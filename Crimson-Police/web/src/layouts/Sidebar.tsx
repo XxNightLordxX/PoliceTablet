@@ -1,12 +1,14 @@
 // Left navigation: one button per visible screen (active item in --cp-primary with an accent edge), each with an
 // optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
-// items of group 'more' fold under one More button that carries the sum of their badges (Config.AdminUi.groupSidebar).
+// items of group 'more' fold under one More button that carries the sum of their badges (the Admin UI's rare tools).
 
-// With `sections` (Config.AdminUi.groupByPlay) each list is ordered by section, with a small heading over each one.
-// With iconsOnly the sidebar is a narrow strip of icons, each name on hover (Config.Tablet.compactSidebar and
-// supervisorCompact). The Supervisor UI passes sections too when Config.Tablet.supervisorByTask is on.
-// A section may carry a one-line `hint` shown under its heading, and `search` is a slot under the heading (both used by
-// the Admin UI plain layout, Config.AdminUi.plainLayout).
+// Left navigation: one button per visible screen (active item in --cp-primary with an accent edge), each with an
+// optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
+// items of group 'more' fold under one More button that carries the sum of their badges (the Admin UI's rare tools).
+// With `sections` each list is ordered by section, with a small heading over each one (the Admin UI's six groups, the
+// Supervisor UI's People / Missions / Rewards); a section may carry a one-line `hint` under its heading, and `search`
+// is a slot under the heading (the Admin UI's screen search). With iconsOnly the sidebar is a narrow strip of icons,
+// each name on hover (Config.Tablet.compactSidebar and supervisorCompact).
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from '../shared/components';
@@ -20,16 +22,16 @@ export interface SidebarItem {
     badge?: ReactNode;
     // a pulsing dot instead of a count (Active Mission while on a run)
     live?: boolean;
-    // 'more' = folded under the More button when the sidebar is grouped
+    // 'more' = folded under the More button
     group?: 'main' | 'more';
-    // the section it is listed under when the sidebar has sections (Config.AdminUi.groupByPlay)
+    // the section it is listed under when the sidebar has sections
     play?: string;
 }
 
 export interface SidebarSection {
     key: string;
     label: string;
-    // a one-line description under the heading (Config.AdminUi.plainLayout)
+    // a one-line description under the heading
     hint?: string;
 }
 
@@ -139,7 +141,7 @@ export function Sidebar({
     sections?: SidebarSection[];
     // the icons only, each name on hover (Config.Tablet.compactSidebar, Officer UI)
     iconsOnly?: boolean;
-    // a slot under the heading (the Admin UI screen search, Config.AdminUi.plainLayout)
+    // a slot under the heading (the Admin UI screen search)
     search?: ReactNode;
 }) {
     const folded = more ? items.filter(it => it.group === 'more') : [];

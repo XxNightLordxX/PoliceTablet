@@ -1,5 +1,8 @@
 // Supervisor UI: its own sidebar (6 screens, hidden when their action is not in session.actions; Department with
-// the Review Queue's open-items badge; grouped by task and/or icons only per Config.Tablet, layouts/supervisorNav), department theme
+
+// Supervisor UI: its own sidebar (6 screens, hidden when their action is not in session.actions; Department with
+// the Review Queue's open-items badge; grouped by task under People, Missions and Rewards,
+// icons only with Config.Tablet.supervisorCompact, layouts/supervisorNav), department theme
 // and the officer's look, watermark and the switch back to the Officer UI.
 
 import { Button, MaintenanceBanner, Watermark } from '../shared/components';
@@ -21,7 +24,7 @@ export function SupervisorLayout() {
     const { screen, navigate } = useNavigation();
     const screens = screensFor('supervisor', session);
     const counts = useNavCounts();
-    // Config.Tablet.supervisorByTask / supervisorCompact: only the sidebar's grouping and width change
+    // Config.Tablet.supervisorCompact: the sidebar's width
     const nav = supervisorNavOf(session);
     setMoneyFormat(session.config.format);
 
@@ -32,14 +35,12 @@ export function SupervisorLayout() {
                 <Sidebar
                     heading={t('ui.nav.supervisor')}
                     iconsOnly={nav.compact}
-                    sections={
-                        nav.byTask ? SUPERVISOR_TASKS.map(k => ({ key: k, label: t(`ui.nav.task.${k}`) })) : undefined
-                    }
+                    sections={SUPERVISOR_TASKS.map(k => ({ key: k, label: t(`ui.nav.task.${k}`) }))}
                     items={screens.map(s => ({
                         key: s.key,
                         label: t(s.titleKey),
                         icon: s.icon,
-                        play: supervisorTaskOf(s.key, nav),
+                        play: supervisorTaskOf(s.key),
                         ...navBadge(s.key, counts),
                     }))}
                     active={screen}

@@ -2,8 +2,8 @@
 
 -- Admin UI -> Home's Needs attention panel: admin:getNeedsAttention answers the Problems lines, today's
 -- refused starts, the open disputes, the flagged runs waiting for a review (one per run, the admin's own left out)
--- and the open player suspect cases (only with the Player suspects screen), in one request; refused while
--- Config.AdminUi.needsAttention is off (shipped) and for anyone but an admin.
+-- and the open player suspect cases (only with the Player suspects screen), in one request; refused for anyone but
+-- an admin. The panel is always on Home (BK1: no switch).
 
 local H = dofile('tests/harness.lua')
 
@@ -70,14 +70,12 @@ end
 --                                    STEPS
 -- ============================================================================
 
-do -- needsAttention ships off: the request is refused
-    H.eq(Config.AdminUi.needsAttention, false, 'shipped false')
-    local data, err = Cb('admin:getNeedsAttention', 1)
-    H.ok(data == nil and err == 'err.needs_attention_off', 'off: err.needs_attention_off')
+do -- no switch: config.lua has none, the request answers as shipped
+    H.eq(Config.AdminUi.needsAttention, nil, 'no needsAttention switch')
+    H.ok(Cb('admin:getNeedsAttention', 1) ~= nil, 'an admin reads the panel as shipped')
 end
 
 do -- one request answers every line
-    Config.AdminUi.needsAttention = true
     Config.LiveCrime = Config.LiveCrime or {}
     local liveWas = Config.LiveCrime.enabled
     Config.LiveCrime.enabled = true
@@ -114,7 +112,6 @@ end
 do -- anyone but an admin is refused
     local data, err = Cb('admin:getNeedsAttention', 7)
     H.ok(data == nil and err == 'err.no_permission', 'an officer is refused')
-    Config.AdminUi.needsAttention = false
 end
 
 return H

@@ -104,10 +104,6 @@ Config.Tablet = {
     -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
     -- false = icons and names (as before)
     compactSidebar = false,
-    -- true = the Supervisor UI sidebar is grouped by task under three headings: People (Department: officers, give
-    -- points, mission bans, controls, review queue, calls and notices, field training), Missions (list, live,
-    -- cross-department, builder) and Rewards (payouts); false = one list (as before). Only the layout changes
-    supervisorByTask = false,
     -- true = the Supervisor UI sidebar shows only the icons (the name shows on hover); false = icons and names
     -- (as before)
     supervisorCompact = false,
@@ -115,14 +111,6 @@ Config.Tablet = {
     -- its Officers tab, 'review' = Department on its Review tab, 'live' = Live Missions (a screen or tab the
     -- supervisor may not see = the first one)
     supervisorLanding = 'first',
-    -- true = the supervisor dialogs Give points, Mission ban and Clear cooldown open with the points, hours and reason
-    -- last used on this tablet (kept until Crimson-Police restarts or the player reconnects), so a second award or ban
-    -- in a row needs no typing; false = they open empty (as before). The server checks every value again
-    supervisorRemember = false,
-    -- true = when a supervisor or an admin decides a flagged run or a dispute, the other supervisors of that
-    -- department who have the Review Queue open see the updated queue at once; false = they see it at their next
-    -- refresh, within 30 seconds (as before)
-    supervisorReviewLive = false,
     -- Mission desks: ox_target boxes that open the Officer UI, one per police station the Qbox police script
     -- knows, each 1.5-3 m from its duty point in the base-game interior and facing it. A custom station MLO may need
     -- a desk moved: Admin UI -> Departments -> Desks. departments = nil lets every department use a desk;
@@ -166,60 +154,13 @@ Config.AdminTheme = {          -- Admin UI colours (hex)
     text = '#f5f3f4',          -- body text
 }
 Config.AdminUi = {
-    -- true = the Admin UI sidebar shows the everyday screens (Home, Payouts, Missions, Live, Officers, Settings) and
-    -- folds the rest under More, whose badge adds up theirs; false = every screen in one flat list
-    groupSidebar = true,
-    -- true = the Admin UI sidebar and Settings put screens and settings under three plain sections, NPC missions,
-    -- Player vs police (real players as suspects) and Police teamwork (cop and cop), with money and the server
-    -- after them; false = the sidebar order and the Settings groups as before. Only the layout changes
-    groupByPlay = true,
-    -- The screen the Admin UI opens on: 'home' = a landing screen with the common jobs (new mission, missions on or
-    -- off, pay, points, quick settings, what is wrong) and the live runs; 'payouts' or 'missions' = open straight
-    -- on that screen, with no Home screen
-    landing = 'home',
-    -- The view Admin UI -> Settings opens in: 'simple' = only the everyday settings in plain groups, with plain
-    -- labels and help texts ('All settings' is one click away); 'all' = every setting by config.lua section
-    settingsView = 'simple',
-    -- true = the Home tiles hold the quick forms (switch missions and locations on or off, change pay, give or take
-    -- points, the everyday settings), each done right there; false = the tiles only open the full screen
-    homeForms = true,
     -- Ready-made reasons shown as buttons under the reason box when setting pay, giving or taking points and in a
     -- mission's Quick edit: a click fills the box, which can still be typed in; {} = no buttons, only typing
     reasonChips = { 'Balance change', 'Event', 'Correction' },
-    -- true = the Admin UI uses plain names and puts every screen under six groups, each with a one-line
-    -- description: NPC missions, Player vs police, Police teamwork, Permissions, Economy and System; the
-    -- rarely used tools fold under More, a search box finds any screen or setting, a breadcrumb shows where you are
-    -- and each screen's title uses the same plain name; false = the sidebar and titles as before. Only the layout
-    -- changes
-    plainLayout = false,
-    -- true = the Admin UI gets a Map markers screen (under NPC missions): how the objective blips look, the switch of
-    -- the extra parts, and every part (the prisoner van and tow truck among them) with its on switch, look (sprite,
-    -- colour, size), label and range, and who sees it (departments, jobs, lowest grade, mission types, missions,
-    -- role), saved like any setting; false = no such screen (Settings still has every value). The extra parts stay
-    -- off until Config.Markers.extraParts
-    markersScreen = true,
-    -- true = Admin UI -> Home shows a "Needs attention" panel on top: the Problems lines, today's refused mission
-    -- starts, the open disputes, the flagged runs waiting for a review and the open player suspect cases, each a
-    -- count that opens its screen; false = no such panel (Home as before). It only reads
-    needsAttention = false,
     -- Rows per page (10-200, e.g. 50) on the long Admin UI lists, each read a page at a time from the server:
     -- Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases;
-    -- 0 = each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)
+    -- 0 = each list's own size (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case)
     pageSize = 0,
-    -- true = Payments made and Leaderboards each open with one request to the server (the totals and the flagged
-    -- runs come with the list) instead of two; false = two requests as before. The screens show the same
-    oneRequest = false,
-    -- true = the long lists of every tablet UI (a scrolling table of more than 100 rows, such as the Admin UI's
-    -- Leaderboards board, the officer Leaderboard and the supervisor Department Report, and the Settings search
-    -- results) draw only the rows in view and add the next ones as you scroll, so a big list opens and scrolls
-    -- faster; false = every row is drawn at once as before. The rows and their order are the same
-    windowRows = false,
-    -- true = the settings-heavy Admin UI dialogs (a department, a mission desk, Void runs) and the Supervisor UI's
-    -- Mission controls show the options changed every day and fold the rarely changed ones under a More button;
-    -- each screen remembers on that computer whether More was left open (the Mission Builder's "More settings" of
-    -- a block too), and a control that is set never hides; false = every option shown open, as before. Only the
-    -- layout changes
-    foldAdvanced = false,
 }
 
 -- ============================================================================
@@ -1205,15 +1146,6 @@ Config.Builder = {
                                                -- (you keep them, try again or place them by hand); false = no button
     autoFillRing = { 15.0, 80.0 },             -- metres beyond the keep-out that "Fill N for me" puts points at
                                                -- (nearest, furthest)
-
-    quickWizard = true,                        -- true = the New mission button opens a 4-step wizard (What,
-                                               -- Where, Check, Publish): pick a template, stand at the spot, fill
-                                               -- the points, publish; Open the full editor is on every step;
-                                               -- false = the New mission dialog and the full editor only
-    foldAdvanced = true,                       -- true = each block's settings show the few that matter
-                                               -- (e.g. a shootout: waves, enemies per wave, weapons, difficulty)
-                                               -- and fold the rest under "More settings"; false = every setting
-                                               -- is shown open, as before
 
     -- On: a Teleport button next to each point on the Locations step puts you on the ground there (the server reads
     -- the saved point and logs it). Admins always; others only with Permissions.builderTeleport. Off: no button.

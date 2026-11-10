@@ -1,27 +1,28 @@
-// Admin UI · Home (screen key 'admin_home', Config.AdminUi.landing = 'home'): the landing screen. Six tiles open the
-
-// screens of the common jobs (navigate with params where the screen takes them) and a Live now strip shows the runs
-// of the Live screen. Every number comes from a request another screen already makes. With Config.AdminUi.homeForms
-// on, four tiles hold a quick form (admin/components/HomeForms) that does the job right there; Open still opens the
-// full screen. With Config.AdminUi.needsAttention on, a Needs attention panel on top reads
+// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on. A Needs attention panel on top reads
 // admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
 
-import { useState, type ReactNode } from 'react';
-import { Badge, Button, Card, Icon, Screen, SearchInput, TextInput, type IconName } from '../../shared/components';
+// Admin UI · Home (screen key 'admin_home'): the screen the Admin UI opens on. A Needs attention panel on top reads
+// admin:getNeedsAttention (modules/adminhome) once a minute; its lines come from admin/components/needsAttention.ts.
+// Six tiles open the screens of the common jobs (navigate with params where the screen takes them); four of them
+// hold a quick form (admin/components/HomeForms) that does the job right there, and Open still opens the full
+// screen. A Live now strip shows the runs of the Live screen. Every number comes from a request another screen
+// already makes.
+
+import type { ReactNode } from 'react';
+import { Badge, Button, Card, Icon, Screen, type IconName } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { useNavigate, type AdminScreenKey, type ScreenParams } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
-import { useSession } from '../../shared/session';
 import { useNavCounts } from '../../layouts/navBadges';
 import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
-import type { AdminLiveRunsData, AdminRefusalsData } from '../../types/admin_live';
+import type { AdminLiveRunsData } from '../../types/admin_live';
 import type { MissionLoadSummary } from '../../types/admin_missions';
-import type { NeedsAttentionData, ProblemsData } from '../../types/admin_system';
-import { attentionLines, attentionWaiting, wrongCheckKeys } from '../components/needsAttention';
+import type { NeedsAttentionData } from '../../types/admin_system';
+import { attentionLines, attentionWaiting } from '../components/needsAttention';
 import { useAdminTitle } from '../../layouts/useAdminTitle';
 import './Home.css';
 
@@ -60,38 +61,6 @@ function Tile({ icon, title, text, screen, params, children }: TileProps) {
     );
 }
 
-// A tile with a box: Enter (or Open) passes what was typed to the screen as one param.
-function InputTile({
-    param,
-    search,
-    placeholder,
-    ...tile
-}: TileProps & { param: string; search?: boolean; placeholder: string }) {
-    const navigate = useNavigate();
-    const [value, setValue] = useState('');
-    const go = () => navigate(tile.screen, value.trim() ? { [param]: value.trim() } : {});
-    const Box = search ? SearchInput : TextInput;
-    return (
-        <Card className="admin-home-tile" padding="md">
-            <div className="admin-home-tile__head">
-                <span className="admin-home-tile__icon" aria-hidden>
-                    <Icon name={tile.icon} size={20} />
-                </span>
-                <div className="admin-home-tile__titles">
-                    <div className="admin-home-tile__title">{tile.title}</div>
-                    <div className="admin-home-tile__text">{tile.text}</div>
-                </div>
-            </div>
-            <Box value={value} onChange={setValue} onEnter={go} placeholder={placeholder} aria-label={placeholder} />
-            <div className="admin-home-tile__actions">
-                <Button variant="primary" size="sm" iconRight="chevronRight" onClick={go}>
-                    {t('admin.home.open')}
-                </Button>
-            </div>
-        </Card>
-    );
-}
-
 interface CheckLine {
     key: string;
     label: string;
@@ -101,23 +70,18 @@ interface CheckLine {
     params?: ScreenParams;
 }
 
-// Something wrong?: the last mission load, Config health, System problems, stuck payments and the refused mission
-// starts of today (Live -> Refused), each a link. With the Needs attention panel on (attention), its Problems and
-// Refused starts lines are left out here (the panel shows them), and their two requests are not sent.
-function SomethingWrong({ attention }: { attention: boolean }) {
+// Something wrong?: the last mission load, Config health and stuck payments, each a link (the Problems lines and
+// today's refused starts are in Needs attention).
+function SomethingWrong() {
     const navigate = useNavigate();
     const load = useRequest<MissionLoadSummary>('admin:getMissionLoad', {}, { pushTopic: 'builder', pollMs: 60000 });
     const health = useRequest<ConfigHealthItem[]>('admin:getConfigHealth', {});
-    const problems = useRequest<ProblemsData>('admin:getProblems', {}, { skip: attention });
-    const refusals = useRequest<AdminRefusalsData>('admin:getRefusals', {}, { pollMs: 60000, skip: attention });
     const counts = useNavCounts();
     const refused = load.data ? asArray(load.data.failed).length + asArray(load.data.overrideFailed).length : 0;
     const unhealthy = asArray(health.data).filter(i => i.level !== 'ok').length;
-    const total = problems.data?.total ?? 0;
     const stuck = counts.adminPayments ?? 0;
-    const refusedToday = refusals.data?.today ?? 0;
     const dash = t('admin.home.unknown');
-    const all: CheckLine[] = [
+    const lines: CheckLine[] = [
         {
             key: 'load',
             label: t('admin.home.check_load'),
@@ -135,30 +99,14 @@ function SomethingWrong({ attention }: { attention: boolean }) {
             screen: 'admin_permissions',
         },
         {
-            key: 'problems',
-            label: t('admin.home.check_problems'),
-            value: problems.data ? formatNumber(total) : dash,
-            bad: total > 0,
-            screen: 'admin_system',
-        },
-        {
             key: 'payments',
             label: t('admin.home.check_payments'),
             value: formatNumber(stuck),
             bad: stuck > 0,
-            screen: 'admin_payments',
-        },
-        {
-            key: 'refused',
-            label: t('admin.home.check_refused'),
-            value: refusals.data ? formatNumber(refusedToday) : dash,
-            bad: refusedToday > 0,
-            screen: 'admin_live',
-            params: { tab: 'refused' },
+            screen: 'admin_money',
+            params: { moneyTab: 'payments' },
         },
     ];
-    const keep = wrongCheckKeys(attention);
-    const lines = all.filter(l => keep.includes(l.key));
     const anyBad = lines.some(l => l.bad);
     return (
         <Card className="admin-home-tile" padding="md" highlight={anyBad ? 'warning' : undefined}>
@@ -245,7 +193,7 @@ function LiveNow() {
     );
 }
 
-// Needs attention (Config.AdminUi.needsAttention): what is waiting for an admin, from one batched request
+// Needs attention: what is waiting for an admin, from one batched request
 // (admin:getNeedsAttention), each line a count that opens its screen.
 function NeedsAttention() {
     const navigate = useNavigate();
@@ -294,14 +242,9 @@ function NeedsAttention() {
 
 export default function AdminHome() {
     const screenTitle = useAdminTitle('admin_home');
-    // Config.AdminUi.homeForms: the quick forms on the tiles (false = the tiles only open the screen)
-    const adminUi = useSession().config?.adminUi;
-    const forms = adminUi?.homeForms !== false;
-    // Config.AdminUi.needsAttention: the Needs attention panel on top (false = Home as before)
-    const attention = adminUi?.needsAttention === true;
     return (
         <Screen title={screenTitle} subtitle={t('admin.home.subtitle')} className="admin-home-screen">
-            {attention ? <NeedsAttention /> : null}
+            <NeedsAttention />
             <LiveNow />
             <div className="admin-home-grid">
                 <Tile
@@ -314,60 +257,37 @@ export default function AdminHome() {
                 <Tile
                     icon="layers"
                     title={t('admin.home.onoff_title')}
-                    text={forms ? t('admin.home.onoff_form') : t('admin.home.onoff_text')}
+                    text={t('admin.home.onoff_form')}
                     screen="admin_missions"
                     params={{ tab: 'catalog' }}
                 >
-                    {forms ? <MissionSwitchForm /> : null}
+                    <MissionSwitchForm />
                 </Tile>
                 <Tile
                     icon="dollar"
                     title={t('admin.home.pay_title')}
-                    text={forms ? t('admin.home.pay_form') : t('admin.home.pay_text')}
-                    screen="admin_payouts"
+                    text={t('admin.home.pay_form')}
+                    screen="admin_money"
                 >
-                    {forms ? <PayForm /> : null}
+                    <PayForm />
                 </Tile>
-                {forms ? (
-                    <Tile
-                        icon="star"
-                        title={t('admin.home.points_title')}
-                        text={t('admin.home.points_form')}
-                        screen="admin_officers"
-                    >
-                        <PointsForm />
-                    </Tile>
-                ) : (
-                    <InputTile
-                        icon="star"
-                        title={t('admin.home.points_title')}
-                        text={t('admin.home.points_text')}
-                        screen="admin_officers"
-                        param="citizenid"
-                        placeholder={t('admin.home.points_placeholder')}
-                    />
-                )}
-                {forms ? (
-                    <Tile
-                        icon="sliders"
-                        title={t('admin.home.settings_title')}
-                        text={t('admin.home.settings_form')}
-                        screen="admin_settings"
-                    >
-                        <QuickSettingsForm />
-                    </Tile>
-                ) : (
-                    <InputTile
-                        icon="sliders"
-                        title={t('admin.home.settings_title')}
-                        text={t('admin.home.settings_text')}
-                        screen="admin_settings"
-                        param="q"
-                        search
-                        placeholder={t('admin.home.settings_placeholder')}
-                    />
-                )}
-                <SomethingWrong attention={attention} />
+                <Tile
+                    icon="star"
+                    title={t('admin.home.points_title')}
+                    text={t('admin.home.points_form')}
+                    screen="admin_officers"
+                >
+                    <PointsForm />
+                </Tile>
+                <Tile
+                    icon="sliders"
+                    title={t('admin.home.settings_title')}
+                    text={t('admin.home.settings_form')}
+                    screen="admin_settings"
+                >
+                    <QuickSettingsForm />
+                </Tile>
+                <SomethingWrong />
             </div>
         </Screen>
     );

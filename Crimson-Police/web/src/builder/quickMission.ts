@@ -1,8 +1,8 @@
-// The New mission wizard (Config.Builder.quickWizard) without React: its steps, what a location still misses, what
+// The New mission wizard without React: its steps, what a location still misses, what
 // "Fill the points for me" fills, the name it proposes and the check list. QuickMission.tsx draws it; the browser
 // walk-through (quickMission.walk.ts) runs the same helpers against the mocks.
 
-import type { BuilderConfig, BuilderError, BuilderLocation } from '../types/builder_server';
+import type { BuilderError, BuilderLocation } from '../types/builder_server';
 import type { BuilderStepKey, PointSpec } from '../types/builder_client';
 import { isRoute, listsOf, locationOfError, objectiveOfError, pointsOf, stepOfError } from './defUtils';
 
@@ -16,11 +16,6 @@ export const FULL_STEP: Record<QuickStep, BuilderStepKey> = {
     check: 'publish',
     publish: 'publish',
 };
-
-// What a "New mission" press opens: the wizard (Config.Builder.quickWizard, missing = on) or the New mission dialog
-export function newMissionOpens(config: Pick<BuilderConfig, 'quickWizard'> | null | undefined): 'wizard' | 'dialog' {
-    return config && config.quickWizard === false ? 'dialog' : 'wizard';
-}
 
 // The navigate() params of Home's "Make a new mission" tile: Admin UI -> Missions, Builder tab, New mission pressed
 export const NEW_MISSION_PARAMS = { tab: 'builder', wizard: 'new' } as const;

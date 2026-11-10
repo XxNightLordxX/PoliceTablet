@@ -866,8 +866,8 @@ ok, res = Act('server:sup:reviewFlagged', 2, { rowId = rowB, decision = 'void', 
 H.eq(res, 'err.already_voided', 'cannot void twice')
 H.eq(Cb('sup:getReviewQueue', 2).ok, true, 'the supervisor\'s review queue')
 
--- step FX1, Config.Tablet.supervisorReviewLive: a decision pushes the updated queue to the other supervisors of that
--- department who have it open (each his own queue); shipped off, nobody is pushed
+-- step FX1 (BK1: always): a decision pushes the updated queue to the other supervisors of that department who have
+-- it open (each his own queue)
 do
     local function Pushes()
         local out = {}
@@ -876,13 +876,7 @@ do
         end
         return out
     end
-    H.eq(Config.Tablet.supervisorReviewLive, false, 'FX1: the live Review Queue ships off')
-    H.eq(Cb('sup:getReviewQueue', 7).ok, true, 'FX1: the second SAST supervisor opens the queue')
-    local before = #Pushes()
-    CP.Admin.withReviewQueue(2, true, { rowId = rowB })
-    H.eq(#Pushes(), before, 'FX1: off: nobody else gets the queue (as before)')
-    H.eq(CP.Admin.shareReviewQueue(2), 0, 'FX1: off: shareReviewQueue sends nothing')
-    Config.Tablet.supervisorReviewLive = true
+    H.eq(Config.Tablet.supervisorReviewLive, nil, 'BK1: no switch for the live Review Queue')
     for _, src in ipairs({ 2, 7, 4 }) do Cb('sup:getReviewQueue', src) end
     before = #Pushes()
     local okW, reply = CP.Admin.withReviewQueue(2, true, { rowId = rowB })
@@ -909,7 +903,6 @@ do
         'Z9: a SAST decision on a SAST + FIB run reaches the open FIB queue too')
     H.eq(CP.Admin.shareReviewQueue(2, { 'sast' }), 1, 'Z9: a list of one department reaches only it')
     infos[8], H.players[8] = nil, nil
-    Config.Tablet.supervisorReviewLive = false
 end
 H.eq(SecurityLines(2), supLines, 'a supervisor\'s review flow (queue, approve, void, refusals) leaves no security line')
 

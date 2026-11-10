@@ -2013,10 +2013,9 @@ CP.Net.callback('admin:getBoards', function(src, args)
         if not CP.Net.rateOk(src, 'boards:past', 1, 2000) then return nil, 'err.rate_limited' end
     end
     local out, err = LB.adminBoard(args)
-    -- Config.AdminUi.oneRequest: the flagged runs come with the board (the screen asks with withFlagged)
-    local Kit = CP.AdminKit
+    -- the flagged runs come with the board when the screen asks (withFlagged): one request per screen open
     local want = type(args) == 'table' and args.withFlagged == true
-    if out and want and Kit and Kit.oneRequest and Kit.oneRequest() and CP.Admin and CP.Admin.flaggedFor then
+    if out and want and CP.Admin and CP.Admin.flaggedFor then
         local okF, list = pcall(CP.Admin.flaggedFor, src)
         out.flagged = okF and type(list) == 'table' and list or {}
     end

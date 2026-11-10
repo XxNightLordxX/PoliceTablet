@@ -1,12 +1,11 @@
-// The More fold (Config.AdminUi.foldAdvanced): the rarely changed options of a settings-heavy dialog or screen sit
+// The More fold: the rarely changed options of a settings-heavy dialog or screen sit under a More button.
 
-// under a More button. Off, the children show open as before. Each screen remembers, per viewer in the browser,
-// whether More was left open (a blocked storage just starts folded). forceOpen keeps it open (an option that is set
-// or has an error never hides).
+// (the Admin UI's department, desk and Void runs dialogs, the Supervisor UI's Mission controls, fold={false} = open).
+// Each screen remembers, per viewer in the browser, whether More was left open (a blocked storage just starts
+// folded). forceOpen keeps it open (an option that is set or has an error never hides).
 
 import { useState, type ReactNode } from 'react';
 import { t } from '../i18n';
-import { useOptionalSession } from '../session';
 import { Icon } from './Icon';
 
 export const MORE_PREFIX = 'cp.more.';
@@ -27,15 +26,10 @@ export function writeMoreOpen(screen: string, open: boolean): void {
     }
 }
 
-// Config.AdminUi.foldAdvanced of the open UI (false outside one).
-export function useFoldAdvanced(): boolean {
-    return useOptionalSession()?.config?.adminUi?.foldAdvanced === true;
-}
-
 export interface MoreFoldProps {
     // the screen or dialog the open state is remembered for (e.g. 'dept_dialog')
     screen: string;
-    // fold at all (default: Config.AdminUi.foldAdvanced)
+    // false = show the children open, with no More button (default true)
     fold?: boolean;
     // keep it open whatever was remembered
     forceOpen?: boolean;
@@ -45,9 +39,8 @@ export interface MoreFoldProps {
 }
 
 export function MoreFold({ screen, fold, forceOpen, count, children }: MoreFoldProps) {
-    const folds = useFoldAdvanced();
     const [open, setOpen] = useState(() => readMoreOpen(screen));
-    if (!(fold ?? folds)) return <>{children}</>;
+    if (fold === false) return <>{children}</>;
     const shown = open || forceOpen === true;
     const toggle = () => {
         const next = !shown;

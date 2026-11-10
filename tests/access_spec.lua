@@ -121,24 +121,10 @@ do
     H.eq(Refused(Open(3, { via = 'export' })), 'err.not_police', 'the officer checks still come first')
     local adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
     H.ok(adm.ok, 'the Admin UI has its own command: no way checks')
-    H.eq(adm.data.config.adminUi.groupSidebar, true, 'Config.AdminUi.groupSidebar ships on: the sidebar is grouped')
-    Config.AdminUi.groupSidebar = false
-    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
-    H.eq(adm.data.config.adminUi.groupSidebar, false, 'groupSidebar = false: the session asks for the flat list')
-    Config.AdminUi.groupSidebar = true
-    H.eq(adm.data.config.adminUi.landing, 'home', 'Config.AdminUi.landing ships home: the Admin UI opens on Home')
-    Config.AdminUi.landing = 'missions'
-    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
-    H.eq(adm.data.config.adminUi.landing, 'missions', 'landing = missions: the session opens on Missions')
-    Config.AdminUi.landing = 'bogus'
-    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
-    H.eq(adm.data.config.adminUi.landing, 'home', 'an unknown landing falls back to Home')
-    Config.AdminUi.landing = 'home'
-    H.eq(adm.data.config.adminUi.homeForms, true, 'Config.AdminUi.homeForms ships on: the Home tiles hold forms')
-    Config.AdminUi.homeForms = false
-    adm = Cb('getSession', 9, { ui = 'admin', via = 'command' })
-    H.eq(adm.data.config.adminUi.homeForms, false, 'homeForms = false: the Home tiles only open their screen')
-    Config.AdminUi.homeForms = true
+    -- BK1: the layout switches are baked in; the Admin UI session carries only the reason buttons
+    local keys = {}
+    for k in pairs(adm.data.config.adminUi) do keys[#keys + 1] = k end
+    H.eq(table.concat(keys, ','), 'reasonChips', 'the Admin UI session has no layout switch any more')
     H.eq(table.concat(adm.data.config.adminUi.reasonChips, '|'), 'Balance change|Event|Correction',
         'Config.AdminUi.reasonChips ships three ready-made reasons')
     Config.AdminUi.reasonChips = { '  Event  ', 'Event', '', 42, string.rep('x', 61), 'Prize' }
@@ -161,74 +147,18 @@ do
     nav = Cb('getSession', 1, { via = 'export' }).data.config.officerNav
     H.eq(nav.order, 'classic', 'an unknown sidebarOrder counts as classic')
     Config.Tablet.sidebarOrder, Config.Tablet.activeFirst, Config.Tablet.compactSidebar = 'classic', false, false
-    -- Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding (G5): the Supervisor UI, shipped as before
+    -- Config.Tablet.supervisorCompact / supervisorLanding (G5): the Supervisor UI, shipped as before
     local sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
-    H.ok(sup.byTask == false and sup.compact == false, 'supervisorByTask and supervisorCompact ship off: one list')
+    H.ok(sup.compact == false, 'supervisorCompact ships off: icons and names')
     H.eq(sup.landing, 'first', 'supervisorLanding ships first: the Supervisor UI opens as before')
-    H.eq(sup.controlsCard, nil, 'MG3: no supervisorControlsCard any more (Controls shows the use inline)')
-    H.eq(sup.remember, false, 'supervisorRemember ships off: the supervisor dialogs open empty (WF2)')
-    Config.Tablet.supervisorRemember = true
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav.remember, true,
-        'supervisorRemember on: the session asks the dialogs to remember (WF2)')
-    Config.Tablet.supervisorRemember = false
-    Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
-        true, true, 'review'
+    H.ok(sup.byTask == nil and sup.remember == nil, 'BK1: grouped by task and remembering are baked in')
+    Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding = true, 'review'
     sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
-    H.ok(sup.byTask and sup.compact and sup.landing == 'review', 'all three set: the session asks for them')
+    H.ok(sup.compact and sup.landing == 'review', 'both set: the session asks for them')
     Config.Tablet.supervisorLanding = 'payouts'
     sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
     H.eq(sup.landing, 'first', 'an unknown supervisorLanding counts as first')
-    Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
-        false, false, 'first'
-    -- Config.AdminUi.plainLayout (G6): the Admin UI plain layout, shipped off
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
-        'plainLayout ships off: the Admin UI sidebar as before')
-    Config.AdminUi.plainLayout = true
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, true,
-        'plainLayout on: the session asks')
-    Config.AdminUi.plainLayout = 'yes'
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.plainLayout, false,
-        'anything but true counts as off')
-    Config.AdminUi.plainLayout = false
-    -- MG2: one Money screen, always: an older config.lua's rewardsScreen / moneyScreen are not sent
-    Config.AdminUi.rewardsScreen, Config.AdminUi.moneyScreen = false, false
-    local old = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
-    H.ok(old.rewardsScreen == nil and old.moneyScreen == nil, 'the session has no Rewards or Money switch')
-    Config.AdminUi.rewardsScreen, Config.AdminUi.moneyScreen = nil, nil
-    -- Config.AdminUi.markersScreen (MG1, missionBlipsScreen before): the Map markers screen, shipped on
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.markersScreen, true,
-        'markersScreen ships on: the Admin UI has a Map markers screen')
-    Config.AdminUi.markersScreen = false
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.markersScreen, false,
-        'markersScreen = false: no Map markers screen')
-    Config.AdminUi.markersScreen = true
-    -- Config.AdminUi.needsAttention (H5): Home's Needs attention panel, shipped off
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
-        'needsAttention ships off: Home as before')
-    Config.AdminUi.needsAttention = true
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, true,
-        'needsAttention on: the session asks for the panel')
-    Config.AdminUi.needsAttention = 'yes'
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.needsAttention, false,
-        'needsAttention: anything but true is off')
-    Config.AdminUi.needsAttention = false
-    -- Config.AdminUi.oneRequest (H6): shipped off, true only
-    local aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
-    H.ok(aui.oneRequest == false, 'oneRequest ships off')
-    Config.AdminUi.oneRequest = 'yes'
-    aui = Cb('getSession', 1, { via = 'export' }).data.config.adminUi
-    H.ok(aui.oneRequest == false, 'anything but true is off')
-    Config.AdminUi.oneRequest = false
-    -- Config.AdminUi.foldAdvanced (FX2): the More fold, shipped off; the Supervisor UI gets it too
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, false,
-        'foldAdvanced ships off: every option open')
-    Config.AdminUi.foldAdvanced = true
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, true,
-        'foldAdvanced on: the session folds')
-    Config.AdminUi.foldAdvanced = 'yes'
-    H.eq(Cb('getSession', 1, { via = 'export' }).data.config.adminUi.foldAdvanced, false,
-        'foldAdvanced: anything but true is off')
-    Config.AdminUi.foldAdvanced = false
+    Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding = false, 'first'
     -- Config.RealSuspects.adminScreen (V18): the Real suspects screen only while live crimes or volunteers are on
     H.eq(adm.data.config.realSuspects.screen, false, 'live crimes and volunteers ship off: no Real suspects screen')
     Config.LiveCrime.enabled = true

@@ -1320,7 +1320,7 @@ local function Here(o)
     local ok, reasonKey, vars = B.checkSpot(spot, PlaceCtx(o, o.points))
     local point = RoundVec({ x = pos.x, y = pos.y, z = storeZ }, o.heading, heading)
     local reply = { ok = ok == true, reason = (not ok and reasonKey) and CP.L(reasonKey, vars) or false, point = point }
-    -- a start also names its street: the New mission wizard (Config.Builder.quickWizard) names the mission after it
+    -- a start also names its street: the New mission wizard names the mission after it
     if o.kind == 'start' then reply.street = StreetsOf({ point })[1] end
     if not ok then return reply end
     local pts = {}

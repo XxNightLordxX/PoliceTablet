@@ -25,7 +25,6 @@ import type { BuilderBonusEntry, BuilderBonusOption } from '../../types/builder_
 import { MinutesField, RangeNumber, RemoveButton, StarPicker } from '../controls';
 import { messageAt } from '../defUtils';
 import { detailRange, requiredTierFor, suggestsNoVehiclePenalties, totalArmed } from '../schema';
-import { foldsAdvanced } from '../blockBasics';
 import { StepIntro, type StepProps } from './common';
 
 // the server sends its list (cfg.forbiddenItems; a trailing * is a prefix) and checks again on every save
@@ -258,7 +257,6 @@ export function StepDetails({ ed, cfg, def, ro }: StepProps) {
             <Items {...{ ed, cfg, def, ro }} />
         </Card>
     );
-    const fold = foldsAdvanced(cfg);
     // an error in a folded field opens "More settings", so a refused value is never hidden
     const folded = asArray(e).some(x =>
         /^(description|timeLimit|startTimeout|cooldown|departments|items|bonuses|penalties)\b/.test(x.path),
@@ -269,34 +267,7 @@ export function StepDetails({ ed, cfg, def, ro }: StepProps) {
         </StepIntro>
     );
 
-    if (!fold) {
-        return (
-            <div className="builder_client-step">
-                {intro}
-                <Grid cols="3fr 2fr" gap={4} align="start">
-                    <div className="builder_client-col">
-                        <Card title={t('builder.details.mission')} icon="edit" padding="md">
-                            <div className="builder_client-form">
-                                {nameField}
-                                {descriptionField}
-                                {typeField}
-                                {noPayout}
-                            </div>
-                        </Card>
-                        {bonusesCard}
-                    </div>
-                    <div className="builder_client-col">
-                        {teamCard}
-                        {timingCard}
-                        {availableCard}
-                        {vehicleCard}
-                        {itemsCard}
-                    </div>
-                </Grid>
-            </div>
-        );
-    }
-    // Config.Builder.foldAdvanced: name, type, difficulty and team size open; the rest under "More settings"
+    // name, type, difficulty and team size open; the rest under "More settings"
     return (
         <div className="builder_client-step">
             {intro}

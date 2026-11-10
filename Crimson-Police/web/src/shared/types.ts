@@ -97,43 +97,20 @@ export interface Session {
         commendationKinds?: string[];
         rewards?: { enabled: boolean };
         format?: { currency: string; currencyAfter: boolean };
-        // Config.AdminUi: groupSidebar false = the Admin UI sidebar is one flat list
-        // landing = the screen the Admin UI opens on ('home' shows the Home screen; the others hide it)
-        // homeForms = the Home tiles hold the quick forms (false: they only open the screen)
-        // reasonChips = the ready-made reasons under a reason box (ReasonChips; [] = none)
+        // Config.AdminUi.reasonChips: the ready-made reasons under a reason box (ReasonChips; [] = none)
         adminUi?: {
-            groupSidebar: boolean;
-            // true (or left out) = the Admin sidebar and Settings group by NPC missions, Player vs police, Police teamwork
-            groupByPlay?: boolean;
-            landing?: 'home' | 'payouts' | 'missions';
-            homeForms?: boolean;
             reasonChips?: string[];
-            // plain names, six described groups, search and breadcrumb (layouts/adminNav; false = as before)
-            plainLayout?: boolean;
-            // the Map markers screen (admin/screens/MapMarkers.tsx; only false = no such screen)
-            markersScreen?: boolean;
-            // Home's Needs attention panel (Config.AdminUi.needsAttention)
-            needsAttention?: boolean;
-            // one request per screen open (Config.AdminUi.oneRequest)
-            oneRequest?: boolean;
-            // long lists draw only the rows in view (Config.AdminUi.windowRows; false = every row)
-            windowRows?: boolean;
-            // the More fold of the settings-heavy dialogs and Mission controls (Config.AdminUi.foldAdvanced)
-            foldAdvanced?: boolean;
         };
         // Config.RealSuspects.adminScreen: screen = the Admin UI shows Real suspects (true only while
         // Config.LiveCrime.enabled or Config.Volunteers.enabled is on)
         realSuspects?: { screen: boolean };
         // Config.Tablet.sidebarOrder / activeFirst / compactSidebar: the Officer UI sidebar (layouts/officerNav)
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
-        // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding: the Supervisor UI sidebar and
-        // the screen it opens on (layouts/supervisorNav)
+        // Config.Tablet.supervisorCompact / supervisorLanding: the Supervisor UI sidebar's width and the screen it
+        // opens on (layouts/supervisorNav)
         supervisorNav?: {
-            byTask: boolean;
             compact: boolean;
             landing: 'first' | 'report' | 'review' | 'live';
-            // Config.Tablet.supervisorRemember: the supervisor dialogs open with the values last used
-            remember?: boolean;
         };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;

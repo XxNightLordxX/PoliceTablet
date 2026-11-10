@@ -1,4 +1,4 @@
-// Admin UI · Home quick forms (Config.AdminUi.homeForms): the common jobs done on the Home tile itself. Each form
+// Admin UI · Home quick forms: the common jobs done on the Home tile itself. Each form
 
 // sends the same action as its full screen (the server checks everything again):
 //   MissionSwitchForm  server:admin:setMissionEnabled / setLocationEnabled (Missions -> mission list)

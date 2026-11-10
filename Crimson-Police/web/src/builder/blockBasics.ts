@@ -1,14 +1,8 @@
-// Block settings: the basics open, the rest folded under "More settings" (Config.Builder.foldAdvanced), without
-// React: whether the builder folds, and the shootout's plain Difficulty (Easy, Normal, Hard), which sets accuracy,
+// Block settings without React: the shootout's plain Difficulty (Easy, Normal, Hard), which sets accuracy,
 // armour and health inside the ranges the server sends (Config.Blocks.hostile_waves).
 
 import type { BuilderConfig } from '../types/builder_server';
 import { rangeOf, type Rng } from './schema';
-
-// Block settings fold the advanced ones (Config.Builder.foldAdvanced); missing = on
-export function foldsAdvanced(config: Pick<BuilderConfig, 'foldAdvanced'> | null | undefined): boolean {
-    return !(config && config.foldAdvanced === false);
-}
 
 export const HW_DIFFICULTIES = ['easy', 'normal', 'hard'] as const;
 export type HwDifficulty = (typeof HW_DIFFICULTIES)[number];

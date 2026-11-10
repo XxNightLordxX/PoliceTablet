@@ -533,7 +533,7 @@
     min-width: 0;
 }
 
-/* Config.AdminUi.groupByPlay: the All settings list under its play headings */
+/* The All settings list under its play headings */
 .settings-nav__heading {
     padding: 8px 10px 2px;
     font-size: var(--cp-fs-xs);

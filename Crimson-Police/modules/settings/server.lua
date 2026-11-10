@@ -130,77 +130,12 @@ local COMMON = {
     'OfficerOptions.enabled',
 }
 
--- The plain groups the Settings screen folds the config.lua sections into (title settings.group.<key>, help text
--- settings.group_help.<key>). A section no group names (a new banner in config.lua) goes under Server.
-local GROUPS = {
-    { key = 'tablet', sections = { 'tablet_and_commands', 'formats', 'departments', 'officer_profile', 'names' } },
-    {
-        key = 'missions',
-        sections = {
-            'mission_types',
-            'difficulty',
-            'route_to_the_start',
-            'map_markers',
-            'random_draw',
-            'units',
-            'cross_department_missions',
-            'built_in_mission_tweaks',
-            'downed_participants',
-            'mission_builder',
-            'admin_test_mode',
-            'blocks',
-        },
-    },
-    { key = 'npcs', sections = { 'spawning', 'suspect_behaviour', 'scaling_by_participants' } },
-    { key = 'pay', sections = { 'cash', 'payout_editing', 'disputes', 'feature_rewards' } },
-    {
-        key = 'points',
-        sections = {
-            'scoring_xp_levels_and_goals',
-            'bonuses_and_penalties',
-            'leaderboard',
-            'special_events',
-            'department_challenge',
-            'item_rewards',
-        },
-    },
-    {
-        key = 'police',
-        sections = {
-            'police_actions_and_custody',
-            'decisions',
-            'real_suspects',
-            'live_crimes',
-            'volunteer_suspects',
-            'criminal_tablet',
-            'field_training',
-        },
-    },
-    { key = 'dispatch', sections = { 'dispatch', 'real_calls', 'alert_suppression' } },
-    {
-        key = 'server',
-        sections = {
-            'general',
-            'storage',
-            'permissions',
-            'admin_control',
-            'mission_controls',
-            'run_limits',
-            'anti_exploit',
-            'performance',
-            'time',
-            'retention',
-            'backups',
-            'other',
-        },
-    },
-}
--- the group of a section no group names, and Config.AdminUi.groupByPlay's groups (below)
-local Play = { plainFallback = 'server' }
+local Play = {}
 
--- Config.AdminUi.groupByPlay: the same sections folded by who the play is against (title settings.group.<key>, help
--- settings.group_help.<key>): NPC missions, Player vs police (real players as suspects), Police teamwork (cop and
--- cop), then the tablet, money and the server as before. A section no group names goes under play_system.
+-- The plain groups the Settings screen folds the config.lua sections into, by who the play is against (title
+-- settings.group.<key>, help settings.group_help.<key>): NPC missions, Player vs police (real players as suspects),
+-- Police teamwork (cop and cop), then the tablet, money and the server. A section no group names (a new banner in
+-- config.lua) goes under play_system.
 Play.groups = {
     {
         key = 'play_npc',
@@ -272,11 +207,6 @@ Play.fallback = 'play_system'
 Play.ofSection = {}
 for _, g in ipairs(Play.groups) do
     for _, key in ipairs(g.sections) do Play.ofSection[key] = g.key end
-end
-
--- Config.AdminUi.groupByPlay, read at every call (anything but false = on).
-function Play.on()
-    return not (type(Config.AdminUi) == 'table' and Config.AdminUi.groupByPlay == false)
 end
 
 -- Admin UI -> Settings -> Features: every feature an owner can turn on or off, with the section of play it belongs
@@ -590,10 +520,6 @@ Play.features = {
 }
 Settings._features = Play.features
 Settings._playGroups = Play.groups
-local groupOfSection = {}
-for _, g in ipairs(GROUPS) do
-    for _, key in ipairs(g.sections) do groupOfSection[key] = g.key end
-end
 
 -- Read when the mission files load: a change reloads the missions (as Admin UI → Missions → Reload does).
 local RELOAD = {
@@ -1675,8 +1601,6 @@ local KNOWN = {
     ['Cash.source'] = { tpl = Enum({ 'server', 'society' }), kind = 'enum' },
     ['Tablet.sidebarOrder'] = { tpl = Enum({ 'classic', 'mostUsed' }), kind = 'enum' },
     ['Tablet.supervisorLanding'] = { tpl = Enum({ 'first', 'report', 'review', 'live' }), kind = 'enum' },
-    ['AdminUi.landing'] = { tpl = Enum({ 'home', 'payouts', 'missions' }), kind = 'enum' },
-    ['AdminUi.settingsView'] = { tpl = Enum({ 'simple', 'all' }), kind = 'enum' },
     ['AdminUi.reasonChips'] = {
         tpl = ListOf(Text('%S', 60), { max = 8, unique = true }),
         kind = 'list',
@@ -2833,8 +2757,7 @@ local function BuildSchema()
     for _, f in ipairs(FILES) do ReadFile(f, meta, sections) end
     local list, byPath = {}, {}
     local function add(path, default)
-        -- an older config.lua's retired keys (Settings.RETIRED) are no settings any more
-        if byPath[path] or Settings.RETIRED[path] then return end
+        if byPath[path] then return end
         local e = Describe(path, default)
         local m = meta[path]
         local parts = Segments(path)
@@ -2901,7 +2824,7 @@ local function BuildSchema()
             key = s.key,
             title = s.title,
             file = s.file,
-            group = groupOfSection[s.key] or Play.plainFallback,
+            group = Play.ofSection[s.key] or Play.fallback,
             groups = {},
             groupByPath = {},
         }
@@ -2915,7 +2838,7 @@ local function BuildSchema()
                 key = e.section,
                 title = CP.L('settings.section.other'),
                 file = 'config',
-                group = groupOfSection[e.section] or Play.plainFallback,
+                group = Play.ofSection[e.section] or Play.fallback,
                 groups = {},
                 groupByPath = {},
             }
@@ -3134,67 +3057,12 @@ local function DeleteRow(path)
     return true
 end
 
--- Settings config.lua no longer has because the screen they switched is now the only way (MG2: one Money screen
--- with Pay rates, Rewards, Payments and Department funds; MG3: one Department screen whose Controls tab shows each
--- control's limits and today's use inline). A row saved under one is skipped quietly at start (no warning, no
--- Problems line, nothing applied) and an imported file's row is left out (Settings.RETIRED).
-Settings.RETIRED = {
-    ['AdminUi.rewardsScreen'] = true,
-    ['AdminUi.moneyScreen'] = true,
-    ['Tablet.supervisorControlsCard'] = true,
-}
-
--- The saved rows without the retired ones.
-function Settings._dropRetired(rows)
+-- The saved rows of settings that still exist. A row saved under a setting config.lua no longer has (a switch an
+-- update removed) is skipped quietly at start: no warning, no Problems line, nothing applied.
+function Settings._dropUnknown(rows)
     local out = {}
     for _, r in ipairs(rows) do
-        if not Settings.RETIRED[tostring(r.setting_key)] then out[#out + 1] = r end
-    end
-    return out
-end
-
--- The saved rows with Map markers' old names read as the new ones (CP.MarkerAliases.paths), once: an old row is saved
--- again under each of its new paths that has no row yet, then removed, so every later change, reset or export uses
--- the new name. A row that cannot be moved is still read under its new name this start.
-function Settings._aliasRows(rows)
-    local A = CP.MarkerAliases
-    if not (A and A.paths) then return rows end
-    local have = {}
-    for _, r in ipairs(rows) do have[tostring(r.setting_key)] = true end
-    local out = {}
-    for _, r in ipairs(rows) do
-        local old = tostring(r.setting_key)
-        local news = A.paths(old)
-        if news == nil then
-            out[#out + 1] = r
-        else
-            local moved = true
-            for _, new in ipairs(news) do
-                if not have[new] then
-                    have[new] = true
-                    out[#out + 1] = {
-                        setting_key = new,
-                        value_json = r.value_json,
-                        updated_by = r.updated_by,
-                        updated_ts = r.updated_ts,
-                    }
-                    if A.savedUsed then A.savedUsed(old, new) end
-                    local ok, err = pcall(MySQL.insert.await, [[
-                        INSERT INTO cp_settings (setting_key, value_json, updated_by, updated_at) VALUES (?, ?, ?, NOW())
-                        ON DUPLICATE KEY UPDATE value_json = VALUES(value_json), updated_by = VALUES(updated_by),
-                          updated_at = VALUES(updated_at)
-                    ]], { new, tostring(r.value_json), tostring(r.updated_by or 'console') })
-                    if not ok then
-                        moved = false
-                        CP.err(TAG, 'saving %s under its new name %s failed: %s', old, new, tostring(err))
-                    end
-                end
-            end
-            if moved then
-                local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_settings WHERE setting_key = ?', { old })
-                if not ok then CP.err(TAG, 'removing the old setting %s failed: %s', old, tostring(err)) end
-            end
-        end
+        if Settings.entry(tostring(r.setting_key)) then out[#out + 1] = r end
     end
     return out
 end
@@ -3208,7 +3076,7 @@ local function LoadRows()
         return false
     end
     saved = {}
-    rows = Settings._aliasRows(Settings._dropRetired(type(rows) == 'table' and rows or {}))
+    rows = Settings._dropUnknown(type(rows) == 'table' and rows or {})
     -- every saved value, so a bonus's kind is checked with its saved value (they are saved together)
     local pending = {}
     for _, r in ipairs(rows) do
@@ -3351,8 +3219,6 @@ function Settings.boot()
     local ok = LoadRows()
     if ok then ApplyAll(true) end
     loaded = true
-    -- one line when config.lua or a saved setting still used Map markers' old names
-    if CP.MarkerAliases and CP.MarkerAliases.report then pcall(CP.MarkerAliases.report) end
     local n = 0
     for _ in pairs(saved) do n = n + 1 end
     if n > 0 then print(('[crimson-police] %s'):format(CP.L('settings.console_loaded', { n = n }))) end
@@ -3465,8 +3331,7 @@ end
 -- the fallback group, after its own).
 function Settings.plainGroups()
     local out, byKey = {}, {}
-    local play = Play.on()
-    for _, g in ipairs(play and Play.groups or GROUPS) do
+    for _, g in ipairs(Play.groups) do
         local v = {
             key = g.key,
             title = CP.L('settings.group.' .. g.key),
@@ -3477,17 +3342,15 @@ function Settings.plainGroups()
         byKey[g.key] = v
     end
     for _, sec in ipairs(Schema().sections) do
-        local v = play and (byKey[Play.ofSection[sec.key]] or byKey[Play.fallback]) or byKey[sec.group]
-            or byKey[Play.plainFallback]
+        local v = byKey[Play.ofSection[sec.key]] or byKey[Play.fallback]
         v.sections[#v.sections + 1] = sec.key
     end
     return out
 end
 
--- The plain group a section shows under in the Settings screen (Config.AdminUi.groupByPlay picks the set).
+-- The plain group a section shows under in the Settings screen.
 function Play.groupOf(sec)
-    if Play.on() then return Play.ofSection[sec.key] or Play.fallback end
-    return sec.group
+    return Play.ofSection[sec.key] or Play.fallback
 end
 
 -- Settings -> Features: the features whose switch config.lua has, each with its play section and its setting.
@@ -3520,7 +3383,6 @@ function Settings.commonPaths()
     return out
 end
 Settings._common = COMMON
-Settings._groups = GROUPS
 
 -- SettingsView: every section, group and setting, with the counts the screen shows.
 function Settings.all()
@@ -3564,12 +3426,7 @@ function Settings.all()
     end
     out.groups = Settings.plainGroups()
     out.common = Settings.commonPaths()
-    -- Config.AdminUi.groupByPlay: the groups are NPC missions, Player vs police, Police teamwork, then the rest
-    out.byPlay = Play.on() or nil
     out.features = Settings.features()
-    -- Config.AdminUi.settingsView: the view the screen opens in (anything unknown = 'simple')
-    local aui = type(Config.AdminUi) == 'table' and Config.AdminUi or {}
-    out.view = aui.settingsView == 'all' and 'all' or 'simple'
     out.safeMode = safeMode or nil
     out.added = Settings.addedDepartments()
     return out
@@ -4520,27 +4377,7 @@ function Settings.previewImport(text)
     if #doc.settings > IMPORT_ROWS then return nil, 'err.setting_too_many' end
     local view = { changes = {}, unknown = {}, locked = {}, invalid = {}, money = {}, unchanged = 0 }
     local apply, seen = {}, {}
-    -- a file exported before Map markers took in the mission blips: its old names read as the new ones
-    local items, named = {}, {}
-    for _, item in ipairs(doc.settings) do
-        if type(item) == 'table' and type(item.path) == 'string' then named[item.path] = true end
-    end
-    for _, item in ipairs(doc.settings) do
-        local news = type(item) == 'table' and CP.MarkerAliases and CP.MarkerAliases.paths(item.path) or nil
-        if type(item) == 'table' and Settings.RETIRED[item.path] then
-            -- a retired setting (the Money screen took it in): left out quietly, not listed as unknown
-            named[item.path] = true
-        elseif news then
-            for _, new in ipairs(news) do
-                if not named[new] then
-                    named[new] = true
-                    items[#items + 1] = { path = new, value = item.value, none = item.none }
-                end
-            end
-        else
-            items[#items + 1] = item
-        end
-    end
+    local items = doc.settings
     for _, item in ipairs(items) do
         local path = type(item) == 'table' and item.path or nil
         if type(path) ~= 'string' or seen[path] then

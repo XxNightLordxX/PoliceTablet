@@ -3,11 +3,11 @@
 // generated from the builder:config ranges (config/blocks.lua): every number shows its min, max and default and
 // refuses values outside them; selects offer only the allowed lists (Config.Builder.allowed); chances are whole
 // percent and progress times seconds (builder units, protocol §1.1). Field paths follow ARCHITECTURE §3.3.
-// With Config.Builder.foldAdvanced (builder:config foldAdvanced) a panel is drawn in two passes through FoldCtx: the
+// A panel is drawn in two passes through FoldCtx: the
 // basics (the objective name and the groups without `advanced`, plus `summary` groups such as the shootout's Waves,
 // Enemies per wave, Weapons and Difficulty) and, inside a closed "More settings" <details>, the checks (minimum time,
-// presence range) and every `advanced` group; an error on the objective opens it. Folding off draws every group open
-// as before. The logic without React (foldsAdvanced, Easy/Normal/Hard inside the hostile_waves ranges) is
+// presence range) and every `advanced` group; an error on the objective opens it. The logic without React
+// (Easy/Normal/Hard inside the hostile_waves ranges) is
 // blockBasics.ts; blockPanels.walk.ts renders the panels and Details against the browser mocks (node walk.mjs).
 
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react';
@@ -22,14 +22,13 @@ import {
     TextInput,
     Toggle,
     readMoreOpen,
-    useFoldAdvanced,
     writeMoreOpen,
 } from '../shared/components';
 import { asArray } from '../shared/data';
 import { t } from '../shared/i18n';
 import type { BuilderConfig, BuilderDefinition, BuilderError, BuilderObjective } from '../types/builder_server';
 import { GroupTitle, MultiPick, OptionPick, RangeNumber, nameOf } from './controls';
-import { HW_DIFFICULTIES, foldsAdvanced, hwDifficultyOf, hwDifficultyStats, perWaveOf } from './blockBasics';
+import { HW_DIFFICULTIES, hwDifficultyOf, hwDifficultyStats, perWaveOf } from './blockBasics';
 import { getAt, messageAt } from './defUtils';
 import {
     flagOf,
@@ -81,7 +80,7 @@ function Note({ children, tone = 'info' }: { children: ReactNode; tone?: 'info' 
     );
 }
 
-// Which groups a panel draws (Config.Builder.foldAdvanced): 'all' every group as before (folding off), 'basic' the
+// Which groups a panel draws: 'all' every group (a panel drawn outside BlockPanel), 'basic' the
 // groups that stay open, 'advanced' the ones under "More settings". A panel is drawn once per pass.
 type Fold = 'all' | 'basic' | 'advanced';
 const FoldCtx = createContext<Fold>('all');
@@ -2001,8 +2000,8 @@ const PANELS: Record<string, ComponentType<PanelProps>> = {
 
 const MORE_SCREEN = 'builder_block';
 
-// The settings panel of one objective: its name, then the block's own settings. With Config.Builder.foldAdvanced the
-// block's basics stay open and the rest (the checks, the advanced groups) fold under a closed "More settings".
+// The settings panel of one objective: its name, then the block's own settings. The block's basics stay open and the
+// rest (the checks, the advanced groups) fold under "More settings", open as the viewer last left it.
 export function BlockPanel(props: PanelProps) {
     const { cfg, def, obj, index, ro, errors, set } = props;
     const Panel = PANELS[obj.block];
@@ -2011,9 +2010,6 @@ export function BlockPanel(props: PanelProps) {
     const presence = rangeOf(cfg, obj.block, 'presenceRange', [50, 800, 150]);
     const minDefault = asArray(cfg.blockList).find(x => x.id === obj.block)?.minSeconds ?? 30;
     const labelMax = cfg.limits?.objectiveLabel ?? 64;
-    const fold = foldsAdvanced(cfg);
-    // Config.AdminUi.foldAdvanced: More settings stays as the viewer last left it (browser storage)
-    const remember = useFoldAdvanced();
     const label = (
         <Field label={t('builder.settings.label')} error={messageAt(errors, `${p}.label`)} required>
             <TextInput
@@ -2058,17 +2054,6 @@ export function BlockPanel(props: PanelProps) {
             {Extra ? <Extra {...props} /> : null}
         </>
     );
-    if (!fold) {
-        return (
-            <div className="builder_client-panel">
-                <Group title={t('builder.settings.common')}>
-                    {label}
-                    {checks}
-                </Group>
-                {own}
-            </div>
-        );
-    }
     // an error on this objective opens the fold, so a refused value is never hidden
     const hidden = errors.some(e => e.path.startsWith(`${p}.`) && e.path !== `${p}.label`);
     return (
@@ -2078,9 +2063,9 @@ export function BlockPanel(props: PanelProps) {
             <details
                 key={`${index}:${obj.block}`}
                 className="builder_client-more"
-                open={hidden || (remember && readMoreOpen(MORE_SCREEN)) || undefined}
+                open={hidden || readMoreOpen(MORE_SCREEN) || undefined}
                 onToggle={e => {
-                    if (remember && !hidden) writeMoreOpen(MORE_SCREEN, e.currentTarget.open);
+                    if (!hidden) writeMoreOpen(MORE_SCREEN, e.currentTarget.open);
                 }}
             >
                 <summary className="builder_client-more-title">

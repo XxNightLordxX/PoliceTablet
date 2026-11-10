@@ -117,8 +117,8 @@ from the harness, before -> after:
 | the auto-suspension check, the flagged-run notes of a run list, the Type of the Day and mission control overrides, the publisher lookup, the reward take-back check, the per-day caps (`cp_audit`) | rows read per lookup | the whole audit log -> the rows of that target or action (migration 017: `idx_audit_target`, `idx_audit_action`) |
 | a dispute looked up by its run (`cp_disputes`) | rows read | the whole table -> that run's rows (`idx_dispute_run`) |
 | Settings: typing in the search box or saving one setting | rows drawn again | every row on the screen -> only rows whose data changed (`SettingRow` is memoized, `save` and `reset` keep their identity) |
-| `Config.AdminUi.windowRows = true`, an 800-row table in a scroll box (Leaderboards) | table rows drawn | 801 -> under 50 (the rows in view, 12 above and below, two spacers); shipped `false` = every row as before |
-| `Config.AdminUi.windowRows = true`, Settings search with hundreds of matches | rows drawn at first | every match -> 60, then 60 more each time the end is within 600 px |
+| An 800-row table in a scroll box (Leaderboards) | table rows drawn | 801 -> under 50 (the rows in view, 12 above and below, two spacers) |
+| Settings search with hundreds of matches | rows drawn at first | every match -> 60, then 60 more each time the end is within 600 px |
 
 How it was found: `CP.Storage.MemSQL.scanMeter` (nil in the game) counts the rows each whole-table read of the saves
 folder engine hands over; run over the idle server (`tests/server_cost_spec.lua` world, 120 s) it found none, and over
@@ -331,7 +331,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | shared/hooks.ts `useRequest` | screen polls (`pollMs`) | the screen is mounted in the open tablet | 10 -> 20 s shortest (`POLL_MIN_MS`: a smaller `pollMs` polls every 20 s), up to 60 s per screen; pushes refresh at once |
 | layouts/navBadges.ts | sidebar counts re-ask | tablet open | 5 min (the `nav` push does the rest) |
 | shared/hooks.ts `useCountdown` | HUD countdowns | a countdown shows | one `setTimeout` at each whole second, ends at 0 |
-| shared/rowWindow.ts `useRowWindow` | the rows a windowed table draws | `Config.AdminUi.windowRows` on, a scrolling table of more than 100 rows | on scroll, one update per animation frame (no timer) |
+| shared/rowWindow.ts `useRowWindow` | the rows a windowed table draws | a scrolling table of more than 100 rows | on scroll, one update per animation frame (no timer) |
 | builder/useDraftEditor.ts | autosave | an editable draft is open | `autosaveSeconds` |
 | admin/screens/Testing.tsx | clock tick | the screen is open | 30 s |
 

@@ -1,6 +1,6 @@
-// Supervisor UI · Department → Controls (old screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+// Supervisor UI · Department → Controls (title key 'ui.screen.sup_controls'): the
 
-// Supervisor UI · Department → Controls (old screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+// Supervisor UI · Department → Controls (title key 'ui.screen.sup_controls'): the
 // controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
 // editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
 // reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
@@ -25,7 +25,6 @@ import {
     SegmentedControl,
     Textarea,
     Toggle,
-    useFoldAdvanced,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { fmtDateTime, formatDuration } from '../../shared/format';
@@ -81,7 +80,7 @@ export function groupOf(c: MissionControlState): GroupKey {
     return CONTROL_GROUP[c.key] ?? (c.scope === 'run' ? 'run' : 'department');
 }
 
-// Config.AdminUi.foldAdvanced: the controls a supervisor rarely changes fold under More in their group. A control
+// The controls a supervisor rarely changes fold under More in their group. A control
 // that is set (it has a saved value) always stays open, so a change in force never hides.
 export const ADVANCED_CONTROLS = new Set([
     'abandonCooldown',
@@ -999,7 +998,6 @@ export default function MissionControls() {
     const { run, busy } = useAdminAction();
     const [pending, setPending] = useState<Pending | null>(null);
 
-    const fold = useFoldAdvanced();
     const dept = asArray(data?.departments)[0];
     const deptShort = dept?.short ?? session.officer?.departmentShort ?? '';
     // only the controls an admin switched on; an action control is used from its own screen
@@ -1072,14 +1070,14 @@ export default function MissionControls() {
                     />
                 );
                 // folding off: every control in config order, as before
-                const open = fold ? g.rows.filter(c => !isFolded(c)) : g.rows;
-                const more = fold ? g.rows.filter(isFolded) : [];
+                const open = g.rows.filter(c => !isFolded(c));
+                const more = g.rows.filter(isFolded);
                 return (
                     <Card key={g.key} title={t(`sup.controls.group.${g.key}`)} subtitle={t(SUP_GROUP_HELP[g.key])}>
                         <div className="sup-mc-list">
                             {open.map(row)}
                             {more.length > 0 ? (
-                                <MoreFold screen={`sup_controls.${g.key}`} fold count={more.length}>
+                                <MoreFold screen={`sup_controls.${g.key}`} count={more.length}>
                                     {more.map(row)}
                                 </MoreFold>
                             ) : null}

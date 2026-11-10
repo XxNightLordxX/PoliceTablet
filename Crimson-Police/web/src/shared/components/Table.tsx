@@ -1,7 +1,7 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';
-import { useRowWindow, useWindowRows } from '../rowWindow';
+import { useRowWindow } from '../rowWindow';
 import { EmptyState, Spinner } from './Feedback';
 
 export interface TableColumn<R> {
@@ -36,8 +36,7 @@ export interface TableProps<R> {
     dense?: boolean;
     // Extra row(s) pinned under the body, e.g. "your row" on a leaderboard.
     footer?: ReactNode;
-    // Draw only the rows in view (Config.AdminUi.windowRows); only with maxHeight and more than 100 rows.
-    // Left out: the open UI's setting.
+    // Draw only the rows in view (default true); only with maxHeight and more than 100 rows. false = every row.
     windowRows?: boolean;
     className?: string;
     'aria-label'?: string;
@@ -68,11 +67,10 @@ export function Table<R>({
 }: TableProps<R>) {
     // Lua encodes an empty table as {} (not []), so anything that is not an array counts as no rows.
     const list: R[] = Array.isArray(rows) ? rows : [];
-    const uiWindow = useWindowRows();
     const viewGuess = typeof maxHeight === 'number' ? maxHeight : 480;
     const { win, onScroll, rowRef } = useRowWindow(
         list.length,
-        maxHeight !== undefined && (windowRows ?? uiWindow),
+        maxHeight !== undefined && windowRows !== false,
         viewGuess,
         dense ? 32 : 44,
     );

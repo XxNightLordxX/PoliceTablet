@@ -213,7 +213,7 @@ export function BulkVoidDialog({ open, onClose, initial: given, name, onDone }: 
                             options={(session.config?.missionTypes ?? []).map(m => ({ value: m.key, label: m.label }))}
                         />
                     </Field>
-                    {/* Config.AdminUi.foldAdvanced: the mission id, the awards and the strike fold under More; a set one
+                    {/* the mission id, the awards and the strike fold under More; a set one
                     never hides */}
                     <MoreFold screen="bulk_void" count={3} forceOpen={!!missionId.trim() || includeAwards || strike}>
                         <Field label={t('ui.admin_officers.bulk.mission')}>

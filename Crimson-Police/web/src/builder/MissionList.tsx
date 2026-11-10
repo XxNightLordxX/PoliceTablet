@@ -87,7 +87,7 @@ export interface MissionListProps {
     scope: BuilderScope;
     config: BuilderConfig | null;
     onOpen: (id: string) => void;
-    // "New mission" opens the wizard instead of the dialog (Config.Builder.quickWizard)
+    // "New mission" opens the wizard (left out: the New mission dialog)
     onNew?: () => void;
     // open with the New mission dialog showing (the wizard's "Open the full editor" on its first step)
     createOpen?: boolean;

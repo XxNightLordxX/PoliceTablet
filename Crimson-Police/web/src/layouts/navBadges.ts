@@ -42,7 +42,6 @@ export function navBadge(key: ScreenKey, c: NavCounts): { badge?: string; live?:
         // Admin UI (admin-only counts: the server sends them to admin players only)
         case 'admin_officers':
             return { badge: countBadge((c.adminReview ?? 0) + (c.adminDisputes ?? 0)) };
-        case 'admin_payments':
         case 'admin_money':
             return { badge: countBadge(c.adminPayments ?? 0) };
         case 'admin_live':

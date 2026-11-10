@@ -1,19 +1,16 @@
-// Admin UI -> Map markers (Config.AdminUi.markersScreen) walked against the browser mocks (node walk.mjs, a gate
+// Admin UI -> Map markers walked against the browser mocks (node walk.mjs, a gate step).
 
-// Admin UI -> Map markers (Config.AdminUi.markersScreen) walked against the browser mocks (node walk.mjs, a gate
-// step): the screen shows under NPC missions unless switched off and the old Mission blips key opens it, the
-// objective's settings and kinds are listed, every part with its look, the prisoner van with its own switch, the
-// pickers offer the departments, jobs, mission types and missions, and the rules saved are the value the server checks.
+// The screen shows under NPC missions, the objective's settings and kinds are listed, every part with its look, the
+// prisoner van with its own switch, the pickers offer the departments, jobs, mission types and missions, and the
+// rules saved are the value the server checks.
 
 import '../../mocks/settings.mock';
 import '../../mocks/builder_client.mock';
 import { ADMIN_GROUP_OF } from '../../layouts/adminNav';
-import { resolveAdminKey } from '../../layouts/adminMoney';
 import { ADMIN_SCREENS } from '../../layouts/screens';
 import { mockLocale } from '../../mocks/samples';
 import { setLocale, t } from '../../shared/i18n';
 import { action, request } from '../../shared/nui';
-import type { Session } from '../../shared/types';
 import type { SettingsData } from '../../types/settings';
 import {
     COLOURS,
@@ -45,19 +42,13 @@ function ok(cond: unknown, what: string): void {
 }
 
 async function steps(): Promise<void> {
-    // the screen: under NPC missions, shown unless Config.AdminUi.markersScreen = false
+    // the screen: under NPC missions, always shown
     const def = ADMIN_SCREENS.find(s => s.key === 'admin_markers');
-    ok(def, 'the Map markers screen is in the Admin registry');
-    ok(!ADMIN_SCREENS.some(s => s.key === 'admin_blips'), 'one screen: no Mission blips screen of its own');
-    const session = (markersScreen?: boolean) =>
-        ({ config: { adminUi: { groupSidebar: true, markersScreen } } }) as unknown as Session;
-    ok(def?.visible && def.visible(session(true)) === true, 'shipped (true): the screen shows');
-    ok(def?.visible && def.visible(session()) === true, 'an older session without the key: the screen shows');
-    ok(def?.visible && def.visible(session(false)) === false, 'markersScreen = false: no screen');
-    ok(def?.play === 'npc' && ADMIN_GROUP_OF.admin_markers === 'npc', 'listed under NPC missions in both layouts');
+    ok(def && !def.visible, 'the Map markers screen is in the Admin registry, always shown');
+    ok(!ADMIN_SCREENS.some(s => (s.key as string) === 'admin_blips'), 'one screen: no Mission blips screen of its own');
+    ok(ADMIN_GROUP_OF.admin_markers === 'npc', 'listed under NPC missions');
     ok(t('ui.nav.plain.admin_markers') !== 'ui.nav.plain.admin_markers', 'it has a plain name');
     ok(t('ui.screen.admin_markers') === 'Map markers', 'its title');
-    ok(resolveAdminKey('admin_blips', { q: 1 }, session(true)).key === 'admin_markers', 'the old key opens it');
 
     // the objective's settings and the kinds of objective blip
     const res = await request<SettingsData>('admin:getSettings', {});

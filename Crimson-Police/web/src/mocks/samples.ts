@@ -143,31 +143,12 @@ const CONFIG: Session['config'] = {
     disputeWindowHours: 48,
     periods: ['weekly', 'monthly', 'season', 'alltime'],
     filters: ['overall', 'patrol', 'training', 'investigation', 'tactical', 'unit', 'cross', 'department'],
-    // ?flatSidebar in the browser shows the Admin UI sidebar as Config.AdminUi.groupSidebar = false does
-    // ?landing=payouts or ?landing=missions opens the Admin UI there, with no Home screen (Config.AdminUi.landing)
-    // ?homeLinks: the Home tiles only open their screen (Config.AdminUi.homeForms = false)
     adminUi: {
-        groupSidebar: !(typeof window !== 'undefined' && /[?&]flatSidebar\b/.test(window.location.search)),
-        landing:
-            typeof window !== 'undefined' && /[?&]landing=payouts\b/.test(window.location.search)
-                ? 'payouts'
-                : typeof window !== 'undefined' && /[?&]landing=missions\b/.test(window.location.search)
-                  ? 'missions'
-                  : 'home',
-        homeForms: !(typeof window !== 'undefined' && /[?&]homeLinks\b/.test(window.location.search)),
         // ?noReasonChips: no ready-made reason buttons (Config.AdminUi.reasonChips = {})
         reasonChips:
             typeof window !== 'undefined' && /[?&]noReasonChips\b/.test(window.location.search)
                 ? []
                 : ['Balance change', 'Event', 'Correction'],
-        // ?plainLayout: the Admin UI plain layout (Config.AdminUi.plainLayout = true)
-        plainLayout: typeof window !== 'undefined' && /[?&]plainLayout\b/.test(window.location.search),
-        // ?needsAttention: Home's Needs attention panel (Config.AdminUi.needsAttention = true)
-        needsAttention: typeof window !== 'undefined' && /[?&]needsAttention\b/.test(window.location.search),
-        // ?noMarkersScreen: no Map markers screen (Config.AdminUi.markersScreen = false)
-        markersScreen: !(typeof window !== 'undefined' && /[?&]noMarkersScreen\b/.test(window.location.search)),
-        // ?oneRequest: one request per screen open
-        oneRequest: typeof window !== 'undefined' && /[?&]oneRequest\b/.test(window.location.search),
     },
     // ?rsOff: no Real suspects screen (Config.LiveCrime.enabled and Config.Volunteers.enabled both false)
     realSuspects: { screen: !(typeof window !== 'undefined' && /[?&]rsOff\b/.test(window.location.search)) },
@@ -178,10 +159,9 @@ const CONFIG: Session['config'] = {
         activeFirst: typeof window !== 'undefined' && /[?&]activeFirst\b/.test(window.location.search),
         compact: typeof window !== 'undefined' && /[?&]compactSidebar\b/.test(window.location.search),
     },
-    // ?supByTask, ?supCompact, ?supLanding=review: the Supervisor UI as Config.Tablet.supervisorByTask = true,
-    // supervisorCompact = true and supervisorLanding = 'review' show it
+    // ?supCompact, ?supLanding=review: the Supervisor UI as Config.Tablet.supervisorCompact = true and
+    // supervisorLanding = 'review' show it
     supervisorNav: {
-        byTask: typeof window !== 'undefined' && /[?&]supByTask\b/.test(window.location.search),
         compact: typeof window !== 'undefined' && /[?&]supCompact\b/.test(window.location.search),
         landing: (() => {
             const m =

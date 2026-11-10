@@ -39,7 +39,6 @@ import type {
     BankingCheck,
     BankingEntry,
     PaymentRow,
-    PaymentTotals,
     PaymentsExport,
     PaymentsView,
     UnfundedPreview,
@@ -433,8 +432,7 @@ export default function AdminPayments() {
     const screenTitle = useAdminTitle('admin_payments');
     const session = useSession();
     const departments = session.config?.departments ?? [];
-    const oneRequest = session.config?.adminUi?.oneRequest === true;
-    // Leaderboards → stuck payments links here with navigate('admin_payments', { status: 'paying' })
+    // Leaderboards → stuck payments links here with navigate('admin_money', { moneyTab: 'payments', status: 'paying' })
     const { params } = useNavigation();
     const [status, setStatus] = useState(typeof params.status === 'string' ? params.status : '');
     const [department, setDepartment] = useState('');
@@ -462,20 +460,16 @@ export default function AdminPayments() {
         const f: Record<string, unknown> = { ...where, page, size: PAGE_SIZE };
         if (status) f.status = status;
         if (citizenid) f.citizenid = citizenid;
-        if (oneRequest) f.withTotals = true;
+        // the totals come with the list, so the screen opens with one request
+        f.withTotals = true;
         return f;
-    }, [where, status, citizenid, page, oneRequest]);
+    }, [where, status, citizenid, page]);
 
     const { data, loading, error, refetch } = useRequest<PaymentsView>('admin:getPayments', filter, {
         pushTopic: 'payments',
     });
-    // Config.AdminUi.oneRequest: the totals come with the list, so the screen opens with one request
-    const totals = useRequest<PaymentTotals>('admin:getPaymentTotals', where, { skip: oneRequest });
-    const tot = oneRequest ? (data?.totals ?? null) : totals.data;
-    const reload = () => {
-        void refetch();
-        if (!oneRequest) void totals.refetch();
-    };
+    const tot = data?.totals ?? null;
+    const reload = () => void refetch();
     const pick =
         <T,>(set: (v: T) => void) =>
         (v: T) => {

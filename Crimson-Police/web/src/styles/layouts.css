@@ -533,7 +533,7 @@
     padding: 26px 34px 36px;
 }
 
-/* Grouped sidebar (Config.AdminUi.groupSidebar): the More button and the screens it unfolds */
+/* Grouped sidebar: the More button and the screens it unfolds */
 .cp-nav-item--more {
     color: var(--cp-subtle);
 }
@@ -546,7 +546,7 @@
     padding-left: 22px;
 }
 
-/* Config.AdminUi.groupByPlay: a small heading over each section of the sidebar */
+/* A small heading over each section of the sidebar */
 .cp-sidebar__section {
     padding: 10px 12px 4px;
     font-size: var(--cp-fs-xs);
@@ -593,7 +593,7 @@
     margin-left: 0;
 }
 
-/* Config.AdminUi.plainLayout: the one-line description under a sidebar group, the screen search box and
+/* The one-line description under a sidebar group, the screen search box and
    the breadcrumb over the screen */
 .cp-sidebar__section-hint {
     padding: 0 12px 6px;

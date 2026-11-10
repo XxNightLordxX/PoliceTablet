@@ -1,6 +1,6 @@
 // The Money screen and one request per screen open against the browser mocks (node walk.mjs, a gate step):
-// one Money screen with Pay rates, Rewards, Payments and Department funds tabs, whose old screen keys stay aliases,
-// and Config.AdminUi.oneRequest brings Payments' totals with its list.
+// one Money screen with Pay rates, Rewards, Payments and Department funds tabs (a link names its tab), and Payments
+// gets its totals with its list.
 
 import '../mocks/admin_economy.mock';
 import '../mocks/oversight.mock';
@@ -9,7 +9,7 @@ import { request } from '../shared/nui';
 import type { Session } from '../shared/types';
 import type { DepartmentFundsView, PaymentsView } from '../types/admin_economy';
 import type { DepartmentsData } from '../types/oversight';
-import { MONEY_TABS, moneySearchWords, moneyTabOf, resolveAdminKey } from './adminMoney';
+import { MONEY_TABS, moneySearchWords, moneyTabOf } from './adminMoney';
 import { ADMIN_GROUP_OF } from './adminNav';
 import { navBadge, EMPTY_COUNTS } from './navBadges';
 import { landingScreen, screensFor } from './screens';
@@ -21,8 +21,7 @@ function ok(cond: unknown, what: string): void {
     else failures.push(what);
 }
 
-const sessionOf = (adminUi: Record<string, unknown>) =>
-    ({ actions: [], config: { adminUi: { landing: 'home', ...adminUi } } }) as unknown as Session;
+const sessionOf = (adminUi: Record<string, unknown>) => ({ actions: [], config: { adminUi } }) as unknown as Session;
 
 async function steps(): Promise<void> {
     // one Money screen, always: the old money screens are its tabs, not sidebar items
@@ -30,7 +29,7 @@ async function steps(): Promise<void> {
     const keys = screensFor('admin', shipped).map(s => s.key);
     ok(keys.includes('admin_money'), 'the Money screen shows');
     ok(
-        !keys.includes('admin_payouts') && !keys.includes('admin_rewards') && !keys.includes('admin_payments'),
+        !(keys as string[]).some(k => ['admin_payouts', 'admin_rewards', 'admin_payments'].includes(k)),
         'Payouts, Rewards and Payments are tabs of Money, not screens of their own',
     );
     ok(keys.indexOf('admin_money') === keys.indexOf('admin_home') + 1, 'Money sits right under Home');
@@ -46,16 +45,9 @@ async function steps(): Promise<void> {
         'every tab has its English name',
     );
 
-    // the old keys are aliases of their tab, with the link's own params kept
-    const pay = resolveAdminKey('admin_payouts', undefined, shipped);
-    ok(pay.key === 'admin_money' && moneyTabOf(pay.params) === 'pay', 'admin_payouts opens the Pay rates tab');
-    const rew = resolveAdminKey('admin_rewards', undefined, null);
-    ok(rew.key === 'admin_money' && moneyTabOf(rew.params) === 'rewards', 'admin_rewards opens the Rewards tab');
-    const made = resolveAdminKey('admin_payments', { status: 'paying' }, shipped);
-    ok(made.key === 'admin_money' && moneyTabOf(made.params) === 'payments', 'admin_payments opens Payments');
-    ok(made.params.status === 'paying', "the link's own params are kept (Leaderboards -> stuck payments)");
-    ok(resolveAdminKey('admin_live', { tab: 'refused' }, shipped).key === 'admin_live', 'other screens are untouched');
-    ok(resolveAdminKey('admin_blips', {}, shipped).key === 'admin_markers', 'the Mission blips alias still works');
+    // a link names its tab; the old screen keys are no screens any more
+    ok(moneyTabOf({ moneyTab: 'payments', status: 'paying' }) === 'payments', 'a link opens Payments');
+    ok(!keys.some(k => (k as string) === 'admin_blips'), 'no old Mission blips key');
     ok(moneyTabOf({}) === 'pay' && moneyTabOf(null) === 'pay', 'Money opens on Pay rates');
     ok(moneyTabOf({ moneyTab: 'funds' }) === 'funds', 'Department funds can be asked for');
     ok(moneyTabOf({ moneyTab: 'nope' }) === 'pay', 'an unknown tab opens Pay rates');
@@ -63,9 +55,8 @@ async function steps(): Promise<void> {
     ok(ADMIN_GROUP_OF.admin_money === 'economy', 'plain layout: Money under Economy');
     const words = moneySearchWords().join(' ').toLowerCase();
     ok(words.includes('payouts') && words.includes('rewards') && words.includes('funds'), 'search finds Money');
-    const landing = sessionOf({ landing: 'payouts' });
-    const avail = screensFor('admin', landing).map(s => s.key);
-    ok(landingScreen('admin', landing, avail) === 'admin_money', 'a landing of payouts opens Money');
+    const avail = screensFor('admin', shipped).map(s => s.key);
+    ok(landingScreen('admin', shipped, avail) === 'admin_home', 'the Admin UI opens on Home');
 
     // Department funds: the departments its cards are drawn for
     const depts = await request<DepartmentsData>('admin:getDepartments', {});
@@ -75,9 +66,9 @@ async function steps(): Promise<void> {
     });
     ok(funds.ok && funds.data && typeof funds.data.enabled === 'boolean', "Department funds: a department's card");
 
-    // oneRequest: the list brings its totals when asked for them
+    // the list brings its totals when asked for them (the screen always asks)
     const two = await request<PaymentsView>('admin:getPayments', { page: 1, size: 25 });
-    ok(two.ok && two.data && two.data.totals === undefined, 'without withTotals: no totals (the second request)');
+    ok(two.ok && two.data && two.data.totals === undefined, 'without withTotals: no totals');
     const one = await request<PaymentsView>('admin:getPayments', { page: 1, size: 25, withTotals: true });
     ok(one.ok && one.data?.totals?.byStatus, 'withTotals: the totals come with the list');
 }

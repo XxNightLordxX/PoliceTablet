@@ -937,7 +937,7 @@
     gap: 12px;
 }
 
-/* "More settings" (Config.Builder.foldAdvanced): the advanced groups of a block and of Details, closed at first */
+/* "More settings": the advanced groups of a block and of Details, closed at first */
 .builder_client-more {
     border-radius: var(--cp-radius);
     border: 1px dashed var(--cp-border);
@@ -1685,7 +1685,7 @@
     }
 }
 
-/* New mission wizard (QuickMission.tsx, Config.Builder.quickWizard) */
+/* New mission wizard (QuickMission.tsx) */
 .builder_client-quick__head {
     display: flex;
     align-items: center;

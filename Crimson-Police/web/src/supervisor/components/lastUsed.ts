@@ -1,11 +1,12 @@
-// Supervisor dialogs open with the values last used (Config.Tablet.supervisorRemember): Give points (the
+// Supervisor dialogs open with the values last used: the values of the last successful Give points (points,
+// reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only
+// (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
 
-// Config.Tablet.supervisorRemember (session config.supervisorNav.remember, shipped false): the values of the
-// last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason),
-// kept in the page's memory only; the dialogs open with them while the switch is on. startNumber() keeps a number
-// inside the control's current min..max, else the minimum. The server checks every value again.
-
-import type { Session } from '../../shared/types';
+// Supervisor dialogs open with the values last used: the values of the last successful Give points (points,
+// reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only
+// (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
+// startNumber() keeps a number inside the control's current min..max, else the minimum. The server checks every value
+// again.
 
 export type LastUsedForm = 'award' | 'ban' | 'cooldown';
 export interface LastUsedValues {
@@ -15,20 +16,13 @@ export interface LastUsedValues {
 
 const store = new Map<LastUsedForm, LastUsedValues>();
 
-// The session's supervisorNav.remember (an older session = off).
-export function rememberOn(session: Session | null | undefined): boolean {
-    return session?.config?.supervisorNav?.remember === true;
-}
-
-// The values a dialog opens with: the last ones while on, else none.
-export function lastUsed(form: LastUsedForm, on: boolean): LastUsedValues {
-    if (!on) return {};
+// The values a dialog opens with: the last ones (none yet = {}).
+export function lastUsed(form: LastUsedForm): LastUsedValues {
     return { ...(store.get(form) ?? {}) };
 }
 
-// Keep the values of a successful submit (only while on).
-export function keepLastUsed(form: LastUsedForm, on: boolean, values: LastUsedValues): void {
-    if (!on) return;
+// Keep the values of a successful submit.
+export function keepLastUsed(form: LastUsedForm, values: LastUsedValues): void {
     const reason = typeof values.reason === 'string' ? values.reason.trim().slice(0, 200) : undefined;
     const number = typeof values.number === 'number' && Number.isFinite(values.number) ? values.number : undefined;
     store.set(form, { number, reason });

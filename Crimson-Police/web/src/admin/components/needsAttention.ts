@@ -1,4 +1,4 @@
-// Admin UI -> Home's Needs attention panel (Config.AdminUi.needsAttention): the lines of
+// Admin UI -> Home's Needs attention panel: the lines of
 // admin:getNeedsAttention, each a count that opens its screen. Pure helpers; walk: needsAttention.walk.ts.
 
 import type { AdminScreenKey, ScreenParams } from '../../shared/navigation';
@@ -54,11 +54,4 @@ export function attentionLines(data: NeedsAttentionData | null | undefined): Att
 // How many lines have something waiting (the panel's subtitle and its warning edge).
 export function attentionWaiting(lines: AttentionLine[]): number {
     return lines.filter(l => l.n > 0).length;
-}
-
-// The lines of Home's Something wrong? tile, in order. With the Needs attention panel on, Problems and Refused starts
-// are on the panel already, so the tile leaves them out (they would show twice).
-export function wrongCheckKeys(attention: boolean): string[] {
-    const all = ['load', 'health', 'problems', 'payments', 'refused'];
-    return attention ? all.filter(k => k !== 'problems' && k !== 'refused') : all;
 }

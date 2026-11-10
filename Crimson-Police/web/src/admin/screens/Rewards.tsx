@@ -1,6 +1,6 @@
-// Admin UI · Money → Rewards (old screen key 'admin_rewards', now a tab of admin_money): every feature that pays.
+// Admin UI · Money → Rewards (a tab of admin_money): every feature that pays.
 
-// Admin UI · Money → Rewards (old screen key 'admin_rewards', now a tab of admin_money): every feature that pays on
+// Admin UI · Money → Rewards (a tab of admin_money): every feature that pays on
 // one page. Each row shows its switch, its money and how it is paid, and its items (the RewardPoolEditor item picker,
 // checked against ox_inventory by the server); the Item rewards switch sits on top with a one-click turn on. Every
 // change saves through the Settings save flow (server:admin:setSetting: checked, audited, pushed as 'settings').

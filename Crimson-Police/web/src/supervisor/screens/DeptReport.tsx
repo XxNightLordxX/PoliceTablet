@@ -1,4 +1,4 @@
-// Supervisor UI · Department → Officers (old screen key 'sup_report', callbacks sup:getDeptReport and
+// Supervisor UI · Department → Officers (title key 'ui.screen.sup_report', callbacks sup:getDeptReport and
 
 // sup:getOfficerActivity). The department's challenge standing, this week's bounty, and every officer
 // of the department who played this week (runs, completed, points, cash, last run); tapping an officer

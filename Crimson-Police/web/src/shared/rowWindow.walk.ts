@@ -1,5 +1,5 @@
-// Windowed lists (Config.AdminUi.windowRows) against the browser mocks (node walk.mjs, a gate step): the
-// window math, and a long scrolling Table drawing only the rows in view while the option is on (every row while off).
+// Windowed lists against the browser mocks (node walk.mjs, a gate step): the window math, and a long scrolling
+// Table drawing only the rows in view (every row with windowRows={false}).
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';

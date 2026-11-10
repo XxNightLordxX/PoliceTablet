@@ -1,14 +1,14 @@
-// Windowed lists (Config.AdminUi.windowRows): a long list draws only the rows in view, plus a few above
-// and below, and two spacers keep the scroll bar and the scroll position as if every row were there. Shipped off:
-// every row is drawn at once, as before. docs/dev/LOOPS.md "NUI".
+// Windowed lists: a long list draws only the rows in view, plus a few above and below, and two spacers keep the
+// scroll bar and the scroll position as if every row were there. docs/dev/LOOPS.md "NUI".
 
-// Windowed lists (Config.AdminUi.windowRows, shipped false): rowWindow() works out the rows of a scroll
-// position (more than 100 rows, 12 above and below the view, spacers for the rest); useRowWindow() is the Table's scroll
-// handler (one update per animation frame) and measures the first drawn row; useGrowingLimit() lets the Settings search
-// results start with 60 rows and add 60 each time an IntersectionObserver sees the end within 600 px.
+// Windowed lists: a long list draws only the rows in view, plus a few above and below, and two spacers keep the
+// scroll bar and the scroll position as if every row were there. docs/dev/LOOPS.md "NUI".
+// rowWindow() works out the rows of a scroll position (more than 100 rows, 12 above and below the view, spacers for the
+// rest); useRowWindow() is the Table's scroll handler (one update per animation frame) and measures the first drawn
+// row; useGrowingLimit() lets the Settings search results start with 60 rows and add 60 each time an
+// IntersectionObserver sees the end within 600 px.
 
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
-import { useOptionalSession } from './session';
 
 // Lists up to this many rows always draw every row (a window would save nothing worth the spacers).
 export const WINDOW_MIN_ROWS = 100;
@@ -45,11 +45,6 @@ export function rowWindow(
     return { start, end, padTop: start * rowHeight, padBottom: (n - end) * rowHeight };
 }
 
-// Config.AdminUi.windowRows of the open UI (false outside one).
-export function useWindowRows(): boolean {
-    return useOptionalSession()?.config?.adminUi?.windowRows === true;
-}
-
 // The window of a scrolling element: its onScroll handler and a ref for the first drawn row (its height is measured
 // once per list length). Scroll events are folded into one update per animation frame.
 export function useRowWindow(total: number, on: boolean, viewportGuess: number, rowGuess: number) {
@@ -68,7 +63,7 @@ export function useRowWindow(total: number, on: boolean, viewportGuess: number, 
     useEffect(() => () => cancelAnimationFrame(frame.current), []);
     const onScroll = useCallback(
         (e: UIEvent<HTMLElement>) => {
-            // windowRows on: the scroll position is kept also while the list is short (no window), so a list that
+            // the scroll position is kept also while the list is short (no window), so a list that
             // grows past WINDOW_MIN_ROWS again starts from where the element really is (the browser clamped it)
             if (!on) return;
             const el = e.currentTarget;
@@ -84,13 +79,13 @@ export function useRowWindow(total: number, on: boolean, viewportGuess: number, 
 }
 
 // A list that grows as its end comes into view (the Settings search results): limit rows at first, GROW_CHUNK more
-// each time the sentinel element is within 600 px of the view. Off: no limit. A new list (key) starts again.
-export function useGrowingLimit(total: number, on: boolean, key: unknown) {
+// each time the sentinel element is within 600 px of the view. A new list (key) starts again.
+export function useGrowingLimit(total: number, key: unknown) {
     const [limit, setLimit] = useState(GROW_CHUNK);
     useEffect(() => setLimit(GROW_CHUNK), [key]);
     const sentinel = useRef<HTMLDivElement | null>(null);
-    // no IntersectionObserver (never in CEF, but a plain browser preview might lack it): every row, as when off
-    const can = on && typeof IntersectionObserver !== 'undefined';
+    // no IntersectionObserver (never in CEF, but a plain browser preview might lack it): every row
+    const can = typeof IntersectionObserver !== 'undefined';
     const more = can && total > limit;
     useEffect(() => {
         const el = sentinel.current;

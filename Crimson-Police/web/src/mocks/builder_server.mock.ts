@@ -436,10 +436,7 @@ function buildConfig(): BuilderConfig {
         // as shipped: admins only (Config.Permissions.builderTeleport is empty)
         teleport: admin,
         requireTestToPublish: REQUIRE_TEST && !admin,
-        // as shipped: "New mission" opens the wizard; the built-ins of Config.Builder.templates the preview has
-        quickWizard: true,
-        // as shipped: block settings fold the advanced ones under "More settings"
-        foldAdvanced: true,
+        // the built-ins of Config.Builder.templates the preview has
         templates: TEMPLATE_IDS.filter(id => BUILTINS.some(b => b.id === id)).map(id => ({
             id,
             type: BUILTINS.find(b => b.id === id)!.type,

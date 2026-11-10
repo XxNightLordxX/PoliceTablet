@@ -1,4 +1,4 @@
-// Admin UI · Payouts (old key 'admin_payouts', now the Pay rates tab of admin_money; title 'ui.screen.admin_payouts').
+// Admin UI · Money → Pay rates (a tab of admin_money; title 'ui.screen.admin_payouts').
 
 // Tabs Types / Missions: every mission type and every mission with its base payout and where it comes
 // from; admin payouts are marked "Set by an admin". Set (NumberInput within Config.Cash limits + reason,

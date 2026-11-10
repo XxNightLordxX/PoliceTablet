@@ -308,17 +308,6 @@ do
     H.ok(groups.Database and groups.Database.desc:find('enabled = false: database off', 1, true) ~= nil,
         'the comment under a banner describes the first table')
     H.eq(E('Database.enabled').locked, 'settings.locked.database', 'where the settings live: config.lua only')
-    H.eq(E('AdminUi.groupSidebar').default, true, 'the Admin UI sidebar ships grouped')
-    H.ok(E('AdminUi.groupSidebar').desc:find('folds the rest under More', 1, true) ~= nil,
-        'groupSidebar: its config.lua comment is its description')
-    H.eq(E('AdminUi.landing').default, 'home', 'the Admin UI ships opening on Home')
-    H.eq(E('AdminUi.landing').kind, 'enum', 'landing is a choice')
-    H.ok(E('AdminUi.landing').desc:find('a landing screen with the common jobs', 1, true) ~= nil,
-        'landing: its config.lua comment is its description')
-    H.eq(E('AdminUi.homeForms').default, true, 'the Home tiles ship with their quick forms')
-    H.eq(E('AdminUi.homeForms').kind, 'boolean', 'homeForms is a switch')
-    H.ok(E('AdminUi.homeForms').desc:find('the Home tiles hold the quick forms', 1, true) ~= nil,
-        'homeForms: its config.lua comment is its description')
     H.eq(cjson.encode(E('AdminUi.reasonChips').default), '["Balance change","Event","Correction"]',
         'the reason buttons ship with three ready-made reasons')
     H.eq(E('AdminUi.reasonChips').kind, 'list', 'reasonChips is a list of texts')
@@ -329,9 +318,6 @@ do
     H.eq(E('Tablet.activeFirst').default, false, 'Active Mission ships in its place')
     H.eq(E('Tablet.compactSidebar').default, false, 'the Officer UI sidebar ships with names')
     H.eq(E('Tablet.compactSidebar').kind, 'boolean', 'compactSidebar is a switch')
-    H.eq(E('Tablet.supervisorByTask').default, false, 'the Supervisor UI sidebar ships as one list')
-    H.ok((E('Tablet.supervisorByTask').desc or ''):find('Only the layout changes', 1, true) ~= nil,
-        'supervisorByTask: its config.lua comment is its description')
     H.eq(E('Tablet.supervisorCompact').default, false, 'the Supervisor UI sidebar ships with names')
     H.eq(E('Tablet.supervisorLanding').default, 'first', 'the Supervisor UI ships opening on its first screen')
     H.eq(E('Tablet.supervisorLanding').kind, 'enum', 'supervisorLanding is a choice')
@@ -340,49 +326,16 @@ do
     H.eq(Config.Tablet.supervisorControlsCard, nil, 'config.lua has no supervisorControlsCard')
     H.ok((E('Tablet.supervisorLanding').desc or ''):find('Department on its Review tab', 1, true) ~= nil,
         'supervisorLanding: its config.lua comment names the Department tabs')
-    H.eq(E('Tablet.supervisorRemember').default, false, 'the supervisor dialogs ship opening empty (WF2)')
-    H.eq(E('Tablet.supervisorRemember').kind, 'boolean', 'supervisorRemember is a switch')
-    -- step FX1: the live Review Queue, shipped off, described by its config.lua comment
-    H.eq(E('Tablet.supervisorReviewLive').default, false, 'the live Review Queue ships off (FX1)')
-    H.eq(E('Tablet.supervisorReviewLive').kind, 'boolean', 'supervisorReviewLive is a switch')
-    H.ok((E('Tablet.supervisorReviewLive').desc or ''):find('Review Queue open', 1, true) ~= nil,
-        'supervisorReviewLive: its config.lua comment is its description')
-    H.ok((E('Tablet.supervisorRemember').desc or ''):find('last used on this tablet', 1, true) ~= nil,
-        'supervisorRemember: its config.lua comment is its description')
     H.ok(not Check('Tablet.supervisorLanding', 'payouts'), 'another landing is refused')
-    H.eq(E('AdminUi.plainLayout').default, false, 'the Admin UI ships with its sidebar as before')
-    H.eq(E('AdminUi.plainLayout').kind, 'boolean', 'plainLayout is a switch')
-    H.ok((E('AdminUi.plainLayout').desc or ''):find('Only the layout changes', 1, true) ~= nil,
-        'plainLayout: its config.lua comment is its description')
     -- step MG2: one Money screen is the only way: the Rewards and Money switches are no settings any more
     H.eq(S.entry('AdminUi.rewardsScreen'), nil, 'no rewardsScreen setting (Money -> Rewards is always there)')
     H.eq(S.entry('AdminUi.moneyScreen'), nil, 'no moneyScreen setting (one Money screen, always)')
     H.ok(Config.AdminUi.rewardsScreen == nil and Config.AdminUi.moneyScreen == nil, 'config.lua has neither')
-    H.eq(E('AdminUi.needsAttention').default, false, 'Admin Home ships with no Needs attention panel')
-    H.eq(E('AdminUi.needsAttention').kind, 'boolean', 'needsAttention is a switch')
-    H.ok((E('AdminUi.needsAttention').desc or ''):find('each a count that opens its screen', 1, true) ~= nil,
-        'needsAttention: its config.lua comment is its description')
-    -- step H6: rows per page and one request per screen open, all shipped as before
+    -- step H6: rows per page, shipped as before
     H.eq(E('AdminUi.pageSize').default, 0, 'pageSize ships 0: every list as before')
     H.ok(E('AdminUi.pageSize').min == 0 and E('AdminUi.pageSize').max == 200, 'pageSize: 0 to 200')
     H.ok((E('AdminUi.pageSize').desc or ''):find('Rows per page', 1, true) ~= nil,
         'pageSize: its config.lua comment is its description')
-    H.eq(E('AdminUi.oneRequest').default, false, 'the screens ship with two requests as before')
-    H.ok((E('AdminUi.oneRequest').desc or ''):find('one request to the server', 1, true) ~= nil,
-        'oneRequest: its config.lua comment is its description')
-    -- step OP3: windowed lists, shipped off (every row at once)
-    H.eq(E('AdminUi.windowRows').default, false, 'the Admin UI lists ship drawing every row at once')
-    H.eq(E('AdminUi.windowRows').kind, 'boolean', 'windowRows is a switch')
-    H.ok((E('AdminUi.windowRows').desc or ''):find('draw only the rows in view', 1, true) ~= nil,
-        'windowRows: its config.lua comment is its description')
-    -- FX2: the More fold, shipped off (every option open)
-    H.eq(E('AdminUi.foldAdvanced').default, false, 'the dialogs and Mission controls ship with every option open')
-    H.eq(E('AdminUi.foldAdvanced').kind, 'boolean', 'foldAdvanced is a switch')
-    H.ok(
-        (E('AdminUi.foldAdvanced').desc or ''):find('fold the rarely changed ones under a More button', 1, true) ~= nil,
-        'foldAdvanced: its config.lua comment is its description')
-    H.ok((E('AdminUi.plainLayout').desc or ''):find('each screen\'s title uses the same plain name', 1, true) ~= nil,
-        'plainLayout: the description says the titles inside the screens follow')
     H.ok(E('FeatureRewards.suspect.byType') ~= nil, 'byType is one setting edited as a whole')
     H.ok((E('FeatureRewards.suspect.byType').desc or ''):find('pays the money above', 1, true) ~= nil,
         'byType: its config.lua comment is its description')
@@ -436,18 +389,6 @@ do
             and E('Builder.teleport').default == true
             and E('Builder.teleport').desc:find('the server reads the saved point', 1, true) ~= nil,
         'Builder.teleport is a true/false setting, shipped on, with its comment'
-    )
-    H.ok(
-        E('Builder.quickWizard') ~= nil and E('Builder.quickWizard').kind == 'boolean'
-            and E('Builder.quickWizard').default == true
-            and (E('Builder.quickWizard').desc or ''):find('4-step wizard', 1, true) ~= nil,
-        'Builder.quickWizard is a true/false setting, shipped on, with its comment'
-    )
-    H.ok(
-        E('Builder.foldAdvanced') ~= nil and E('Builder.foldAdvanced').kind == 'boolean'
-            and E('Builder.foldAdvanced').default == true
-            and (E('Builder.foldAdvanced').desc or ''):find('More settings', 1, true) ~= nil,
-        'Builder.foldAdvanced is a true/false setting, shipped on, with its comment'
     )
     H.ok(
         E('Builder.templates') ~= nil and E('Builder.templates').kind == 'list'
@@ -507,9 +448,9 @@ do
     end
     H.eq(S.entry('Tablet.command').common, nil, 'a setting off the list is not common')
     H.eq(#S.commonPaths(), #S._common, 'every everyday setting is offered')
-    H.eq(#S._groups, 8, 'eight plain groups')
+    H.eq(#S._playGroups, 6, 'six plain groups, by who the play is against')
     local seen = {}
-    for _, g in ipairs(S._groups) do
+    for _, g in ipairs(S._playGroups) do
         H.ok(CP.Locale.has('settings.group.' .. g.key) and CP.Locale.has('settings.group_help.' .. g.key),
             g.key .. ': a title and a help text')
         for _, key in ipairs(g.sections) do
@@ -518,31 +459,17 @@ do
         end
     end
     for _, sec in ipairs(sc.sections) do
-        H.ok(seen[sec.key] ~= nil, sec.key .. ': a group names this section')
-        H.eq(sec.group, seen[sec.key], sec.key .. ': the section carries its group')
+        H.eq(sec.group, seen[sec.key] or 'play_system', sec.key .. ': the section carries its group')
     end
-    H.eq(seen.suspect_behaviour, 'npcs', 'NPC combat and running away are under NPCs')
-    -- the eight plain groups (Config.AdminUi.groupByPlay = false; the play groups: tests/admin_features_spec.lua)
-    Config.AdminUi.groupByPlay = false
+    H.eq(seen.suspect_behaviour, 'play_npc', 'NPC combat and running away are under NPC missions')
     local view = S.all()
-    Config.AdminUi.groupByPlay = true
     local n = 0
     for _, g in ipairs(view.groups) do n = n + #g.sections end
     H.eq(n, #view.sections, 'the view lists every section under one group')
-    H.eq(view.groups[1].title, 'Tablet', 'group titles come from the locale')
+    H.eq(view.groups[1].title, 'NPC missions', 'group titles come from the locale')
     H.eq(S.view('Flee.sprintSeconds').common, true, 'a setting view says it is common')
     H.eq(S.view('Flee.sprintSeconds').label, 'Seconds a runner sprints', 'with its plain label')
-    -- Config.AdminUi.settingsView: the view the screen opens in
-    H.eq(S.entry('AdminUi.settingsView').default, 'simple', 'Settings ships opening in Simple')
-    H.eq(S.entry('AdminUi.settingsView').kind, 'enum', 'settingsView is a choice')
-    H.ok(S.entry('AdminUi.settingsView').desc:find('only the everyday settings in plain groups', 1, true) ~= nil,
-        'settingsView: its config.lua comment is its description')
-    H.eq(view.view, 'simple', 'the view asks the screen to open in Simple')
-    Config.AdminUi.settingsView = 'all'
-    H.eq(S.all().view, 'all', 'settingsView = all: the screen opens on every setting')
-    Config.AdminUi.settingsView = 'bogus'
-    H.eq(S.all().view, 'simple', 'an unknown view falls back to Simple')
-    Config.AdminUi.settingsView = 'simple'
+    H.eq(S.entry('AdminUi.settingsView'), nil, 'Settings always opens in Simple (BK1)')
 end
 
 -- ============================================================================
@@ -1505,11 +1432,6 @@ do
     H.ok(row and table.concat(row.limits or {}, ','):find('Markers.extraParts', 1, true) ~= nil,
         'and links the extra parts\' switch')
     -- the Map markers screen edits these same settings: one per part field, the rules as one value
-    H.eq(E('AdminUi.markersScreen').default, true, 'the Admin UI ships with a Map markers screen')
-    H.eq(E('AdminUi.markersScreen').kind, 'boolean', 'markersScreen is a switch')
-    H.ok((E('AdminUi.markersScreen').desc or ''):find('Map markers screen', 1, true) ~= nil,
-        'markersScreen: its config.lua comment is its description')
-    H.eq(E('AdminUi.missionBlipsScreen').path, nil, 'missionBlipsScreen is an old name only')
     H.eq(E('Markers.parts.coronerVan.sprite').kind, 'number', 'a part\'s sprite is its own number setting')
     H.eq(E('Markers.parts.coronerVan.shortRange').kind, 'boolean', 'its range is a switch')
     H.eq(E('Markers.rules').kind, 'json', 'the rules are one setting the screen saves whole')
@@ -1771,7 +1693,7 @@ do
     H.eq(Config.Blocks.escort.speed[2], 110, 'blocks.lua settings too')
     H.eq(Config.Limits.maxUnitSize, 4, 'a saved value that is not allowed is ignored')
     H.ok(Printed('the saved setting Limits.maxUnitSize was ignored'), 'with one clear console line')
-    H.ok(Printed('the saved setting Old.removed was ignored'), 'a setting config.lua no longer has too')
+    H.ok(not Printed('Old.removed'), 'a setting config.lua no longer has is skipped quietly (BK1)')
     local v = S.view('Limits.maxUnitSize')
     H.ok(v.invalid == 'err.setting_number' and v.invalidValue == 'lots', 'the screen shows the ignored value')
     H.ok(S.view('Tablet.keybind').pending == nil, 'nothing waits for a restart any more')
@@ -1912,7 +1834,8 @@ do
         for _, g in ipairs(sec.groups) do groups[g.path] = g end
         if sec.key == 'field_training' then section = sec end
     end
-    H.ok(section and section.title == 'Field training' and section.group == 'police', 'Field training: police')
+    H.ok(section and section.title == 'Field training' and section.group == 'play_team',
+        'Field training: Police teamwork')
     H.eq(E('FieldTraining.enabled').default, false, 'field training ships off')
     H.ok(E('FieldTraining.enabled').desc:find('supervisors can pair trainers and rookies', 1, true) ~= nil,
         'enabled: its comment')

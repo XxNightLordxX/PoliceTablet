@@ -58,5 +58,5 @@ export { QuietBoundary } from './QuietBoundary';
 export { ScreenStub } from './ScreenStub';
 export { MaintenanceBanner } from './MaintenanceBanner';
 
-export { MoreFold, useFoldAdvanced, readMoreOpen, writeMoreOpen, MORE_PREFIX } from './MoreFold';
+export { MoreFold, readMoreOpen, writeMoreOpen, MORE_PREFIX } from './MoreFold';
 export type { MoreFoldProps } from './MoreFold';

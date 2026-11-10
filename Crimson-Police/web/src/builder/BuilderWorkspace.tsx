@@ -8,7 +8,6 @@ import { t } from '../shared/i18n';
 import { BuilderEditor } from './BuilderEditor';
 import { MissionList } from './MissionList';
 import { QuickMissionStart } from './QuickMission';
-import { newMissionOpens } from './quickMission';
 import { editorMemory, hasResults, setEditorMemory, subscribeBuilder, currentTool, type BuilderScope } from './store';
 import { useBuilderConfig } from './useBuilderConfig';
 
@@ -17,7 +16,7 @@ export interface BuilderWorkspaceProps {
     // called when a mission is opened or closed (the admin screen switches tabs)
     onOpenChange?: (id: string | null) => void;
     // counts "New mission" presses outside the list (the Missions header, Home's tile): each new value opens the
-    // wizard at once (Config.Builder.quickWizard), or the New mission dialog when it is off
+    // wizard at once
     newRequest?: number;
 }
 
@@ -26,11 +25,9 @@ export function BuilderWorkspace({ scope, onOpenChange, newRequest = 0 }: Builde
     const [openId, setOpenId] = useState<string | null>(() => editorMemory(scope).openId);
     // a new editor for every opened mission; a save that renames the draft keeps the same editor (and its lock)
     const [editorKey, setEditorKey] = useState(0);
-    // the New mission wizard's first step (Config.Builder.quickWizard), and the dialog its "Open the full editor" opens
+    // the New mission wizard's first step, and the New mission dialog its "Open the full editor" opens
     const [starting, setStarting] = useState(false);
     const [classic, setClassic] = useState(false);
-    // a new list for every outside "New mission" with the wizard off, so its dialog opens again
-    const [listKey, setListKey] = useState(0);
     const handledNew = useRef(0);
 
     // a tool result for a mission that is not open (e.g. the NUI reloaded): open it so it can be applied
@@ -61,19 +58,13 @@ export function BuilderWorkspace({ scope, onOpenChange, newRequest = 0 }: Builde
     };
 
     // an outside "New mission" press: leave an open mission (its lock is released, an unsaved change kept) and open
-    // the wizard or the dialog once builder:config has arrived
+    // the wizard once builder:config has arrived
     useEffect(() => {
         if (!config || config.enabled === false || newRequest <= handledNew.current) return;
         handledNew.current = newRequest;
         if (openId) close();
-        if (newMissionOpens(config) === 'wizard') {
-            setClassic(false);
-            setStarting(true);
-        } else {
-            setStarting(false);
-            setClassic(true);
-            setListKey(k => k + 1);
-        }
+        setClassic(false);
+        setStarting(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [config, newRequest]);
 
@@ -138,21 +129,16 @@ export function BuilderWorkspace({ scope, onOpenChange, newRequest = 0 }: Builde
     }
     return (
         <MissionList
-            key={listKey}
             scope={scope}
             config={config}
             onOpen={id => {
                 setClassic(false);
                 open(id);
             }}
-            onNew={
-                newMissionOpens(config) === 'wizard'
-                    ? () => {
-                          setClassic(false);
-                          setStarting(true);
-                      }
-                    : undefined
-            }
+            onNew={() => {
+                setClassic(false);
+                setStarting(true);
+            }}
             createOpen={classic}
         />
     );

@@ -1784,7 +1784,7 @@
     animation-fill-mode: forwards;
 }
 
-/* The More fold (Config.AdminUi.foldAdvanced): the rarely changed options of a dialog or screen */
+/* The More fold: the rarely changed options of a dialog or screen */
 .cp-more {
     display: flex;
     flex-direction: column;

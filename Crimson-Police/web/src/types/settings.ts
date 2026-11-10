@@ -121,7 +121,8 @@ export interface SettingsPlainGroup {
     sections: string[];
 }
 
-// Config.AdminUi.settingsView: 'simple' = the everyday settings in plain groups; 'all' = every setting by section.
+// The Settings screen's view: 'simple' (it opens in it) = the everyday settings in plain groups; 'all' = every
+// setting by section.
 export type SettingsViewMode = 'simple' | 'all';
 
 export interface SettingsData {
@@ -139,10 +140,6 @@ export interface SettingsData {
     // the plain groups and the everyday settings (paths, in order) of the Simple view
     groups?: SettingsPlainGroup[];
     common?: string[];
-    // the view the screen opens in (Config.AdminUi.settingsView)
-    view?: SettingsViewMode;
-    // Config.AdminUi.groupByPlay: groups are NPC missions, Player vs police, Police teamwork, then the rest
-    byPlay?: boolean;
     // Settings -> Features: every feature switch, with its section and the setting it writes
     features?: FeatureEntry[];
 }

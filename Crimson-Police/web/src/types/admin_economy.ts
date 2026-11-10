@@ -66,7 +66,7 @@ export interface PaymentsView {
     // a maintenance lock holds payments back (its kind)
     held?: string | null;
     serverTime: number;
-    // Config.AdminUi.oneRequest: the totals, asked for with withTotals
+    // the totals, asked for with withTotals (one request per screen open)
     totals?: PaymentTotals | null;
 }
 

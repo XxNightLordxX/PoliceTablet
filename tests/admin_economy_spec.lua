@@ -395,22 +395,20 @@ do
     H.eq(d.total, 6, 'by dates (>= and <)')
     d = Cb('admin:getPayments', 1, { size = 2, page = 2 })
     H.ok(d.page == 2 and d.pages == 4 and #d.rows == 2, 'paging')
-    -- step H6: Config.AdminUi.pageSize wins over the asked size (at least 10); oneRequest brings the totals
-    H.eq(d.totals, nil, 'oneRequest off (shipped): no totals with the list')
+    -- step H6: Config.AdminUi.pageSize wins over the asked size (at least 10); withTotals brings the totals
+    H.eq(d.totals, nil, 'no withTotals: no totals with the list')
     Config.AdminUi.pageSize = 4
     d = Cb('admin:getPayments', 1, { size = 2, page = 1, withTotals = true })
     H.ok(d.size == 10 and d.pages == 1 and #d.rows == 7, 'pageSize: the server\'s size, never below 10')
-    H.eq(d.totals, nil, 'withTotals is ignored while oneRequest is off')
-    Config.AdminUi.oneRequest = true
+    H.ok(d.totals ~= nil, 'withTotals: the totals come with the list')
     d = Cb('admin:getPayments', 1, { department = 'fib', withTotals = true })
     local tot = Cb('admin:getPaymentTotals', 1, { department = 'fib' })
     H.ok(
         d.totals and d.totals.paidTotal == tot.paidTotal
             and d.totals.byStatus.pending.count == tot.byStatus.pending.count,
-        'oneRequest: the same totals with the list'
+        'the same totals with the list'
     )
     Config.AdminUi.pageSize = 0
-    Config.AdminUi.oneRequest = false
     local _, eF = Cb('admin:getPayments', 1, { status = 'nope' })
     H.eq(eF, 'err.invalid_filter', 'an unknown status is refused')
     _, eF = Cb('admin:getPayments', 1, { from = H.time, to = H.time - 10 })

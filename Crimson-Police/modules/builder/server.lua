@@ -3920,10 +3920,6 @@ CP.Net.callback('builder:config', function(src)
         useMyPosition = bc.useMyPosition ~= false,
         -- "Fill N for me" on a spawn point row (Config.Builder.autoFill)
         autoFill = bc.autoFill ~= false,
-        -- "New mission" opens the 4-step wizard (Config.Builder.quickWizard)
-        quickWizard = bc.quickWizard ~= false,
-        -- block settings: the basics open, the rest under "More settings" (Config.Builder.foldAdvanced)
-        foldAdvanced = bc.foldAdvanced ~= false,
         -- "Teleport" next to each point (Config.Builder.teleport; admins, or a Config.Permissions.builderTeleport grant)
         teleport = B.canTeleport(src),
         -- the built-ins a new mission can start from (Config.Builder.templates): name and one-line blurb

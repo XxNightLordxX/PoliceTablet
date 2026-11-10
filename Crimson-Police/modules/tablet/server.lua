@@ -317,12 +317,6 @@ local function ProfileConfig(deptKey)
     }
 end
 
--- Config.AdminUi.landing: the screen the Admin UI opens on (anything unknown = 'home')
-local LANDINGS = { home = true, payouts = true, missions = true }
-local function AdminLanding(v)
-    return LANDINGS[v] and v or 'home'
-end
-
 -- Config.Tablet.sidebarOrder, activeFirst, compactSidebar: the Officer UI sidebar (anything unknown =
 -- 'classic', the order as before)
 local ORDERS = { classic = true, mostUsed = true }
@@ -335,17 +329,14 @@ local function OfficerNav()
     }
 end
 
--- Config.Tablet.supervisorByTask, supervisorCompact, supervisorLanding: the Supervisor UI sidebar and the
--- screen it opens on (anything unknown = 'first', as before)
+-- Config.Tablet.supervisorCompact, supervisorLanding: the Supervisor UI sidebar's width and the screen it opens on
+-- (anything unknown = 'first')
 local SUP_LANDINGS = { first = true, report = true, review = true, live = true }
 local function SupervisorNav()
     local tab = type(Config.Tablet) == 'table' and Config.Tablet or {}
     return {
-        byTask = tab.supervisorByTask == true,
         compact = tab.supervisorCompact == true,
         landing = SUP_LANDINGS[tab.supervisorLanding] and tab.supervisorLanding or 'first',
-        -- Config.Tablet.supervisorRemember: the supervisor dialogs open with the values last used
-        remember = tab.supervisorRemember == true,
     }
 end
 
@@ -410,25 +401,7 @@ local function ExtraConfig(deptKey)
             currency = type(fmt.currency) == 'string' and fmt.currency or '$',
             currencyAfter = fmt.currencyAfter == true,
         },
-        adminUi = {
-            groupSidebar = aui.groupSidebar ~= false,
-            groupByPlay = aui.groupByPlay ~= false,
-            landing = AdminLanding(aui.landing),
-            homeForms = aui.homeForms ~= false,
-            reasonChips = ReasonChips(aui.reasonChips),
-            -- the plain layout (layouts/adminNav.ts), shipped false = as before
-            plainLayout = aui.plainLayout == true,
-            -- the Map markers screen (admin/screens/MapMarkers.tsx), shipped true; false = no such screen
-            markersScreen = aui.markersScreen ~= false,
-            -- Home's Needs attention panel (admin:getNeedsAttention), shipped false = no panel
-            needsAttention = aui.needsAttention == true,
-            -- one request per screen open (Payments and Leaderboards)
-            oneRequest = aui.oneRequest == true,
-            -- long lists draw only the rows in view (shared/components/Table, Settings search), shipped false
-            windowRows = aui.windowRows == true,
-            -- the More fold of the settings-heavy dialogs and the Mission controls (shared/components/MoreFold)
-            foldAdvanced = aui.foldAdvanced == true,
-        },
+        adminUi = { reasonChips = ReasonChips(aui.reasonChips) },
         realSuspects = { screen = RealSuspectsScreen() },
         officerNav = OfficerNav(),
         supervisorNav = SupervisorNav(),

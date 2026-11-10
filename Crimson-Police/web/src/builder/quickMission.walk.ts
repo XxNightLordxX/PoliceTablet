@@ -24,7 +24,6 @@ import {
     fillPlan,
     keepsBaseName,
     missingPoints,
-    newMissionOpens,
     wizardName,
     workLocation,
 } from './quickMission';
@@ -79,13 +78,10 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 }
 
 async function steps(): Promise<void> {
-    // 1 · What: the wizard is on and offers the templates
+    // 1 · What: the wizard offers the templates; every "New mission" (the Missions header, Home's tile, the Builder
+    // list) opens it in one press
     const cfg: BuilderConfig = normalizeConfig(await data(request<BuilderConfig>('builder:config', {}), 'config'));
-    ok(cfg.quickWizard === true, 'builder:config says the wizard is on (Config.Builder.quickWizard)');
-    // every "New mission" (the Missions header, Home's tile, the Builder list) opens it in one press
-    ok(newMissionOpens(cfg) === 'wizard', 'New mission opens the wizard');
-    ok(newMissionOpens({ quickWizard: false }) === 'dialog', 'quickWizard = false: New mission opens the dialog');
-    ok(newMissionOpens({}) === 'wizard' && newMissionOpens(null) === 'wizard', 'a missing quickWizard means on');
+    ok(!('quickWizard' in cfg), 'builder:config has no wizard switch (always the wizard)');
     ok(asksNewMission({ ...NEW_MISSION_PARAMS }), "Home's Make a new mission tile asks for New mission");
     ok(NEW_MISSION_PARAMS.tab === 'builder', "Home's tile opens the Builder tab");
     ok(!asksNewMission({ tab: 'builder' }) && !asksNewMission({ tab: 'catalog' }), 'the other links only switch tab');

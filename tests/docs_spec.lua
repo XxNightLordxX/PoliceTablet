@@ -312,6 +312,8 @@ end
 local keys = 0
 for _, rel in ipairs(owner) do
     local s = ReadRepo(rel) or ''
+    -- the owner guide's Baked in part names the keys an update removed (tests/baked_in_spec.lua checks that table)
+    s = s:gsub('\n### [%d%.]+ Baked in[^\n]*\n.-\n## ', '\n## ')
     local seen = {}
     for path, after in s:gmatch('%f[%w]Config%.([%w_%.]+)(.?)') do
         path = path:gsub('%.+$', '')

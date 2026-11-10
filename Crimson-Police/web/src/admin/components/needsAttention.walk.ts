@@ -2,11 +2,10 @@
 // one batched admin:getNeedsAttention answer, its lines and the screen each one opens, and the plain screen titles.
 
 import '../../mocks/admin_system.mock';
-import { adminNavOf, adminTitleKey } from '../../layouts/adminNav';
+import { adminTitleKey } from '../../layouts/adminNav';
 import { request } from '../../shared/nui';
-import type { Session } from '../../shared/types';
 import type { NeedsAttentionData } from '../../types/admin_system';
-import { attentionLines, attentionWaiting, wrongCheckKeys } from './needsAttention';
+import { attentionLines, attentionWaiting } from './needsAttention';
 
 const failures: string[] = [];
 let passed = 0;
@@ -34,15 +33,8 @@ async function steps(): Promise<void> {
     ok(noRs[0]?.n === 0 && noRs[1]?.n === 1 && noRs[2]?.n === 0, 'counts are whole and never below 0');
     ok(attentionWaiting(noRs) === 1 && attentionLines(undefined).length === 0, 'waiting count; no answer, no lines');
 
-    // Something wrong?: with the panel on, Problems and Refused starts show only on the panel
-    ok(wrongCheckKeys(false).join(',') === 'load,health,problems,payments,refused', 'tile as before without the panel');
-    ok(wrongCheckKeys(true).join(',') === 'load,health,payments', 'panel on: no Problems or Refused twice');
-
-    // the title inside a screen: the plain name in the plain layout, else the screen's own name
-    const plain = adminNavOf({ config: { adminUi: { plainLayout: true } } } as unknown as Session);
-    const classic = adminNavOf({ config: { adminUi: {} } } as unknown as Session);
-    ok(adminTitleKey('admin_live', plain) === 'ui.nav.plain.admin_live', 'plain layout: the plain title');
-    ok(adminTitleKey('admin_live', classic) === 'ui.screen.admin_live', 'shipped: the title as before');
+    // the title inside a screen: its plain name
+    ok(adminTitleKey('admin_live') === 'ui.nav.plain.admin_live', 'the plain title');
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

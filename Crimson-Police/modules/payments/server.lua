@@ -269,9 +269,9 @@ function Payments.list(args)
     local out = {}
     for _, r in ipairs(rows) do out[#out + 1] = View(r) end
     local nextAt = CP.Cash and CP.Cash.nextForfeitureAt and CP.Cash.nextForfeitureAt() or nil
-    -- Config.AdminUi.oneRequest: the totals come with the list (the screen asks with withTotals)
+    -- the totals come with the list when the screen asks (withTotals): one request per screen open
     local totals = nil
-    if args.withTotals == true and Kit and Kit.oneRequest and Kit.oneRequest() then totals = Payments.totals(args) end
+    if args.withTotals == true then totals = Payments.totals(args) end
     return {
         totals = totals,
         rows = out,

@@ -133,10 +133,6 @@ function Kit.pageOf(list, page, size)
     return out, p, pages, total
 end
 
--- Config.AdminUi.oneRequest: a screen open asks for its list and its side data in one request.
----@return boolean
-function Kit.oneRequest() return type(Config.AdminUi) == 'table' and Config.AdminUi.oneRequest == true end
-
 -- ============================================================================
 --                           R: REASON, T: TYPED WORD
 -- ============================================================================

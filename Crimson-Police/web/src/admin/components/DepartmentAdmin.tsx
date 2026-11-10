@@ -18,7 +18,6 @@ import {
     Select,
     TextInput,
     Toggle,
-    useFoldAdvanced,
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { hasKey, t } from '../../shared/i18n';
@@ -495,7 +494,7 @@ export function DepartmentDialog({
                         )}
                     </div>
                 </Field>
-                {/* Config.AdminUi.foldAdvanced: the colours, the logo and the officer options fold under More */}
+                {/* the colours, the logo and the officer options fold under More */}
                 <MoreFold screen="dept_dialog">
                     {!isNew ? (
                         <Grid min={150} gap={3}>
@@ -607,8 +606,7 @@ function DeskDialog({
             : await run('server:admin:addDeskHere', payload, { requestId: false, success: 'sysadmin.ui.desk_added' });
         if (res.ok) onSaved();
     };
-    // Config.AdminUi.foldAdvanced: the departments stay open above More; unfolded, the order is as before
-    const fold = useFoldAdvanced();
+    // the departments stay open above More
     const departmentsField = (
         <Field label={t('sysadmin.ui.desk_departments')} hint={t('sysadmin.ui.desk_departments_hint')}>
             <div className="dept-admin-jobs">
@@ -652,8 +650,8 @@ function DeskDialog({
                 <Field label={t('sysadmin.ui.desk_label')} required>
                     <TextInput value={f.label} onChange={v => set('label', v)} maxLength={64} />
                 </Field>
-                {fold ? departmentsField : null}
-                {/* Config.AdminUi.foldAdvanced: the box size, the rotation and the prop fold under More */}
+                {departmentsField}
+                {/* the box size, the rotation and the prop fold under More */}
                 <MoreFold screen="desk_dialog">
                     <Grid cols={4} gap={2}>
                         {(['x', 'y', 'z'] as const).map(p => (
@@ -677,7 +675,6 @@ function DeskDialog({
                             />
                         </Field>
                     </Grid>
-                    {fold ? null : departmentsField}
                     <Field label={t('sysadmin.ui.desk_prop')} hint={t('sysadmin.ui.desk_prop_hint')}>
                         <TextInput
                             value={f.prop}

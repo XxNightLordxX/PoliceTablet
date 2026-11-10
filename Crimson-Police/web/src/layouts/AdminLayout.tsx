@@ -1,8 +1,8 @@
 // Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
 
-// Config.AdminTheme), no watermark, sidebar with the admin-only badges (everyday screens, the rest under
-// More), the maintenance banner. Config.AdminUi.plainLayout: plain names, seven described groups, the rare
-// tools under More, a search box over the screens and the settings, and a breadcrumb over the screen.
+// Config.AdminTheme), no watermark, the maintenance banner, and a sidebar with the admin-only badges: plain names,
+// six described groups, the rare tools under More, a search box over the screens and the settings, and a breadcrumb
+// over the screen (layouts/adminNav.ts).
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon, IconButton, LayerRootContext, MaintenanceBanner, SearchInput } from '../shared/components';
@@ -17,7 +17,6 @@ import {
     adminCrumbs,
     adminFoldOf,
     adminGroupOf,
-    adminNavOf,
     adminTitleKey,
     searchScreens,
 } from './adminNav';
@@ -25,7 +24,7 @@ import { moneySearchWords } from './adminMoney';
 import { navBadge, useNavCounts } from './navBadges';
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
-import { PLAY_SECTIONS, screensFor } from './screens';
+import { screensFor } from './screens';
 import { Sidebar, type SidebarItem } from './Sidebar';
 
 export function AdminLayout() {
@@ -34,29 +33,19 @@ export function AdminLayout() {
     const { screen, navigate } = useNavigation();
     const screens = screensFor('admin', session);
     const counts = useNavCounts();
-    // Config.AdminUi.groupSidebar: everyday screens first, the rest under More (false = one flat list)
-    const grouped = session.config?.adminUi?.groupSidebar !== false;
-    // Config.AdminUi.groupByPlay: NPC missions, Player vs police, Police teamwork, then money and the server
-    const byPlay = session.config?.adminUi?.groupByPlay !== false;
-    // Config.AdminUi.plainLayout: plain names, the six groups, search and breadcrumb (false = as before)
-    const nav = adminNavOf(session);
     const [find, setFind] = useState('');
     const groupLabel = (g: string) => t(`ui.nav.admin_group.${g}`);
     const items: SidebarItem[] = screens.map(s => ({
         key: s.key,
-        label: t(adminTitleKey(s.key, nav)),
+        label: t(adminTitleKey(s.key)),
         icon: s.icon,
-        group: adminFoldOf(s.key, nav, s.group),
-        play: nav.plain ? adminGroupOf(s.key, nav) : s.play,
+        group: adminFoldOf(s.key),
+        play: adminGroupOf(s.key),
         ...navBadge(s.key, counts),
     }));
-    const sections = nav.plain
-        ? ADMIN_GROUPS.map(k => ({ key: k, label: groupLabel(k), hint: t(`ui.nav.admin_hint.${k}`) }))
-        : byPlay
-          ? PLAY_SECTIONS.map(k => ({ key: k, label: t(`settings.features.play.${k}`) }))
-          : undefined;
+    const sections = ADMIN_GROUPS.map(k => ({ key: k, label: groupLabel(k), hint: t(`ui.nav.admin_hint.${k}`) }));
     // Searching: the matching screens in one list, then 'Search settings for ...' while Settings shows
-    const searching = nav.plain && find.trim() !== '';
+    const searching = find.trim() !== '';
     const found = searching
         ? searchScreens(
               items.map(it => ({
@@ -80,7 +69,7 @@ export function AdminLayout() {
         if (k === SETTINGS_SEARCH) navigate('admin_settings', { q: find.trim() });
         else navigate(k as ScreenKey);
     };
-    const crumbs = adminCrumbs(screen, nav);
+    const crumbs = adminCrumbs(screen);
     const homeShown = screens.some(s => s.key === 'admin_home');
     const root = useRef<HTMLDivElement>(null);
     const [layer, setLayer] = useState<HTMLDivElement | null>(null);
@@ -125,18 +114,16 @@ export function AdminLayout() {
                 <Sidebar
                     heading={t('ui.nav.admin')}
                     items={searching ? found : items}
-                    more={!searching && (grouped || nav.plain) ? t('ui.nav.more') : undefined}
+                    more={!searching ? t('ui.nav.more') : undefined}
                     sections={searching ? undefined : sections}
                     search={
-                        nav.plain ? (
-                            <SearchInput
-                                value={find}
-                                onChange={setFind}
-                                onEnter={() => found[0] && select(found[0].key)}
-                                placeholder={t('ui.nav.search_screens')}
-                                aria-label={t('ui.nav.search_screens')}
-                            />
-                        ) : undefined
+                        <SearchInput
+                            value={find}
+                            onChange={setFind}
+                            onEnter={() => found[0] && select(found[0].key)}
+                            placeholder={t('ui.nav.search_screens')}
+                            aria-label={t('ui.nav.search_screens')}
+                        />
                     }
                     active={screen}
                     onSelect={select}
@@ -161,7 +148,7 @@ export function AdminLayout() {
                                     <Icon name="chevronRight" size={12} />
                                 </>
                             ) : null}
-                            <span aria-current="page">{t(adminTitleKey(screen, nav))}</span>
+                            <span aria-current="page">{t(adminTitleKey(screen))}</span>
                         </nav>
                     ) : null}
                     <LayerRootContext.Provider value={layer}>

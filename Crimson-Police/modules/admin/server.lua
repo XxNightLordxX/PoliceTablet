@@ -2768,23 +2768,18 @@ function Admin.reviewQueueFor(src)
     return { flagged = flagged, disputes = disputes, canReview = canReview, canHandle = canHandle }
 end
 
--- Config.Tablet.supervisorReviewLive: who has the Review Queue open (src -> os.time() of his last
+-- Who has the Review Queue open (src -> os.time() of his last
 -- sup:getReviewQueue; the screen asks every 30 s while open). Closing the tablet or leaving forgets him.
 local reviewWatch = {}
 local REVIEW_WATCH_S = 75
-
-local function ReviewLiveOn()
-    local tab = Config.Tablet
-    return type(tab) == 'table' and tab.supervisorReviewLive == true
-end
 
 -- After src decided a flagged run or a dispute: every other supervisor with the Review Queue open gets his own
 -- updated queue at once (push 'reviewQueue'), of dept only: the row's department (or the list of a cross-department
 -- run's departments) when given, else a supervisor's own
 -- (he decides only his department's rows); an admin (any department's rows) or the console: every department.
--- Returns how many got it; 0 with the switch off.
+-- Returns how many got it.
 function Admin.shareReviewQueue(src, dept)
-    if not ReviewLiveOn() or next(reviewWatch) == nil then return 0 end
+    if next(reviewWatch) == nil then return 0 end
     if dept == nil and tonumber(src) ~= 0 and not IsAdmin(src) then dept = ViewerDepartment(src) end
     -- a list: the departments of a cross-department run (its row sits in each of their queues)
     local depts = nil
@@ -2817,7 +2812,7 @@ Admin._reviewWatch = function() return reviewWatch end
 
 CP.Net.callback('sup:getReviewQueue', function(src)
     local queue, err = Admin.reviewQueueFor(src)
-    if queue and ReviewLiveOn() and tonumber(src) and tonumber(src) > 0 then reviewWatch[tonumber(src)] = os.time() end
+    if queue and tonumber(src) and tonumber(src) > 0 then reviewWatch[tonumber(src)] = os.time() end
     return queue, err
 end, { rate = 3 })
 
@@ -2836,8 +2831,7 @@ local function PageSize()
     return Kit and Kit.pageSize and Kit.pageSize() or nil
 end
 
--- The flagged runs an admin reviews (his own runs left out): admin:getFlagged, and admin:getBoards with
--- Config.AdminUi.oneRequest.
+-- The flagged runs an admin reviews (his own runs left out): admin:getFlagged, and admin:getBoards withFlagged.
 function Admin.flaggedFor(src)
     local _, citizenid = ViewerDepartment(src)
     return Admin.flaggedRows(nil, citizenid or '')

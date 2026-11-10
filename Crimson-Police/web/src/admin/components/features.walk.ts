@@ -1,13 +1,8 @@
-// Admin UI split by play walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
-
-// Admin UI split by play walked against the browser mocks (node walk.mjs, a gate step): the sidebar lists
-// the admin screens under NPC missions, Player vs police, Police teamwork, then money and the server, and Settings ->
-// Features lists each feature switch by section with the setting it writes (a risky one asks first, a money one
-// keeps its typed ENABLE).
+// Settings -> Features walked against the browser mocks (node walk.mjs, a gate step): each feature switch by section
+// of play (NPC missions, Player vs police, Police teamwork, money, the server) with the setting it writes (a risky
+// one asks first, a money one keeps its typed ENABLE). The Admin UI sidebar's groups: layouts/adminNav.walk.ts.
 
 import '../../mocks/settings.mock';
-import { ADMIN_SCREENS, PLAY_SECTIONS } from '../../layouts/screens';
-import { inSections } from '../../layouts/Sidebar';
 import { action, request } from '../../shared/nui';
 import type { SettingsData } from '../../types/settings';
 import { featureSections, limitValue, toggleNeeds } from './features';
@@ -20,25 +15,6 @@ function ok(cond: unknown, what: string): void {
 }
 
 async function steps(): Promise<void> {
-    // the sidebar: every admin screen but Home has a section, and the list is ordered by section
-    const noSection = ADMIN_SCREENS.filter(s => !s.play).map(s => s.key);
-    ok(noSection.length === 1 && noSection[0] === 'admin_home', 'only Home sits above the sections');
-    const sections = PLAY_SECTIONS.map(k => ({ key: k, label: k.toUpperCase() }));
-    const listed = inSections(ADMIN_SCREENS, sections);
-    ok(listed.length === ADMIN_SCREENS.length, 'every screen is still listed (the same keys and links)');
-    ok(listed[0].item.key === 'admin_home' && !listed[0].heading, 'Home first, with no heading');
-    ok(listed[1].heading === 'NPC', 'then the NPC missions heading');
-    ok(listed[1].item.key === 'admin_missions', 'over Missions');
-    ok(listed.find(l => l.item.key === 'admin_rs')?.heading === 'PVP', 'Real suspects heads Player vs police');
-    const team = listed.filter(l => l.item.play === 'team').map(l => l.item.key);
-    ok(team.includes('admin_officers') && team.includes('admin_leaderboards'), 'officers and boards are teamwork');
-    ok(listed.filter(l => l.heading).length === PLAY_SECTIONS.length, 'one heading per section');
-    const flat = inSections(ADMIN_SCREENS, undefined);
-    ok(
-        flat.every((l, i) => l.item.key === ADMIN_SCREENS[i].key && !l.heading),
-        'off: the order as before',
-    );
-
     // Settings -> Features
     const res = await request<SettingsData>('admin:getSettings', {});
     const secs = featureSections(res.data);

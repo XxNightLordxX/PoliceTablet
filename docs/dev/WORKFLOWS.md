@@ -13,8 +13,8 @@ file loaded again from the same saves folder, the players still online). "Drop" 
 
 The workflows are grouped by who does them: **Officer**, **Supervisor**, **Field training**, **Criminal**,
 **Admin** and **System** (what the resource does on its own). Each group's screens sit in the matching tablet: the
-Officer UI (`/CrimsonPolice`), the Supervisor UI (the switch in the Officer UI header, for supervisors; with
-`Config.Tablet.supervisorByTask = true` its sidebar is grouped under People, Missions, Rewards and Review), the
+Officer UI (`/CrimsonPolice`), the Supervisor UI (the switch in the Officer UI header, for supervisors; its sidebar
+grouped under People, Missions and Rewards), the
 criminal tablet and the Admin UI (`/CrimsonPoliceAdmin`, its sidebar grouped by play). Every screen of a workflow
 has a one-line help under its title that says what to do next, and every error it can show says what went wrong
 and what to do about it (tests/workflow_errors_spec.lua holds every err.* text to that).
@@ -217,9 +217,9 @@ item, a commendation. Result: **Pass**.
 
 Steps: Give points, Mission ban (set or lift), a commendation (give or revoke) and Clear cooldown were answered and
 then the dialog asked again; now the reply carries the officer's fresh activity or cooldown list (before: 2 requests;
-after: 1). With `Config.Tablet.supervisorRemember = true` the Give points, Mission ban and Clear cooldown dialogs
-open with the points, hours and reason last used on that tablet, so a second award or ban in a row is open + submit
-(before: open, type 2 fields, submit; after: open, submit). Shipped `false`: they open empty, as before. An empty
+after: 1). The Give points, Mission ban and Clear cooldown dialogs open with the points, hours and reason last used
+on that tablet, so a second award or ban in a row is open + submit (before: open, type 2 fields, submit; after:
+open, submit). An empty
 reason now reads "Enter a reason in the Reason box first".
 
 ### Review, void, dispute (Review Queue)
@@ -232,9 +232,9 @@ Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, approved (ca
 disputed and restored. Result: **Pass**.
 
 Steps: A decision was answered and then the queue was asked for again; now the reply carries the fresh queue
-and the row leaves at once (before: 2 requests; after: 1). With `Config.Tablet.supervisorReviewLive = true` the other
-supervisors of that department who have the Review Queue open get their updated queue at once (tests/oversight_spec.lua),
-so two supervisors never work the same row; shipped `false` (they see it at their next refresh, within 30 seconds).
+and the row leaves at once (before: 2 requests; after: 1). The other supervisors of that department who have the
+Review Queue open get their updated queue at once (tests/oversight_spec.lua), so two supervisors never work the same
+row.
 
 ### Mission Builder
 

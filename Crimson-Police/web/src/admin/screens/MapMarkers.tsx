@@ -1,6 +1,6 @@
-// Admin UI · Map markers (screen key 'admin_markers', Config.AdminUi.markersScreen; the old 'admin_blips' opens it):
+// Admin UI · Map markers (screen key 'admin_markers'):
 
-// Admin UI · Map markers (screen key 'admin_markers', Config.AdminUi.markersScreen; the old 'admin_blips' opens it):
+// Admin UI · Map markers (screen key 'admin_markers'):
 // Config.Markers on one page. On top the objective's own settings (its blip, line, Radio Silence) and how each kind
 // of objective blip looks; then the switch of the extra parts (shipped off) and how often the server checks; then
 // one row per part (the prisoner van and tow truck with their own switch, where the vans wait, evidence, cars,

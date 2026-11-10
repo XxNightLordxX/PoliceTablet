@@ -793,7 +793,7 @@ CP.Net.action('server:admin:handleDispute', function(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local ok, data = D.handle(src, payload.disputeId, payload.decision, payload.reason, payload.awardPoints,
         { adminOnly = true })
-    -- the supervisors with the Review Queue open see it at once (Config.Tablet.supervisorReviewLive)
+    -- the supervisors with the Review Queue open see it at once
     if ok and Has('Admin', 'shareReviewQueue') then pcall(CP.Admin.shareReviewQueue, src) end
     return ok, data
 end, { rate = 3 })

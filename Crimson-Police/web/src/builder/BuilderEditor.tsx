@@ -183,7 +183,7 @@ export function BuilderEditor({ id, scope, config, onClose, onRenamed, onOpen }:
     const session = useSession();
     const ui: BuilderUi = session.ui === 'admin' ? 'admin' : 'supervisor';
     const [step, setStep] = useState<BuilderStepKey>(() => editorMemory(scope).step || 'blocks');
-    // the New mission wizard (Config.Builder.quickWizard) while it runs on this draft, null = the full editor
+    // the New mission wizard while it runs on this draft, null = the full editor
     const [quick, setQuickState] = useState<QuickMemory | null>(() => editorMemory(scope).quick ?? null);
     const [confirmBreak, setConfirmBreak] = useState(false);
     const [closing, setClosing] = useState(false);

@@ -108,17 +108,17 @@ names the change it came with.
 
 ## Admin UI and Settings
 
-- [ ] The Admin sidebar shows the headings NPC missions, Police teamwork, Pay and rewards and Server (Player vs police while live crimes or volunteers are on); every screen still opens; groupByPlay = false brings the old order back. (AP1)
+- [ ] The Admin sidebar shows the headings NPC missions, Police teamwork, Pay and rewards and Server (Player vs police while live crimes or volunteers are on); every screen still opens. (AP1)
 - [ ] config.lua opens with PART 1 · GENERAL and its six parts follow the Admin UI; Settings -> All settings lists the sections in that order, with Run limits (Config.Limits) under Server; a mission desk still shows for its department after a department's jobs change in Settings. (AP2)
 - [ ] config.lua opens with CONTENTS (the six parts and their blocks) and every PART heading has a "Usually changed here:" line; Settings -> All settings shows a description on every setting, also Bonuses -> lab_fire -> value, Markers -> kinds -> clue -> scale, Departments -> fib -> jobs and a Builder range such as Blocks -> pursuit -> speed. The server behaves as before (no value changed). (G8)
 - [ ] Settings -> Features lists the features by section; turning "Runners tire" off asks nothing and shows Off at once; turning Live crimes on asks first; Cash for live cases switches on with one click; Cash.allowManualCash still wants ENABLE; each change is in Settings -> History and the audit log; Settings opens that setting in All settings. (AP1)
-- [ ] /CrimsonPoliceAdmin lands on Home with Live now and six tiles; each tile opens the right screen; Something wrong? lines open Missions, Permissions, System, Payments. Landing = 'payouts' in Settings: Payouts opens first. (A3)
-- [ ] Sidebar shows 5 items + More (8); a stuck payment shows its count on More while folded; More stays open after reopening; groupSidebar off gives one flat list. (A2)
-- [ ] Settings opens in Simple (about 25 plain settings, no Config paths); "All settings" shows everything by section; search "tweaks" shows Open Missions; settingsView = 'all' opens on All settings. (A7, A8)
+- [ ] /CrimsonPoliceAdmin lands on Home with Live now and six tiles; each tile opens the right screen; Something wrong? lines open Missions, Permissions and Money → Payments. (A3)
+- [ ] The Admin sidebar folds Seasons, Leaderboards, Departments, Audit and Testing under More; a link to one of them unfolds More; More stays open after reopening. (A2)
+- [ ] Settings opens in Simple (about 25 plain settings, no Config paths); "All settings" shows everything by section; search "tweaks" shows Open Missions. (A7, A8)
 - [ ] Settings: click "Built-in mission tweaks" near the bottom and its settings are in view; Tablet and commands shows "Default tablet key" and "Players may open the tablet with a key"; labels read plainly (e.g. "Seconds a runner sprints"). (A1, A7)
 - [ ] Plain labels in Economy -> Payouts dialog, the Builder blocks and publish steps, Settings badges and filter, Officers record and disputes, Leaderboards award. (A9)
 - [ ] Missions -> Gang Shootout opens one drawer; switch a location off and set a new payout with a reason: the catalog has one location fewer and Payouts -> Missions shows the amount. (A10)
-- [ ] Home -> Give or take points 50 with a reason: the toast names the officer and points move; 600 asks for the citizen ID. Turn missions on or off (type "beat"), Change pay (Patrol), Quick settings ("debug") all work; homeForms = false makes the tiles only open screens. (A11)
+- [ ] Home -> Give or take points 50 with a reason: the toast names the officer and points move; 600 asks for the citizen ID. Turn missions on or off (type "beat"), Change pay (Patrol), Quick settings ("debug") all work. (A11)
 - [ ] Payouts -> Set payout -> Event chip fills the reason; Home's points form has the same chips; a built-in's Quick edit time limit 20 shows 20:00. (A12)
 - [ ] Start a mission while a unit member is already on a run: Live -> Refused shows "A unit member is already on a mission."; Home -> Something wrong? shows Refused starts today: 1 and opens the tab. (A4, A5)
 - [ ] Put a broken custom mission (e.g. timeLimit = 5) in missions/custom and press Reload mission files: it shows greyed "Not loaded" with "Time limit must be 1 to 60 minutes."; Show the problem gives the file and the loader's text. (A6)
@@ -136,26 +136,25 @@ names the change it came with.
 - [ ] Files mode with a year of runs: Run clean-up now gives no multi-second freeze or console hitch, the archived counts match. (Q14)
 - [ ] Missions -> Builder shows the same list; the server profiler no longer shows a ~40 ms builder:list block every 30 s. (Q9)
 - [ ] Shipped config: every list pages as before. (H6)
-- [ ] Admin UI: one Money screen (no Payouts, Rewards or Payments in the sidebar) with Pay rates, Rewards, Payments and Department funds tabs; the Home Change pay tile opens Pay rates; Leaderboards → stuck payments opens Payments filtered to Paying; the Payments badge sits on Money; `Config.AdminUi.landing = 'payouts'` opens Money; the plain layout's search finds Money by typing Payouts or Rewards. (MG2)
-- [ ] Money tabs (MG2): Pay rates sets and clears a payout (reason asked, Activity log row); Rewards saves a change (Settings → History); Payments' row actions and the money tools that ship off show only with their switch on, as before; Department funds shows each department's Funds card, and Add funds still asks for its confirm. A value saved earlier for `AdminUi.moneyScreen` or `AdminUi.rewardsScreen` gives no console line and no Problems line. (MG2)
+- [ ] Admin UI: one Money screen (no Payouts, Rewards or Payments in the sidebar) with Pay rates, Rewards, Payments and Department funds tabs; the Home Change pay tile opens Pay rates; Leaderboards → stuck payments opens Payments filtered to Paying; the Payments badge sits on Money; the sidebar search finds Money by typing Payouts or Rewards. (MG2)
+- [ ] Money tabs (MG2): Pay rates sets and clears a payout (reason asked, Activity log row); Rewards saves a change (Settings → History); Payments' row actions and the money tools that ship off show only with their switch on, as before; Department funds shows each department's Funds card, and Add funds still asks for its confirm. (MG2)
 - [ ] `Config.AdminUi.pageSize = 10`: Activity log, Payments made and Officers show 10 rows a page; an officer with more than 10 runs on Leaderboards shows a pager under his runs; Player suspects cases page by 10. (H6)
-- [ ] `Config.AdminUi.oneRequest` On: Payments made shows its totals cards and Leaderboards its flagged runs as before; with Config.Debug on, opening each screen logs one request. (H6)
-- [ ] Shipped config: Admin UI Home looks as before (no Needs attention panel); every screen title is as before. (H5)
-- [ ] `Config.AdminUi.plainLayout` On: the title inside Live reads "Running now", Payouts "Mission pay", Permissions "Who can do what"; Off: "Live", "Payouts", "Permissions". (H5)
+- [ ] Payments made shows its totals cards and Leaderboards its flagged runs; with Config.Debug on, opening each screen logs one request. (H6, BK1)
+- [ ] The title inside Live reads "Running now", Money → Pay rates "Mission pay", Permissions "Who can do what". (H5, BK1)
 - [ ] Suspend an officer from the Admin UI: his tablet refuses him within 15 s, as before; unsuspend: it opens again.
   Retire and unretire: the same.
 - [ ] An admin leaves mid logo upload (Departments → Upload a logo): whoever joins next with his id can upload at
   once.
 - [ ] Settings: type in the search box with a few hundred settings showing: the text follows your typing without lag;
   saving one setting still updates its row.
-- [ ] `Config.AdminUi.needsAttention` On: Home's Something wrong? shows Last mission load, Config health and stuck
-  payments only (Problems and Refused starts are on the Needs attention panel); Off: all five lines as before. (R1)
+- [ ] Home's Something wrong? shows Last mission load, Config health and stuck payments (Problems and Refused starts
+  are on the Needs attention panel). (R1, BK1)
 
 ## Mission Builder
 
 - [ ] Supervisor UI -> Mission Builder -> New mission -> Beat patrol at the Vespucci car park: Use my position names it "Beat patrol - <street>"; place or record the checkpoints, Next, Next, Publish, confirm in under 10 clicks; the full editor shows the same draft. (B14)
 - [ ] Gang shootout in the wizard: Fill the points for me places hostile spawns outside the arrival circle. (B14, B10)
-- [ ] Admin Home -> Make a new mission, Missions -> New mission and New mission in the Builder tab all open the wizard; Config.Builder.quickWizard = false opens the old dialog. (B15)
+- [ ] Admin Home -> Make a new mission, Missions -> New mission and New mission in the Builder tab all open the wizard; its Open the full editor on the first step opens the New mission dialog. (B15, BK1)
 - [ ] A new patrol with one location publishes and plays; the Locations step shows the 3-or-more tip; a built-in cut to 2 locations is refused. (B1)
 - [ ] Add "Field contact": real card name, description and objective name; shootout spawns too close to the start give one error naming "Hostile spawn points". (B2)
 - [ ] Record a short driven beat (under 0.8 km, ending where it began): saved as checkpoints, publishes. (B3)
@@ -317,7 +316,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Criminal tablet: `Config.Volunteers.enabled` and `Config.CriminalTablet.enabled` on; a civilian types `/crimtab`: the dark tablet opens on Home; agree, tick a suspect, Get on the list: the time left shows. An officer on duty types `/crimtab`: refused. (G2)
 - [ ] With the criminal tablet open, officers take a mission a volunteer can play: Jobs shows the suspect, type, area and timer (no pop-up); Accept sets the waypoint and Active shows the meet point and time left; Give up within a minute is free (no strike in History). Close the tablet while a question is open: the pop-up comes up for the seconds left. (G2)
 - [ ] `access = 'granted'`: Admin UI → Permissions → Extra grants → Criminal tablet for one gang from a grade: only its members open `/crimtab`; the grant gives no Supervisor UI button. Resmon of Crimson-Police with the tablet closed stays at 0.02 ms or less. (G2)
-- [ ] `Config.AdminUi.needsAttention` On in Settings: Home shows Needs attention on top with Problems, Refused starts today, Open disputes, Flagged runs waiting for review and (with live crimes or volunteers on) Open player suspect cases. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Officers opens on Disputes. Click Problems: Server health opens on Problems. (H5)
+- [ ] Home shows Needs attention on top with Problems, Refused starts today, Open disputes, Flagged runs waiting for review and (with live crimes or volunteers on) Open player suspect cases. File a dispute from an officer: Open disputes goes to 1 within a minute; click it: Officers opens on Disputes. Click Problems: Server health opens on Problems. (H5)
 - [ ] Feature rewards on (suspect): start an admin backup (maintenance lock) and let a volunteer case end fairly meanwhile: his row shows Pending in Payments made, and he is paid when the backup ends or at his next login (never lost as a duplicate). (Z1)
 - [ ] Live crimes with backup on: an officer joins a live case, quits the game and reconnects while it runs: he gets no join offer and "You left this live case and can't join it again"; Live shows one entry for him. (Z1)
 - [ ] Volunteers on: a volunteer with a police job plays a case, officers reach him, he goes on duty: he is told his part is void with a strike, the staff timeline shows "went on police duty mid-case", the criminal tablet History shows "Went on police duty (strike)". (Z1)
@@ -389,13 +388,13 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] On a run, look at a contacted person and at a stopped car with people inside: the same Talk, Detain, Arrest,
   Frisk, Escort, seat and cuff options show as before; get into a car: they hide; get out: they show again. Client
   resmon while the eye rests on them: lower than before the update.
-- [ ] Settings → Admin UI → windowRows On, reopen the Admin UI: Leaderboards with a long board scrolls smoothly and
-  shows every officer in order; a Settings search for one letter adds rows as you scroll down. Back to Off.
-- [ ] Settings → Admin UI → foldAdvanced On, reopen the tablet: System → edit a department and a mission desk: the
+- [ ] Leaderboards with a long board scrolls smoothly and shows every officer in order; a Settings search for one
+  letter adds rows as you scroll down.
+- [ ] System → edit a department and a mission desk: the
   colours, logo and box size sit under More options; Officers → Void runs…: the mission id, Include awards and Strike
   sit under More (a ticked Strike keeps it open); Supervisor UI → Mission controls: noRepeat and the twist
   multipliers sit under More, a control you set stays open; open More, close and reopen the tablet: More is still
-  open. Back to Off: every option open as before.
+  open.
 - [ ] Read a few errors in the Admin UI, the Mission Builder and the criminal tablet: each says what went wrong and,
   where you can do something, what to do next.
 - [ ] Idle server (no run, nobody in Testing, no unit): resmon shows Crimson-Police's server side lower than before;
@@ -440,9 +439,8 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   for answering a dispute. (Pure speed-up: the reply carries the new queue.)
 - [ ] Dispatch: Decline a pushed mission: the card leaves at once. Business Check: log a door on Active Mission: the
   next door's buttons show as soon as the server takes the log (no fixed wait).
-- [ ] `Config.Tablet.supervisorRemember = true`: give 10 points with a reason, open Give points for another officer:
-  10 and the reason are filled in; the same for Mission ban (hours, reason) and Clear cooldown (reason). Restart
-  Crimson-Police: the dialogs open empty. Shipped `false`: they always open empty.
+- [ ] Give 10 points with a reason, open Give points for another officer: 10 and the reason are filled in; the same
+  for Mission ban (hours, reason) and Clear cooldown (reason). Restart Crimson-Police: the dialogs open empty.
 - [ ] Errors read with a next step: claim a call another unit just took ("Pick another call on Dispatch"), invite
   into a full unit ("Its leader can remove a member to make room"), submit a supervisor dialog with no reason.
 - [ ] Admin UI -> System -> Backups: Backup now, then Delete an older backup: the list changes at once (one request,
@@ -454,9 +452,8 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   once with no reload flicker (the reply carries the view). Admin UI -> Officers: Void or Restore a run in the run
   dialog: the run, the run list and the officer's totals change at once; Settings -> Reset all: the screen shows the
   config.lua values at once. (FX1)
-- [ ] `Config.Tablet.supervisorReviewLive = true`: two SAST supervisors open the Review Queue; one approves a flagged
-  run: it leaves the other's list at once. A FIB supervisor's list does not change. Shipped `false`: the other list
-  changes at its next refresh (within 30 seconds). (FX1)
+- [ ] Two SAST supervisors open the Review Queue; one approves a flagged run: it leaves the other's list at once. A
+  FIB supervisor's list does not change. (FX1)
 - [ ] Quit and rejoin: a suspect of a live crime quits and comes back within two minutes: he is still on the case card
   and can be cuffed; a volunteer quits and comes back while engaged: his criminal tablet shows the case again, no
   strike; a rookie quits mid-run: the run goes on for his trainer and does not count; a trainer quits and comes back
@@ -515,7 +512,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Admin UI -> System -> Storage copy while a run is going: the toast names the run count, no `{count}`. (Z8B)
 - [ ] Process the scene: destroy the coroner van once it is called: Release to coroner moves to the scene marker.
   (Z8B)
-- [ ] `Config.Tablet.supervisorReviewLive = true`: an admin who is also an FIB officer approves a SAST flagged run:
+- [ ] An admin who is also an FIB officer approves a SAST flagged run:
   a SAST supervisor with the Review Queue open sees it go. A non-supervisor granted reviewFlagged sees the Review
   badge count. (Z8B)
 - [ ] Push a mission twice at once (double click) with one push left today: only one goes out. A SAST supervisor
@@ -547,7 +544,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Live case: once the scene is secured the HUD shows "Detain and book the suspects" without the 60/60 bar. (Z9)
 - [ ] Drug stash search with Seize: find every stash, cancel one Seize bar: that stash keeps its orange point and
   GPS line, the checklist stays open until it is seized. (Z9)
-- [ ] `Config.Tablet.supervisorReviewLive = true`: a SAST supervisor decides a SAST + FIB run's row: an FIB
+- [ ] A SAST supervisor decides a SAST + FIB run's row: an FIB
   supervisor with the Review Queue open sees it go at once. (Z9)
 - [ ] An officer with a builderEdit grant runs a draft test: the audit log shows role supervisor, not admin. (Z9)
 - [ ] An admin's Review badge counts the admin-only flag kinds his Review Queue lists. (Z9)
@@ -587,7 +584,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   an old case's text says nothing about a restart. (Z10)
 - [ ] During a maintenance lock, `/CrimsonPoliceAdmin award <cid> 50 reason` is refused with the maintenance
   text. (Z10)
-- [ ] `Config.AdminUi.windowRows = true`: scroll a long board far down, filter it to a few rows, clear the filter:
+- [ ] Scroll a long board far down, filter it to a few rows, clear the filter:
   the rows show at once. (Z10)
 - [ ] The extra parts of Map markers ship off: with `Config.Markers.extraParts = false` a run shows only the objective
   blips, the prisoner van and the tow truck. Turn on Admin UI -> Map markers -> Turn on and the parts `coronerVan`,
@@ -608,7 +605,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   has one Map markers row (no Extra mission blips row). (BL2, MG1)
 - [ ] Map markers -> Partner -> Change who sees it: tick SAST, pick The run's leader only, Save: the row shows
   the two limits, Settings -> History has the change, and only the run's leader sees partners if he is SAST. Remove the
-  rules: everyone on the run sees them again. `Config.AdminUi.markersScreen = false` hides the screen. (BL2, MG1)
+  rules: everyone on the run sees them again. (BL2, MG1)
 - [ ] Map markers, a part with `roles = 'leader'`: the officer who started the run leaves it (or drops): the next
   officer (the new host) sees the part within a few seconds. (Z11)
 - [ ] Map markers with `suspectVehicle` on, a Traffic Enforcement run: no blip on the violator while it drives
@@ -624,10 +621,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   once (one blip, blue, "Prisoner transport" / "Tow truck"), never a second blip. Switch Prisoner van off on Map
   markers: its blip goes within 2 s; on again: back. Give it a new colour or label: the next van has it. A rule
   `prisonerVan = { grade = 3 }`: an officer below grade 3 gets no van blip on the next van. (MG1)
-- [ ] Old names: put back an old `Config.MissionBlips = { enabled = true, ... }` block and
-  `Config.Markers.serviceVehicles = false` (or keep settings saved in game under those names before the update), start:
-  one console line lists each old name with its new one, the extra parts are on and the vans hidden as before;
-  Settings shows the values under Markers.extraParts and Markers.parts, and the next start prints no such line. (MG1)
+- [ ] One way to do each thing (BK1): Settings has no groupSidebar, groupByPlay, plainLayout, landing, settingsView,
+  homeForms, markersScreen, needsAttention, oneRequest, windowRows, foldAdvanced, quickWizard, supervisorByTask,
+  supervisorRemember or supervisorReviewLive; a value saved for one of them before the update gives no console line
+  and no Problems line.
 - [ ] Back up now, then restart Crimson-Police while it writes (big store): after the start, saves/_backups holds no
   `.t.*.json` or `.f*.bin` without a matching `.manifest.json`. (Z11)
 - [ ] A restore that fails part way, then the fix restore of its automatic backup works: the reply and the audit

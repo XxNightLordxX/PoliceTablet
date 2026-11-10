@@ -1,9 +1,9 @@
 // Admin UI -> Money -> Rewards walked against the browser mocks (node walk.mjs, a gate
-// step): the tab its old key opens, lists every feature that pays with its money, account and items, saves
+// step): the Rewards tab of Money lists every feature that pays with its money, account and items, saves
 // through server:admin:setSetting, and the item editors build the values the server checks.
 
 import '../../mocks/settings.mock';
-import { moneyTabOf, resolveAdminKey } from '../../layouts/adminMoney';
+import { moneyTabOf } from '../../layouts/adminMoney';
 import { ADMIN_SCREENS } from '../../layouts/screens';
 import { action, request } from '../../shared/nui';
 import type { SettingsData } from '../../types/settings';
@@ -18,10 +18,9 @@ function ok(cond: unknown, what: string): void {
 }
 
 async function steps(): Promise<void> {
-    // the screen: a tab of Money (no screen of its own), its old key opens that tab
-    ok(!ADMIN_SCREENS.some(s => s.key === 'admin_rewards'), 'no Rewards screen of its own in the sidebar');
-    const opened = resolveAdminKey('admin_rewards', undefined, null);
-    ok(opened.key === 'admin_money' && moneyTabOf(opened.params) === 'rewards', 'admin_rewards opens Money on Rewards');
+    // the screen: a tab of Money (no screen of its own)
+    ok(!ADMIN_SCREENS.some(s => (s.key as string) === 'admin_rewards'), 'no Rewards screen of its own in the sidebar');
+    ok(moneyTabOf({ moneyTab: 'rewards' }) === 'rewards', 'navigate(admin_money, { moneyTab: rewards }) opens Rewards');
 
     // the rows from the settings data
     const res = await request<SettingsData>('admin:getSettings', {});

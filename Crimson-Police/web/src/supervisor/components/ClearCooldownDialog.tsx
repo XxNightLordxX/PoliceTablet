@@ -21,8 +21,7 @@ import { useAction, useRequest } from '../../shared/hooks';
 import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { asList, type OfficerCooldowns } from '../../types/boards';
-import { useOptionalSession } from '../../shared/session';
-import { keepLastUsed, lastUsed, rememberOn } from './lastUsed';
+import { keepLastUsed, lastUsed } from './lastUsed';
 
 interface Target {
     scope: 'type' | 'mission';
@@ -71,9 +70,8 @@ export function ClearCooldownDialog({
     useEffect(() => {
         if (data) setFetchKey(k => k + 1);
     }, [data]);
-    // Config.Tablet.supervisorRemember: open with the reason last used
-    const remember = rememberOn(useOptionalSession());
-    useEffect(() => setReason(lastUsed('cooldown', remember).reason ?? ''), [officer?.citizenid, remember]);
+    // open with the reason last used
+    useEffect(() => setReason(lastUsed('cooldown').reason ?? ''), [officer?.citizenid]);
 
     const current = data && data.citizenid === officer?.citizenid ? data : null;
     const types = asList(current?.cooldowns?.types);
@@ -92,7 +90,7 @@ export function ClearCooldownDialog({
             { success: 'sup.cd.cleared' },
         );
         if (!res.ok) return;
-        keepLastUsed('cooldown', remember, { reason });
+        keepLastUsed('cooldown', { reason });
         // the reply carries the fresh list (an older server: ask for it)
         applyReplyView<OfficerCooldowns>(res.data, 'view', setData, () => void refetch());
     };

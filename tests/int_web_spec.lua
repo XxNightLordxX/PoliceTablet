@@ -260,14 +260,15 @@ do
     H.ok(lb ~= nil and adminSrv ~= nil, 'Admin Leaderboards screen and modules/admin exist')
     Has(adminSrv, 'CP.Net.callback(\'admin:getFlagged\'', 'modules/admin registers admin:getFlagged')
     Has(adminSrv, 'CP.Net.action(\'server:admin:reviewFlagged\'', 'modules/admin registers server:admin:reviewFlagged')
-    Has(lb, 'useRequest<{ flagged: FlaggedRow[] }>(\'admin:getFlagged\'', 'Admin Leaderboards loads the flagged runs')
+    Has(lb, 'const boardArgs = useMemo(() => ({ ...args, withFlagged: true }), [args]);',
+        'Admin Leaderboards loads the flagged runs with the board (one request)')
     Has(lb, 'run(\'server:admin:reviewFlagged\', { rowId: review.row.rowId, decision: review.decision, reason }',
         'Approve / Void send server:admin:reviewFlagged { rowId, decision, reason }')
     Has(lb, 'onDecide(r, \'approve\')', 'each flagged row has Approve')
     Has(lb, 'onDecide(r, \'void\')', 'each flagged row has Void')
     local dialog = lb:match('<ConfirmDialog%s+open={!!review}(.-)/>')
     H.ok(dialog ~= nil and dialog:find('required: true', 1, true) ~= nil, 'the review dialog requires a reason')
-    Has(lb, 'void flaggedReq.refetch();', 'the flagged list refreshes after a decision')
+    Has(lb, '// the board\'s refetch brings the flagged runs too', 'the flagged list refreshes after a decision')
     local missing = {}
     for key in pairs(LiteralKeys(lb)) do if not keys[key] then missing[#missing + 1] = key end end
     for key in lb:gmatch('\'(sup%.review%.[%w_]+)\'') do if not keys[key] then missing[#missing + 1] = key end end
@@ -349,22 +350,24 @@ end
 -- ============================================================================
 --           ADMIN UI SIDEBAR: EVERYDAY SCREENS, THE REST UNDER MORE
 -- ============================================================================
--- Config.AdminUi.groupSidebar: the same screen keys either way, so every link keeps working.
+-- layouts/adminNav.ts: the rare tools fold under More, the rest stay in the sidebar (BK1: the only layout).
 
 do
     local reg = Read(WEB .. 'layouts/screens.ts') or ''
     local admin = reg:match('ADMIN_SCREENS.-\n%];') or ''
-    local groups = { main = {}, more = {} }
-    for entry in admin:gmatch('{(.-)}') do
-        local key, group = entry:match('key: \'([%w_]+)\''), entry:match('group: \'(%w+)\'')
-        if key and groups[group or ''] then groups[group][#groups[group] + 1] = key end
+    local navSrc = Read(WEB .. 'layouts/adminNav.ts') or ''
+    local rare = navSrc:match('export const ADMIN_RARE = %[(.-)%];') or ''
+    local main, more = {}, {}
+    for key in admin:gmatch('key: \'([%w_]+)\'') do
+        if rare:find('\'' .. key .. '\'', 1, true) then more[#more + 1] = key else main[#main + 1] = key end
     end
-    -- MG2: one Money screen in place of Payouts, Rewards and Payments (their keys open its tabs)
-    H.eq(table.concat(groups.main, ','),
-        'admin_home,admin_money,admin_missions,admin_live,admin_officers,admin_settings',
-        'the everyday admin screens stay in the sidebar')
-    -- admin_markers (MG1, admin_blips before): the Map markers screen folds under More too
-    H.eq(#groups.more, 9, 'the other nine fold under More (' .. table.concat(groups.more, ',') .. ')')
+    H.eq(
+        table.concat(main, ','),
+        'admin_home,admin_money,admin_missions,admin_live,admin_markers,admin_officers,admin_permissions,admin_settings,'
+            .. 'admin_rs,admin_system',
+        'the everyday admin screens stay in the sidebar'
+    )
+    H.eq(#more, 5, 'the rare tools fold under More (' .. table.concat(more, ',') .. ')')
     local rs = admin:match('key: \'admin_rs\',(.-)}') or ''
     H.ok(rs:find('s.config?.realSuspects?.screen === true', 1, true) ~= nil,
         'Real suspects (V18) shows only while the server says live crimes or volunteers are on')
@@ -376,16 +379,15 @@ do
         'a folded More carries the sum of its badges')
     Has(bar, 'window.localStorage.setItem(MORE_KEY', 'the open state is kept per viewer')
     local layout = Read(WEB .. 'layouts/AdminLayout.tsx')
-    Has(layout, 'const grouped = session.config?.adminUi?.groupSidebar !== false;', 'the layout follows the config')
-    Has(layout, 'more={!searching && (grouped || nav.plain) ? t(\'ui.nav.more\') : undefined}',
-        'grouped: the More label is passed')
+    Has(layout, 'group: adminFoldOf(s.key),', 'each screen folds by adminNav')
+    Has(layout, 'more={!searching ? t(\'ui.nav.more\') : undefined}', 'the More label is passed')
     H.ok(keys['ui.nav.more'], 'the More label has a locale key')
 end
 
 -- ============================================================================
 --             ADMIN HOME: THE LANDING SCREEN WITH THE COMMON JOBS
 -- ============================================================================
--- Config.AdminUi.landing = 'home' shows Home first; 'payouts' or 'missions' hide it and open on that screen.
+-- The Admin UI opens on Home (BK1: Config.AdminUi.landing is baked in).
 
 do
     local nav = Read(WEB .. 'shared/navigation.tsx') or ''
@@ -393,16 +395,14 @@ do
     local reg = Read(WEB .. 'layouts/screens.ts') or ''
     local admin = reg:match('ADMIN_SCREENS.-\n%];') or ''
     H.eq(admin:match('key: \'([%w_]+)\''), 'admin_home', 'Home is the first admin screen')
-    Has(admin, 'visible: s => adminLanding(s) === \'home\'', 'Home shows only while landing is home')
-    -- step H6: a landing of 'payouts' opens Money's Mission pay tab while the Money screen is on
-    Has(reg, 'const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;',
-        'the Admin UI opens on the landing screen')
+    H.ok(not admin:find('adminLanding', 1, true), 'Home always shows')
+    Has(reg, 'return available[0] ?? \'home\';', 'the Admin UI opens on its first screen, Home')
     local app = Read(WEB .. 'App.tsx')
     Has(app, 'ui ? currentScreen(ui, session, available, current) :', 'the App shows the current screen')
     Has(reg, 'return keep && current ? current.key : landingScreen(ui, session, available);',
         'a screen not shown falls back to the landing screen')
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
-    -- one tile per title (Config.AdminUi.homeForms picks a form or a link tile for some), plus Something wrong?
+    -- one tile per title, plus Something wrong?
     local tiles, titles = 0, {}
     local grid = home:match('export default function AdminHome%(%).*') or ''
     for k in grid:gmatch('title={t%(\'admin%.home%.([%w_]+)_title\'%)}') do
@@ -416,14 +416,13 @@ do
     Has(missionsScreen, 'onClick={startNew}', 'the Missions header New mission opens the wizard')
     Has(missionsScreen, '<BuilderWorkspace scope="admin" newRequest={newRequest} />', 'the Builder tab gets the press')
     Has(home, 'screen="admin_missions" params={{ tab: \'catalog\' }}', 'Turn missions on/off opens the list')
-    Has(home, 'screen="admin_officers" param="citizenid"', 'Give or take points opens Officers at the citizen')
-    Has(home, 'screen="admin_settings" param="q"', 'Quick settings opens Settings with the search')
+    Has(home, 'screen="admin_officers"', 'Give or take points opens Officers')
+    Has(home, 'screen="admin_settings"', 'Quick settings opens Settings')
     for _, req in ipairs({
         'admin:getMissionLoad',
         'admin:getConfigHealth',
-        'admin:getProblems',
         'admin:getLiveRuns',
-        'admin:getRefusals',
+        'admin:getNeedsAttention',
     }) do
         H.ok(home:find('\'' .. req .. '\'', 1, true) ~= nil, 'Home reuses ' .. req)
         local mocked = false
@@ -437,7 +436,8 @@ do
     local missions = Read(WEB .. 'admin/screens/Missions.tsx')
     Has(missions, 'if (params.tab === \'builder\' || params.tab === \'catalog\') setTab(params.tab);',
         'Missions opens the tab Home asks for')
-    Has(home, 'screen: \'admin_live\', params: { tab: \'refused\' }', 'Refused starts today opens Live -> Refused')
+    local att = Read(WEB .. 'admin/components/needsAttention.ts') or ''
+    Has(att, 'screen: \'admin_live\'', 'Refused starts today (Needs attention) opens Live')
     local live = Read(WEB .. 'admin/screens/Live.tsx') or ''
     Has(live, 'if (params.tab === \'refused\'', 'Live opens the tab Home asks for')
     Has(live, '{t(r.reason)}', 'a refused start shows the reason in the officer\'s words')
@@ -451,20 +451,16 @@ end
 --                                  ADMIN HOME
 -- ============================================================================
 -- QUICK FORMS (switch missions, pay, points, settings).
--- Config.AdminUi.homeForms = true: four tiles do their job on Home with the same actions as the full screens.
+-- Four tiles do their job on Home with the same actions as the full screens (BK1: always).
 
 do
     local home = Read(WEB .. 'admin/screens/Home.tsx') or ''
     local forms = Read(WEB .. 'admin/components/HomeForms.tsx') or ''
-    Has(home, 'const forms = adminUi?.homeForms !== false;', 'the forms follow the config')
-    -- H5: the Needs attention panel follows Config.AdminUi.needsAttention (shipped off)
-    Has(home, 'const attention = adminUi?.needsAttention === true;', 'the Needs attention panel follows the config')
+    Has(home, '<NeedsAttention />', 'Home always shows the Needs attention panel')
     for _, f in ipairs({ 'MissionSwitchForm', 'PayForm', 'PointsForm', 'QuickSettingsForm' }) do
         Has(home, '<' .. f .. ' />', 'Home shows the ' .. f)
         Has(forms, 'export function ' .. f .. '()', f .. ' is in HomeForms')
     end
-    Has(home, 'param="citizenid"', 'homeForms = false: the points tile still opens the officer')
-    Has(home, 'param="q"', 'homeForms = false: Quick settings still searches Settings')
     -- the four actions, with the payloads of the full screens
     Has(forms, '\'server:admin:setMissionEnabled\', { missionId: m.id, enabled }', 'a mission switch')
     Has(forms, '\'server:admin:setLocationEnabled\', { missionId: m.id, index, enabled }', 'a location switch')
@@ -505,8 +501,6 @@ do
     H.ok(mocks:find('\'server:admin:adjustPoints\',', 1, true) ~= nil, 'adjustPoints has a mock')
     for k in forms:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
     for k in home:gmatch('t%(\'(admin%.home%.[%w_]+)\'') do H.ok(keys[k], 'locale key ' .. k) end
-    local samples = Read(WEB .. 'mocks/samples.ts') or ''
-    Has(samples, 'homeForms: !(', 'the browser mock can show the link tiles (?homeLinks)')
 end
 
 -- ============================================================================
@@ -812,14 +806,13 @@ do
     Has(sm, '\'Cash.source\',', 'and Cash.source')
 end
 
--- Settings: the Simple view (Config.AdminUi.settingsView) shows the everyday settings in plain groups, with no Config
+-- Settings: the Simple view (where it opens) shows the everyday settings in plain groups, with no Config
 -- paths; All settings is one click away; per-mission settings point to Missions instead of a raw JSON box.
 do
     local st = Read(WEB .. 'admin/screens/Settings.tsx') or ''
     local types = Read(WEB .. 'types/settings.ts') or ''
     local sm = Read(WEB .. 'mocks/settings.mock.ts') or ''
-    Has(st, 'const view: SettingsViewMode = picked ?? (data?.view === \'all\' ? \'all\' : \'simple\');',
-        'the screen opens in the view the server names (Simple unless it says all)')
+    Has(st, 'const view: SettingsViewMode = picked ?? \'simple\';', 'the screen opens in Simple')
     Has(st, '{ key: \'simple\', label: t(\'settings.view.simple\') },', 'a Simple switch next to the filter chips')
     Has(st, '{ key: \'all\', label: t(\'settings.view.all\') }', 'and All settings')
     Has(st, 'onClick={() => setPicked(\'all\')}', 'the line under the Simple list opens All settings')
@@ -833,7 +826,6 @@ do
     Has(st, '{simple && perMission(s) ? (\n                    <PerMissionNote />',
         'Simple shows the Missions note there')
     Has(st, 'navigate(\'admin_missions\', { tab: \'catalog\' })', 'which opens the mission list')
-    Has(types, 'view?: SettingsViewMode;', 'SettingsData carries the view')
     Has(sm, 'common: [\'Debug\', \'Locale\', \'Tablet.deskDistance\'],', 'the dev Settings list has a Simple set')
     for _, k in ipairs({
         'settings.view.simple',
@@ -1086,10 +1078,9 @@ do
     local mock = Read(WEB .. 'mocks/oversight.mock.ts') or ''
     local samples = Read(WEB .. 'mocks/samples.ts') or ''
     local tabletSrc = Read(ROOT .. 'modules/tablet/server.lua') or ''
-    -- MG3: Mission controls is the Controls tab of the Department screen; sup_controls is an alias that opens it
+    -- MG3: Mission controls is the Controls tab of the Department screen (BK1: no old screen key)
     local dept = Read(WEB .. 'layouts/supDepartment.ts') or ''
-    Has(nav, '| \'sup_controls\'', 'SupervisorScreenKey still has sup_controls (an alias)')
-    Has(dept, 'sup_controls: \'controls\',', 'sup_controls opens the Controls tab')
+    H.ok(not nav:find('| \'sup_controls\'', 1, true), 'SupervisorScreenKey has no sup_controls any more')
     Has(screens, 'import SupDepartment from \'../supervisor/screens/Department\';', 'the registry imports Department')
     Has(dept, 'controls: s => has(s, \'missionControls\') || s.config?.missionControls === true,',
         'Controls: visible with the master switch or a control outside it')

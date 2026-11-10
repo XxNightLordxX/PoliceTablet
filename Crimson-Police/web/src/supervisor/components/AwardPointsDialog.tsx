@@ -10,9 +10,8 @@ import { useEffect, useState } from 'react';
 import { Button, Dialog, Field, NumberInput, TextInput, Textarea } from '../../shared/components';
 import { useAction } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
-import { useOptionalSession } from '../../shared/session';
 import type { AwardPointsControl } from '../../types/boards';
-import { keepLastUsed, lastUsed, rememberOn, startNumber } from './lastUsed';
+import { keepLastUsed, lastUsed, startNumber } from './lastUsed';
 
 export function AwardPointsDialog({
     officer,
@@ -29,18 +28,17 @@ export function AwardPointsDialog({
     activity?: boolean;
 }) {
     const { run, busy } = useAction();
-    // Config.Tablet.supervisorRemember: open with the points and reason last given
-    const remember = rememberOn(useOptionalSession());
+    // open with the points and reason last given
     const [points, setPoints] = useState<number | null>(control?.min ?? 1);
     const [reason, setReason] = useState('');
     const [confirm, setConfirm] = useState('');
     useEffect(() => {
-        const last = lastUsed('award', remember);
+        const last = lastUsed('award');
         const min = control?.min ?? 1;
         setReason(last.reason ?? '');
         setConfirm('');
         setPoints(startNumber(last.number, min, control?.max, min));
-    }, [officer?.citizenid, control?.min, control?.max, remember]);
+    }, [officer?.citizenid, control?.min, control?.max]);
 
     const left = control?.perDay !== undefined ? control.perDay - (control.usedToday ?? 0) : undefined;
     const needsConfirm = !!control?.confirmAbove && (points ?? 0) >= control.confirmAbove;
@@ -69,7 +67,7 @@ export function AwardPointsDialog({
             { success: 'sup.award.done' },
         );
         if (!res.ok) return;
-        keepLastUsed('award', remember, { number: points ?? undefined, reason });
+        keepLastUsed('award', { number: points ?? undefined, reason });
         onDone(res.data);
         onClose();
     };

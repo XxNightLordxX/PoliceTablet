@@ -1,6 +1,6 @@
 -- CP.AdminHome (server): Admin UI -> Home's "Needs attention" panel in one batched callback
 -- (admin:getNeedsAttention): the Problems lines, today's refused mission starts, the open disputes, the flagged runs
--- waiting for a review and the open real-suspect cases. Config.AdminUi.needsAttention (shipped false = no panel).
+-- waiting for a review and the open real-suspect cases.
 
 CP.AdminHome = CP.AdminHome or {}
 local AH = CP.AdminHome
@@ -30,10 +30,6 @@ local function Count(ok, v)
     local n = ok and tonumber(v) or nil
     if not n or n ~= n or n < 0 or n == math.huge then return 0 end
     return math.floor(n)
-end
-
-function AH.enabled()
-    return type(Config.AdminUi) == 'table' and Config.AdminUi.needsAttention == true
 end
 
 -- The refused mission starts on the server's day (CP.Schedule, the daily reset), as Home's "Refused starts today".
@@ -92,7 +88,6 @@ end
 
 if CP.AdminKit and CP.AdminKit.callback then
     CP.AdminKit.callback('admin:getNeedsAttention', 'openAdmin', function(ctx)
-        if not AH.enabled() then return nil, 'err.needs_attention_off' end
         return AH.needsAttention(ctx.src)
     end, { rate = 2 })
 end

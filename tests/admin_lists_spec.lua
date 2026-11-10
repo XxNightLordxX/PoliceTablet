@@ -1,9 +1,8 @@
--- The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) and
--- Config.AdminUi.oneRequest (a screen opens with one request) read through CP.AdminKit, and the Player suspects
--- cases a page at a time.
+-- The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) read through
+-- CP.AdminKit, and the Player suspects cases a page at a time.
 
 -- The long Admin UI lists: CP.AdminKit.pageSize (Config.AdminUi.pageSize, 0 = nil, 10-200), pageOf (one page
--- of a list in memory) and oneRequest, and admin:getRsCases a page at a time. The SQL lists (audit, payments, an
+-- of a list in memory), and admin:getRsCases a page at a time. The SQL lists (audit, payments, an
 -- officer's runs, flagged runs with the board) have one case each in adminkit_spec, admin_economy_spec and
 -- admin_boards_spec.
 
@@ -22,14 +21,13 @@ H.load('modules/adminkit/server.lua')
 local Kit = CP.AdminKit
 
 -- ============================================================================
---                         1. PAGE SIZE AND ONE REQUEST
+--                                 1. PAGE SIZE
 -- ============================================================================
 
 do
     H.eq(Config.AdminUi.pageSize, 0, 'pageSize ships 0: every list as before')
     H.eq(Kit.pageSize(), nil, '0: no page size of its own')
-    H.eq(Config.AdminUi.oneRequest, false, 'oneRequest ships off')
-    H.eq(Kit.oneRequest(), false, 'off: two requests as before')
+    H.eq(Kit.oneRequest, nil, 'BK1: one request per screen open is the only way (no switch)')
     Config.AdminUi.pageSize = 50
     H.eq(Kit.pageSize(), 50, '50 rows a page')
     Config.AdminUi.pageSize = 3
@@ -39,11 +37,6 @@ do
     Config.AdminUi.pageSize = 'lots'
     H.eq(Kit.pageSize(), nil, 'anything else: as before')
     Config.AdminUi.pageSize = 0
-    Config.AdminUi.oneRequest = 'yes'
-    H.eq(Kit.oneRequest(), false, 'anything but true is off')
-    Config.AdminUi.oneRequest = true
-    H.eq(Kit.oneRequest(), true, 'on')
-    Config.AdminUi.oneRequest = false
 
     local list = {}
     for i = 1, 23 do list[i] = i end

@@ -348,18 +348,16 @@ do
     local args = { period = 'alltime', filter = 'overall', citizenid = 'OFF00011', runsPage = 2, withFlagged = true }
     local d = W.data('admin:getBoards', 1, args)
     H.ok(#d.runs == 14 and d.runsPage == nil, 'shipped (pageSize 0): every run at once, as before')
-    H.eq(d.flagged, nil, 'shipped (oneRequest off): the flagged runs stay a request of their own')
+    H.ok(type(d.flagged) == 'table', 'withFlagged: the flagged runs come with the board (one request)')
     Config.AdminUi.pageSize = 10
-    Config.AdminUi.oneRequest = true
     d = W.data('admin:getBoards', 1, args)
     H.ok(d.runsPage and d.runsPage.page == 2 and d.runsPage.pages == 2 and d.runsPage.total == 14,
         'pageSize 10: page 2 of 2, 14 runs')
     H.eq(#d.runs, 4, 'page 2 holds the last 4 runs')
     local alone = W.data('admin:getFlagged', 1, {})
     H.ok(type(d.flagged) == 'table' and #d.flagged == #alone.flagged and #d.flagged >= 1,
-        'oneRequest: the flagged runs come with the board, the same as admin:getFlagged')
+        'the flagged runs that come with the board are the same as admin:getFlagged')
     Config.AdminUi.pageSize = 0
-    Config.AdminUi.oneRequest = false
 end
 
 _G.print = W.realPrint or print

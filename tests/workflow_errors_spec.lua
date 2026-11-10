@@ -127,7 +127,6 @@ local NOTHING_TO_DO = {
     ['err.live_case_off'] = true,
     ['err.live_join_off'] = true,
     ['err.mc_disabled'] = true,
-    ['err.needs_attention_off'] = true,
     ['err.nothing_pending'] = true,
     ['err.op_disabled'] = true,
     ['err.op_none'] = true,

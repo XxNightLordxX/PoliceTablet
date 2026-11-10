@@ -1,6 +1,6 @@
-// Admin UI -> Map markers (Config.AdminUi.markersScreen): Config.Markers as rows built from the settings data
+// Admin UI -> Map markers: Config.Markers as rows built from the settings data
 
-// Admin UI -> Map markers (Config.AdminUi.markersScreen): Config.Markers as rows built from the settings data
+// Admin UI -> Map markers: Config.Markers as rows built from the settings data
 // (admin:getSettings): the objective's settings and the look of each kind of objective blip, the switch of the extra
 // parts, each part's settings and its rules, and the pickers' choices. Pure helpers; admin/screens/MapMarkers.tsx
 // draws them and saves through the Settings save flow (server:admin:setSetting, checked and audited by the server).

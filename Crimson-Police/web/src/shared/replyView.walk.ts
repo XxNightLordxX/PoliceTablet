@@ -3,19 +3,17 @@
 
 // Smoother workflows against the browser mocks (node walk.mjs, a gate step): Approve / Void on the Review
 // Queue and Decline on Dispatch answer with the screen's fresh view, so the screen needs no second request; a reply
-// without it asks again. The supervisor dialogs open with the values last used only while
-// Config.Tablet.supervisorRemember is on.
+// without it asks again. The supervisor dialogs open with the values last used.
 
 import '../mocks/oversight.mock';
 import '../mocks/missioncalls.mock';
 import '../mocks/admin_system.mock';
-import { keepLastUsed, lastUsed, rememberOn, resetLastUsed, startNumber } from '../supervisor/components/lastUsed';
+import { keepLastUsed, lastUsed, resetLastUsed, startNumber } from '../supervisor/components/lastUsed';
 import type { BackupsData } from '../types/admin_system';
 import type { DispatchView } from '../types/missioncalls';
 import type { ReviewQueueData } from '../types/oversight';
 import { action, request } from './nui';
 import { applyReplyView, replyView } from './replyView';
-import type { Session } from './types';
 
 const failures: string[] = [];
 let passed = 0;
@@ -108,24 +106,12 @@ async function steps(): Promise<void> {
         ok(del.ok && !!after && !after.backups.some(b => b.name === name), 'Delete answers with the list without it');
     }
 
-    // Config.Tablet.supervisorRemember: off (as shipped) keeps nothing
+    // the supervisor dialogs open with the values last used (always, since BK1)
     resetLastUsed();
-    const off = {
-        config: { supervisorNav: { byTask: false, compact: false, landing: 'first' } },
-    } as unknown as Session;
-    const on = {
-        config: { supervisorNav: { byTask: false, compact: false, landing: 'first', remember: true } },
-    } as unknown as Session;
-    ok(!rememberOn(off) && rememberOn(on) && !rememberOn(null), 'remember follows the session');
-    keepLastUsed('award', false, { number: 25, reason: 'Great stop' });
-    ok(lastUsed('award', true).reason === undefined, 'off: nothing is kept');
-    keepLastUsed('award', true, { number: 25, reason: '  Great stop  ' });
-    ok(
-        lastUsed('award', true).reason === 'Great stop' && lastUsed('award', true).number === 25,
-        'on: kept and trimmed',
-    );
-    ok(lastUsed('award', false).reason === undefined, 'switched off again: the dialog opens empty');
-    ok(lastUsed('ban', true).reason === undefined, 'each dialog keeps its own values');
+    ok(lastUsed('award').reason === undefined, 'nothing kept yet: the dialog opens empty');
+    keepLastUsed('award', { number: 25, reason: '  Great stop  ' });
+    ok(lastUsed('award').reason === 'Great stop' && lastUsed('award').number === 25, 'kept and trimmed');
+    ok(lastUsed('ban').reason === undefined, 'each dialog keeps its own values');
     ok(startNumber(25, 1, 50, 1) === 25, 'a kept number inside the limits is used');
     ok(startNumber(80, 1, 50, 1) === 1 && startNumber(0, 1, 50, 1) === 1, 'outside the limits: the minimum');
     ok(startNumber(undefined, 5, 50, 5) === 5, 'nothing kept: the minimum');

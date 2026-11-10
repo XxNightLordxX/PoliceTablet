@@ -9,20 +9,9 @@ import { createContext, useContext } from 'react';
 export type OfficerScreenKey =
     'home' | 'board' | 'dispatch' | 'unit' | 'active' | 'leaderboard' | 'challenge' | 'profile' | 'options';
 export type SupervisorScreenKey =
-    | 'sup_missions'
-    | 'sup_crossdept'
-    | 'sup_live'
-    | 'sup_department'
-    | 'sup_payouts'
-    | 'sup_builder'
-    // the screens before the Department screen took them in: aliases of sup_department (resolveSupervisorKey)
-    | 'sup_controls'
-    | 'sup_review'
-    | 'sup_report';
+    'sup_missions' | 'sup_crossdept' | 'sup_live' | 'sup_department' | 'sup_payouts' | 'sup_builder';
 export type AdminScreenKey =
     | 'admin_home'
-    | 'admin_payouts'
-    | 'admin_rewards'
     | 'admin_missions'
     | 'admin_seasons'
     | 'admin_leaderboards'
@@ -33,13 +22,10 @@ export type AdminScreenKey =
     | 'admin_audit'
     | 'admin_testing'
     | 'admin_live'
-    | 'admin_payments'
     | 'admin_money'
     | 'admin_system'
     | 'admin_rs'
-    | 'admin_markers'
-    // the Mission blips screen before Map markers took it in: an alias of admin_markers (resolveAdminKey)
-    | 'admin_blips';
+    | 'admin_markers';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;
 
 export type ScreenParams = Record<string, unknown>;

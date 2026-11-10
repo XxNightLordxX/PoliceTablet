@@ -12,7 +12,7 @@ import liveSrc from '../supervisor/screens/LiveMissions.tsx?raw';
 import deptSrc from '../supervisor/screens/Department.tsx?raw';
 import { navBadge } from './navBadges';
 import { screensFor } from './screens';
-import { DEPT_TABS, deptTabOf, deptTabsFor, resolveSupervisorKey } from './supDepartment';
+import { DEPT_TABS, deptTabOf, deptTabsFor } from './supDepartment';
 
 const failures: string[] = [];
 let passed = 0;
@@ -62,18 +62,8 @@ async function steps(): Promise<void> {
     ok(deptTabsFor(null).length === 0, 'no session: no tab');
     ok(!screensFor('supervisor', as(['setTypePayout'])).some(s => s.key === 'sup_department'), 'no tab: no screen');
 
-    // the old keys open their tab, params kept; every other key as it is
-    const r = resolveSupervisorKey('sup_review', { runId: 7 });
-    ok(r.key === 'sup_department' && r.params.deptTab === 'review' && r.params.runId === 7, 'sup_review: Review');
-    ok(resolveSupervisorKey('sup_report', undefined).params.deptTab === 'officers', 'sup_report: Officers');
-    ok(resolveSupervisorKey('sup_controls', undefined).params.deptTab === 'controls', 'sup_controls: Controls');
-    const same = resolveSupervisorKey('sup_live', { a: 1 });
-    ok(same.key === 'sup_live' && same.params.a === 1 && same.params.deptTab === undefined, 'other keys as they are');
-    ok(
-        appSrc.includes('resolveSupervisorKey(asked, askedParams)') &&
-            appSrc.includes('resolveSupervisorKey(asked as ScreenKey, {})'),
-        'App resolves the old keys on navigate and on open',
-    );
+    // the old screen keys are gone: App navigates by the key as it is
+    ok(!appSrc.includes('resolveSupervisorKey') && !appSrc.includes('resolveAdminKey'), 'App has no old-key redirects');
 
     // the tab shown: the asked one when allowed, else Review for the landing 'review', else the first allowed
     ok(deptTabOf({ deptTab: 'calls' }, session) === 'calls', 'an asked tab');

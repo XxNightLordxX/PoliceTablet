@@ -22,6 +22,7 @@ console lines and the exports for other scripts. Each setting's own comment in `
    - [2.6 Change any setting in game: the Settings screen](#26-change-any-setting-in-game-the-settings-screen)
    - [2.7 Turn missions and locations on or off](#27-turn-missions-and-locations-on-or-off)
    - [2.8 How hard NPCs fight back](#28-how-hard-npcs-fight-back)
+   - [2.9 Baked in: one way to do each thing](#29-baked-in-one-way-to-do-each-thing)
 3. [Optional extras](#3-optional-extras)
    - [3.1 The tablet item](#31-the-tablet-item)
    - [3.2 Mission desks](#32-mission-desks)
@@ -82,16 +83,20 @@ console lines and the exports for other scripts. Each setting's own comment in `
 
 ### 1.1 The Supervisor UI layout
 
-**The Supervisor UI layout** is set in `Config.Tablet` (also in Admin UI -> Settings). Shipped, every switch is
-`false` and `supervisorLanding` is `'first'`:
+**The Supervisor UI layout.** The sidebar is grouped by task under three headings: **People** (Department:
+officers, give points, mission bans, Mission controls, Review Queue, calls and notices, field training),
+**Missions** (Mission List, Live Missions, Cross-dept, Builder) and **Rewards** (Payouts). The dialogs **Give
+points**, **Mission ban** and **Clear cooldown** open with the points, hours and reason last used on that tablet
+(kept until Crimson-Police restarts or the player reconnects; a number outside the admin's current limits falls back
+to the minimum), so a second award or ban in a row needs no typing; the server checks every value again. When a
+supervisor or an admin approves or voids a flagged run or decides a dispute, every other supervisor of that
+department who has the **Review Queue** open sees the updated queue at once. Two choices stay in `Config.Tablet`
+(also in Admin UI -> Settings):
 
 | Setting | What it does |
 |---|---|
-| `supervisorByTask` | `true` = the sidebar is grouped by task under three headings: **People** (Department: officers, give points, mission bans, Mission controls, Review Queue, calls and notices, field training), **Missions** (Mission List, Live Missions, Cross-dept, Builder) and **Rewards** (Payouts) |
-| `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on the Department icon) |
+| `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on the Department icon); shipped `false` |
 | `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (shipped), `'report'` (Department on its **Officers** tab), `'review'` (Department on its **Review** tab) or `'live'`. A screen or tab the supervisor may not see falls back to the first screen. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
-| `supervisorRemember` | `true` = the supervisor dialogs **Give points**, **Mission ban** and **Clear cooldown** open with the points, hours and reason last used on that tablet (kept until Crimson-Police restarts or the player reconnects; a number outside the admin's current limits falls back to the minimum), so a second award or ban in a row needs no typing. The server checks every value again; shipped `false` (they open empty) |
-| `supervisorReviewLive` | `true` = when a supervisor or an admin approves or voids a flagged run or decides a dispute, every other supervisor of that department who has the **Review Queue** open sees the updated queue at once (the decided row is gone, so two supervisors never work on the same row). Shipped `false` (the others see it at their next refresh, within 30 seconds) |
 
 Only the layout changes: every screen keeps its permission, and a screen a supervisor may not see stays hidden (a
 heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
@@ -105,9 +110,7 @@ controls used from their own dialogs, such as Give points and Mission ban, are l
 **Review** (the Review Queue), **Calls & notices** (the mission calls panel and the department notices) and
 **Training** (field training). A tab shows only when the supervisor may use what is on it, with the same permission
 as before, and the Review Queue count sits on Department. The old screens Department Report, Mission controls and
-Review Queue are no sidebar entries any more; a link to one opens its tab. The old **Your controls today** switch
-(`supervisorControlsCard`) is gone (the limits and today's use always show inline); a value saved for it earlier is
-ignored quietly.
+Review Queue are no sidebar entries any more (the limits and today's use always show inline on Controls).
 
 Inside the screens, Mission controls and Review Queue share the Officer UI header (the screen name, its subtitle and
 one help line) and its load states (spinner, error with Retry, "Could not refresh" over what was loaded last). Each
@@ -571,7 +574,7 @@ Everything else works as shipped. These are the ones owners change most:
 | `Config.Route` | The GPS route to the mission start. `required` (`true`): officers must follow it; `abandonAfter` (30 s) off the route in one stretch ends their run as Abandoned with the type cooldown, after a warning at `warnAfter` (10 s). `false`: the route is still set and shown and **Recalculate route** still works, but leaving it never ends a run (no warning, no countdown, no cooldown); the start timeout stays. A run keeps the value it was accepted with, so a change in **Settings** applies to new runs; a test run follows its own **Start route** switch. Also `maxDeviation` (120 m off the line counts as off route), `maxRecalcs` (2) and `maxDrift` (1000 m). `lateArriveRange` (150 m): once the run is In progress, an officer still on his way follows the action instead of the start (GPS to the objective, no route check) and arrives this close to it; `0` = only the start counts. `followActionSeconds` (300 s): from then on he has this long to reach the action, never less time than he had, so the start timeout does not drop a partner who left late while he chases; the HUD and the tablet show the time left in the last 2 minutes; `0` = he keeps the start deadline from his accept |
 | `Config.MissionCalls` | Tablet mission calls: `enabled`, how often (`spawnEvery`), how many open at once (`maxOpen`) |
 | `Config.Events` | Type of the Day, the Weekly Boss (`weeklyBoss.days`, `points`, `payout`) and the twists your officers may choose when they take a mission: `twists.<key>` (`enabled`, `points` = share of P it adds, `cash` = its cash multiplier) for Armored Hostiles (+25 %, x1.25; only where armed NPCs spawn), Time Crunch (+20 %, x1.20) and Radio Silence (+25 %, x1.25). Several stack, up to `twistMaxPoints` (+70 %) and `twistMaxCash` (x1.95), paid only for a completed run. `modifierChance` (0) adds a random twist to that share of runs on top of the chosen ones |
-| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `minLocations` (`1`: one location is enough for a custom mission; the Locations step suggests 3 or more as a tip), `minLocationsOverride` (`3`: an edited built-in mission keeps at least this many), `requireTestToPublish` (`false` = testing is optional, as shipped), `useMyPosition` (`true`: **Set start here** and **Add here** on the Locations step place a point where you stand, the tablet stays open), `autoFill` (`true`: **Fill N for me** on a spawn point row proposes the points around the start) and `autoFillRing` (`{ 15, 80 }`: how many metres beyond the keep-out they go, nearest and furthest), `quickWizard` (`true`: **New mission** opens the 4-step wizard What, Where, Check, Publish; `false`: the New mission dialog and the full editor only; [5.12](#512-mission-builder)), `foldAdvanced` (`true`: Details and each block's settings show the few that matter and fold the rest under **More settings**; `false`: every setting open), `teleport` (`true`: **Teleport** on each point for admins and the ranks granted in `Config.Permissions.builderTeleport`; [1.3](#13-mission-builder-permissions)), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [1.3](#13-mission-builder-permissions)), `maxPointFromStart` (300 m, 50-2000: every point of a location within its start circle plus this, routes, patrol checkpoints, escort ambush points and flee paths exempt), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m), and `route.patrolSpacing` (300 m, 50-1000): a patrol (checkpoint route) recorded by driving is saved as checkpoints about this far apart, not judged as a road route, so a short beat publishes, and `defaultTeam` (patrol, training and investigation 2, tactical 4): the most officers a new mission starts with, by type, and `templates` (ten built-ins, e.g. `beat_patrol`, `gang_shootout`; `{}` = none): built-in missions a new mission can start from, copying their type, difficulty, team, times, bonuses, penalties and objectives but none of their locations |
+| `Config.Builder` | Mission Builder on or off, what builders may pick, `noBuildZones`, `minLocations` (`1`: one location is enough for a custom mission; the Locations step suggests 3 or more as a tip), `minLocationsOverride` (`3`: an edited built-in mission keeps at least this many), `requireTestToPublish` (`false` = testing is optional, as shipped), `useMyPosition` (`true`: **Set start here** and **Add here** on the Locations step place a point where you stand, the tablet stays open), `autoFill` (`true`: **Fill N for me** on a spawn point row proposes the points around the start) and `autoFillRing` (`{ 15, 80 }`: how many metres beyond the keep-out they go, nearest and furthest), `teleport` (`true`: **Teleport** on each point for admins and the ranks granted in `Config.Permissions.builderTeleport`; [1.3](#13-mission-builder-permissions)), `supervisorItems` (`false` = only admins put items in a custom mission, as shipped; [1.3](#13-mission-builder-permissions)), `maxPointFromStart` (300 m, 50-2000: every point of a location within its start circle plus this, routes, patrol checkpoints, escort ambush points and flee paths exempt), and `spawnMargin` (40 m, 0-150): a custom mission's armed NPCs (a shootout and its boss, ambush and pursuit cars, warrant associates) must spawn outside the start circle plus this, e.g. 100 m from a 60 m start, so a fight never appears around your officers as they arrive (hostages and suspects keep `minSpawnFromStart`, 30 m), and `route.patrolSpacing` (300 m, 50-1000): a patrol (checkpoint route) recorded by driving is saved as checkpoints about this far apart, not judged as a road route, so a short beat publishes, and `defaultTeam` (patrol, training and investigation 2, tactical 4): the most officers a new mission starts with, by type, and `templates` (ten built-ins, e.g. `beat_patrol`, `gang_shootout`; `{}` = none): built-in missions a new mission can start from, copying their type, difficulty, team, times, bonuses, penalties and objectives but none of their locations |
 | `Config.Downed.dropOffs` | Where a downed officer is taken when no EMS is on duty |
 | `Config.Custody.tow.enabled` | `false` makes impounded cars fade out instead of leaving on a tow truck |
 | `Config.Custody.serviceClearance` | `30.0` m: a prisoner van, tow truck or coroner van never appears or is put down closer than this to any player |
@@ -641,8 +644,6 @@ Performance; all as shipped change nothing):
 - `Config.Performance.markerRange` (try `60`): caps how far away the per-frame objective markers draw.
 - `Config.Performance.pushGapMs` (try `250`): merges a burst of tablet updates into one per kind and player.
 - `Config.Performance.latentAboveBytes` (try `65536`): sends big answers in the background.
-- `Config.AdminUi.windowRows`: draws only the rows in view of a long scrolling list in every tablet UI (try it if the
-  Leaderboards board or a Settings search feels slow on a big server).
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
 of words refused in bios (one per line). Read that list and change it for your community.
@@ -654,23 +655,22 @@ no restart to do by hand. Type `/CrimsonPoliceAdmin` and open **Settings**.
 
 - **It opens in Simple**: only the about 25 everyday settings (Debug, language, the tablet key, desk distance, pay
   account and daily cap, NPC distances, accuracy and damage, the runner times, the GPS line, Radio Silence, mission
-  calls, the Builder minimums, the test overlay, the daily and weekly reset), under 8 plain groups (Tablet, Missions
-  and Builder, NPCs, Pay and cash, Points and rewards, Police actions, Dispatch, Server), each with a plain name and a
-  short help text and no `Config.` path. **All settings** (the switch next to the filters, or the button under the
+  calls, the Builder minimums, the test overlay, the daily and weekly reset), under the plain groups below, each with
+  a plain name and a short help text and no `Config.` path. **All settings** (the switch next to the filters, or the button under the
   list) shows every setting as below. The search and the **Changed** and **Needs a server restart** filters always
   look through every setting. In Simple, the mission tweaks and disabled locations say "Change this per mission in
-  Missions" with a button, instead of a JSON box. To open on every setting, set `Config.AdminUi.settingsView = 'all'`.
+  Missions" with a button, instead of a JSON box.
 - **All settings lists every setting**, grouped like the file (Tablet and commands, Departments, Mission types, Cash,
   ... and the Mission Builder ranges of `blocks.lua`), with the note from `config.lua` as its description (every
   setting has one; a field inside a list takes its `field: text` line from above the list). Use the search box (a
   name, a path like `Tablet.deskDistance`, or a word of the note), or the **Changed** and **Needs a server restart**
   filters.
-- **Grouped by who you play against** (`Config.AdminUi.groupByPlay`, on): Simple and All settings put the sections
+- **Grouped by who you play against**: Simple and All settings put the sections
   under **NPC missions** (mission types, stars, spawning, NPC combat and running away, markers, mission calls, events
   and twists, custody, the Builder), **Player vs police** (Real suspects rules, Live crimes, Volunteer suspects),
   **Police teamwork** (units, cross-department operations, Mission controls, field training, points, goals,
   leaderboard, challenge, profile), then **Tablet and dispatch**, **Pay and rewards** and **Server**. A section with
-  no everyday setting shows a button to its settings in All settings. `false` = the 8 plain groups above.
+  no everyday setting shows a button to its settings in All settings.
 - The **Features** tab lists every feature you can turn on or off, by the same sections: each with its name, its
   `Config.` switch, On or Off, and a **Settings** link that shows that setting in All settings. The switch there saves
   the same setting as the list (audited, Reset puts `config.lua`'s value back) and works at once. Risky ones (safe
@@ -795,6 +795,42 @@ Good to know:
   `accuracyMax` in Settings and run it again.
 
 ---
+
+### 2.9 Baked in: one way to do each thing
+
+Some switches only chose between an old and a new layout of the same screens. The better layout is now the only one
+and the switch is gone; nothing was taken away, and every action, permission, grant, department scope, audit row and
+money switch is where it was. A value saved in game for one of these keys is skipped quietly at start; delete the key
+from an older `config.lua` (Crimson-Police ignores it).
+
+| Removed key | Now always | Where it is |
+|---|---|---|
+| `Config.AdminUi.groupSidebar` | everyday screens on top, the rare tools under **More** | Admin UI sidebar ([5.3](#53-the-admin-panel)) |
+| `Config.AdminUi.groupByPlay` | screens and settings grouped by NPC missions, Player vs police, Police teamwork, then the rest | Admin UI sidebar, Settings ([2.6](#26-change-any-setting-in-game-the-settings-screen)) |
+| `Config.AdminUi.plainLayout` | plain names, six described groups, the screen search and the breadcrumb | Admin UI sidebar ([5.3](#53-the-admin-panel)) |
+| `Config.AdminUi.landing` | the Admin UI opens on **Home**, whose tiles open Money and Missions | Admin UI → Home |
+| `Config.AdminUi.settingsView` | Settings opens in Simple; **All settings** is one click away | Admin UI → Settings |
+| `Config.AdminUi.homeForms` | the Home tiles hold their quick forms; **Open** opens the full screen | Admin UI → Home |
+| `Config.AdminUi.markersScreen` | the **Map markers** screen is shown | Admin UI → NPC missions → Map markers ([3.13](#313-map-markers-every-part-of-a-mission)) |
+| `Config.AdminUi.needsAttention` | the **Needs attention** panel on top of Home | Admin UI → Home |
+| `Config.AdminUi.oneRequest` | Payments made and Leaderboards open with one request each | Admin UI → Money → Payments, Leaderboards |
+| `Config.AdminUi.windowRows` | long lists draw only the rows in view | every tablet UI |
+| `Config.AdminUi.foldAdvanced` | settings-heavy dialogs and Mission controls fold the rare options under **More** | Admin UI dialogs, Supervisor UI → Department → Controls |
+| `Config.Builder.foldAdvanced` | a block's basics open, the rest under **More settings** | Mission Builder → Details and block settings |
+| `Config.Builder.quickWizard` | **New mission** opens the 4-step wizard; the New mission dialog is its **Open the full editor** | Mission Builder ([5.12](#512-mission-builder)) |
+| `Config.Tablet.supervisorByTask` | the Supervisor UI sidebar under People, Missions and Rewards | Supervisor UI sidebar ([1.1](#11-the-supervisor-ui-layout)) |
+| `Config.Tablet.supervisorRemember` | Give points, Mission ban and Clear cooldown open with the values last used | Supervisor UI → Department → Officers |
+| `Config.Tablet.supervisorReviewLive` | a decided flagged run or dispute leaves every other open Review Queue at once | Supervisor UI → Department → Review |
+
+**Kept as settings**, because a city may want them differently: `Config.AdminUi.reasonChips` (your own reason
+buttons), `Config.Tablet.sidebarOrder`, `activeFirst`, `compactSidebar`, `supervisorCompact` and `supervisorLanding`
+(how each city likes its sidebars), and the tuning numbers `Config.AdminUi.pageSize` and `Config.Performance.loopScale`,
+`pushGapMs`, `latentAboveBytes` and `markerRange` (each shipped as before).
+
+The old screen keys of merged screens (`admin_payouts`, `admin_rewards`, `admin_payments`, `admin_blips`,
+`sup_report`, `sup_controls`, `sup_review`) and the old Map markers names (`Config.MissionBlips`,
+`Config.Markers.serviceVehicles`, `Config.AdminUi.missionBlipsScreen`) are no longer read: use **Money**, **Map
+markers**, **Department** and `Config.Markers` (its `extraParts`, `refreshEvery`, `parts` and `rules`).
 
 ## 3. Optional extras
 
@@ -1138,8 +1174,7 @@ and tow truck coming to you, and, if you want, every other part of a mission on 
 other parts ship off: with `Config.Markers.extraParts = false` only the objective, the prisoner van and the tow
 truck show, as before.
 
-The easy way is Admin UI → **Map markers** (under NPC missions; `Config.AdminUi.markersScreen`, shipped `true`,
-`false` hides the screen). On top are the objective's own settings (its blip, GPS line, Radio Silence, HUD line) and
+The easy way is Admin UI → **Map markers** (under NPC missions). On top are the objective's own settings (its blip, GPS line, Radio Silence, HUD line) and
 the look of each kind of objective blip. Then the switch of the extra parts (**Turn on**) and how often the server
 checks. Below it is one row per part, each with:
 
@@ -1172,14 +1207,6 @@ switch) and edit every value in Admin UI → **Settings** → Missions and Build
 Each part has `on`, `sprite`, `colour`, `scale`, `label` (`''` = the built-in name) and `shortRange` (`true` = only
 on the minimap when near). The prisoner van and tow truck are drawn once each (never a second blip), in every Radio
 Silence mode, while their `on` is `true`.
-
-**Older names still work.** A `config.lua` from before this change keeps working: its old `MissionBlips` block is
-read into `Config.Markers` (`MissionBlips.enabled` as `Config.Markers.extraParts`; `refreshEvery`, `parts` and
-`rules` under the same names), `Markers.serviceVehicles` as the `on` of `Config.Markers.parts.prisonerVan` and
-`Config.Markers.parts.towTruck`, and `AdminUi.missionBlipsScreen` as `Config.AdminUi.markersScreen` (a new name you
-set already wins). Settings saved in game under the old names still apply and are moved to the new names at the
-first start. The console says once which old names it read and their new names: rename them in
-`config/config.lua` when you have time. An old link to the Mission blips screen opens Map markers.
 
 **Who sees a part**: `Config.Markers.rules` limits a part by department, job, lowest grade, mission type,
 mission and role. All rules you set must match; a part without rules shows to everyone on the run:
@@ -1360,85 +1387,65 @@ Which of these they can use is set in `Config.Permissions.supervisor` ([1.2](#12
 | **Audit Log** | Every supervisor and admin action, with filters and a CSV export |
 | **Testing** | Optional: every mission and location with its test result, test runs, testers, and an area coverage table ([5.13](#513-testing-tools)) |
 
-**Home** does the common jobs right on its tiles: **Turn missions on or off** (type part of a mission's name, flip its
+**Home** is where the panel opens. On top, **Needs attention** shows what is waiting for you, each line a count that
+opens its screen: **Problems** (System → Problems), **Refused starts today** (Live → Refused), **Open disputes**
+(Officers → Disputes), **Flagged runs waiting for review** (Leaderboards, one per run, your own left out, every one
+counted) and **Open player suspect cases** (Real suspects; only while you have that screen). It loads in one request
+and refreshes every minute; it only reads.
+
+The tiles do the common jobs right there: **Turn missions on or off** (type part of a mission's name, flip its
 switch, or open its locations and flip one), **Change pay** (find a mission type or a mission, enter the amount and a
 reason), **Give or take points** (find the officer, enter the points, below 0 takes away, and a reason; from 500
 points up you also type their citizen ID) and **Quick settings** (find an everyday setting and change it there, with
-the same checks as the Settings screen). **Open** on each tile still opens the full screen. To have the tiles only
-open their screen, set `Config.AdminUi.homeForms = false` (Admin UI → **Settings**): Quick settings then searches
-Settings for what you type, Give or take points opens that officer when you type a citizen ID. **Something wrong?**
-lists the last mission load (loaded and refused), Config health warnings, System problems, stuck payments and
-**Refused starts today** (opens Live → **Refused**); click a line to open its screen.
+the same checks as the Settings screen). **Open** on each tile opens the full screen. **Something wrong?** lists the
+last mission load (loaded and refused), Config health warnings and stuck payments; click a line to open its screen.
 
-**Needs attention** (`Config.AdminUi.needsAttention`, Admin UI → **Settings**, shipped `false` = no such panel) puts a
-panel on top of Home with what is waiting for you, each line a count that opens its screen: **Problems** (System →
-Problems), **Refused starts today** (Live → Refused), **Open disputes** (Officers → Disputes), **Flagged runs waiting
-for review** (Leaderboards, one per run, your own left out, every one counted) and **Open player suspect cases** (Real
-suspects; only while you have that screen). It loads in one request and refreshes every minute; it only reads. While
-it is on, **Something wrong?** leaves out its Problems and Refused starts lines, so nothing shows twice.
-
-To open the
-panel straight on Payouts or Missions instead (with no Home), set `Config.AdminUi.landing = 'payouts'` or
-`'missions'` (Admin UI → **Settings**).
-
-Under the reason box of every **Set payout** (Payouts, Home, a mission's drawer), **Give or take points** (Home,
+Under the reason box of every **Set payout** (Money, Home, a mission's drawer), **Give or take points** (Home,
 Leaderboards, Officers) and **Quick edit** sit ready-made reasons: **Balance change**, **Event** and **Correction**.
 A click fills the box; you can still type your own. Change the list in `Config.AdminUi.reasonChips` (Admin UI →
 **Settings**, up to 8 reasons of up to 60 characters); `{}` shows no buttons.
 
-The sidebar shows the everyday screens (**Home**, **Money**, **Missions**, **Live**, **Officers**, **Settings**) and a
-**More** button with the others. While More is folded its badge adds up theirs, so nothing waiting is hidden; a
-link or notification that opens one of them unfolds it, and the panel remembers whether you left it open. To get one
-flat list again, set `Config.AdminUi.groupSidebar = false` (Admin UI → **Settings**).
-
-The sidebar is also split into three plain sections, so NPC work, player work and police teamwork never mix:
-
-- **NPC missions**: Missions (with the Mission Builder and the mission switches) and Live.
-- **Player vs police**: Real suspects (real players as suspects: live crimes, volunteers, surrender and talk-down,
-  the pair ledger, blocks and exclusions; it shows while live crimes or volunteers are on).
-- **Police teamwork**: Officers, Departments, Leaderboards, Seasons and Permissions (supervisor Mission controls).
-- Then **Pay and rewards** (Payouts, Payments) and **Server** (Settings, System, Audit, Testing). Home stays on top.
-
-Each section has a small heading; the More folding works the same inside it, and every screen keeps its links. The
-Settings screen uses the same split (see [2.6](#26-change-any-setting-in-game-the-settings-screen)). To get the old
-order and the eight Settings groups back, set `Config.AdminUi.groupByPlay = false` (Admin UI → **Settings**).
-
-**The plain layout** (`Config.AdminUi.plainLayout`, Admin UI → **Settings**, shipped `false` = the sidebar above)
-reorganizes the Admin UI for owners who want plain words and fewer places to look:
+**The sidebar** uses plain words and puts every screen under six groups, each with a one-line description:
 
 | Group (with its one-line description) | Screens in it (plain name, old name) |
 |---|---|
-| **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live) |
+| **NPC missions**: missions against computer suspects and the runs going on now | Missions; Running now (Live); Map markers |
 | **Player vs police**: real players as suspects | Player suspects (Real suspects; while live crimes or volunteers are on) |
 | **Police teamwork**: officers, departments and boards | Officers; Departments, Leaderboards, Seasons and challenges (under More) |
 | **Permissions**: who may do what | Who can do what (Permissions) |
 | **Economy**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
 | **System**: settings, server health, activity log and tests | Settings; Server health (System); Activity log (Audit Log) and Test tools (Testing) under More |
 
-Home stays on top. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name
-or group matches what you type (Enter opens the first), plus **Search settings for "..."**, which opens Settings with
-those words in its search box. A breadcrumb over each screen (Home › group › screen) shows where you are; click Home
-to go back. The title inside each screen uses the same plain name (Running now, Mission pay, Who can do
-what, ...). Only the layout changes: every screen keeps its permission and its links (the screen keys stay the same,
-so saved links and notifications still open the right screen), and a group with nothing you may see is not shown.
+Home stays on top. The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing
+waiting is hidden, a link or notification that opens one of them unfolds it, and the panel remembers whether you left
+it open. A **Find a screen or setting** box over the sidebar lists the screens whose plain name, old name or group
+matches what you type (Enter opens the first), plus **Search settings for "..."**, which opens Settings with those
+words in its search box. A breadcrumb over each screen (Home › group › screen) shows where you are; click Home to go
+back. The title inside each screen uses the same plain name (Running now, Mission pay, Who can do what, ...). Every
+screen keeps its permission, and a group with nothing you may see is not shown.
 
 **The Money screen.** Admin UI → **Money** holds every money tool as four tabs: **Pay rates** (the old Payouts
 screen), **Rewards** (every feature that pays), **Payments** (every payment made, with its row actions) and
-**Department funds**. There is no switch for it: it is the only way in. The old screen keys still work, so a Home
-tile (Change pay), a Needs attention line, the Leaderboards stuck payments link and a landing of `'payouts'` open the
-right tab, and the search box finds Money by the old names (Payouts, Rewards, Payments). Every action, permission
-check, audit row and money-tool switch is the same as before. The old switches `AdminUi.rewardsScreen` and
-`AdminUi.moneyScreen` are gone: an older config.lua that still has them, or a value saved for them in game, is
-ignored quietly.
+**Department funds**. Home's Change pay tile, the Needs attention lines and the Leaderboards stuck payments link open
+the right tab, and the search box finds Money by the old names (Payouts, Rewards, Payments). Every action, permission
+check, audit row and money-tool switch is the same as before.
 
-**Long lists and faster screens** (each in Admin UI → **Settings**, each shipped off):
+**Long lists and faster screens.** Payments made gets its totals and Leaderboards gets its flagged runs in the same
+request as the list, so each screen opens with one request. In every tablet UI, a scrolling table of more than 100
+rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department screen's
+Officers tab) draws only the rows in view and the next ones as you scroll, and the Settings search results start with
+60 rows and add more as you reach the end. The department and mission desk dialogs (Admin UI -> System) show their
+everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More
+options** button, and so does **Void runs…** (Officers, Leaderboards, an operation's history: the mission id,
+Include awards and Strike; one you set stays open). The Supervisor UI's **Mission controls** folds the rarely changed
+controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call
+wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays
+open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More
+settings** of a block. One setting stays:
 
 | Setting | Shipped | What it does |
 | --- | --- | --- |
-| `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
-| `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
-| `Config.AdminUi.windowRows` | `false` | In every tablet UI, a scrolling table of more than 100 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department screen's Officers tab) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
-| `Config.AdminUi.foldAdvanced` | `false` | The department and mission desk dialogs (Admin UI -> System) show their everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More options** button, and so does **Void runs…** (Officers, Leaderboards, an operation's history: the mission id, Include awards and Strike; one you set stays open). The Supervisor UI's **Mission controls** folds the rarely changed controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More settings** of a block. Only the layout changes; `false` shows everything open as before. |
+| `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list's own size (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 
 ### 5.4 The missions
 
@@ -1565,10 +1572,10 @@ or more finished runs, and a Discord post (when `cp_webhook_board` is set).
 Supervisors (Supervisor UI → **Mission Builder**) and admins (Admin UI → **Missions** → Builder) make new missions
 in game, with no coding:
 
-**New mission** opens a 4-step wizard (`Config.Builder.quickWizard = true`, as shipped), about 8 clicks for a
+**New mission** opens a 4-step wizard, about 8 clicks for a
 mission. Every New mission does it in one press: the Mission Builder list, the **New mission** button at the top of
 Admin UI -> Missions (from any tab, also while a mission is open: its edit lock is released and an unsaved change kept)
-and Home's **Make a new mission** tile. With the wizard off they open the New mission dialog instead.
+and Home's **Make a new mission** tile.
 
 1. **What**: pick a template card (a built-in mission's objectives, team, times, bonuses and penalties, none of its
    locations; `Config.Builder.templates`) or **Start from scratch** with a mission type.
@@ -1583,7 +1590,7 @@ and Home's **Make a new mission** tile. With the wizard off they open the New mi
 4. **Publish**: the same checklist and "Publish?" confirmation as the full editor.
 
 **Open the full editor** is on every step (the same draft); on the first step it opens the New mission dialog.
-`Config.Builder.quickWizard = false` keeps only the dialog and the full editor, whose steps are:
+The full editor's steps are:
 
 1. Pick up to 6 objective blocks (fight waves, pursuit, escort, search an area, rescue, skill check and more).
 2. Fill in the details: name, type (it sets the points and pay), difficulty, officers, time limit, cooldown and
@@ -1597,7 +1604,6 @@ and Home's **Make a new mission** tile. With the wizard off they open the New mi
    enemies' aim, armour and health inside the ranges of `config/blocks.lua`), and **More settings** holds each
    wave's own count, the next-wave timing, ped models, aim, armour, health, behaviour, the boss and traffic, plus
    "Flag runs finished faster than" and "Officers must stay within". A setting with an error opens it.
-   `Config.Builder.foldAdvanced = false` shows every setting open.
 3. Place spots in the world and record road routes by driving them. **Set start here** and **Add here** (or
    **Set here**) on the Locations step put the point where you stand, or where your vehicle is, with your heading:
    the tablet stays open and the spot is checked like an aimed one (no-build zone, water, ground, room for the ped

@@ -1,4 +1,4 @@
-// Supervisor UI · Department → Review: the Review Queue (old screen key 'sup_review').
+// Supervisor UI · Department → Review: the Review Queue.
 
 // Tabs Flagged runs / Disputes: flagged runs involving the supervisor's department with the reason
 // (e.g. outside help) and who, and disputes about flagged or voided runs. Runs they took part in never appear; runs of
@@ -229,7 +229,7 @@ export default function SupReviewQueue() {
         {},
         { pollMs: 30000 },
     );
-    // Config.Tablet.supervisorReviewLive: another supervisor's decision pushes this viewer's fresh queue
+    // Another supervisor's decision pushes this viewer's fresh queue
     usePush<ReviewQueueData | null>('reviewQueue', q => {
         if (q && typeof q === 'object') setData(q);
     });

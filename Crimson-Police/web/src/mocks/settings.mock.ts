@@ -227,7 +227,7 @@ const data: SettingsData = {
                 },
             ],
         },
-        // Admin UI -> Map markers (Config.AdminUi.markersScreen): the objective's settings, two kinds, the extra
+        // Admin UI -> Map markers: the objective's settings, two kinds, the extra
         // parts' switch, a few parts, the rules
         {
             key: 'map_markers',
@@ -341,7 +341,7 @@ const data: SettingsData = {
     pending: 0,
     invalid: 0,
     total: 14,
-    // the Simple view (Config.AdminUi.settingsView = 'simple'; ?settingsView=all opens on All settings)
+    // the plain groups of the Simple view
     groups: [
         { key: 'tablet', title: 'Tablet', help: 'How officers open the tablet.', sections: ['tablet_and_commands'] },
         { key: 'missions', title: 'Missions and Builder', help: 'Mission ranges.', sections: ['blocks'] },
@@ -362,7 +362,6 @@ const data: SettingsData = {
         },
         { key: 'live_cash', play: 'pvp', path: 'LiveCrime.cash' },
     ],
-    view: typeof window !== 'undefined' && /[?&]settingsView=all\b/.test(window.location.search) ? 'all' : 'simple',
 };
 
 const history: SettingsHistoryRow[] = [

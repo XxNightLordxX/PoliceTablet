@@ -1,9 +1,9 @@
 -- Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
 
 -- Admin UI split by play (the owner: "ensure the admin panel separates npc stuff and player player stuff
--- and cop cop stuff and every feature is able to be turned on and off etc edited"): Config.AdminUi.groupByPlay folds
--- the Settings sections into NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every
--- feature switch with its section and the setting it writes.
+-- and cop cop stuff and every feature is able to be turned on and off etc edited"): the Settings sections fold into
+-- NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every feature switch with its
+-- section and the setting it writes.
 
 local H = dofile('tests/harness.lua')
 
@@ -44,17 +44,10 @@ H.step(0)
 local S = CP.Settings
 
 -- ============================================================================
---                   THE SWITCH (Config.AdminUi.groupByPlay)
+--                   NO SWITCH (BK1: grouped by play, always)
 -- ============================================================================
 
-do
-    local e = S.entry('AdminUi.groupByPlay')
-    H.ok(e ~= nil, 'Config.AdminUi.groupByPlay is a setting')
-    H.eq(e and e.kind, 'boolean', 'groupByPlay is a switch')
-    H.eq(e and e.default, true, 'it ships on: only the layout changes')
-    H.ok(e and e.desc:find('NPC missions', 1, true) ~= nil, 'its config.lua comment is its description')
-    H.ok(e and not e.restart, 'it is read at every call, no restart')
-end
+H.eq(S.entry('AdminUi.groupByPlay'), nil, 'Config.AdminUi.groupByPlay is no setting any more')
 
 -- ============================================================================
 --                THE THREE SECTIONS (Settings, Simple and All)
@@ -84,7 +77,6 @@ do
     H.eq(seen.cash, 'play_economy', 'cash stays with the money')
 
     local view = S.all()
-    H.eq(view.byPlay, true, 'shipped: the view says it is grouped by play')
     H.eq(view.groups[1].key, 'play_npc', 'NPC missions first')
     H.eq(view.groups[2].key, 'play_pvp', 'then Player vs police')
     H.eq(view.groups[3].key, 'play_team', 'then Police teamwork')
@@ -95,17 +87,6 @@ do
     for _, sec in ipairs(view.sections) do
         H.eq(sec.group, seen[sec.key], sec.key .. ': the section carries its play group')
     end
-
-    -- off: the eight plain groups as before, read at the next call
-    Config.AdminUi.groupByPlay = false
-    view = S.all()
-    H.eq(view.byPlay, nil, 'off: not grouped by play')
-    H.eq(#view.groups, 8, 'off: the eight plain groups')
-    H.eq(view.groups[1].title, 'Tablet', 'off: Tablet first, as before')
-    for _, sec in ipairs(view.sections) do
-        if sec.key == 'live_crimes' then H.eq(sec.group, 'police', 'off: live crimes under Police actions') end
-    end
-    Config.AdminUi.groupByPlay = true
 end
 
 -- ============================================================================
@@ -188,23 +169,17 @@ end
 -- ============================================================================
 
 do
-    local tablet = ReadRepo('Crimson-Police/modules/tablet/server.lua')
-    Has(tablet, 'groupByPlay = aui.groupByPlay ~= false,', 'the Admin UI session carries groupByPlay')
-    local screens = ReadRepo('Crimson-Police/web/src/layouts/screens.ts')
-    Has(screens, 'export const PLAY_SECTIONS', 'the sidebar knows the play sections')
+    local nav = ReadRepo('Crimson-Police/web/src/layouts/adminNav.ts')
     for _, key in ipairs({ 'admin_missions', 'admin_rs', 'admin_officers', 'admin_settings', 'admin_money' }) do
-        local entry = screens and screens:match('key: \'' .. key .. '\',(.-)}') or ''
-        H.ok(entry:find('play: \'', 1, true) ~= nil, key .. ': has a play section')
+        H.ok(nav and nav:find('    ' .. key .. ': \'', 1, true) ~= nil, key .. ': has a group of play')
     end
     local layout = ReadRepo('Crimson-Police/web/src/layouts/AdminLayout.tsx')
-    Has(layout, 'session.config?.adminUi?.groupByPlay !== false', 'the layout follows the config')
+    Has(layout, 'play: adminGroupOf(s.key),', 'the sidebar lists each screen under its group')
     local st = ReadRepo('Crimson-Police/web/src/admin/screens/Settings.tsx')
     Has(st, '<FeaturesPanel', 'Settings has the Features panel')
     local guide = ReadRepo('docs/OWNER_GUIDE.md')
-    Has(guide, 'Config.AdminUi.groupByPlay', 'the owner guide describes the three sections')
+    Has(guide, '**Grouped by who you play against**', 'the owner guide describes the three sections')
     Has(ReadRepo('README.md'), '**Features**', 'and the README the Features overview')
-    local config = ReadRepo('Crimson-Police/config/config.lua')
-    Has(config, 'groupByPlay = true,', 'config.lua has the switch')
 end
 
 return H

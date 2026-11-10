@@ -1915,9 +1915,8 @@ Server:
 - Simple set (A7): `COMMON` lists about 25 everyday paths (Debug, Locale, the tablet key, NPC accuracy and damage, the
   Flee times, spawning distances, the route line, Radio Silence, mission calls, the Builder minimums, payout reasons,
   built-in editing, the test overlay, the resets).
-- Simple view (A8): `SettingsView.view` is `Config.AdminUi.settingsView` ('simple' or 'all'; anything else =
-  'simple'), the view `admin/screens/Settings.tsx` opens in until the admin picks one with the Simple / All settings
-  switch.
+- Simple view (A8): `admin/screens/Settings.tsx` opens in Simple until the admin picks All settings with the Simple /
+  All settings switch.
 - Net: callbacks `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`: the audit rows of the actions
   above); actions `server:admin:setSetting` (`{ path, value? | json?, none? }`), `server:admin:resetSetting` (`{ path
   }`), `server:admin:resetAllSettings`, `server:admin:setMissionEnabled` (`{ missionId, enabled }`),
@@ -2177,9 +2176,7 @@ centre) and at most one GPS line. modules/runs/client.lua drives it.
   line, the waypoint).
 - The extra parts (`Config.Markers.extraParts`, shipped false; every part's `on` shipped false but the prisoner van's
   and tow truck's, which are drawn only by `service` above and are never an extra part).
-- Admin UI: the Map markers screen (`admin_markers`, NPC missions; `Config.AdminUi.markersScreen`, session
-  `config.adminUi.markersScreen`, shown unless false; `admin_blips` is an alias, `resolveAdminKey`; web
-  admin/screens/MapMarkers.tsx, admin/components/mapMarkers.ts) reads `admin:getSettings` and `admin:getMissions`.
+- Admin UI: the Map markers screen (`admin_markers`, NPC missions; web admin/screens/MapMarkers.tsx, admin/components/mapMarkers.ts) reads `admin:getSettings` and `admin:getMissions`.
 
 ### 5.45 CP.Opponents — modules/opponents (S)
 The real suspects of a case, shared by live crimes (§5.46) and volunteer suspects (§5.47).
@@ -3446,9 +3443,8 @@ awardPoints` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `s
 setVoidKind|flagRow` sent with `views = { rowId, archived, citizenid, runs, officer }` (`CP.Corrections.withViews`),
 `server:admin:backupNow|restoreBackup|deleteBackup` (`Sys.backupsView`), `storageCopy|setStorageMode|useStoreAgain`
 (`Sys.storageView`; `admin:getStorage` allows one read per 5 s), `server:admin:resetAllSettings` (`Settings.all()`).
-`Config.Tablet.supervisorReviewLive` (false): after each review decision `CP.Admin.shareReviewQueue(src)` pushes
-`reviewQueue` to the department's other supervisors who asked for the queue in the last 75 s.
-`Config.Tablet.supervisorRemember` (false): supervisor dialogs open with the values last used
+After each review decision `CP.Admin.shareReviewQueue(src)` pushes `reviewQueue` to the department's other
+supervisors who asked for the queue in the last 75 s. Supervisor dialogs open with the values last used
 (`supervisor/components/lastUsed.ts`, page memory only).
 
 ### 9.2 Session
@@ -3638,7 +3634,7 @@ The admin kit (web/src/admin/components/kit): `useAdminAction()` (`run(name, pay
 `requestId`), `newRequestId()`, `OfficerPicker`, `DateRangeField`, `Pager`, `PreviewTable`, `JobProgress` /
 `useAdminJob(jobId)`, `MoneyEffect`, `RowsEditor` (on `SettingView.rows`). `ConfirmDialog` takes `effect` and
 `typedWord` (Confirm stays off until the word matches; `onConfirm(reason, typed)`). `MaintenanceBanner` shows on every
-UI; `useMaintenance()` (shared/session.tsx) follows the session and the push. New admin screens: `admin_payments`,
+UI; `useMaintenance()` (shared/session.tsx) follows the session and the push. New admin screens: `admin_money`,
 `admin_live`, `admin_system`.
 
 Economy (web/src/types/admin_economy.ts; the item reward shapes in types/rewards.ts):
@@ -3816,8 +3812,9 @@ Screen keys (for `navigate`) and title keys (`ui.screen.<key>`):
 `layouts/supDepartment.ts`: tabs Officers = viewMissionList, officer dialog: Clear cooldown; Controls =
 missionControls or `session.config.missionControls`, happy hour: Start with minutes, countdown, End now; Review =
 reviewFlagged or handleDisputes; Calls & notices = missionCalls or a Mission control; Training = viewMissionList or
-fieldTraining; the old keys `sup_report`, `sup_controls`, `sup_review` open their tab via `resolveSupervisorKey`)
-`sup_payouts` (setTypePayout) `sup_builder` (builderEdit) | | Admin | `admin_home` `admin_payouts` `admin_payments`
+fieldTraining; a link names its tab with `{ deptTab }`)
+`sup_payouts` (setTypePayout) `sup_builder` (builderEdit) | | Admin | `admin_home` `admin_money`
+(Money: Pay rates, Rewards, Payments, Department funds; `{ moneyTab }`) `admin_markers`
 `admin_missions` `admin_live` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments`
 `admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` `admin_rs` |
 

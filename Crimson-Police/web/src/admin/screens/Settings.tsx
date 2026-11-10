@@ -30,7 +30,7 @@ import { request } from '../../shared/nui';
 import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { applyReplyView } from '../../shared/replyView';
-import { useGrowingLimit, useWindowRows } from '../../shared/rowWindow';
+import { useGrowingLimit } from '../../shared/rowWindow';
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
 import { toast } from '../../shared/toast';
@@ -1223,14 +1223,14 @@ export default function AdminSettings() {
     // Permissions → Config health → Open setting comes here with the path to show
     const { params } = useNavigation();
     const [query, setQuery] = useState(typeof params.q === 'string' ? params.q.toLowerCase() : '');
-    // the sidebar's 'Search settings for ...' (Config.AdminUi.plainLayout) while this screen is already open
+    // the sidebar's 'Search settings for ...' while this screen is already open
     useEffect(() => {
         if (typeof params.q === 'string') setQuery(params.q.toLowerCase());
     }, [params]);
     const [filter, setFilter] = useState<Filter>('all');
-    // Simple or All settings: opens in Config.AdminUi.settingsView until the admin picks one
+    // Simple or All settings: opens in Simple (the everyday settings) until the admin picks All settings
     const [picked, setPicked] = useState<SettingsViewMode | null>(null);
-    const view: SettingsViewMode = picked ?? (data?.view === 'all' ? 'all' : 'simple');
+    const view: SettingsViewMode = picked ?? 'simple';
     const simple = view === 'simple';
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
@@ -1250,14 +1250,13 @@ export default function AdminSettings() {
     );
     const q = query.trim().toLowerCase();
     const searching = q !== '' || filter !== 'all';
-    // Config.AdminUi.windowRows: the search results start with the first rows and add more as the end
-    // comes into view; off = every match at once, as before. The matches are worked out once per search, not per draw.
-    const windowRows = useWindowRows();
+    // the search results start with the first rows and add more as the end comes into view. The matches are
+    // worked out once per search, not per draw.
     const hits = useMemo(
         () => (searching ? all.filter(s => matches(s, q) && passes(s, filter)) : []),
         [all, searching, q, filter],
     );
-    const grow = useGrowingLimit(hits.length, windowRows, `${q}|${filter}`);
+    const grow = useGrowingLimit(hits.length, `${q}|${filter}`);
     const allowed = useMemo(
         () => (grow.limit >= hits.length ? null : new Set(hits.slice(0, grow.limit).map(s => s.path))),
         [hits, grow.limit],
@@ -1380,17 +1379,15 @@ export default function AdminSettings() {
             : [];
         const plain = simple ? simpleGroups(sections, asArray(data?.groups), asArray(data?.common)) : [];
         const shown = plain.reduce((n, g) => n + g.settings.length, 0);
-        // Config.AdminUi.groupByPlay: every play group shows, one with no everyday setting points to All settings
+        // every play group shows; one with no everyday setting points to All settings
         const playGroups = asArray(data?.groups);
-        const plainShown = data?.byPlay
-            ? playGroups.map(g => plain.find(p => p.group.key === g.key) ?? { group: g, settings: [] })
-            : plain;
+        const plainShown = playGroups.map(g => plain.find(p => p.group.key === g.key) ?? { group: g, settings: [] });
         const openGroup = (sectionKeys: string[]) => {
             setPicked('all');
             if (sectionKeys[0]) setSectionKey(sectionKeys[0]);
             setJump(n => n + 1);
         };
-        // All settings: the section list, under the play headings while grouped by play
+        // All settings: the section list, under the play headings
         const navItem = (sec: SettingsSection) => (
             <button
                 key={sec.key}
@@ -1409,18 +1406,16 @@ export default function AdminSettings() {
                 ) : null}
             </button>
         );
-        const navList = data?.byPlay
-            ? playGroups.flatMap(g => {
-                  const secs = asArray(g.sections).flatMap(k => sections.filter(sec => sec.key === k));
-                  if (!secs.length) return [];
-                  return [
-                      <div key={`play-${g.key}`} className="settings-nav__heading">
-                          {g.title}
-                      </div>,
-                      ...secs.map(navItem),
-                  ];
-              })
-            : sections.map(navItem);
+        const navList = playGroups.flatMap(g => {
+            const secs = asArray(g.sections).flatMap(k => sections.filter(sec => sec.key === k));
+            if (!secs.length) return [];
+            return [
+                <div key={`play-${g.key}`} className="settings-nav__heading">
+                    {g.title}
+                </div>,
+                ...secs.map(navItem),
+            ];
+        });
         body = (
             <>
                 <div className="settings-intro">

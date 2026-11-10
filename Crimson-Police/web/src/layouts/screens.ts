@@ -5,7 +5,6 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
-import { resolveAdminKey } from './adminMoney';
 import { deptTabsFor } from './supDepartment';
 import { supervisorLanding, supervisorNavOf } from './supervisorNav';
 
@@ -65,16 +64,7 @@ export interface ScreenDef<K extends ScreenKey = ScreenKey> {
     component: ComponentType | LazyExoticComponent<ComponentType>;
     // Hidden when this returns false (permissions from session.actions).
     visible?: (session: Session) => boolean;
-    // Admin sidebar (Config.AdminUi.groupSidebar): 'main' items always show, 'more' items fold under More.
-    group?: 'main' | 'more';
-    // Admin sidebar (Config.AdminUi.groupByPlay): the section it is listed under (PLAY_SECTIONS); none = on top
-    play?: PlaySection;
 }
-
-// The sections of the Admin sidebar (Config.AdminUi.groupByPlay), in order: missions against NPCs, real players as
-// suspects, officers working together, then money and the server. Titles: settings.features.play.<key>.
-export type PlaySection = 'npc' | 'pvp' | 'team' | 'economy' | 'system';
-export const PLAY_SECTIONS: PlaySection[] = ['npc', 'pvp', 'team', 'economy', 'system'];
 
 const has = (s: Session, ...actions: string[]) => Array.isArray(s.actions) && actions.some(a => s.actions.includes(a));
 
@@ -128,7 +118,7 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
     },
     // MG3: one Department screen: Officers (the Department Report), Controls (Mission controls), Review (the Review
     // Queue), Calls & notices and Training, each tab with the permission of the screen it replaces
-    // (layouts/supDepartment.ts); the old keys sup_report, sup_controls and sup_review open their tab
+    // (layouts/supDepartment.ts)
     {
         key: 'sup_department',
         titleKey: 'ui.screen.sup_department',
@@ -152,102 +142,74 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
     },
 ];
 
-// Config.AdminUi.landing: 'home' (or a session without it) shows Home; 'payouts' or 'missions' hide it.
-const adminLanding = (s: Session) => s.config?.adminUi?.landing ?? 'home';
-
 export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
     {
         key: 'admin_home',
         titleKey: 'ui.screen.admin_home',
         icon: 'home',
         component: AdminHome,
-        visible: s => adminLanding(s) === 'home',
-        group: 'main',
     },
     {
-        // Money: Pay rates, Rewards, Payments and Department funds as four tabs; the old keys admin_payouts,
-        // admin_rewards and admin_payments open their tab (resolveAdminKey)
+        // Money: Pay rates, Rewards, Payments and Department funds as four tabs (layouts/adminMoney.ts)
         key: 'admin_money',
         titleKey: 'ui.screen.admin_money',
         icon: 'dollar',
         component: AdminMoney,
-        play: 'economy',
-        group: 'main',
     },
     {
         key: 'admin_missions',
         titleKey: 'ui.screen.admin_missions',
         icon: 'layers',
         component: AdminMissions,
-        play: 'npc',
-        group: 'main',
     },
     {
         key: 'admin_live',
         titleKey: 'ui.screen.admin_live',
         icon: 'activity',
         component: AdminLive,
-        play: 'npc',
-        group: 'main',
     },
     {
-        // Map markers (Config.AdminUi.markersScreen, shipped on): the objective's look and every part of a mission
-        // (the old key admin_blips opens it, resolveAdminKey)
+        // Map markers: the objective's look and every part of a mission
         key: 'admin_markers',
         titleKey: 'ui.screen.admin_markers',
         icon: 'mapPin',
         component: AdminMapMarkers,
-        visible: s => s.config?.adminUi?.markersScreen !== false,
-        play: 'npc',
-        group: 'more',
     },
     {
         key: 'admin_seasons',
         titleKey: 'ui.screen.admin_seasons',
         icon: 'calendar',
         component: AdminSeasons,
-        play: 'team',
-        group: 'more',
     },
     {
         key: 'admin_leaderboards',
         titleKey: 'ui.screen.admin_leaderboards',
         icon: 'podium',
         component: AdminLeaderboards,
-        play: 'team',
-        group: 'more',
     },
     {
         key: 'admin_officers',
         titleKey: 'ui.screen.admin_officers',
         icon: 'search',
         component: AdminOfficers,
-        play: 'team',
-        group: 'main',
     },
     {
         key: 'admin_departments',
         titleKey: 'ui.screen.admin_departments',
         icon: 'building',
         component: AdminDepartments,
-        play: 'team',
-        group: 'more',
     },
     {
         key: 'admin_permissions',
         titleKey: 'ui.screen.admin_permissions',
         icon: 'key',
         component: AdminPermissions,
-        play: 'team',
-        group: 'more',
     },
     {
         key: 'admin_settings',
         titleKey: 'ui.screen.admin_settings',
         icon: 'sliders',
         component: AdminSettings,
-        play: 'system',
-        group: 'main',
     },
     {
         // Real suspects: while live crimes or volunteers are on (Config.RealSuspects.adminScreen)
@@ -256,32 +218,24 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         icon: 'shield',
         component: AdminRealSuspects,
         visible: s => has(s, 'antiFarmOverride') && s.config?.realSuspects?.screen === true,
-        play: 'pvp',
-        group: 'more',
     },
     {
         key: 'admin_system',
         titleKey: 'ui.screen.admin_system',
         icon: 'server',
         component: AdminSystem,
-        play: 'system',
-        group: 'more',
     },
     {
         key: 'admin_audit',
         titleKey: 'ui.screen.admin_audit',
         icon: 'fileText',
         component: AdminAudit,
-        play: 'system',
-        group: 'more',
     },
     {
         key: 'admin_testing',
         titleKey: 'ui.screen.admin_testing',
         icon: 'flask',
         component: AdminTesting,
-        play: 'system',
-        group: 'more',
     },
 ];
 
@@ -302,14 +256,9 @@ export function defaultScreen(ui: UiKind): ScreenKey {
     return (ALL[ui]?.[0]?.key ?? 'home') as ScreenKey;
 }
 
-// The screen a UI opens on while its remembered screen is not one it shows: the first one, except the Admin UI
-// opens on Config.AdminUi.landing (Home, Payouts or Missions) and the Supervisor UI on Config.Tablet.supervisorLanding.
+// The screen a UI opens on while its remembered screen is not one it shows: the first one (the Admin UI's Home),
+// except the Supervisor UI opens on Config.Tablet.supervisorLanding.
 export function landingScreen(ui: UiKind, session: Session | null, available: ScreenKey[]): ScreenKey {
-    if (ui === 'admin' && session) {
-        // a landing of 'payouts' opens Money's Pay rates tab (resolveAdminKey)
-        const want = resolveAdminKey(`admin_${adminLanding(session)}` as ScreenKey, {}, session).key;
-        if (available.includes(want)) return want;
-    }
     // Config.Tablet.supervisorLanding: 'first' = as before
     if (ui === 'supervisor')
         return supervisorLanding(supervisorNavOf(session), available, deptTabsFor(session)) ?? 'home';

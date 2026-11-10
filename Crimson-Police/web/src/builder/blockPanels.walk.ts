@@ -1,6 +1,5 @@
-// Block settings and Details with Config.Builder.foldAdvanced against the browser mocks (node walk.mjs, a gate
-// step): the shootout's four basics open, every other setting under a closed "More settings", Easy/Normal/Hard
-// inside the server's ranges, and folding off draws every setting open as before.
+// Block settings and Details against the browser mocks (node walk.mjs, a gate step): the shootout's four basics open,
+// every other setting under a closed "More settings", and Easy/Normal/Hard inside the server's ranges.
 
 import '../mocks/builder_server.mock';
 import '../mocks/builder_client.mock';
@@ -9,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { request } from '../shared/nui';
 import type { BuilderConfig, BuilderDefinition, BuilderObjective } from '../types/builder_server';
 import { BlockPanel } from './BlockPanels';
-import { foldsAdvanced, hwDifficultyOf, hwDifficultyStats, perWaveOf } from './blockBasics';
+import { hwDifficultyOf, hwDifficultyStats, perWaveOf } from './blockBasics';
 import { StepDetails } from './steps/StepDetails';
 import type { StepProps } from './steps/common';
 import { normalizeConfig } from './useBuilderConfig';
@@ -88,8 +87,6 @@ async function steps(): Promise<void> {
     const r = await request<BuilderConfig>('builder:config', {});
     if (!r.ok || !r.data) throw new Error(`config: ${r.error ?? 'no data'}`);
     const cfg = normalizeConfig(r.data);
-    ok(cfg.foldAdvanced === true && foldsAdvanced(cfg), 'builder:config folds (Config.Builder.foldAdvanced)');
-    ok(foldsAdvanced({}) && foldsAdvanced(null) && !foldsAdvanced({ foldAdvanced: false }), 'missing = on');
 
     // the shootout: name, then four basics, then a closed More settings with the rest
     const html = panel(cfg, shootout());
@@ -146,11 +143,6 @@ async function steps(): Promise<void> {
     );
     ok(/<details[^>]* open/.test(bad), 'an error under More settings opens it');
 
-    // folding off: every setting open as before, no More settings, no Difficulty
-    const off = panel({ ...cfg, foldAdvanced: false }, shootout());
-    ok(!off.includes('<details'), 'foldAdvanced = false: no More settings');
-    ok(!off.includes('>builder.hw.difficulty<') && off.includes('>builder.field.accuracy<'), 'and every field open');
-
     // Details: name, type, difficulty and team size open, the rest folded
     const obj = shootout();
     const props = {
@@ -169,6 +161,4 @@ async function steps(): Promise<void> {
         ok(dOpen.includes(`>builder.details.${k}<`), `Details shows ${k} open`);
     for (const k of ['description', 'time_limit', 'cooldown', 'vehicle_penalties'])
         ok(!dOpen.includes(`>builder.details.${k}<`) && det.includes(`>builder.details.${k}<`), `${k} folded`);
-    const detOff = renderToStaticMarkup(createElement(StepDetails, { ...props, cfg: { ...cfg, foldAdvanced: false } }));
-    ok(!detOff.includes('<details') && detOff.includes('>builder.details.time_limit<'), 'Details unfolded when off');
 }

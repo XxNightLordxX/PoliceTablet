@@ -124,6 +124,5 @@
   "admin.map_markers.kind.scene": "Scene",
   "admin.map_markers.kind.point": "Point to check",
   "admin.map_markers.kind.device": "Device",
-  "admin.map_markers.kind.objective": "Any other objective",
-  "markers.console_aliases": "Map markers: config.lua or the saved settings still use old names, read as the new ones this start (rename them in config/config.lua; saved settings were moved): {list}"
+  "admin.map_markers.kind.objective": "Any other objective"
 }

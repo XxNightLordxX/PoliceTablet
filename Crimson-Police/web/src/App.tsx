@@ -8,8 +8,6 @@ import { OfficerLayout } from './layouts/OfficerLayout';
 import { SupervisorLayout } from './layouts/SupervisorLayout';
 import { landingOf, normalizeCrimView } from './criminal/model';
 import type { CrimScreen, CrimView } from './types/criminal';
-import { resolveAdminKey } from './layouts/adminMoney';
-import { resolveSupervisorKey } from './layouts/supDepartment';
 import { currentScreen, defaultScreen, preloadScreens, screensFor } from './layouts/screens';
 import { TABLET_H, TABLET_W, tabletScale } from './layouts/TabletFrame';
 import BuilderOverlay from './hud/BuilderOverlay';
@@ -163,18 +161,9 @@ export default function App() {
         if (typeof m.seq === 'number') setOpenSeq(m.seq);
         // Lua names a screen (the Dispatch key, a call just now); else the officer option openOn picks one, or none
         const asked = m.screen ?? openScreenFor(target, next);
-        // an old key opens its tab: Money in the Admin UI, Department in the Supervisor UI
-        const opened = !asked
-            ? null
-            : target === 'admin'
-              ? resolveAdminKey(asked as ScreenKey, {}, next)
-              : target === 'supervisor'
-                ? resolveSupervisorKey(asked as ScreenKey, {})
-                : null;
-        const screen = opened ? opened.key : asked;
+        const screen = asked;
         if (screen && screensFor(target, next).some(s => s.key === screen)) {
-            const params = opened ? opened.params : {};
-            setScreens(prev => ({ ...prev, [target]: { key: screen as ScreenKey, params, picked: true } }));
+            setScreens(prev => ({ ...prev, [target]: { key: screen as ScreenKey, params: {}, picked: true } }));
         }
     });
     useNuiEvent('close', () => {
@@ -283,22 +272,15 @@ export default function App() {
     const screenKey: ScreenKey = ui ? currentScreen(ui, session, available, current) : 'home';
 
     const navigate = useCallback(
-        (asked: ScreenKey, askedParams?: ScreenParams) => {
+        (key: ScreenKey, params?: ScreenParams) => {
             if (!ui) return;
-            // the old money keys open their tab of Money; the old Department keys their tab of Department
-            const { key, params } =
-                ui === 'admin'
-                    ? resolveAdminKey(asked, askedParams, session)
-                    : ui === 'supervisor'
-                      ? resolveSupervisorKey(asked, askedParams)
-                      : { key: asked, params: askedParams };
             if (!available.includes(key)) {
                 console.warn(`[crimson-police:ui] navigate('${key}') ignored: not a screen of the ${ui} UI`);
                 return;
             }
             setScreens(prev => ({ ...prev, [ui]: { key, params: params ?? {}, picked: true } }));
         },
-        [ui, available, session],
+        [ui, available],
     );
 
     const nav: NavigationValue = useMemo(

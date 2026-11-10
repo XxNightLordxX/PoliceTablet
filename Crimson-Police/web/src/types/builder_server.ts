@@ -316,10 +316,6 @@ export interface BuilderConfig {
     useMyPosition?: boolean;
     // "Fill N for me" on a spawn point row (Config.Builder.autoFill); missing = on
     autoFill?: boolean;
-    // "New mission" opens the 4-step wizard (Config.Builder.quickWizard); missing = on
-    quickWizard?: boolean;
-    // block settings show the basics and fold the rest under "More settings" (Config.Builder.foldAdvanced); missing = on
-    foldAdvanced?: boolean;
     // "Teleport" next to each point: Config.Builder.teleport is on and this caller may (admins, or a
     // Config.Permissions.builderTeleport grant for his department and grade); missing = no
     teleport?: boolean;

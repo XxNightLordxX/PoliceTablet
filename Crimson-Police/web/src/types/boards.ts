@@ -244,7 +244,7 @@ export interface AdminBoards {
     runs?: AdminRun[];
     // Config.AdminUi.pageSize: runs holds one page of the officer's runs (asked for with runsPage)
     runsPage?: ListPage | null;
-    // Config.AdminUi.oneRequest: the flagged runs, asked for with withFlagged
+    // the flagged runs, asked for with withFlagged (one request per screen open)
     flagged?: FlaggedRow[];
     // full admin control: the past windows to pick from and every metric the board can be ranked by
     windows?: { weeks: PastWindow[]; months: PastWindow[] };

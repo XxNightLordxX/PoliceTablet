@@ -1,9 +1,9 @@
-// The More fold (Config.AdminUi.foldAdvanced) against the browser mocks (node walk.mjs, a gate step): off, the
-// options show open as before; on, they sit under More, closed at first, open as the viewer last left them (a
-// blocked storage starts folded), and an option that is set never hides.
+// The More fold against the browser mocks (node walk.mjs, a gate step): the options sit under More, closed at first,
+// open as the viewer last left them (a blocked storage starts folded), and an option that is set never hides.
 
-// Against the browser mocks (node walk.mjs, a gate step): the More fold off (open, no button), on (closed,
-// the count), forceOpen, the open state remembered per screen and a blocked storage; which Mission controls fold and
+// The More fold against the browser mocks (node walk.mjs, a gate step): the options sit under More, closed at first,
+// open as the viewer last left them (a blocked storage starts folded), and an option that is set never hides.
+// fold={false} (open, no button), the fold (closed, the count), forceOpen, the open state remembered per screen and a blocked storage; which Mission controls fold and
 // that a set one never does.
 
 import { createElement } from 'react';
@@ -35,7 +35,7 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 const g = globalThis as unknown as { window?: unknown };
 
 function withSession(foldAdvanced: boolean | undefined, screen: string, extra: Record<string, unknown> = {}): string {
-    const session = { config: { adminUi: { groupSidebar: true, foldAdvanced } } } as unknown as Session;
+    const session = { config: { adminUi: {}, foldAdvanced } } as unknown as Session;
     const value: SessionContextValue = {
         session,
         ui: 'admin',
@@ -71,10 +71,13 @@ function steps(): void {
     }
     ok(!threw, 'blocked storage: writing never throws');
 
-    // shipped (foldAdvanced off or missing): the option shows open, no More button, as before
-    const off = withSession(false, 'desk_dialog');
-    ok(off.includes('rare option') && !off.includes('cp-more'), 'off: the option shows open with no More button');
-    ok(!withSession(undefined, 'desk_dialog').includes('cp-more'), 'missing: as off');
+    // fold={false}: the option shows open, no More button
+    const off = withSession(true, 'desk_dialog', { fold: false });
+    ok(
+        off.includes('rare option') && !off.includes('cp-more'),
+        'fold false: the option shows open with no More button',
+    );
+    ok(withSession(undefined, 'desk_dialog').includes('cp-more'), 'every UI folds (no switch)');
 
     // on: a More button, the option folded
     const on = withSession(true, 'desk_dialog');

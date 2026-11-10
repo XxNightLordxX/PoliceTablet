@@ -102,7 +102,7 @@ function StuckPanel({ list }: { list: StuckPayment[] }) {
                         size="sm"
                         variant="ghost"
                         icon="chevronRight"
-                        onClick={() => navigate('admin_payments', { status: 'paying' })}
+                        onClick={() => navigate('admin_money', { moneyTab: 'payments', status: 'paying' })}
                     >
                         {t('int.ui.open_payments')}
                     </Button>
@@ -295,13 +295,6 @@ export default function AdminLeaderboards() {
     const [bulk, setBulk] = useState(false);
     const [runRow, setRunRow] = useState<AdminRun | null>(null);
     const [approveRun, setApproveRun] = useState<{ row: FlaggedRow; rows: FlaggedRow[] } | null>(null);
-    // Config.AdminUi.oneRequest: the flagged runs come with the board, so the screen opens with one request
-    const oneRequest = session.config?.adminUi?.oneRequest === true;
-    const flaggedReq = useRequest<{ flagged: FlaggedRow[] }>(
-        'admin:getFlagged',
-        {},
-        { pollMs: 60000, skip: oneRequest },
-    );
     // Config.AdminUi.pageSize: the page of the open officer's runs (the server ignores it while 0)
     const [runsPage, setRunsPage] = useState(1);
 
@@ -317,15 +310,12 @@ export default function AdminLeaderboards() {
             ...(eff === 'department' ? { department } : {}),
         };
     }, [period, eff, department, metric, past]);
-    const boardArgs = useMemo(() => (oneRequest ? { ...args, withFlagged: true } : args), [args, oneRequest]);
+    // the flagged runs come with the board, so the screen opens with one request
+    const boardArgs = useMemo(() => ({ ...args, withFlagged: true }), [args]);
     const { data, loading, error, refetch } = useRequest<AdminBoards>('admin:getBoards', boardArgs, {
         pollMs: 60000,
     });
-    const flaggedRows = asList(oneRequest ? data?.flagged : flaggedReq.data?.flagged);
-    // after a review: the board's refetch brings the flagged runs too while oneRequest is on
-    const refetchFlagged = () => {
-        if (!oneRequest) void flaggedReq.refetch();
-    };
+    const flaggedRows = asList(data?.flagged);
     useEffect(() => setRunsPage(1), [officer?.citizenid]);
     const runsReq = useRequest<AdminBoards>(
         'admin:getBoards',
@@ -415,7 +405,7 @@ export default function AdminLeaderboards() {
         );
         setReview(null);
         if (res.ok) {
-            refetchFlagged();
+            // the board's refetch brings the flagged runs too
             void refetch();
             if (officer) void runsReq.refetch();
         }
@@ -430,7 +420,7 @@ export default function AdminLeaderboards() {
         );
         setApproveRun(null);
         if (res.ok) {
-            refetchFlagged();
+            // the board's refetch brings the flagged runs too
             void refetch();
         }
     };
@@ -800,7 +790,7 @@ export default function AdminLeaderboards() {
                     <div className="boards-admin-side">
                         <FlaggedPanel
                             list={flaggedRows}
-                            loading={oneRequest ? loading : flaggedReq.loading}
+                            loading={loading}
                             onDecide={(row, decision) => setReview({ row, decision })}
                             onApproveRun={(row, rows) => setApproveRun({ row, rows })}
                         />

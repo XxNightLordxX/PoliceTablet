@@ -1,5 +1,5 @@
-// Admin UI plain layout against the browser mocks (node walk.mjs, a gate step): Config.AdminUi.plainLayout
-// reaches the Admin UI as the session's config.adminUi.plainLayout, and the layout changes only when it is set.
+// The Admin UI layout against the browser mocks (node walk.mjs, a gate step): plain names, six described groups,
+// the rare tools under More, the screen search and the breadcrumb (the only layout since BK1).
 
 import '../mocks/core.mock';
 import { request } from '../shared/nui';
@@ -9,11 +9,9 @@ import {
     ADMIN_GROUPS,
     ADMIN_GROUP_OF,
     ADMIN_RARE,
-    CLASSIC_ADMIN_NAV,
     adminCrumbs,
     adminFoldOf,
     adminGroupOf,
-    adminNavOf,
     adminTitleKey,
     searchScreens,
 } from './adminNav';
@@ -27,9 +25,6 @@ function ok(cond: unknown, what: string): void {
     else failures.push(what);
 }
 
-const sessionWith = (plain: unknown) => ({ config: { adminUi: { plainLayout: plain } } }) as unknown as Session;
-const PLAIN = { plain: true };
-
 export async function walk(): Promise<{ passed: number; failures: string[] }> {
     try {
         await steps();
@@ -42,10 +37,7 @@ export async function walk(): Promise<{ passed: number; failures: string[] }> {
 async function steps(): Promise<void> {
     const res = await request<Session>('getSession', { ui: 'admin' });
     ok(res.ok, 'getSession answers');
-    ok(!adminNavOf(res.data).plain, 'the mock session ships the Admin UI as before');
-    ok(adminNavOf(null) === CLASSIC_ADMIN_NAV, 'no session: as before');
-    ok(!adminNavOf(sessionWith('yes')).plain, 'anything but true counts as off');
-    ok(adminNavOf(sessionWith(true)).plain, 'plainLayout = true: the plain layout');
+    ok(res.data?.config?.adminUi && !('plainLayout' in res.data.config.adminUi), 'the session has no layout switch');
 
     const keys = ADMIN_SCREENS.map(s => s.key);
     // every screen but Home has a group, every group is one of the seven, and every group holds a screen
@@ -59,7 +51,7 @@ async function steps(): Promise<void> {
     );
     // plain names and descriptions exist for every screen and group (no internal ids shown)
     ok(
-        keys.every(k => t(adminTitleKey(k, PLAIN)) !== adminTitleKey(k, PLAIN)),
+        keys.every(k => t(adminTitleKey(k)) !== adminTitleKey(k)),
         'every screen has a plain name',
     );
     ok(
@@ -67,25 +59,10 @@ async function steps(): Promise<void> {
         'every group has a one-line description',
     );
 
-    // off: the registry's own labels, sections and folds (as before)
-    ok(
-        keys.every(k => adminTitleKey(k, CLASSIC_ADMIN_NAV) === `ui.screen.${k}`),
-        'off: the screen titles as before',
-    );
-    ok(
-        keys.every(k => adminGroupOf(k, CLASSIC_ADMIN_NAV) === undefined),
-        'off: no plain group',
-    );
-    ok(
-        ADMIN_SCREENS.every(s => adminFoldOf(s.key, CLASSIC_ADMIN_NAV, s.group) === s.group),
-        'off: the folds as before',
-    );
-    ok(!adminCrumbs('admin_money', CLASSIC_ADMIN_NAV).home, 'off: no breadcrumb');
-
     // on: Home on top, then the six groups in order, rare tools under More
     const sections = ADMIN_GROUPS.map(k => ({ key: k, label: k, hint: `hint ${k}` }));
     const listed = inSections(
-        keys.map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
+        keys.map(k => ({ key: k, play: adminGroupOf(k) })),
         sections,
     );
     ok(listed[0].item.key === 'admin_home' && !listed[0].heading, 'on: Home first with no heading');
@@ -105,13 +82,13 @@ async function steps(): Promise<void> {
         'on: no description without a heading',
     );
     ok(
-        ADMIN_RARE.every(k => adminFoldOf(k, PLAIN, 'main') === 'more'),
+        ADMIN_RARE.every(k => adminFoldOf(k) === 'more'),
         'on: the rarely used tools fold under More',
     );
-    ok(adminFoldOf('admin_money', PLAIN, 'more') === 'main', 'on: Money shows without opening More');
+    ok(adminFoldOf('admin_money') === 'main', 'on: Money shows without opening More');
     ok(
         !inSections(
-            keys.filter(k => k !== 'admin_rs').map(k => ({ key: k, play: adminGroupOf(k, PLAIN) })),
+            keys.filter(k => k !== 'admin_rs').map(k => ({ key: k, play: adminGroupOf(k) })),
             sections,
         ).some(x => x.heading === 'pvp'),
         'on: a hidden screen leaves no empty group',
@@ -120,7 +97,7 @@ async function steps(): Promise<void> {
     // search: by plain name, old name or group, every word must match
     const items = keys.map(k => ({
         key: k,
-        words: [t(adminTitleKey(k, PLAIN)), t(`ui.screen.${k}`), t(`ui.nav.admin_group.${ADMIN_GROUP_OF[k]}`)],
+        words: [t(adminTitleKey(k)), t(`ui.screen.${k}`), t(`ui.nav.admin_group.${ADMIN_GROUP_OF[k]}`)],
     }));
     ok(searchScreens(items, '').length === 0, 'search: nothing typed, nothing listed');
     ok(
@@ -139,6 +116,6 @@ async function steps(): Promise<void> {
     ok(searchScreens(items, 'zzz').length === 0, 'search: no match, nothing listed');
 
     // breadcrumb: Home > group > screen; none on Home itself
-    ok(adminCrumbs('admin_money', PLAIN).group === 'economy', 'breadcrumb: Money sits under Economy');
-    ok(!adminCrumbs('admin_home', PLAIN).home, 'breadcrumb: none on Home');
+    ok(adminCrumbs('admin_money').group === 'economy', 'breadcrumb: Money sits under Economy');
+    ok(!adminCrumbs('admin_home').home, 'breadcrumb: none on Home');
 }

@@ -117,7 +117,7 @@ export interface ProblemsData {
     tags: string[];
 }
 
-// admin:getNeedsAttention (Config.AdminUi.needsAttention): Home's Needs attention panel in one answer.
+// admin:getNeedsAttention: Home's Needs attention panel in one answer.
 export interface NeedsAttentionData {
     problems: number;
     refusedToday: number;

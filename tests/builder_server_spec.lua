@@ -2364,16 +2364,8 @@ local function Body()
         H.ok(okCfg and conf.requireTestToPublish == false, 'the builder is told testing is optional')
         H.eq(okCfg and conf.useMyPosition, true, '"Use my position" is offered (Config.Builder.useMyPosition)')
         H.eq(okCfg and conf.autoFill, true, '"Fill N for me" is offered (Config.Builder.autoFill)')
-        H.eq(okCfg and conf.quickWizard, true, '"New mission" opens the wizard (Config.Builder.quickWizard)')
-        Config.Builder.quickWizard = false
-        local okW, confW = cb(1, 'builder:config', {})
-        H.eq(okW and confW.quickWizard, false, 'Config.Builder.quickWizard = false: the dialog and full editor only')
-        Config.Builder.quickWizard = true
-        H.eq(okCfg and conf.foldAdvanced, true, 'block settings fold the advanced ones (Config.Builder.foldAdvanced)')
-        Config.Builder.foldAdvanced = false
-        local okF, confF = cb(1, 'builder:config', {})
-        H.eq(okF and confF.foldAdvanced, false, 'Config.Builder.foldAdvanced = false: every block setting open')
-        Config.Builder.foldAdvanced = true
+        H.ok(okCfg and conf.quickWizard == nil and conf.foldAdvanced == nil,
+            'BK1: the wizard and the folded block settings are the only way (no switches)')
         local okL, list = cb(1, 'builder:list', {})
         local entry = nil
         for _, e in ipairs(okL and list.missions or {}) do if e.id == hid then entry = e end end
