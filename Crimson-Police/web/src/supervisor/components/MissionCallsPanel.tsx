@@ -1,4 +1,4 @@
-// Mission calls for staff: the Supervisor UI's Live Missions panel and the Admin UI's Missions tab (withdraw,
+// Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw,
 // page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
 
 import { useMemo, useState } from 'react';

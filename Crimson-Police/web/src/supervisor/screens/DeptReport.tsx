@@ -1,4 +1,4 @@
-// Supervisor UI · Department Report (screen key 'sup_report', callbacks sup:getDeptReport and
+// Supervisor UI · Department → Officers (old screen key 'sup_report', callbacks sup:getDeptReport and
 
 // sup:getOfficerActivity). The department's challenge standing, this week's bounty, and every officer
 // of the department who played this week (runs, completed, points, cash, last run); tapping an officer
@@ -48,8 +48,6 @@ import { ClearCooldownDialog } from '../components/ClearCooldownDialog';
 import { MissionBanDialog } from '../components/MissionBanDialog';
 import { AwardPointsDialog } from '../components/AwardPointsDialog';
 import { CommendDialog } from '../components/CommendDialog';
-import { FieldTrainingPanel } from '../components/FieldTrainingPanel';
-import { MyControlsCard } from '../components/MyControlsCard';
 import './DeptReport.css';
 
 // Best dispositions as a share of all of them ("–" without decisions).
@@ -293,18 +291,9 @@ function ActivityDialog({ officer, onClose }: { officer: ReportOfficer | null; o
     );
 }
 
-// An officer an admin granted only field training (Config.Permissions.grants): the Field training panel alone.
-function FieldTrainingOnly() {
-    return (
-        <Screen title={t('ui.screen.sup_report')} className="boards-report">
-            <FieldTrainingPanel />
-        </Screen>
-    );
-}
-
+// The Department screen's Officers tab (shown with viewMissionList; field training is its own tab).
 export default function DeptReport() {
-    const can = useCan();
-    return can('viewMissionList') ? <FullDeptReport /> : <FieldTrainingOnly />;
+    return <FullDeptReport />;
 }
 
 function FullDeptReport() {
@@ -621,8 +610,6 @@ function FullDeptReport() {
                     }
                 />
             </Card>
-            <MyControlsCard />
-            <FieldTrainingPanel />
             <Row gap={2} className="boards-report-note">
                 <Icon name="info" size={13} />
                 <span>{t('sup.report.note')}</span>

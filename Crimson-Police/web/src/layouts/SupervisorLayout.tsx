@@ -1,5 +1,5 @@
-// Supervisor UI: its own sidebar (8 screens, hidden when their action is not in session.actions; Review Queue with
-// its open-items badge; grouped by task and/or icons only per Config.Tablet, layouts/supervisorNav), department theme
+// Supervisor UI: its own sidebar (6 screens, hidden when their action is not in session.actions; Department with
+// the Review Queue's open-items badge; grouped by task and/or icons only per Config.Tablet, layouts/supervisorNav), department theme
 // and the officer's look, watermark and the switch back to the Officer UI.
 
 import { Button, MaintenanceBanner, Watermark } from '../shared/components';

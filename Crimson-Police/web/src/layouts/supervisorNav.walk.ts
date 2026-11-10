@@ -29,13 +29,13 @@ const REGISTRY = [
     'sup_missions',
     'sup_crossdept',
     'sup_live',
-    'sup_controls',
-    'sup_review',
+    'sup_department',
     'sup_payouts',
     'sup_builder',
-    'sup_report',
 ] as ScreenKey[];
-const sessionWith = (n: unknown) => ({ config: { supervisorNav: n } }) as unknown as Session;
+// a supervisor who may see the Officers and Review tabs of Department
+const sessionWith = (n: unknown) =>
+    ({ config: { supervisorNav: n }, actions: ['viewMissionList', 'reviewFlagged'] }) as unknown as Session;
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {
     try {
@@ -54,7 +54,7 @@ async function steps(): Promise<void> {
     ok(supervisorNavOf(null) === CLASSIC_SUP_NAV, 'no session: as before');
     ok(supervisorNavOf(sessionWith({ landing: 'payouts' })).landing === 'first', 'an unknown landing counts as first');
 
-    // every Supervisor screen has a task, and every task is one of the four headings
+    // every Supervisor screen has a task, and every task is one of the three headings
     ok(
         REGISTRY.every(k => SUPERVISOR_TASKS.includes(SUPERVISOR_TASK_OF[k])),
         'every screen sits under a task',
@@ -73,7 +73,8 @@ async function steps(): Promise<void> {
         'supervisorByTask off: no headings',
     );
 
-    // grouped by task: People, Missions, Rewards, Review, each heading once over its first screen
+    // grouped by task: People, Missions, Rewards, each heading once over its first screen (MG3: Review is a tab of
+    // Department, under People)
     const byTask = { ...CLASSIC_SUP_NAV, byTask: true };
     const sections = SUPERVISOR_TASKS.map(k => ({ key: k, label: k }));
     const grouped = inSections(
@@ -82,14 +83,14 @@ async function steps(): Promise<void> {
     );
     ok(
         grouped.map(x => x.item.key).join(',') ===
-            'sup_report,sup_missions,sup_crossdept,sup_live,sup_controls,sup_builder,sup_payouts,sup_review',
-        'byTask: People, then Missions in their order, then Rewards, then Review',
+            'sup_department,sup_missions,sup_crossdept,sup_live,sup_builder,sup_payouts',
+        'byTask: People, then Missions in their order, then Rewards',
     );
     ok(
         grouped
             .filter(x => x.heading)
             .map(x => x.heading)
-            .join(',') === 'people,missions,rewards,review',
+            .join(',') === 'people,missions,rewards',
         'byTask: each heading once',
     );
     // a supervisor without the Payouts screen: no empty Rewards heading
@@ -101,31 +102,40 @@ async function steps(): Promise<void> {
 
     // landing: 'first' = the first one shown; a set landing when shown; otherwise the first one
     ok(supervisorLanding(CLASSIC_SUP_NAV, REGISTRY) === 'sup_missions', 'first: the first screen (as before)');
-    ok(supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'review' }, REGISTRY) === 'sup_review', 'review: Review');
-    ok(supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'report' }, REGISTRY) === 'sup_report', 'report: Report');
+    const review = { ...CLASSIC_SUP_NAV, landing: 'review' as const };
+    ok(supervisorLanding(review, REGISTRY) === 'sup_department', 'review: Department');
+    ok(supervisorLanding(review, REGISTRY, ['officers', 'review']) === 'sup_department', 'review: with its tab');
+    ok(supervisorLanding(review, REGISTRY, ['officers']) === 'sup_missions', 'review without its tab: the first one');
+    ok(
+        supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'report' }, REGISTRY, ['officers']) === 'sup_department',
+        'report: Department',
+    );
     ok(supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'live' }, REGISTRY) === 'sup_live', 'live: Live Missions');
     ok(
-        supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'review' }, ['sup_report'] as ScreenKey[]) === 'sup_report',
+        supervisorLanding({ ...CLASSIC_SUP_NAV, landing: 'live' }, ['sup_payouts'] as ScreenKey[]) === 'sup_payouts',
         'a landing the supervisor may not see: the first screen',
     );
     ok(supervisorLanding(CLASSIC_SUP_NAV, []) === undefined, 'no screens: none');
 
     // the screen shown: the landing until a screen is picked, then the picked one; the other UIs as before
-    const review = sessionWith({ byTask: false, compact: false, landing: 'review' });
+    const reviewS = sessionWith({ byTask: false, compact: false, landing: 'review' });
     const first = sessionWith({ byTask: false, compact: false, landing: 'first' });
     const start = { key: 'sup_missions' as ScreenKey };
     ok(currentScreen('supervisor', first, REGISTRY, start) === 'sup_missions', 'first, nothing picked: as before');
-    ok(currentScreen('supervisor', review, REGISTRY, start) === 'sup_review', 'review, nothing picked: Review Queue');
     ok(
-        currentScreen('supervisor', review, REGISTRY, { key: 'sup_payouts', picked: true }) === 'sup_payouts',
+        currentScreen('supervisor', reviewS, REGISTRY, start) === 'sup_department',
+        'review, nothing picked: Department',
+    );
+    ok(
+        currentScreen('supervisor', reviewS, REGISTRY, { key: 'sup_payouts', picked: true }) === 'sup_payouts',
         'a picked screen stays',
     );
     ok(
-        currentScreen('supervisor', first, ['sup_report'] as ScreenKey[], start) === 'sup_report',
+        currentScreen('supervisor', first, ['sup_department'] as ScreenKey[], start) === 'sup_department',
         'the start screen not shown: the first one shown (as before)',
     );
     ok(
-        currentScreen('officer', review, ['home', 'board'] as ScreenKey[], { key: 'board' }) === 'board',
+        currentScreen('officer', reviewS, ['home', 'board'] as ScreenKey[], { key: 'board' }) === 'board',
         'the Officer UI keeps its screen as before',
     );
 }

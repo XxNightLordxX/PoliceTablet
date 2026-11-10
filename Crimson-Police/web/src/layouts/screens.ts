@@ -6,6 +6,7 @@ import type { IconName } from '../shared/components';
 import type { AdminScreenKey, OfficerScreenKey, ScreenKey, SupervisorScreenKey } from '../shared/navigation';
 import type { Session, UiKind } from '../shared/types';
 import { resolveAdminKey } from './adminMoney';
+import { deptTabsFor } from './supDepartment';
 import { supervisorLanding, supervisorNavOf } from './supervisorNav';
 
 import Home from '../officer/screens/Home';
@@ -21,10 +22,8 @@ import MyOptions from '../officer/screens/MyOptions';
 import SupMissionList from '../supervisor/screens/MissionList';
 import SupCrossDept from '../supervisor/screens/CrossDept';
 import SupLiveMissions from '../supervisor/screens/LiveMissions';
-import SupReviewQueue from '../supervisor/screens/ReviewQueue';
 import SupPayouts from '../supervisor/screens/Payouts';
-import SupDeptReport from '../supervisor/screens/DeptReport';
-import SupMissionControls from '../supervisor/screens/MissionControls';
+import SupDepartment from '../supervisor/screens/Department';
 
 // The Admin UI screens and the Supervisor Mission Builder load on first use: every player's NUI starts
 // without them (most players never open them). Opening that UI starts loading all of its screens at once
@@ -127,19 +126,15 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         component: SupLiveMissions,
         visible: s => has(s, 'viewMissionList', 'forceRecall'),
     },
+    // MG3: one Department screen: Officers (the Department Report), Controls (Mission controls), Review (the Review
+    // Queue), Calls & notices and Training, each tab with the permission of the screen it replaces
+    // (layouts/supDepartment.ts); the old keys sup_report, sup_controls and sup_review open their tab
     {
-        key: 'sup_controls',
-        titleKey: 'ui.screen.sup_controls',
-        icon: 'clock',
-        component: SupMissionControls,
-        visible: s => has(s, 'missionControls') || s.config?.missionControls === true,
-    },
-    {
-        key: 'sup_review',
-        titleKey: 'ui.screen.sup_review',
-        icon: 'shieldCheck',
-        component: SupReviewQueue,
-        visible: s => has(s, 'reviewFlagged', 'handleDisputes'),
+        key: 'sup_department',
+        titleKey: 'ui.screen.sup_department',
+        icon: 'building',
+        component: SupDepartment,
+        visible: s => deptTabsFor(s).length > 0,
     },
     {
         key: 'sup_payouts',
@@ -154,14 +149,6 @@ export const SUPERVISOR_SCREENS: ScreenDef<SupervisorScreenKey>[] = [
         icon: 'tool',
         component: SupBuilder,
         visible: s => has(s, 'builderEdit'),
-    },
-    {
-        key: 'sup_report',
-        titleKey: 'ui.screen.sup_report',
-        icon: 'barChart',
-        component: SupDeptReport,
-        // fieldTraining alone: the screen shows only its Field training panel
-        visible: s => has(s, 'viewMissionList', 'fieldTraining'),
     },
 ];
 
@@ -324,7 +311,8 @@ export function landingScreen(ui: UiKind, session: Session | null, available: Sc
         if (available.includes(want)) return want;
     }
     // Config.Tablet.supervisorLanding: 'first' = as before
-    if (ui === 'supervisor') return supervisorLanding(supervisorNavOf(session), available) ?? 'home';
+    if (ui === 'supervisor')
+        return supervisorLanding(supervisorNavOf(session), available, deptTabsFor(session)) ?? 'home';
     return available[0] ?? 'home';
 }
 

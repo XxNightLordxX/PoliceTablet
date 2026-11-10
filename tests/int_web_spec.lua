@@ -1086,17 +1086,15 @@ do
     local mock = Read(WEB .. 'mocks/oversight.mock.ts') or ''
     local samples = Read(WEB .. 'mocks/samples.ts') or ''
     local tabletSrc = Read(ROOT .. 'modules/tablet/server.lua') or ''
-    Has(nav, '| \'sup_live\' | \'sup_controls\' | \'sup_review\'', 'SupervisorScreenKey has sup_controls')
-    Has(screens, 'import SupMissionControls from \'../supervisor/screens/MissionControls\';', 'the registry imports it')
-    Has(screens, [[{
-        key: 'sup_controls',
-        titleKey: 'ui.screen.sup_controls',
-        icon: 'clock',
-        component: SupMissionControls,
-        visible: s => has(s, 'missionControls') || s.config?.missionControls === true,
-    },]], 'sup_controls: visible with the master switch or a control outside it')
+    -- MG3: Mission controls is the Controls tab of the Department screen; sup_controls is an alias that opens it
+    local dept = Read(WEB .. 'layouts/supDepartment.ts') or ''
+    Has(nav, '| \'sup_controls\'', 'SupervisorScreenKey still has sup_controls (an alias)')
+    Has(dept, 'sup_controls: \'controls\',', 'sup_controls opens the Controls tab')
+    Has(screens, 'import SupDepartment from \'../supervisor/screens/Department\';', 'the registry imports Department')
+    Has(dept, 'controls: s => has(s, \'missionControls\') || s.config?.missionControls === true,',
+        'Controls: visible with the master switch or a control outside it')
     local atLive = screens:find('key: \'sup_live\'', 1, true) or math.huge
-    H.ok(atLive < (screens:find('key: \'sup_controls\'', 1, true) or 0), 'and comes after Live Missions')
+    H.ok(atLive < (screens:find('key: \'sup_department\'', 1, true) or 0), 'and Department comes after Live Missions')
     Has(tabletSrc, 'CP.DeptControls.available(src) == true', 'the session carries config.missionControls')
     for _, use in ipairs({
         {

@@ -165,7 +165,7 @@ do
     local sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
     H.ok(sup.byTask == false and sup.compact == false, 'supervisorByTask and supervisorCompact ship off: one list')
     H.eq(sup.landing, 'first', 'supervisorLanding ships first: the Supervisor UI opens as before')
-    H.eq(sup.controlsCard, false, 'supervisorControlsCard ships off: no Your controls today card (H4)')
+    H.eq(sup.controlsCard, nil, 'MG3: no supervisorControlsCard any more (Controls shows the use inline)')
     H.eq(sup.remember, false, 'supervisorRemember ships off: the supervisor dialogs open empty (WF2)')
     Config.Tablet.supervisorRemember = true
     H.eq(Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav.remember, true,
@@ -173,11 +173,8 @@ do
     Config.Tablet.supervisorRemember = false
     Config.Tablet.supervisorByTask, Config.Tablet.supervisorCompact, Config.Tablet.supervisorLanding =
         true, true, 'review'
-    Config.Tablet.supervisorControlsCard = true
     sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
-    H.ok(sup.byTask and sup.compact and sup.landing == 'review' and sup.controlsCard,
-        'all four set: the session asks for them')
-    Config.Tablet.supervisorControlsCard = false
+    H.ok(sup.byTask and sup.compact and sup.landing == 'review', 'all three set: the session asks for them')
     Config.Tablet.supervisorLanding = 'payouts'
     sup = Cb('getSession', 1, { via = 'export' }).data.config.supervisorNav
     H.eq(sup.landing, 'first', 'an unknown supervisorLanding counts as first')

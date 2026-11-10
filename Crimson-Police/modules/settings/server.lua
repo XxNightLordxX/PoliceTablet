@@ -3135,11 +3135,13 @@ local function DeleteRow(path)
 end
 
 -- Settings config.lua no longer has because the screen they switched is now the only way (MG2: one Money screen
--- with Pay rates, Rewards, Payments and Department funds). A row saved under one is skipped quietly at start (no
--- warning, no Problems line, nothing applied) and an imported file's row is left out (Settings.RETIRED).
+-- with Pay rates, Rewards, Payments and Department funds; MG3: one Department screen whose Controls tab shows each
+-- control's limits and today's use inline). A row saved under one is skipped quietly at start (no warning, no
+-- Problems line, nothing applied) and an imported file's row is left out (Settings.RETIRED).
 Settings.RETIRED = {
     ['AdminUi.rewardsScreen'] = true,
     ['AdminUi.moneyScreen'] = true,
+    ['Tablet.supervisorControlsCard'] = true,
 }
 
 -- The saved rows without the retired ones.

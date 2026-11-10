@@ -208,7 +208,9 @@ Supervisor UI — its own layout and sidebar. Supervisors play missions from the
 | Mission Builder | Their drafts plus published missions | Build, record routes, test, publish, archive; roll back or break an edit lock (as Config.Permissions allows) |
 | Department Report | Challenge standing, this week's bounty, officer activity this week | Open an officer's activity |
 
-Supervisor UI additions: Live Missions gets a Mission calls panel (withdraw, page a unit, create a call); Review Queue gets a Profiles tab (pending pictures, pending bios when bioRequiresApproval is on, and profile reports); Department Report gets arrests, citations, impounds, correct decisions and calls per officer, and "Commend" in each officer's activity.
+One Department screen (MG3): Department Report, Mission controls and Review Queue are no sidebar entries of their own but tabs of one Department screen (sup_department): Officers (the Department Report and each officer's actions), Controls (Mission controls, each control's admin limits and today's use inline from sup:getMyControls, the action controls in one card), Review (the Review Queue), Calls & notices (the Mission calls panel, moved off Live Missions, and the department notices) and Training (field training). Each tab keeps the permission of the screen or panel it replaces; the old keys sup_report, sup_controls and sup_review open their tab (params kept); the Review Queue badge sits on Department.
+
+Supervisor UI additions: Live Missions gets a Mission calls panel (withdraw, page a unit, create a call; on Department → Calls & notices since MG3); Review Queue gets a Profiles tab (pending pictures, pending bios when bioRequiresApproval is on, and profile reports); Department Report gets arrests, citations, impounds, correct decisions and calls per officer, and "Commend" in each officer's activity.
 
 Admin UI — a separate full-screen panel for server admins, covering every department.
 
@@ -289,7 +291,7 @@ Personal accent and appearance
 
 Layout options (presentation only: screen keys, visibility and links never change; the code is in web/src/layouts/, see docs/ARCHITECTURE.md §12)
 
-- Supervisor UI (Config.Tablet, all default false or 'first'): supervisorByTask groups the sidebar by task (people, missions, rewards, review) with a heading over each; supervisorCompact shows icons only; supervisorLanding opens on 'report', 'review' or 'live' when visible (anything else = the first screen) until a screen is picked. supervisorControlsCard shows on Department Report a read-only card of each Mission control he may use now (value in use, whether a change is live, min and max, today's use; the callback is refused with err.controls_card_off while off). supervisorRemember reopens Give points, Mission ban and Clear cooldown with the last successful values (page memory only; out-of-range numbers fall back to the min; the server checks again). supervisorReviewLive pushes a decision on a flagged run or dispute to every other supervisor of the decider's department (an admin without one: every department) with the Review Queue open (asked in the last 75 s); off = at their next 30 s refresh.
+- Supervisor UI (Config.Tablet, all default false or 'first'): supervisorByTask groups the sidebar by task (people, missions, rewards) with a heading over each; supervisorCompact shows icons only; supervisorLanding opens on 'report' (Department, Officers tab), 'review' (Department, Review tab) or 'live' when visible (anything else = the first screen) until a screen is picked. supervisorControlsCard is retired (MG3: Department → Controls always shows each control's limits and today's use; a saved row is skipped quietly, an imported row left out). supervisorRemember reopens Give points, Mission ban and Clear cooldown with the last successful values (page memory only; out-of-range numbers fall back to the min; the server checks again). supervisorReviewLive pushes a decision on a flagged run or dispute to every other supervisor of the decider's department (an admin without one: every department) with the Review Queue open (asked in the last 75 s); off = at their next 30 s refresh.
 - Officer UI (Config.Tablet.sidebarOrder 'classic' or 'mostUsed', activeFirst, compactSidebar): 'mostUsed' lists home, board, active, dispatch, unit, profile, leaderboard, challenge, options; activeFirst moves Active Mission under Home while on a run; compact shows icons only (68 px, names as button titles, badges on the icon).
 - Admin UI sidebar: groupSidebar (on) shows Home, Money, Missions, Live, Officers and Settings and folds the rest under More (which carries their badge sum; kept open per viewer in the browser). groupByPlay (true) orders the screens by section with headings (NPC missions, Player vs police, Police teamwork, Economy, System), Settings follows the same sections, and Settings → Features lists every feature switch by section with On/Off, a save (risky ones confirm first, money ones need the typed ENABLE) and a link to the setting. plainLayout (false) gives each screen a plain name, a group heading with a one-line description, a screen search (with "Search settings for ...", Enter opens the first) and a breadcrumb over every screen but Home.
 - Admin UI pages: markersScreen (true; missionBlipsScreen before, still read) shows the Map markers screen (NPC missions; the old Mission blips key opens it): the objective's settings and the look of each kind of objective blip, Config.Markers.extraParts (the switch of the extra parts), every part's switch, look and label, and its rules picked from the departments, jobs, mission types and missions, every save a normal setting save. rewardsScreen (false) shows the Rewards screen, one place for every payout and item reward of NPC missions, live and volunteer cases and Config.FeatureRewards features, headed by the Rewards.enabled switch, every save a normal setting save. landing ('home'; 'payouts' or 'missions' hide Home) opens on Home: a Live now strip and six tiles (builder, catalog, payouts, officers, settings search, Something wrong? with mission load, config health, problems, payments and today's refusals). homeForms (true) puts quick forms in four tiles (missions and locations on or off, change pay with a reason, give or take points with the typed citizen ID at or above Corrections.adjustConfirmAbove, quick settings) that send the full screens' actions. reasonChips (three texts; at most 8 of up to 60 characters) are buttons under the reason boxes of Set payout, Give or take points and Quick edit that replace the editable reason (Quick edit times are typed in minutes). settingsView ('simple') opens Settings on the everyday settings with plain labels and no Config path; a switch and a button open All settings (by config.lua section); a search or filter looks through every setting; in Simple, MissionTweaks and DisabledLocations point to Missions.
@@ -1600,20 +1602,17 @@ Config.Tablet = {
     -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
     -- false = icons and names (as before)
     compactSidebar = false,
-    -- true = the Supervisor UI sidebar is grouped by task under four headings: People (Department Report: officers,
-    -- give points, mission bans, field training), Missions (list, live, cross-department, controls, builder),
-    -- Rewards (payouts) and Review (the review queue); false = one list (as before). Only the layout changes
+    -- true = the Supervisor UI sidebar is grouped by task under three headings: People (Department: officers, give
+    -- points, mission bans, controls, review queue, calls and notices, field training), Missions (list, live,
+    -- cross-department, builder) and Rewards (payouts); false = one list (as before). Only the layout changes
     supervisorByTask = false,
     -- true = the Supervisor UI sidebar shows only the icons (the name shows on hover); false = icons and names
     -- (as before)
     supervisorCompact = false,
-    -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department
-    -- Report, 'review' = Review Queue, 'live' = Live Missions (a screen the supervisor may not see = the first one)
+    -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department on
+    -- its Officers tab, 'review' = Department on its Review tab, 'live' = Live Missions (a screen or tab the
+    -- supervisor may not see = the first one)
     supervisorLanding = 'first',
-    -- true = Department Report shows a 'Your controls today' card: each Mission control the supervisor may use now,
-    -- its current value, the admin's limits (min and max) and today's use against the per-day count; false = no
-    -- card (as before). Only shows what the server already checks
-    supervisorControlsCard = false,
     -- true = the supervisor dialogs Give points, Mission ban and Clear cooldown open with the points, hours and reason
     -- last used on this tablet (kept until Crimson-Police restarts or the player reconnects), so a second award or ban
     -- in a row needs no typing; false = they open empty (as before). The server checks every value again

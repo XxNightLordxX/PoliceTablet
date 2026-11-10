@@ -190,8 +190,6 @@ const CONFIG: Session['config'] = {
                     : null;
             return m ? (m[1] as 'report' | 'review' | 'live') : 'first';
         })(),
-        // ?supControlsCard: Config.Tablet.supervisorControlsCard = true
-        controlsCard: typeof window !== 'undefined' && /[?&]supControlsCard\b/.test(window.location.search),
     },
 };
 

@@ -121,7 +121,6 @@ local NOTHING_TO_DO = {
     ['err.bounty_disabled'] = true,
     ['err.builder_disabled'] = true,
     ['err.commendations_off'] = true,
-    ['err.controls_card_off'] = true,
     ['err.crimtab_off'] = true,
     ['err.dispute_final'] = true,
     ['err.fto_off'] = true,

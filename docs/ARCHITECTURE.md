@@ -3796,8 +3796,8 @@ so a missing module reads as config).
   (`err.control_not_set`; audit `missionControlReset`).
 - `view(src)` (each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved,
   setBy, setRole, at, expiresAt, timeLeft, waitLeft, flags, list, offered, choices, ... }`), `available(src)` (sent as
-  `session.config.missionControls`), `mine(src)` (Your controls today, `Config.Tablet.supervisorControlsCard`, false;
-  callback `sup:getMyControls`, `err.controls_card_off`), `checkConfig(map, boot)` (registered names only, `on`
+  `session.config.missionControls`), `mine(src)` (Department → Controls, each control's limits and today's use
+  inline, always on since MG3; callback `sup:getMyControls`), `checkConfig(map, boot)` (registered names only, `on`
   boolean, `min ≤ max` inside `range`, known flags and list names; `err.control_config`).
 - Kind `action`: a staff action with no saved value (`get` nil, `set`/`reset` refuse `err.control_unknown`); `bounded =
   false` = no min/max. Kind `choice`: one name from the bounds' `list` (or every name `choices` gives).
@@ -3841,7 +3841,7 @@ so a missing module reads as config).
 #### Screens and net
 - Net §8.3: `sup:getMissionControls`, `server:sup:setMissionControl`, `server:sup:resetMissionControl` (through
   `Kit.supAction`), `admin:getMissionControls`, `server:admin:setMissionControl`, `server:admin:resetMissionControl`.
-- Supervisor UI → Mission controls (`supervisor/screens/MissionControls.tsx`, `sup_controls`): live on push
+- Supervisor UI → Department → Controls (`supervisor/screens/MissionControls.tsx`, old key `sup_controls`): live on push
   `missionControls`, grouped (Delays and repeats, In a run, Board, Calls, Officers, Department), saved with a reason;
   shown while `available(src)` (with the master switch off when a server-wide control is on, as shipped).
 - Admin UI → Permissions → Mission controls (`admin/components/MissionControlsCard.tsx`): the view adds `bounds`,
@@ -3886,10 +3886,11 @@ in training. Every read-change-write of one record runs under a per-rookie lock 
   so the Admin UI grants and revokes it like an achievement (its override never re-runs a count).
 - Reads: `fto:getMine` (Profile → Field training: `{ training?, rookies, trainerBonus }`, `training.needsTrainer` the
   ride-along type labels; `false` when off or nothing to show) and
-  `sup:getFieldTraining { department? }` (Department Report: `FtoDept`, the department's pairings, up to 300 officers
+  `sup:getFieldTraining { department? }` (Department → Training: `FtoDept`, the department's pairings, up to 300 officers
   as rookie candidates and the online trainers; a supervisor only his own department, admins any).
 - Web: web/src/officer/components/FieldTrainingCard.tsx (FtoTaskList, FtoProgress, the Profile card with Sign off) and
-  web/src/supervisor/components/FieldTrainingPanel.tsx (Department Report: Pair trainer, End training on two clicks).
+  web/src/supervisor/components/FieldTrainingPanel.tsx (Department → Training: Pair trainer, End training on two
+  clicks; says so while field training is off).
 - Tests: tests/field_training_spec.lua (plain Lua, stubbed rows); the 015 column and its JSON_VALUE read in
   tests/foundation_spec.lua.
 
@@ -5404,7 +5405,7 @@ start-up script).
    | UI | keys (sidebar order) |
    |---|---|
    | Officer | `home` `board` `dispatch` (hidden when `Config.MissionCalls.enabled = false`) `unit` `active` `leaderboard` `challenge` `profile` |
-   | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` (+ minutes: addTime) `sup_controls` (missionControls, or `session.config.missionControls`; happy hour: Start with minutes, countdown, End now) `sup_review` (reviewFlagged or handleDisputes) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) `sup_report` (officer dialog: Clear cooldown) |
+   | Supervisor | `sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` (+ minutes: addTime) `sup_department` (MG3, `layouts/supDepartment.ts`: tabs Officers = viewMissionList, officer dialog: Clear cooldown; Controls = missionControls or `session.config.missionControls`, happy hour: Start with minutes, countdown, End now; Review = reviewFlagged or handleDisputes; Calls & notices = missionCalls or a Mission control; Training = viewMissionList or fieldTraining; the old keys `sup_report`, `sup_controls`, `sup_review` open their tab via `resolveSupervisorKey`) `sup_payouts` (setTypePayout) `sup_builder` (builderEdit) |
    | Admin | `admin_home` `admin_payouts` `admin_payments` `admin_missions` `admin_live` `admin_seasons` `admin_leaderboards` `admin_officers` `admin_departments` `admin_permissions` `admin_settings` `admin_system` `admin_audit` `admin_testing` `admin_rs` |
 
    `navigate(key, params)` passes params; read them with `useNavigation().params`

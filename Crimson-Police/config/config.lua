@@ -104,20 +104,17 @@ Config.Tablet = {
     -- true = the Officer UI sidebar shows only the icons (the name shows on hover), leaving the screens more room;
     -- false = icons and names (as before)
     compactSidebar = false,
-    -- true = the Supervisor UI sidebar is grouped by task under four headings: People (Department Report: officers,
-    -- give points, mission bans, field training), Missions (list, live, cross-department, controls, builder),
-    -- Rewards (payouts) and Review (the review queue); false = one list (as before). Only the layout changes
+    -- true = the Supervisor UI sidebar is grouped by task under three headings: People (Department: officers, give
+    -- points, mission bans, controls, review queue, calls and notices, field training), Missions (list, live,
+    -- cross-department, builder) and Rewards (payouts); false = one list (as before). Only the layout changes
     supervisorByTask = false,
     -- true = the Supervisor UI sidebar shows only the icons (the name shows on hover); false = icons and names
     -- (as before)
     supervisorCompact = false,
-    -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department
-    -- Report, 'review' = Review Queue, 'live' = Live Missions (a screen the supervisor may not see = the first one)
+    -- The screen the Supervisor UI opens on: 'first' = the first one it shows (as before), 'report' = Department on
+    -- its Officers tab, 'review' = Department on its Review tab, 'live' = Live Missions (a screen or tab the
+    -- supervisor may not see = the first one)
     supervisorLanding = 'first',
-    -- true = Department Report shows a 'Your controls today' card: each Mission control the supervisor may use now,
-    -- its current value, the admin's limits (min and max) and today's use against the per-day count; false = no
-    -- card (as before). Only shows what the server already checks
-    supervisorControlsCard = false,
     -- true = the supervisor dialogs Give points, Mission ban and Clear cooldown open with the points, hours and reason
     -- last used on this tablet (kept until Crimson-Police restarts or the player reconnects), so a second award or ban
     -- in a row needs no typing; false = they open empty (as before). The server checks every value again

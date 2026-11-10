@@ -335,10 +335,11 @@ do
     H.eq(E('Tablet.supervisorCompact').default, false, 'the Supervisor UI sidebar ships with names')
     H.eq(E('Tablet.supervisorLanding').default, 'first', 'the Supervisor UI ships opening on its first screen')
     H.eq(E('Tablet.supervisorLanding').kind, 'enum', 'supervisorLanding is a choice')
-    H.eq(E('Tablet.supervisorControlsCard').default, false, 'the Department Report ships with no controls card')
-    H.eq(E('Tablet.supervisorControlsCard').kind, 'boolean', 'supervisorControlsCard is a switch')
-    H.ok((E('Tablet.supervisorControlsCard').desc or ''):find('Your controls today', 1, true) ~= nil,
-        'supervisorControlsCard: its config.lua comment is its description')
+    -- step MG3: Department -> Controls shows each control's limits and today's use inline: no switch any more
+    H.eq(S.entry('Tablet.supervisorControlsCard'), nil, 'no supervisorControlsCard setting (the inline use, always)')
+    H.eq(Config.Tablet.supervisorControlsCard, nil, 'config.lua has no supervisorControlsCard')
+    H.ok((E('Tablet.supervisorLanding').desc or ''):find('Department on its Review tab', 1, true) ~= nil,
+        'supervisorLanding: its config.lua comment names the Department tabs')
     H.eq(E('Tablet.supervisorRemember').default, false, 'the supervisor dialogs ship opening empty (WF2)')
     H.eq(E('Tablet.supervisorRemember').kind, 'boolean', 'supervisorRemember is a switch')
     -- step FX1: the live Review Queue, shipped off, described by its config.lua comment

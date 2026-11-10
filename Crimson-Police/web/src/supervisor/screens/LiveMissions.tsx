@@ -31,7 +31,6 @@ import { applyReplyView } from '../../shared/replyView';
 import { t } from '../../shared/i18n';
 import { useCan, useSession } from '../../shared/session';
 import type { LiveParticipant, LiveRunEx, LiveRunsData, SupAddTime } from '../../types/oversight';
-import MissionCallsPanel from '../components/MissionCallsPanel';
 import './LiveMissions.css';
 
 interface RecallTarget {
@@ -369,7 +368,7 @@ export default function SupLiveMissions() {
                 onClose={() => setTimeRun(null)}
                 onConfirm={(m, reason) => void confirmAddTime(m, reason)}
             />
-            {can('missionCalls') ? <MissionCallsPanel scope={isAdminView ? 'admin' : 'sup'} /> : null}
+            {/* the mission calls panel sits on Department -> Calls & notices (MG3) */}
             <ConfirmDialog
                 open={!!target}
                 tone="danger"

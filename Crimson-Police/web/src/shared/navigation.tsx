@@ -12,10 +12,12 @@ export type SupervisorScreenKey =
     | 'sup_missions'
     | 'sup_crossdept'
     | 'sup_live'
-    | 'sup_controls'
-    | 'sup_review'
+    | 'sup_department'
     | 'sup_payouts'
     | 'sup_builder'
+    // the screens before the Department screen took them in: aliases of sup_department (resolveSupervisorKey)
+    | 'sup_controls'
+    | 'sup_review'
     | 'sup_report';
 export type AdminScreenKey =
     | 'admin_home'

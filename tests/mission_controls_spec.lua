@@ -423,7 +423,7 @@ do
     DC.unregister('t_carry')
 end
 
--- Step H4: DC.mine (sup:getMyControls), the Department Report's 'Your controls today' card.
+-- Step H4: DC.mine (sup:getMyControls); MG3: Department -> Controls shows it inline, always (no switch).
 do
     Config.Permissions.supervisor.missionControls = true
     local used = 0
@@ -436,12 +436,9 @@ do
     })
     Config.MissionControls.controls = { t_wait = { on = true, min = 300, max = 900 }, t_day = { on = true, max = 10 } }
     Config.Departments.sast.missionControls = nil
-    local r = Cb('sup:getMyControls', 2)
-    H.ok(r.ok == false and r.error == 'err.controls_card_off',
-        'shipped: no card, nothing is read (' .. cjson.encode(r) .. ')')
-    Config.Tablet.supervisorControlsCard = true
     used = 3
-    r = Cb('sup:getMyControls', 2)
+    local r = Cb('sup:getMyControls', 2)
+    H.ok(r.ok == true, 'shipped: read with no switch (MG3) (' .. cjson.encode(r) .. ')')
     local by = {}
     for _, c in ipairs(r.ok and r.data.controls or {}) do by[c.key] = c end
     H.ok(
@@ -463,7 +460,6 @@ do
     by = {}
     for _, c in ipairs(r.ok and r.data.controls or {}) do by[c.key] = c end
     H.ok(by.t_day and by.t_day.perDay == nil and by.t_day.usedToday == nil, 'an admin has no day count')
-    Config.Tablet.supervisorControlsCard = false
     DC.unregister('t_day')
 end
 

@@ -504,8 +504,8 @@ export interface DeptNoticesView {
     maxDays: number;
     notices: DeptNotice[];
 }
-// sup:getMyControls (Config.Tablet.supervisorControlsCard): the controls this player may use now, for the
-// Department Report's 'Your controls today' card. perDay / usedToday: supervisors only, for a control with a day count.
+// sup:getMyControls: the controls this player may use now, for Department -> Controls (each control's limits and
+// today's use inline, MG3). perDay / usedToday: supervisors only, for a control with a day count.
 export interface MyControl {
     key: string;
     kind: MissionControlState['kind'];

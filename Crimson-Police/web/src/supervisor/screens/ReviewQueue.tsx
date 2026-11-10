@@ -1,4 +1,4 @@
-// Supervisor UI · Review Queue (screen key 'sup_review').
+// Supervisor UI · Department → Review: the Review Queue (old screen key 'sup_review').
 
 // Tabs Flagged runs / Disputes: flagged runs involving the supervisor's department with the reason
 // (e.g. outside help) and who, and disputes about flagged or voided runs. Runs they took part in never appear; runs of

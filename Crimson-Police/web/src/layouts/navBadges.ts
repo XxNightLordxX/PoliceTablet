@@ -36,7 +36,8 @@ export function navBadge(key: ScreenKey, c: NavCounts): { badge?: string; live?:
             return { live: c.onRun === true };
         case 'profile':
             return { badge: countBadge(c.commendations) };
-        case 'sup_review':
+        // the Review Queue is a tab of Department (MG3): its open items sit on Department
+        case 'sup_department':
             return { badge: countBadge(c.review) };
         // Admin UI (admin-only counts: the server sends them to admin players only)
         case 'admin_officers':

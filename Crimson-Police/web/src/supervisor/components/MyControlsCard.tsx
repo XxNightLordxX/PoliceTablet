@@ -1,55 +1,21 @@
-// Supervisor UI · Department Report · Your controls today (Config.Tablet.supervisorControlsCard): each
-// Mission control this supervisor may use now, its current value, the admin's limits and today's use against the
-// per-day count. Read only (sup:getMyControls); the controls are changed on Mission controls or their own dialogs.
+// Supervisor UI · Department → Controls · Used from their own dialogs (MG3): each action control this supervisor may
+// use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
 
-// Supervisor UI · Department Report · Your controls today (Config.Tablet.supervisorControlsCard, session
-// config.supervisorNav.controlsCard): sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls') lists
-// each control this player may use now with the value in use, the admin's min and max and today's use against the
-// per-day count (a control's usedToday function). Read only. Rows: myControls.ts (myControlRow, myControlRows: the
-// most used up first). Walk: supervisor/screens/supHead.walk.ts.
+// Supervisor UI · Department → Controls · Used from their own dialogs (MG3): each action control this supervisor may
+// use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
+// Read only: the rows come from sup:getMyControls (CP.DeptControls.mine, live on push 'missionControls'), read once
+// by MissionControls.tsx, which also shows the same limits and today's use inline on each value control's row.
+// Rows: myControls.ts (actionControlRows). Walk: supervisor/screens/supHead.walk.ts.
 
-import { Badge, Card, EmptyState, Table, type TableColumn } from '../../shared/components';
-import { useRequest } from '../../shared/hooks';
+import { Badge, Card, Table, type TableColumn } from '../../shared/components';
 import { t } from '../../shared/i18n';
-import { useSession } from '../../shared/session';
-import type { MyControlsView } from '../../types/oversight';
-import { controlName, useValueText } from '../../admin/components/MissionControlsCard';
-import { ScreenStatus } from '../../officer/components/ScreenStatus';
-import { screenStateOf } from '../../officer/screens/screenHead';
-import { controlsCardOn, myControlRows, type MyControlRow } from './myControls';
+import { controlName } from '../../admin/components/MissionControlsCard';
+import type { MyControlRow } from './myControls';
 
-export function MyControlsCard() {
-    const session = useSession();
-    const on = controlsCardOn(session);
-    const { data, loading, error, refetch } = useRequest<MyControlsView>(
-        'sup:getMyControls',
-        {},
-        { skip: !on, pushTopic: 'missionControls' },
-    );
-    const text = useValueText();
-    if (!on) return null;
-    const list = data?.controls;
-    const byKey = new Map((Array.isArray(list) ? list : []).map(c => [c.key, c]));
-    const rows = myControlRows(list);
-    const state = screenStateOf(!!data, loading, error);
-
+export function ActionControlsCard({ rows }: { rows: MyControlRow[] }) {
+    if (rows.length === 0) return null;
     const columns: TableColumn<MyControlRow>[] = [
         { key: 'control', header: t('sup.mine.col.control'), render: r => <strong>{controlName(r.key)}</strong> },
-        {
-            key: 'value',
-            header: t('sup.mine.col.value'),
-            render: r =>
-                r.action ? (
-                    <span className="sup-mc-row__who">{t('sup.mine.action')}</span>
-                ) : (
-                    <span>
-                        {text(r.key, byKey.get(r.key)?.value)}{' '}
-                        <Badge size="sm" tone={r.changed ? 'warning' : 'neutral'}>
-                            {t(r.changed ? 'sup.mine.changed' : 'sup.mine.config')}
-                        </Badge>
-                    </span>
-                ),
-        },
         {
             key: 'limits',
             header: t('sup.mine.col.limits'),
@@ -75,19 +41,9 @@ export function MyControlsCard() {
                 ),
         },
     ];
-
     return (
-        <Card title={t('sup.mine.title')} subtitle={t('sup.mine.subtitle')} icon="clock">
-            <ScreenStatus state={state} error={error} onRetry={() => void refetch()} />
-            {state === 'ready' || state === 'stale' ? (
-                <Table
-                    columns={columns}
-                    rows={rows}
-                    rowKey={r => r.key}
-                    empty={<EmptyState compact icon="clock" title={t('sup.mine.none')} />}
-                    aria-label={t('sup.mine.title')}
-                />
-            ) : null}
+        <Card title={t('sup.mine.actions_title')} subtitle={t('sup.mine.actions_subtitle')} icon="clock">
+            <Table columns={columns} rows={rows} rowKey={r => r.key} aria-label={t('sup.mine.actions_title')} />
         </Card>
     );
 }

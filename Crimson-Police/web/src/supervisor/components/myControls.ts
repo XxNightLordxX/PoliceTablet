@@ -1,14 +1,8 @@
-// The Department Report's 'Your controls today' card (Config.Tablet.supervisorControlsCard): one row per
-// Mission control the supervisor may use now, with its current value, the admin's limits and today's use. Pure
-// functions, checked by myControls.walk.ts; the server (sup:getMyControls) decides which controls are listed.
+// Department → Controls, inline use (MG3; the 'Your controls today' card before): one row per Mission control the
+// supervisor may use now, with its current value, the admin's limits and today's use. Pure functions, checked by
+// supHead.walk.ts; the server (sup:getMyControls) decides which controls are listed. Always shown (no switch).
 
-import type { Session } from '../../shared/types';
 import type { MyControl } from '../../types/oversight';
-
-// The card shows only with Config.Tablet.supervisorControlsCard = true (an older session: no card, as before).
-export function controlsCardOn(session: Session | null | undefined): boolean {
-    return session?.config?.supervisorNav?.controlsCard === true;
-}
 
 // today: 'none' = no day count; 'left' = uses left; 'used' = every use of today is spent.
 export interface MyControlRow {
@@ -50,4 +44,10 @@ export function myControlRows(list: MyControl[] | null | undefined): MyControlRo
         .map((r, i) => ({ r, i }))
         .sort((a, b) => share(b.r) - share(a.r) || a.i - b.i)
         .map(x => x.r);
+}
+
+// The controls used from their own dialogs (Give points, Mission ban, notices ...): no row on Controls of their own,
+// so their limits and today's use are listed in one card.
+export function actionControlRows(rows: MyControlRow[]): MyControlRow[] {
+    return rows.filter(r => r.action);
 }

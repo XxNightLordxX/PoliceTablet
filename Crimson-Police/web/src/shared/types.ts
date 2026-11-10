@@ -128,12 +128,10 @@ export interface Session {
         officerNav?: { order: 'classic' | 'mostUsed'; activeFirst: boolean; compact: boolean };
         // Config.Tablet.supervisorByTask / supervisorCompact / supervisorLanding: the Supervisor UI sidebar and
         // the screen it opens on (layouts/supervisorNav)
-        // controlsCard: Config.Tablet.supervisorControlsCard, the Department Report's 'Your controls today'
         supervisorNav?: {
             byTask: boolean;
             compact: boolean;
             landing: 'first' | 'report' | 'review' | 'live';
-            controlsCard?: boolean;
             // Config.Tablet.supervisorRemember: the supervisor dialogs open with the values last used
             remember?: boolean;
         };

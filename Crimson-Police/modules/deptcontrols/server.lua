@@ -897,15 +897,13 @@ local function DayUse(def, dept, n)
     return perDay, used
 end
 
--- DC.mine(src) (Config.Tablet.supervisorControlsCard): the controls that player may use now (DC.canChange),
+-- DC.mine(src) (Department -> Controls, inline; MG3: always on): the controls that player may use now (DC.canChange),
 -- each with its current value, the admin's limits and, for a supervisor, today's use of a control with a per-day count
 -- (admins have none). { controls = { { key, kind, value, configValue, min, max, changed, timeLeft, perDay, usedToday
 -- } } }, or nil, errKey. Read only.
 function DC.mine(src)
     local n = math.tointeger(tonumber(src))
     if not n or n <= 0 or not CP.Access then return nil, 'err.no_permission' end
-    local tab = type(Config.Tablet) == 'table' and Config.Tablet or {}
-    if tab.supervisorControlsCard ~= true then return nil, 'err.controls_card_off' end
     local officer = CP.Access.getOfficer(n)
     local admin = CP.Access.isAdmin(n) == true
     if not officer and not admin then return nil, 'err.no_permission' end

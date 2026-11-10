@@ -514,7 +514,6 @@ do
         { 'Rewards.byType', { patrol = pool, tactical = pool } },
         { 'Permissions.supervisor.missionControls', true },
         { 'MissionControls.controls', controls },
-        { 'Tablet.supervisorControlsCard', true },
         { 'FeatureRewards.supAward.enabled', true },
         { 'FeatureRewards.supAward.items', { { item = 'water', count = 1, chance = 1.0, value = 20 } } },
     }) do

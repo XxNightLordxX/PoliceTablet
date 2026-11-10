@@ -199,14 +199,11 @@ do
     local c
     for _, x in ipairs(view.serverWide) do if x.key == 'happyHour' then c = x end end
     H.ok(c and c.usedToday == 1 and c.perDay == 1 and c.timeLeft == 900, 'the screen: used today, time left')
-    -- Z8B: the 'Your controls today' card (DC.mine) counts it too, not 0
-    local card = Config.Tablet.supervisorControlsCard
-    Config.Tablet.supervisorControlsCard = true
+    -- Z8B: today's use on Department -> Controls (DC.mine) counts it too, not 0
     local mine = DC.mine(2)
-    Config.Tablet.supervisorControlsCard = card
     local m
     for _, x in ipairs(mine and mine.controls or {}) do if x.key == 'happyHour' then m = x end end
-    H.ok(m and m.perDay == 1 and m.usedToday == 1, 'Z8B: the controls card shows the happy hour used today')
+    H.ok(m and m.perDay == 1 and m.usedToday == 1, 'Z8B: Controls shows the happy hour used today')
 end
 
 -- ============================================================================

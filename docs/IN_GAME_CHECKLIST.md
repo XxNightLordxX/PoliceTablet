@@ -89,9 +89,10 @@ names the change it came with.
 - [ ] Happy hour points max 1.25, set x1.2: the card shows "Happy hour x1.2" and points are x1.2; none after the hour; twist points together never exceed twistMaxPoints. (P20)
 - [ ] Department goals: pick one daily and two weekly goals with a reason: the line says it counts from next week, Home goals do not change this week; after the weekly reset SAST goals come only from the pick (+50 / +200); FIB and the sergeant still get any goal. (P21)
 - [ ] Give points: Department Report -> a SAST officer -> Give points 30 with a reason: manual award toast, Profile history entry, audit "Manual award (supervisor)"; no button for FIB or his own or alt character; 80 more the same day refused (100 a day). (P22)
+- [ ] Supervisor UI shows **Department** (no Department Report, Mission controls or Review Queue entries) with the tabs Officers, Controls, Review, Calls & notices and Training; the Review Queue count sits on Department; Live Missions has no Mission calls panel (it is on Calls & notices). A supervisor with `missionCalls` off and no Mission control open has no Calls & notices tab; an officer an admin granted only field training sees Department with Training alone. `supervisorLanding = 'review'` opens Department on Review. A value saved earlier for Tablet.supervisorControlsCard gives no console line. (MG3)
 - [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
 - [ ] Mission controls: Department notices shows Post a notice and Running now (n); End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
-- [ ] `Config.Tablet.supervisorControlsCard = true`: Department Report shows Your controls today; give 10 points to an officer, open Department Report again: the Give points row is up by 10; a control the admin switches off leaves the card. Shipped `false`: no card. (H4)
+- [ ] Department -> Controls shows each control's admin limits (and today's use where it has a day count) on its row, and the Give points / Mission ban card below; give 10 points to an officer: the Give points row is up by 10; a control the admin switches off leaves the list. (H4, MG3)
 - [ ] Mission ban: sergeant A bans a SAST trooper for 24 h; sergeant B (a higher grade than the trooper) tries a 1 h ban on him: refused with "already has a mission ban from another supervisor", and B still has no Lift; A may change his own ban; an admin may replace or lift it. (X11)
 - [ ] Give points: a supervisor at 90 of 100 today double-clicks Give points 50 on two officers at once: one is given, the other says "Please wait a moment" or is refused by the daily limit; never 190 in a day. (X11)
 - [ ] Give points as an admin without a police job: Department Report offers Give points for any officer, and the officer's department switch and min / max apply (switch the control off for FIB only: refused for an FIB officer, given for a SAST one). (X11)
@@ -100,8 +101,8 @@ names the change it came with.
   cooldowns count again. Restart the resource during one: it still ends. (LP3)
 - [ ] Admin UI → Runs and Leaderboards flagged runs, a supervisor's per-day capped action (Mission ban), an
   auto-suspension after voided runs: all behave as before.
-- [ ] `Config.Tablet.supervisorControlsCard` On: a sergeant gives points or sets a Mission ban; Your controls today
-  shows the new count of today at once, without reopening Department Report. (R1)
+- [ ] A sergeant gives points or sets a Mission ban; Department -> Controls shows the new count of today at once,
+  without reopening it. (R1)
 - [ ] A supervisor one below `missionBanPerDay` (or the clear-cooldown or add-run-time cap) clicks twice very fast on
   two officers: one goes through, the other says Please wait a moment; the day's count never passes the cap. (Z5)
 
@@ -420,10 +421,10 @@ marker. Run the mission on that location (turn its other locations off, README 5
 - [ ] Permissions → Extra grants → Criminal tablet for Ballas from grade 1: a Ballas grade 1 member opens `/crimtab`; a civilian outside the gang is refused; an officer on duty is refused. (G7)
 - [ ] The Ballas member gets on the list from Home; a unit accepts Investigation with Real suspect OK: Jobs shows the job with its Reward line "$1,500 if you get away, $500 if you are caught" and no position. Accept, travel, the unit reaches him (Active: giving up is no longer free), he runs and the unit gives the mission up: he is paid $1,500 cash once, History shows "got away" and no strike. (G7)
 - [ ] Live control → anti-farm → Clear cooldowns for both officers, and Settings → Real suspects: Job hop minutes and Suspect cooldown 0: the same unit and volunteer play again at once. He accepts, the unit waits at the start, after 60 s he presses Give up: one strike in History, Active empty, nothing paid. (G7)
-- [ ] Settings: Item rewards On with a Patrol pool, Mission controls On, Give points On, Your controls today On, Give points money On. An officer plays Beat Patrol to the end: the result screen shows $250 and the item; the bank and the inventory get them once. (H7)
+- [ ] Settings: Item rewards On with a Patrol pool, Mission controls On, Give points On, Give points money On. An officer plays Beat Patrol to the end: the result screen shows $250 and the item; the bank and the inventory get them once. (H7)
 - [ ] A SAST trooper and an FIB agent in one unit play Gang Shootout: each row is Reinforced with two departments, each is paid $920 and gets the item. (H7)
 - [ ] A sergeant creates a Patrol call on Dispatch; a trooper claims it, a second trooper is refused; the run pays as a normal Patrol. (H7)
-- [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Your controls today shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
+- [ ] The sergeant clears a trooper's Beat Patrol cooldown (he can take it again), sets the hourly cap inside the admin's bounds (Department -> Controls shows it), gives 20 points ($100 and the item once; an FIB sergeant and his own character are refused) and commends him. (H7)
 - [ ] A flagged run keeps its cash and items until a supervisor of its department approves it; a voided run keeps them until the officer's dispute is approved. (H7)
 - [ ] Settings: Live crimes On, Live-case cash On, Item rewards On, Pay talk-downs On with water x1, Field training On, Tasks `{ "tactical": 1 }` (saved: leaving the other types out is allowed now), Trainer bonus 10, Pay field training sign-offs and Pay finished field training On. (H8)
 - [ ] A crew of two does a Warehouse Burglary: the LIVE card shows "2 suspects"; a unit claims it, secures the scene; a third officer reaching the scene gets "Join the live case?" and joins. Cuff A 30 s (detained), book him at Mission Row for 10 months (booked). The third officer gets "close enough to talk down", Talk them down, B says Yes, cuff him 30 s: Peaceful arrest, and that officer gets $300 and the water once. End case: three rows, each paid the Investigation pay once. Admin UI → Real suspects lists the case; its timeline has joined, talk down, surrendered, peaceful arrest and end case. (H8)
@@ -518,7 +519,7 @@ marker. Run the mission on that location (turn its other locations off, README 5
   a SAST supervisor with the Review Queue open sees it go. A non-supervisor granted reviewFlagged sees the Review
   badge count. (Z8B)
 - [ ] Push a mission twice at once (double click) with one push left today: only one goes out. A SAST supervisor
-  cannot withdraw an FIB lane call. The 'Your controls today' card counts a started happy hour. (Z8B)
+  cannot withdraw an FIB lane call. Department -> Controls counts a started happy hour. (Z8B)
 - [ ] `Config.LiveCrime.enabled = true`: a crew of two where one suspect already scored maxCatchesPerSuspectDay
   today: catching him adds no detain line, catching the other one does. (Z8B)
 - [ ] Two runs ask for a volunteer at the same moment: he gets one pop-up only. (Z8B)

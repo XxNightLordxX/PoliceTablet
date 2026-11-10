@@ -1,11 +1,14 @@
-// Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+// Supervisor UI · Department → Controls (old screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
 
-// Supervisor UI · Mission controls (screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
+// Supervisor UI · Department → Controls (old screen key 'sup_controls', title key 'ui.screen.sup_controls'): the
 // controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
 // editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
 // reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
 // header and load states from supHead.ts (SUP_HEADS) and officer ScreenStatus; each group card has a help
 // line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
+// Inline use (MG3, the old 'Your controls today' card): sup:getMyControls gives each control the supervisor may use
+// now the admin's limits and today's use against its per-day count, shown on its row; the controls used from their
+// own dialogs (Give points, Mission ban ...) are listed in one card with the same (components/MyControlsCard).
 
 import { useEffect, useState } from 'react';
 import {
@@ -30,6 +33,7 @@ import { useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { useSession } from '../../shared/session';
 import type {
+    MyControlsView,
     BoardsValue,
     CallLaneValue,
     CrossDeptValue,
@@ -45,7 +49,8 @@ import type {
 import { controlName, useValueText } from '../../admin/components/MissionControlsCard';
 import { ReasonChips } from '../../admin/components/ReasonChips';
 import { useAdminAction } from '../../admin/components/kit';
-import { DeptNoticesCard } from '../components/DeptNoticesCard';
+import { ActionControlsCard } from '../components/MyControlsCard';
+import { actionControlRows, myControlRows, type MyControlRow } from '../components/myControls';
 import { ScreenStatus } from '../../officer/components/ScreenStatus';
 import { screenStateOf } from '../../officer/screens/screenHead';
 import { SUP_GROUP_HELP, SUP_HEADS } from './supHead';
@@ -739,21 +744,51 @@ function HappyHourRow({
     );
 }
 
+// A control's admin limits and today's use (sup:getMyControls), on its row: nothing while it is not listed.
+export function InlineUse({ use }: { use?: MyControlRow }) {
+    if (!use) return null;
+    return (
+        <div className="sup-mc-row__facts sup-mc-row__use">
+            <span className="cp-num">
+                {`${t('sup.mine.col.limits')}: `}
+                {use.limits
+                    ? t('sup.mine.limits', { min: use.limits.min, max: use.limits.max })
+                    : t('sup.mine.no_limits')}
+            </span>
+            {use.today === 'none' ? null : (
+                <Badge size="sm" tone={use.today === 'used' ? 'danger' : 'success'}>
+                    {`${t('sup.mine.col.today')}: ${t('sup.mine.used', { used: use.used, n: use.perDay })}`}
+                </Badge>
+            )}
+        </div>
+    );
+}
+
 function ControlRow({
     c,
     dept,
+    use,
     busy,
     onAsk,
     onWaitDone,
 }: {
     c: MissionControlState;
     dept: string;
+    use?: MyControlRow;
     busy: boolean;
     onAsk: (p: Pending) => void;
     onWaitDone: () => void;
 }) {
-    if (c.key === 'happyHour') return <HappyHourRow c={c} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />;
-    return <PlainRow c={c} dept={dept} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />;
+    return (
+        <>
+            {c.key === 'happyHour' ? (
+                <HappyHourRow c={c} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />
+            ) : (
+                <PlainRow c={c} dept={dept} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />
+            )}
+            <InlineUse use={use} />
+        </>
+    );
 }
 
 function PlainRow({
@@ -952,6 +987,15 @@ export default function MissionControls() {
         {},
         { pushTopic: 'missionControls' },
     );
+    // each control's admin limits and today's use (CP.DeptControls.mine), live on the same push
+    const mine = useRequest<MyControlsView>('sup:getMyControls', {}, { pushTopic: 'missionControls' });
+    const useRows = myControlRows(mine.data?.controls);
+    const useOf = new Map(useRows.map(r => [r.key, r]));
+    const actions = actionControlRows(useRows);
+    const reload = () => {
+        void refetch();
+        void mine.refetch();
+    };
     const { run, busy } = useAdminAction();
     const [pending, setPending] = useState<Pending | null>(null);
 
@@ -965,8 +1009,6 @@ export default function MissionControls() {
     const groups = GROUPS.map(g => ({ key: g, rows: controls.filter(c => groupOf(c) === g) })).filter(
         g => g.rows.length > 0,
     );
-    // Department notices: an action control with its own card
-    const notices = asArray(dept?.controls).some(c => c.key === 'notices' && c.active);
 
     const confirm = async (reason: string) => {
         if (!pending) return;
@@ -990,7 +1032,7 @@ export default function MissionControls() {
                             },
                   );
         if (res.ok) setPending(null);
-        void refetch();
+        reload();
     };
 
     return (
@@ -1000,7 +1042,7 @@ export default function MissionControls() {
             help={t(SUP_HEADS.controls.help)}
             className="sup-mc"
             actions={
-                <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={() => void refetch()}>
+                <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={reload}>
                     {t('sup.controls.refresh')}
                 </Button>
             }
@@ -1012,7 +1054,7 @@ export default function MissionControls() {
                 </p>
             ) : null}
             <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
-            {data && groups.length === 0 && !notices ? (
+            {data && groups.length === 0 && actions.length === 0 ? (
                 <Card>
                     <EmptyState icon="clock" title={t('sup.controls.empty')} text={t('sup.controls.empty_text')} />
                 </Card>
@@ -1023,9 +1065,10 @@ export default function MissionControls() {
                         key={c.key}
                         c={c}
                         dept={deptShort}
+                        use={useOf.get(c.key)}
                         busy={busy}
                         onAsk={setPending}
-                        onWaitDone={() => void refetch()}
+                        onWaitDone={reload}
                     />
                 );
                 // folding off: every control in config order, as before
@@ -1044,7 +1087,7 @@ export default function MissionControls() {
                     </Card>
                 );
             })}
-            {notices ? <DeptNoticesCard /> : null}
+            <ActionControlsCard rows={actions} />
             <ReasonDialog
                 pending={pending}
                 busy={busy}

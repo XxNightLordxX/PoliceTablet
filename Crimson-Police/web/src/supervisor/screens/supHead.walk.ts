@@ -2,19 +2,18 @@
 
 // Supervisor screens inside against the browser mocks (node walk.mjs, a gate step): Mission controls and
 // Review Queue use the shared header and load states, each Mission controls group says what it is for, Notices and
-// Field training are split by task with the stale line, the risky actions still ask first, and the Department
-// Report's 'Your controls today' rows (myControls.ts) show value, limits and today's use.
+// Field training are split by task with the stale line, the risky actions still ask first, and Department ->
+// Controls shows each control's limits and today's use inline (myControls.ts rows, MG3; no switch any more).
 
 import '../../mocks/core.mock';
 import fieldTraining from '../../../../locales/parts/field_training.json';
 import missionControls from '../../../../locales/parts/mission_controls.json';
 import ui from '../../../../locales/parts/ui.json';
-import type { Session } from '../../shared/types';
 import type { MyControl } from '../../types/oversight';
 import noticesSrc from '../components/DeptNoticesCard.tsx?raw';
 import ftoSrc from '../components/FieldTrainingPanel.tsx?raw';
 import cardSrc from '../components/MyControlsCard.tsx?raw';
-import { controlsCardOn, myControlRow, myControlRows } from '../components/myControls';
+import { actionControlRows, myControlRow, myControlRows } from '../components/myControls';
 import reportSrc from './DeptReport.tsx?raw';
 import controlsSrc from './MissionControls.tsx?raw';
 import reviewSrc from './ReviewQueue.tsx?raw';
@@ -81,17 +80,17 @@ function steps(): void {
     ok(/<ConfirmDialog[\s\S]*required: true/.test(reviewSrc), 'review: Approve / Void / Reject ask for a reason');
     ok(controlsSrc.includes('<ReasonDialog'), 'controls: every change and reset asks for a reason');
 
-    // Your controls today: shown only when switched on, on the Department Report
-    const session = (on: unknown) => ({ config: { supervisorNav: { controlsCard: on } } }) as unknown as Session;
-    ok(controlsCardOn(session(true)), 'card: on with supervisorControlsCard = true');
-    ok(!controlsCardOn(session(false)) && !controlsCardOn(session('yes')) && !controlsCardOn(null), 'card: else off');
-    ok(reportSrc.includes('<MyControlsCard />'), 'card: on the Department Report');
-    ok(cardSrc.includes('skip: !on') && cardSrc.includes("'sup:getMyControls'"), 'card: asks only when switched on');
-    for (const k of ['title', 'subtitle', 'col.control', 'col.value', 'col.limits', 'col.today', 'action', 'none']) {
-        ok(line(`sup.mine.${k}`), `card: sup.mine.${k} in the locale`);
+    // inline use (MG3): always asked, on each control's row; the action controls in one card; no Report card
+    ok(!reportSrc.includes('MyControlsCard'), 'inline: no controls card on the Officers tab');
+    ok(controlsSrc.includes("'sup:getMyControls'") && !controlsSrc.includes('skip:'), 'inline: always asked');
+    ok(controlsSrc.includes('use={useOf.get(c.key)}') && controlsSrc.includes('<InlineUse'), 'inline: on each row');
+    ok(controlsSrc.includes('<ActionControlsCard rows={actions} />'), 'inline: the action controls in one card');
+    ok(!cardSrc.includes('useRequest') && !cardSrc.includes('controlsCard'), 'card: no request and no switch');
+    for (const k of ['col.control', 'col.limits', 'col.today', 'limits', 'no_limits', 'actions_title']) {
+        ok(line(`sup.mine.${k}`), `inline: sup.mine.${k} in the locale`);
     }
-    ok(locale['sup.mine.used']?.includes('{used}') && locale['sup.mine.used'].includes('{n}'), 'card: used of n');
-    ok(line('err.controls_card_off'), 'card: the server error when switched off');
+    ok(locale['sup.mine.used']?.includes('{used}') && locale['sup.mine.used'].includes('{n}'), 'inline: used of n');
+    ok(locale['err.controls_card_off'] === undefined, 'inline: no switched-off error any more');
 
     const value: MyControl = { key: 'hourlyCap', kind: 'number', value: 8, configValue: 8, min: 1, max: 16 };
     const r1 = myControlRow(value);
@@ -109,4 +108,6 @@ function steps(): void {
     const order = myControlRows([value, award, ban]).map(r => r.key);
     ok(order.join() === 'missionBan,awardPoints,hourlyCap', 'rows: most used up first, the rest in server order');
     ok(myControlRows(null).length === 0 && myControlRows(undefined).length === 0, 'rows: nothing sent, no rows');
+    const acts = actionControlRows(myControlRows([value, award, ban])).map(r => r.key);
+    ok(acts.join() === 'missionBan,awardPoints', 'action rows: only the controls used from their own dialogs');
 }

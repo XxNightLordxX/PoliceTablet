@@ -476,16 +476,27 @@ Grades start at 0.
 
 | Setting | What it does |
 |---|---|
-| `supervisorByTask` | `true` = the sidebar is grouped by task under four headings: **People** (Department Report: officers, give points, mission bans, field training), **Missions** (Mission List, Live Missions, Cross-dept, Mission controls, Builder), **Rewards** (Payouts) and **Review** (Review Queue) |
-| `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on its icon) |
-| `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (shipped), `'report'`, `'review'` or `'live'`. A screen the supervisor may not see falls back to the first one. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
-| `supervisorControlsCard` | `true` = Department Report shows a **Your controls today** card: each Mission control the supervisor may use now, the value in use (config or changed), the admin's limits (min to max) and today's use against the per-day count (for example Give points 40 of 100 used, Mission ban 3 of 3 used). Read only; shipped `false` (no card) |
+| `supervisorByTask` | `true` = the sidebar is grouped by task under three headings: **People** (Department: officers, give points, mission bans, Mission controls, Review Queue, calls and notices, field training), **Missions** (Mission List, Live Missions, Cross-dept, Builder) and **Rewards** (Payouts) |
+| `supervisorCompact` | `true` = a narrow strip of icons, each name on hover (the Review Queue count shows on the Department icon) |
+| `supervisorLanding` | The screen the Supervisor UI opens on: `'first'` (shipped), `'report'` (Department on its **Officers** tab), `'review'` (Department on its **Review** tab) or `'live'`. A screen or tab the supervisor may not see falls back to the first screen. Once a screen is picked, the Supervisor UI keeps it until the player reconnects |
 | `supervisorRemember` | `true` = the supervisor dialogs **Give points**, **Mission ban** and **Clear cooldown** open with the points, hours and reason last used on that tablet (kept until Crimson-Police restarts or the player reconnects; a number outside the admin's current limits falls back to the minimum), so a second award or ban in a row needs no typing. The server checks every value again; shipped `false` (they open empty) |
 | `supervisorReviewLive` | `true` = when a supervisor or an admin approves or voids a flagged run or decides a dispute, every other supervisor of that department who has the **Review Queue** open sees the updated queue at once (the decided row is gone, so two supervisors never work on the same row). Shipped `false` (the others see it at their next refresh, within 30 seconds) |
 
 Only the layout changes: every screen keeps its permission, and a screen a supervisor may not see stays hidden (a
 heading with nothing under it is not shown). Each control keeps showing its admin limits where it is used (for
 example Give points shows the min to max points and today's use), and risky actions still ask first.
+
+**One Department screen.** Everything a supervisor does for his department sits on **Supervisor UI -> Department**,
+in five tabs: **Officers** (the Department Report: each officer's week, and from an officer **Give points**,
+**Mission ban**, **Commend** and **Clear cooldown**), **Controls** (Mission controls: each control shows the admin's
+limits and today's use on its own row, for example *Admin limits: 1 to 50* and *Today: 40 of 100 used*, and the
+controls used from their own dialogs, such as Give points and Mission ban, are listed in one card with the same),
+**Review** (the Review Queue), **Calls & notices** (the mission calls panel and the department notices) and
+**Training** (field training). A tab shows only when the supervisor may use what is on it, with the same permission
+as before, and the Review Queue count sits on Department. The old screens Department Report, Mission controls and
+Review Queue are no sidebar entries any more; a link to one opens its tab. The old **Your controls today** switch
+(`supervisorControlsCard`) is gone (the limits and today's use always show inline); a value saved for it earlier is
+ignored quietly.
 
 Inside the screens, Mission controls and Review Queue share the Officer UI header (the screen name, its subtitle and
 one help line) and its load states (spinner, error with Retry, "Could not refresh" over what was loaded last). Each
@@ -517,10 +528,11 @@ it. Admins can always do all of these.
 | `reviewProfiles` | `true` | Approve or reject pictures and bios, clear a bio | Their department; never their own profile |
 | `missionControls` | `false` | Change the Mission controls an admin switched on (below) | Their department only, inside the admin's limits |
 
-Supervisors can always see the Mission List, Live Missions and the Department Report of their own department. The
-other screens hide when their switch is `false`: **Cross-Department Mission** (`launchCrossDept`), **Payouts**
-(`setTypePayout`), **Mission Builder** (`builderEdit`) and **Review Queue** (when `reviewFlagged` and
-`handleDisputes` are both `false`).
+Supervisors can always see the Mission List, Live Missions and the Department screen's **Officers** and **Training**
+tabs for their own department. The other screens and tabs hide when their switch is `false`: **Cross-Department
+Mission** (`launchCrossDept`), **Payouts** (`setTypePayout`), **Mission Builder** (`builderEdit`), Department ->
+**Review** (when `reviewFlagged` and `handleDisputes` are both `false`) and Department -> **Calls & notices** (when
+`missionCalls` is `false` and no Mission control is open to him).
 
 Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%), `Config.Payouts.supervisorCooldown`
 (`1800` seconds), `Config.Commendations.crossDepartment` (`false`; `true` lets supervisors commend other departments),
@@ -529,7 +541,7 @@ Related settings: `Config.Payouts.supervisorRange` (`{ 0.5, 2.0 }` = 50–200%),
 **Mission controls** let a department's supervisors change a few mission rules for their own department, inside
 limits you set. They are **off on install** except the seven server-wide cooldown controls below (cooldownScale,
 abandonCooldown, noRepeat, hourlyCap, dailyCap, happyHour, clearCooldown): nothing changes until you switch them on. You set them in Admin UI → **Permissions** → **Mission controls** (below); supervisors change them in
-Supervisor UI → **Mission controls** (below).
+Supervisor UI → **Department** → **Controls** (below).
 
 - **Mission cooldowns** (on when you install): any department's supervisor may change them, without
   the master switch, and a change counts for **every department** (server-wide):
@@ -559,7 +571,7 @@ Supervisor UI → **Mission controls** (below).
     Doe"); admins see a chip with **End now** in Admin UI → Live. `Config.MissionControls.happyHourPerDay` (`1`):
     happy hours a supervisor may start a day (`0` = none); admins may start more, one at a time.
   - `clearCooldown = { on = true }` (**Clear cooldown**, on when you install: it is a cooldown control): in Supervisor
-    UI → **Department Report** a supervisor opens an officer and presses **Clear cooldown**. He sees the officer's
+    UI → **Department** → **Officers** a supervisor opens an officer and presses **Clear cooldown**. He sees the officer's
     mission type and mission cooldowns with the time left and clears one at a time, with a reason. Any department's
     officer (a cooldown change is server-wide), never his own character, never while the officer is on a run, and
     each officer at most `Config.AdminControl.cooldownClearsPerDay` (`3`) clears a day by all staff together.
@@ -608,7 +620,7 @@ Supervisor UI → **Mission controls** (below).
     command**, right after their own favourite types. Points and pay never change. Reset to recommend none.
 
 - **Mission ban** (`missionBan = { on = false, min = 1, max = 24 }`, off when you install, under the
-  master switch): in Supervisor UI → **Department Report** a supervisor opens an officer of his own department and
+  master switch): in Supervisor UI → **Department** → **Officers** a supervisor opens an officer of his own department and
   presses **Mission ban**: hours (here 1 to 24) and a reason. Only an officer who is online, of a lower grade than
   his, never himself. Until it ends the officer cannot accept from the Mission Board (nor can a unit he is in),
   claim a mission call or join a Cross-Department Mission; his board shows "Mission ban until 18:40 (by Sergeant
@@ -715,7 +727,7 @@ Supervisor UI → **Mission controls** (below).
   never earns rapid response. `Config.MissionControls.pushMissionPerDay` (`5`): pushes one supervisor may make a day
   (admins any). Every push is in the audit log (**Mission pushed to a unit**) with the mission.
 - **Give points** (per department, off when you install, under the master switch):
-  `awardPoints = { on = false, min = 1, max = 50 }`. In **Department Report** the officer's dialog gets a **Give
+  `awardPoints = { on = false, min = 1, max = 50 }`. In **Department** → **Officers** the officer's dialog gets a **Give
   points** button: the supervisor gives `min` to `max` points at a time to an officer of his own department (also one
   who is offline), never to himself or another character on his license (license: and license2:), always with a
   reason. It is the same logged manual award as Admin UI → **Give or take points** (a new row, shown in the
@@ -1452,7 +1464,7 @@ avatarUrls = {                       -- inside Config.Profile
 
 - Only links from the listed `hosts` are accepted. Imgur is blocked in the UK and some other regions. Don't add
   Discord links: they expire after a day.
-- Supervisors approve pictures in Supervisor UI → **Review Queue** → **Profiles**, admins in Admin UI → **Officers**.
+- Supervisors approve pictures in Supervisor UI → **Department** → **Review** → **Profiles**, admins in Admin UI → **Officers**.
 - `Config.Profile.bioRequiresApproval = true` also makes new bios wait for approval.
 
 ### 6.5 Database off: the saves folder
@@ -1617,7 +1629,7 @@ Admin UI → Settings → Police → Field training).
 5. Optional trainer bonus: `trainerBonus`, points the trainer gets for each task he signs off (shipped 0 = none; at
    most 1000). The points show in his history as "Field training sign-off".
 
-How it plays: a supervisor opens **Supervisor UI → Department Report → Field training → Pair trainer**, picks a rookie
+How it plays: a supervisor opens **Supervisor UI → Department → Training → Pair trainer**, picks a rookie
 of his department and an online trainer, and confirms (an admin can do it for any department). Missions the rookie
 completes in a unit with his trainer, both finishing the same run, count towards the task of that mission type. When a
 task's count is reached the trainer gets a toast and signs it off in **Profile → Field training**, with an optional
@@ -1961,12 +1973,10 @@ Supervisors play missions like officers. The **Supervisor** button in the tablet
 |---|---|
 | **Mission List** | Every mission by name. Launch a Cross-Department Mission from here |
 | **Cross-Department Mission** | The running operation: start now, relaunch after a fail, cancel, remove a joiner |
-| **Live Missions** | Runs of their department: force recall. Its Mission calls panel withdraws, pages and creates calls. Admins have their own **Live** screen for every department, with more controls ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
-| **Mission controls** | The rules an admin opened to supervisors ([4.4](#44-what-supervisors-may-do)), grouped (Delays and repeats first): the config.lua value, the value in use, a slider (one per mission type for the cooldowns) or a switch, **Save** and **Back to config** (both ask for a reason; the admin's ready-made reasons show as buttons), who changed it and when, and the time until the next change. Shown while the supervisor may change at least one control: out of the box the cooldown controls, for every department |
-| **Review Queue** | Flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports |
+| **Live Missions** | Runs of their department: force recall. Admins have their own **Live** screen for every department, with more controls ([9.15.3](#9153-live-runs-units-and-anti-farm)) |
+| **Department** | One screen with five tabs. **Officers**: activity per officer this week, and **Commend**; **Give points**, **Clear cooldown** and **Mission ban** when switched on ([4.4](#44-what-supervisors-may-do)). **Controls**: the rules an admin opened to supervisors, grouped (Delays and repeats first): the config.lua value, the value in use, the admin's limits and today's use, a slider (one per mission type for the cooldowns) or a switch, **Save** and **Back to config** (both ask for a reason; the admin's ready-made reasons show as buttons), who changed it and when, and the time until the next change; shown while the supervisor may change at least one control (out of the box the cooldown controls, for every department). **Review**: flagged runs and disputes of their department, and a **Profiles** tab for pictures, bios and reports. **Calls & notices**: the Mission calls panel (withdraw, page and create calls) and the department notices. **Training**: field training, pair trainers and rookies, progress per task ([6.11](#611-field-training-fto)) |
 | **Payouts** | Mission type payouts, within the allowed range |
 | **Mission Builder** | Build, test and publish their own missions ([9.12](#912-mission-builder)) |
-| **Department Report** | Activity per officer this week, and **Commend**; **Clear cooldown** and **Mission ban** when switched on ([4.4](#44-what-supervisors-may-do)); the **Field training** card (pair trainers and rookies, progress per task) when it is switched on ([6.11](#611-field-training-fto)) |
 
 Which of these they can use is set in `Config.Permissions.supervisor` ([4.4](#44-what-supervisors-may-do)).
 
@@ -2068,7 +2078,7 @@ ignored quietly.
 | --- | --- | --- |
 | `Config.AdminUi.pageSize` | `0` | Rows per page (10-200, for example 50) on the Activity log, Payments made, Officers, an officer's runs on Leaderboards and the Player suspects cases. The server sends one page at a time. `0` keeps each list as before (Activity log 50, Payments made 25, Officers 25, the last 100 runs, every case at once). The case filters on Player suspects work on the page shown. |
 | `Config.AdminUi.oneRequest` | `false` | Payments made gets its totals and Leaderboards gets its flagged runs in the same request as the list, so each screen opens with one request instead of two. The screens show the same data. |
-| `Config.AdminUi.windowRows` | `false` | In every tablet UI, a scrolling table of more than 100 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department Report) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
+| `Config.AdminUi.windowRows` | `false` | In every tablet UI, a scrolling table of more than 100 rows (such as the Admin UI's Leaderboards board, the officer Leaderboard or the supervisor Department screen's Officers tab) draws only the rows in view and the next ones as you scroll, and the Settings search results start with 60 rows and add more as you reach the end. The rows and their order are the same; `false` draws every row at once. |
 | `Config.AdminUi.foldAdvanced` | `false` | The department and mission desk dialogs (Admin UI -> System) show their everyday fields open and fold the rest (colours, logo, officer options; box size, rotation, prop) under a **More options** button, and so does **Void runs…** (Officers, Leaderboards, an operation's history: the mission id, Include awards and Strike; one you set stays open). The Supervisor UI's **Mission controls** folds the rarely changed controls in each group (abandon cooldown, no repeat, start, ready check, time limit, idle check, unit size, staff call wait, boards, review rules, the happy hour and twist multipliers) the same way; a control that is set always stays open. Each screen remembers on that computer whether More was left open, and so does the Mission Builder's **More settings** of a block. Only the layout changes; `false` shows everything open as before. |
 
 ### 9.4 The missions
