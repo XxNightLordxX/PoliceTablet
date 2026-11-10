@@ -98,9 +98,19 @@ export function blipParts(data: SettingsData | null | undefined): BlipPart[] {
     return out;
 }
 
-// The parts switched on (they show only while the master switch is on too).
-export function partsOn(parts: BlipPart[]): number {
-    return parts.filter(p => p.on.value === true).length;
+// The parts Map markers shows already (as the server's PartOn): the prisoner van and tow truck while Markers.enabled
+// and Markers.serviceVehicles are not false. Mission blips never adds them then.
+export const MARKER_PARTS = ['prisonerVan', 'towTruck'];
+export function markersShowVans(data: SettingsData | null | undefined): boolean {
+    const by = settingsByPath(data);
+    return by.get('Markers.enabled')?.value !== false && by.get('Markers.serviceVehicles')?.value !== false;
+}
+
+// The parts switched on (they show only while the master switch is on too). With the settings data, a part Map
+// markers shows already is left out.
+export function partsOn(parts: BlipPart[], data?: SettingsData | null): number {
+    const vans = data !== undefined && markersShowVans(data);
+    return parts.filter(p => p.on.value === true && !(vans && MARKER_PARTS.includes(p.id))).length;
 }
 
 // The choices of each list rule: departments and their jobs (Departments.<key>), mission types (MissionTypes.<type>)

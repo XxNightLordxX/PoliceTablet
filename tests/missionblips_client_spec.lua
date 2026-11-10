@@ -141,6 +141,16 @@ H.ok(partner ~= nil and partner.colour == 3, 'a partner near you follows his ped
 Send('run-a', { { k = 'd1', p = 'prisonerDrop', x = 50.0, y = 60.0, z = 30.0 } })
 H.eq(#Live(), 1, 'only the drop-off is left')
 
+-- a live change to a part's look restyles a blip that does not move (settings:changed), with no list coming in
+Config.MissionBlips.parts.prisonerDrop.colour = 27
+Config.MissionBlips.parts.prisonerDrop.label = 'Van stop'
+CP.Hooks.fire('settings:changed')
+H.eq(Live()[1].colour, 27, 'a new colour shows at once on a still blip')
+H.eq(Live()[1].name, 'Van stop', 'and the new label')
+BL.calls = 0
+CP.Hooks.fire('settings:changed')
+H.eq(BL.calls, 0, 'a settings change that leaves the look alone touches no blip')
+
 -- ============================================================================
 --                                   CLEAN-UP
 -- ============================================================================

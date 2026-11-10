@@ -213,6 +213,15 @@ RegisterNetEvent(CP.e('client:missionBlips'), function(data)
     MB.apply(data.runId, items)
 end)
 
+-- A live change to a part's look (Admin UI -> Settings) restyles its blips at once, even those that do not move.
+if CP.Hooks then
+    CP.Hooks.on('settings:changed', function()
+        for _, b in pairs(blips) do
+            if Exists(b.id) and b.look ~= LookSig(Look(b.part)) then Style(b) end
+        end
+    end)
+end
+
 if CP.Qbx and CP.Qbx.onUnload then CP.Qbx.onUnload(function() MB.clear() end) end
 
 AddEventHandler('onResourceStop', function(res)

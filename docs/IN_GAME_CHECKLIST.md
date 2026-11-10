@@ -591,7 +591,7 @@ marker. Run the mission on that location (turn its other locations off, README 5
   before. Turn on Settings -> Features -> Extra mission blips and the parts `coronerVan`, `coronerDrop`, `evidence`,
   `parkedCar` and `partner`; on a Process the scene run the coroner van, where it parks and the body bags show on the
   minimap and the big map, the parked cars near the scene, your partner in blue (not yourself). (BL1)
-- [ ] Add a rule `partner = { roles = 'leader' }`: only the unit leader sees partners, within a few seconds, no
+- [ ] Add a rule `partner = { roles = 'leader' }`: only the run's leader sees partners, within a few seconds, no
   restart. With Radio Silence the parked cars and partners go; the van and the bags stay. (BL1)
 - [ ] A Manhunt with `hidingSpot` on: no hiding spot shows until a fugitive runs; then his spot shows. A live case
   with `reportedPoint` and `hospitalDrop` on: the suspect's own position never shows, only the reported points, and
@@ -601,6 +601,23 @@ marker. Run the mission on that location (turn its other locations off, README 5
 - [ ] Admin UI -> Mission blips is listed under NPC missions. Turn on: the card turns green and Settings -> Features
   shows Extra mission blips on. Switch on Coroner van, pick the picture Van and the colour Purple: on the next
   Process the scene run the van shows with that look on the minimap and the big map, no restart. (BL2)
-- [ ] Mission blips -> Partner -> Change who sees it: tick SAST, pick The unit leader only, Save: the row shows
-  the two limits, Settings -> History has the change, and only the SAST unit leader sees partners. Remove the
+- [ ] Mission blips -> Partner -> Change who sees it: tick SAST, pick The run's leader only, Save: the row shows
+  the two limits, Settings -> History has the change, and only the run's leader sees partners if he is SAST. Remove the
   rules: everyone on the run sees them again. `Config.AdminUi.missionBlipsScreen = false` hides the screen. (BL2)
+- [ ] Mission blips, a part with `roles = 'leader'`: the officer who started the run leaves it (or drops): the next
+  officer (the new host) sees the part within a few seconds. (Z11)
+- [ ] Mission blips with `suspectVehicle` on, a Traffic Enforcement run: no blip on the violator while it drives
+  toward the observe point; it shows once the car has passed you, as the objective blip does. (Z11)
+- [ ] Mission blips during a run: change a part's colour or label on the Mission blips screen: the coroner drop-off,
+  hospital or other still blips change within a second, no new list needed. (Z11)
+- [ ] Mission blips, a live case with `hospitalDrop` on: a suspect goes down, then disconnects: the hospital blip
+  goes. (Z11)
+- [ ] Mission blips -> Change who sees it: tick a choice, then save another setting (or another admin saves one):
+  the ticks stay until you save or cancel. The On count leaves out Prisoner van and Tow truck while Map markers'
+  serviceVehicles is on, and their hints say so. (Z11)
+- [ ] Back up now, then restart Crimson-Police while it writes (big store): after the start, saves/_backups holds no
+  `.t.*.json` or `.f*.bin` without a matching `.manifest.json`. (Z11)
+- [ ] A restore that fails part way, then the fix restore of its automatic backup works: the reply and the audit
+  line name the first automatic backup; the second one is gone and the first stays protected. (Z11)
+- [ ] Admin test run of a pursuit that hands off to a stop: Restart objective on the stop: the car and occupants stay
+  and can be worked again; the stop does not complete with 0/0. (Z11)

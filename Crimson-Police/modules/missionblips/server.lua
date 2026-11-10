@@ -166,6 +166,21 @@ local function EntityPart(run, e)
     return nil
 end
 
+-- A pursuit's violator still cruising toward its observe point (Traffic Enforcement): the pursuit block keeps its
+-- blip hidden until it has passed (blocks/pursuit ShowsBlip), and so does this module.
+local function Unseen(run, e, netId)
+    if e.role ~= 'suspect_vehicle' or not e.obj then return false end
+    local obj = (run.mission and run.mission.objectives or {})[e.obj]
+    if type(obj) ~= 'table' or obj.block ~= 'pursuit' then return false end
+    local ok, ctx = Call('Runs', 'ctx', run, e.obj)
+    if not (ok and type(ctx) == 'table' and type(ctx.obj) == 'table' and type(ctx.obj.observe) == 'table') then
+        return false
+    end
+    local st = type(ctx.state) == 'table' and ctx.state or {}
+    local v = type(st.vehicles) == 'table' and st.vehicles[tostring(netId)] or nil
+    return type(v) == 'table' and v.passed ~= true and v.state == 'cruising'
+end
+
 -- The objectives that have started, with their ctx (CP.Runs.ctx): { { index, block, ctx } }.
 local function StartedCtxs(run)
     local out = {}
@@ -207,7 +222,7 @@ function MB.collect(run)
     -- the run's own entities
     for netId, e in pairs(type(run.entities) == 'table' and run.entities or {}) do
         local part = EntityPart(run, e)
-        if part and PartOn(part) then
+        if part and PartOn(part) and not Unseen(run, e, netId) then
             local moving = e.kind ~= 'object'
             Add('e' .. tostring(netId), part, Point(GetEntityCoords(e.entity), moving and MOVING_M or STILL_M),
                 { netId = netId, moving = moving })
@@ -245,7 +260,13 @@ function MB.collect(run)
         local okC, case = Call('Opponents', 'caseOf', run)
         local down = false
         if okC and type(case) == 'table' and type(case.suspects) == 'table' then
-            for _, rec in pairs(case.suspects) do if type(rec) == 'table' and rec.down then down = true end end
+            -- only a suspect still in play: one who left (disconnect, lost, detained by leave) keeps rec.down
+            for _, rec in pairs(case.suspects) do
+                if type(rec) == 'table' and rec.down and rec.src ~= nil
+                    and (rec.state == 'free' or rec.state == 'cuffed' or rec.state == 'detained') then
+                    down = true
+                end
+            end
         end
         if down then
             local start = run.location and run.location.start
@@ -301,7 +322,8 @@ function MB.allowed(part, run, src, o)
     if not ListRule(rules.missionTypes, run.missionType) then return false end
     if not ListRule(rules.missions, run.missionId) then return false end
     local role = ROLES[rules.roles] and rules.roles or 'all'
-    if role == 'leader' and run.leader ~= src then return false end
+    -- the run's current leader: run.host moves on when he leaves or drops (run.leader is only who created it)
+    if role == 'leader' and (run.host or run.leader) ~= src then return false end
     if role == 'supervisor' and not o.supervisor then return false end
     return true
 end

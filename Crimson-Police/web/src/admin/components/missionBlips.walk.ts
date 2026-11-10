@@ -54,6 +54,14 @@ async function steps(): Promise<void> {
     const parts = blipParts(res.data);
     ok(parts.map(p => p.id).join(',') === 'coronerVan,evidence,hidingSpot,partner', 'every part, in config order');
     ok(partsOn(parts) === 0, 'every part ships off');
+    // the prisoner van and tow truck are not counted while Map markers shows them (Markers.serviceVehicles)
+    const vanPart = { ...parts[0], id: 'prisonerVan', on: { ...parts[0].on, value: true } };
+    const markers = (serviceVehicles: boolean) =>
+        ({
+            sections: [{ groups: [{ settings: [{ path: 'Markers.serviceVehicles', value: serviceVehicles }] }] }],
+        }) as unknown as SettingsData;
+    ok(partsOn([vanPart], markers(true)) === 0, 'serviceVehicles on: the prisoner van is not counted as showing');
+    ok(partsOn([vanPart], markers(false)) === 1, 'serviceVehicles off: the prisoner van counts');
     const van = parts[0];
     ok(
         van.look.sprite?.value === 67 && van.look.colour?.value === 40 && !!van.look.scale && !!van.look.shortRange,

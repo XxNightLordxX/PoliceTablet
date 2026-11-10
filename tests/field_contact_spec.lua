@@ -858,6 +858,22 @@ do
 end
 
 do
+    -- Z11: a test Restart of a stop keeps the handed-over car and occupants and takes them again (no 0/0 complete)
+    local run = W.start({ 1 },
+        StopMission({ occupants = 2, truths = { 'clean', 'clean' }, at = vec4(300.0, 300.0, 30.0, 0.0) }))
+    W.tick(1)
+    local car = Contact(run, 2, 'vehicle')
+    run.test = true
+    H.ok(Runs.testRestart(run), 'Z11: the stop restarts')
+    W.tick(4)
+    H.ok(run.entities[car.netId] ~= nil, 'Z11: the handed-over car is not deleted')
+    H.eq(#W.people(run, 2), 2, 'Z11: both occupants are taken again')
+    H.eq(run.shared.contacts[1].taken, 2, 'Z11: the entry is taken again')
+    H.ok(Obj(run, 2).status == 'active', 'Z11: the objective did not complete with nothing to work')
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do
     -- a person who runs from Order out is Evading: caught, Arrest is Best
     Demeanour('clean', 'runner')
     local run = W.start({ 1 }, StopMission({ occupants = 1, truths = { 'clean' }, at = vec4(300.0, 300.0, 30.0, 0.0) }))

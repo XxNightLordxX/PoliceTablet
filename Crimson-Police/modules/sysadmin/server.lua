@@ -725,7 +725,40 @@ local function IndexFromManifests()
     return SortIndex(out)
 end
 
+local writing = {}              -- [name] = true : a backup this resource start is writing now (no manifest yet)
+local swept = false             -- the stray parts of cut-off backups were removed (once per start)
+
+-- A backup cut off by a resource stop or restart leaves its table and file copies without a manifest, and nothing
+-- else finds them (RemoveBackup and Prune go by the manifest). Once per start: every <name>.t.*.json and
+-- <name>.f<n>.bin whose <name> has no readable manifest (and is not being written now), and every *.tmp, is removed.
+-- force: run again (tests). The number of files removed, or nil when the folder cannot be listed.
+local function SweepStray(force)
+    if swept and not force then return 0 end
+    swept = true
+    local fs = Fs()
+    local okL, names = pcall(function() return fs and fs.list and fs.list(Root() .. '/' .. BACKUP_DIR) end)
+    if not okL or type(names) ~= 'table' then return nil end
+    local good = {}
+    for _, file in ipairs(names) do
+        local name = type(file) == 'string' and file:match('^(.+)%.manifest%.json$') or nil
+        local m = name and ReadJson(BackupPath(file)) or nil
+        if type(m) == 'table' and m.name == name then good[name] = true end
+    end
+    local removed = 0
+    for _, file in ipairs(names) do
+        if type(file) == 'string' then
+            local name = file:match('^([^%.]+)%.t%..+%.json$') or file:match('^([^%.]+)%.f%d+%.bin$')
+            local stray = file:match('%.tmp$') ~= nil or (name ~= nil and not good[name] and not writing[name])
+            if stray and pcall(fs.remove, BackupPath(file)) then removed = removed + 1 end
+        end
+    end
+    if removed > 0 then CP.log(TAG, 'backups: removed %d stray files of backups cut off by a stop', removed) end
+    return removed
+end
+Sys._sweepStray = SweepStray
+
 local function Index()
+    SweepStray()
     local list = ReadJson(BackupPath('index.json'))
     if type(list) ~= 'table' then
         local rebuilt = IndexFromManifests()
@@ -861,15 +894,12 @@ local function Cleanup(fs, manifest, extra)
     if extra then pcall(fs.remove, BackupPath(extra)) end
 end
 
--- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. opts.keep: a backup keep N does not
--- remove this time (the one a restore puts back next). ok, BackupView | false, errKey.
-function Sys.backup(src, kind, opts)
-    Db()
+-- The backup itself, under the name Sys.backup chose (and marks as being written).
+local function Backup(src, kind, opts, name)
     local fs = Fs()
     local schema = Sys.schema()
     if not fs or not schema then return false, 'err.module_unavailable' end
     if not EnsureDir(BACKUP_DIR) then return false, 'err.backup_folder' end
-    local name = BackupName(kind or 'manual')
     local manifest = {
         name = name,
         kind = kind or 'manual',
@@ -947,6 +977,18 @@ function Sys.backup(src, kind, opts)
     Prune(type(opts) == 'table' and opts.keep or nil)
     CP.log(TAG, 'backup %s: %d rows, %d files', name, manifest.rows, #manifest.files)
     return true, list[#list]
+end
+
+-- One backup of every table and file now. kind: 'manual', 'daily' or 'prerestore'. opts.keep: a backup keep N does not
+-- remove this time (the one a restore puts back next). ok, BackupView | false, errKey.
+function Sys.backup(src, kind, opts)
+    Db()
+    SweepStray()
+    local name = BackupName(kind or 'manual')
+    writing[name] = true
+    local ok, res = Backup(src, kind, opts, name)
+    writing[name] = nil
+    return ok, res
 end
 
 function Sys.backups()
@@ -1172,6 +1214,7 @@ function Sys.restore(src, name, reason)
     local okB, auto = Sys.backup(src, 'prerestore', { keep = name })
     if not okB then return Undo(auto) end
     -- the first unfinished restore's automatic backup stays the one that holds the data from before
+    local wasOpen = open
     open = open or auto.name
     SetOpenRestore(open)
     local res = table.pack(pcall(PutBack, m, snap))
@@ -1192,11 +1235,15 @@ function Sys.restore(src, name, reason)
         return false, okR and 'err.restore_failed' or 'err.restore_failed_money'
     end
     SetOpenRestore(nil)
+    -- a fix restore: the data from before is in the first unfinished restore's backup, so that one is named and kept
+    -- (it becomes the latest automatic one again); this restore's own backup holds only the half-restored store
+    local before = wasOpen or auto.name
+    if wasOpen and wasOpen ~= auto.name then RemoveBackup(auto.name) end
     local money, files = res[2], res[3]
-    Kit.auditSync(src, 'audit', 'backupRestored', name, auto.name,
+    Kit.auditSync(src, 'audit', 'backupRestored', name, before,
         ('%d money rows kept, %d files'):format(money.updated + money.inserted, files), reason, { critical = true })
     Maint.askRestart('restore')
-    return true, { backup = name, automatic = auto.name, money = money, files = files, restart = true }
+    return true, { backup = name, automatic = before, money = money, files = files, restart = true }
 end
 
 function Sys.deleteBackup(name)

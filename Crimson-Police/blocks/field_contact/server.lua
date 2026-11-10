@@ -1636,7 +1636,16 @@ end
 
 local function Restart(ctx)
     local st = StateOf(ctx)
-    for _, netId in ipairs(st.order) do ctx.delete(netId) end
+    if st.mode == 'stop' then
+        -- the car and people the pursuit handed over stay: they are taken again (TakeStops) instead of deleted,
+        -- since nothing would hand them over a second time
+        local list = ctx.run.shared and ctx.run.shared.contacts
+        for _, entry in ipairs(type(list) == 'table' and list or {}) do
+            if entry.taken == ctx.index then entry.taken = nil end
+        end
+    else
+        for _, netId in ipairs(st.order) do ctx.delete(netId) end
+    end
     local keep = st.rng
     for k in pairs(st) do st[k] = nil end
     st.rng = keep

@@ -467,6 +467,25 @@ do
             'Z7: a failed write fails the backup (' .. failOn .. '): ' .. tostring(e))
         H.eq(Names(), before, 'Z7: no part or file copy of the failed backup is left behind (' .. failOn .. ')')
     end
+
+    -- Z11: a backup cut off by a stop (no manifest) leaves parts; the sweep at the next start removes them, keeps
+    -- every backup with a manifest, and never touches a backup being written now
+    local before = Names()
+    local stray = { '20200101-000000-daily.t.cp_audit.json', '20200101-000000-daily.f1.bin', 'index.json.tmp' }
+    for _, n in ipairs(stray) do realWrite(dir .. '/' .. n, 'x') end
+    H.ok(Sys._sweepStray(true) == 3, 'Z11: the three stray files of a cut-off backup are removed')
+    H.eq(Names(), before, 'Z11: every backup with a manifest is kept whole')
+    local swept = nil
+    fs.write = function(path, data)
+        local res = table.pack(realWrite(path, data))
+        if not swept and path:find('%.t%.cp_audit%.json$') then swept = Sys._sweepStray(true) end
+        return table.unpack(res, 1, res.n)
+    end
+    H.time = H.time + 2
+    local okB, b = Sys.backup(1, 'manual')
+    fs.write = realWrite
+    H.ok(okB == true and swept == 0, 'Z11: a sweep while a backup is being written leaves its parts alone')
+    H.ok(okB and Names():find(b.name .. '.t.cp_audit.json', 1, true) ~= nil, 'Z11: and that backup is whole')
 end
 
 return H

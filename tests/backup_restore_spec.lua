@@ -566,6 +566,11 @@ do
     ok, e = Restore(auto)
     H.ok(ok == true, 'the automatic backup restores while the failed lock holds: ' .. tostring(e))
     H.eq(OpenMark(), nil, 'the restore is finished')
+    -- Z11: the backup with the data from before is named and stays protected; the fix restore's own automatic
+    -- backup (the half-restored store) is removed
+    H.eq(type(e) == 'table' and e.automatic, auto, 'Z11: the reply names the backup with the data from before')
+    H.eq(LatestAuto(), auto, 'Z11: the half-restored automatic backup is removed, the first one is the latest again')
+    H.ok(CP.Sysadmin._protected(CP.Sysadmin._index())[auto] == true, 'Z11: and it stays protected from keep N')
     v = CP.Maintenance.view()
     H.ok(v and v.restart == true and not v.failed, 'now: done, restart')
     H.eq(One('SELECT cash_status FROM cp_mission_runs WHERE id = 180').cash_status, 'paid', 'still paid')

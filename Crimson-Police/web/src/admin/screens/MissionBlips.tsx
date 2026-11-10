@@ -109,7 +109,10 @@ function RuleEditor({
     onDone: () => void;
 }) {
     const [draft, setDraft] = useState<BlipRule>(() => ruleOf(rules.value, part.id));
-    useEffect(() => setDraft(ruleOf(rules.value, part.id)), [rules.value, part.id]);
+    // keyed on the saved rule itself: another save (a new settings object) keeps an unsaved draft
+    const savedKey = JSON.stringify(ruleOf(rules.value, part.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => setDraft(ruleOf(rules.value, part.id)), [savedKey, part.id]);
     const [missionPick, setMissionPick] = useState('');
     const set = (patch: Partial<BlipRule>) => setDraft(d => ({ ...d, ...patch }));
     const commit = async (rule: BlipRule | null) => {
@@ -369,7 +372,7 @@ export default function AdminMissionBlips() {
                 <Card
                     title={t('admin.mission_blips.master_title')}
                     subtitle={t(masterOn ? 'admin.mission_blips.master_on' : 'admin.mission_blips.master_off', {
-                        n: partsOn(parts),
+                        n: partsOn(parts, data),
                         total: parts.length,
                     })}
                     icon="mapPin"

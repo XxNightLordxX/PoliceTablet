@@ -167,6 +167,25 @@ run.objectives[2].status = 'active'
 Pass()
 H.ok(Parts(2):find('ambush', 1, true) ~= nil, 'the ambush car shows once its objective started (it appeared)')
 
+-- a Traffic Enforcement violator (pursuit with observe): hidden while it cruises toward the observe point
+On({ 'suspectVehicle' })
+run.mission.objectives[2].block = 'pursuit'
+Entity(24, 2401, { role = 'suspect_vehicle', kind = 'vehicle', obj = 2 })
+ctxs[2] = { obj = { observe = { radius = 30 } }, state = { vehicles = { ['24'] = { state = 'cruising' } } } }
+Pass()
+H.eq(Parts(1), 'suspectVehicle',
+    'a violator still cruising before the observe point is never sent (the stopped car is)')
+ctxs[2].state.vehicles['24'].passed = true
+Pass()
+H.eq(Parts(1), 'suspectVehicle,suspectVehicle', 'the violator shows once it has passed the observe point')
+ctxs[2].state.vehicles['24'] = { state = 'cruising' }
+ctxs[2].obj.observe = nil
+Pass()
+H.eq(Last(1), nil, 'a pursuit without observe shows its car from the start (nothing changed)')
+run.entities[24] = nil
+ctxs[2] = nil
+run.mission.objectives[2].block = 'search_area'
+
 -- hiding spots: only once the fugitive was found
 On({ 'hidingSpot' })
 ctxs[2] = { state = { fugitives = { ['30'] = { spot = vec3(300.0, 300.0, 30.0), ran = false } } } }
@@ -182,7 +201,7 @@ H.eq(Last(1).items[1].x, 300.0, 'at the spot')
 On({ 'reportedPoint', 'hospitalDrop', 'partner' })
 run.mission.objectives[2].block = 'live_response'
 ctxs[2] = { state = { reported = { { label = 'Suspect 1', coords = vec3(700.0, 700.0, 30.0) } } } }
-case = { suspects = { cidA = { src = 9, lastCoords = vec3(701.0, 702.0, 30.0), down = false } } }
+case = { suspects = { cidA = { src = 9, state = 'free', lastCoords = vec3(701.0, 702.0, 30.0), down = false } } }
 Pass()
 local items = Last(2).items
 local keys = {}
@@ -197,6 +216,17 @@ H.ok(Parts(2):find('hospitalDrop', 1, true) ~= nil, 'the hospital shows while a 
 local hosp = nil
 for _, it in ipairs(Last(2).items) do if it.p == 'hospitalDrop' then hosp = it end end
 H.eq(hosp and math.floor(hosp.x), 308, 'the hospital nearest the scene (Pillbox), not where the suspect is')
+
+-- a downed suspect who left (disconnect, then lost): the hospital goes
+case.suspects.cidA.state = 'free'
+case.suspects.cidA.src = nil
+Pass()
+H.ok(Parts(2):find('hospitalDrop', 1, true) == nil, 'a downed suspect who disconnected: no hospital')
+case.suspects.cidA.src = 9
+case.suspects.cidA.state = 'lost'
+Pass()
+H.ok((Parts(2) or ''):find('hospitalDrop', 1, true) == nil, 'a downed suspect who is lost: no hospital')
+case.suspects.cidA.state = 'free'
 
 -- a partner in another routing bucket (the arena) is not shown
 buckets[3] = 7
@@ -238,7 +268,12 @@ H.ok(Sees(1) and Sees(2) and Sees(3), 'missionTypes and missions match')
 Rule({ missions = { 'bank_job' } })
 H.ok(not Sees(1), 'missions: another mission only')
 Rule({ roles = 'leader' })
-H.ok(Sees(1) and not Sees(2) and not Sees(3), 'roles leader: the unit leader only')
+H.ok(Sees(1) and not Sees(2) and not Sees(3), 'roles leader: the run\'s leader only')
+-- the leader leaves or drops: the run's host moves on (MigrateHost), run.leader stays who created it
+run.host = 2
+Rule({ roles = 'leader' })
+H.ok(not Sees(1) and Sees(2) and not Sees(3), 'roles leader: the new host sees it once the leader has left')
+run.host = nil
 Rule({ roles = 'supervisor' })
 H.ok(Sees(1) and not Sees(2) and not Sees(3), 'roles supervisor: supervisors only')
 Rule({ departments = { 'sast' }, grade = 3 })

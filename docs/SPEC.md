@@ -2327,7 +2327,7 @@ Config.MissionBlips = {
     },
     -- Who sees a part, by part name; a part without rules shows to every officer on the run. Every rule is optional and
     -- all must match: departments = { 'sast' }, jobs = { 'police' }, grade = the lowest grade level, missionTypes =
-    -- { 'patrol' }, missions = { 'mission_id' }, roles = 'all' | 'leader' (the unit leader) | 'supervisor'
+    -- { 'patrol' }, missions = { 'mission_id' }, roles = 'all' | 'leader' (the run's leader) | 'supervisor'
     -- Example: partner = { departments = { 'sast' }, roles = 'leader' },
     rules = {},
 }
