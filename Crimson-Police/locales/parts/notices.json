@@ -1,0 +1,23 @@
+{
+  "notices.title.staff": "Staff notices",
+  "notices.desc.staff": "Plain text on officers' Home until it runs out: every department or the ones you pick. You can also end any department's notice here.",
+  "notices.posted.staff": "Staff notice posted.",
+  "notices.off": "Staff notices are switched off in Settings (Notices). Running notices can still be ended.",
+  "notices.everyone": "every department",
+  "notices.kind.staff": "Staff",
+  "notices.kind.department": "Department",
+  "notices.history": "History ({n})",
+  "notices.history_none": "No ended notices yet.",
+  "notices.ended.removed": "Ended early {date}",
+  "notices.ended.expired": "Ran out {date}",
+  "notices.alert_mode.off": "Officers see it on Home.",
+  "notices.alert_mode.toast": "On-duty officers also get a toast.",
+  "notices.alert_mode.sound": "On-duty officers also get a toast with a tone.",
+  "notices.alert": "{text}",
+  "notices.alert_title.staff": "Staff notice",
+  "notices.alert_title.department": "Department notice",
+  "settings.feature.staff_notices": "Staff notices",
+  "err.notice_kind": "That kind of notice does not exist. Refresh the screen and try again.",
+  "err.notice_kind_off": "Staff notices are switched off. Switch them on in Settings (Notices) first.",
+  "err.notice_unknown": "That notice is not running any more. Refresh the list."
+}

@@ -45,7 +45,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/custody/client.lua`: CP.Custody (client): the police action flow (begin, progress bar, finish), the case-fail confirm, the service vehicles this client drives for the server and their blips, and the road point the server asks for.
 - `Crimson-Police/modules/custody/server.lua`: CP.Custody (server): contact truths and facts, police actions, grading, the custody chain and the service vehicles (prisoner transport, tow truck, coroner van).
 - `Crimson-Police/modules/deptcontrols/server.lua`: CP.DeptControls (server): Mission controls.
-- `Crimson-Police/modules/deptnotices/server.lua`: CP.DeptNotices (server): a supervisor's department notices (the Mission control notices).
 - `Crimson-Police/modules/diag/client.lua`: CP.Diag (client): the F8 command CrimsonPoliceState prints what holds the screen, the camera, the controls and the NUI focus right now, and which part of it is Crimson-Police's; `CrimsonPoliceState unstick` undoes only ours.
 - `Crimson-Police/modules/downed/client.lua`: CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client (docs/dev/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 - `Crimson-Police/modules/downed/server.lua`: CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
@@ -100,7 +99,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/realplayers/surrender.lua`: CP.Opponents surrender (server): a real suspect of a live case gives himself up, by his own command or
 - `Crimson-Police/modules/realplayers/volunteers.lua`: CP.Volunteers (server): the volunteer list behind Config.RealPlayers.volunteer.command (default /crimsonheat).
 - `Crimson-Police/modules/review/anticheat.lua`: CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the voids -> suspension rule.
-- `Crimson-Police/modules/review/corrections.lua`: CP.Corrections (server): an admin's corrections to officers' records (adjustments, bulk void and restore, retire, reset progression, record move, XP check, restore run, void kinds, flag by hand, badges, streaks, goals, staff notices) and the run history an admin reads.
+- `Crimson-Police/modules/review/corrections.lua`: CP.Corrections (server): an admin's corrections to officers' records (adjustments, bulk void and restore, retire, reset progression, record move, XP check, restore run, void kinds, flag by hand, badges, streaks, goals) and the run history an admin reads (staff notices: CP.Notices, modules/supervisor/notices.lua).
 - `Crimson-Police/modules/review/disputes.lua`: CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how supervisors and admins answer them.
 - `Crimson-Police/modules/review/queue.lua`: CP.Review (server): the one Review queue.
 - `Crimson-Police/modules/review/reviewrules.lua`: CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
@@ -120,6 +119,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/supawards/server.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
 - `Crimson-Police/modules/supervisor/fieldtraining.lua`: CP.FieldTraining (server): field training (Config.Recognition.fieldTraining), part of the supervisor module.
 - `Crimson-Police/modules/supervisor/missionban.lua`: CP.MissionBan (server): a supervisor's temporary mission ban of one officer (the Mission control
+- `Crimson-Police/modules/supervisor/notices.lua`: CP.Notices (server): the one notice system.
 - `Crimson-Police/modules/supervisor/restrictions.lua`: CP.Restrictions (server): the one restrictions list.
 - `Crimson-Police/modules/suptoday/server.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
 - `Crimson-Police/modules/sysadmin/server.lua`: CP.Sysadmin (server): Admin UI → System (storage, backups, webhooks, problems, integrations), Departments (add, turn off, delete, logos, desks), Settings positions and Officers → Support (check access, tablet item, stuck screen).
@@ -171,7 +171,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/SpawnCheckDialog.tsx`: Admin UI · Testing: the Check spawn points dialog.
 - `Crimson-Police/web/src/admin/components/adminHome.ts`: Admin UI -> Home, the dashboard: the tiles of Live now, the Alerts lines and the shortcuts, all from the one admin:getHome answer, each a count that opens its screen.
 - `Crimson-Police/web/src/admin/components/adminHome.walk.ts`: Admin UI -> Home's dashboard against the browser mocks (node walk.mjs, a gate step): the one batched admin:getHome answer, the Live now tiles, the Alerts lines, the screen each one opens, and the shortcuts in the configured order.
-- `Crimson-Police/web/src/admin/components/boards/RecognitionPanel.tsx`: Leaderboards → Recognition: what officers' Home shows, the last closed weeks (Recount, Post again) and the staff notices (Post, Remove).
+- `Crimson-Police/web/src/admin/components/boards/RecognitionPanel.tsx`: Leaderboards → Recognition: what officers' Home shows, the last closed weeks (Recount, Post again) and the notices (shared/NoticesCard, kind staff: post, end any running notice, the history).
 - `Crimson-Police/web/src/admin/components/boards/SeasonTools.tsx`: Seasons → season tools: rename, planned end, reopen within 24 h and Undo, next week's bounty, a past season (Recount bounty week, Recount champion) and a department's contributors.
 - `Crimson-Police/web/src/admin/components/copyText.ts`: Copy one line of text for the admin (a server.cfg line, an export).
 - `Crimson-Police/web/src/admin/components/extraGrants.ts`: Admin UI -> Permissions -> Extra grants: Config.Permissions.grants edited one power at a time.
@@ -310,6 +310,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/index.ts`: Browser dev mode only (main.tsx imports this only when isEnvBrowser()).
 - `Crimson-Police/web/src/mocks/logos.ts`: Placeholder department logos for browser mode (inline SVG data URIs; no external URLs).
 - `Crimson-Police/web/src/mocks/missioncalls.mock.ts`: Browser mocks of the Dispatch screen (mission calls): getMissionCalls, server:claimMissionCall, the staff panel (sup:getMissionCalls and the mc* actions) and the admin area coverage and location plays. ?calls=empty shows no calls, ?calls=run the "on a run" notice, ?calls=op the Cross-Department Mission banner.
+- `Crimson-Police/web/src/mocks/notices.mock.ts`: Mock: the one notice system (modules/supervisor/notices.lua): notices:get { kind }, server:notice:post and server:notice:end, with one list of rows for both kinds like the server's cp_staff_notices.
 - `Crimson-Police/web/src/mocks/options.mock.ts`: Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions, setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 - `Crimson-Police/web/src/mocks/oversight.mock.ts`: Browser mocks for the oversight slice: Supervisor Mission List, Live Missions, Review Queue and Admin Officers, Departments, Permissions and Audit Log.
 - `Crimson-Police/web/src/mocks/profile.mock.ts`: Browser mocks of the profile slice: Edit profile, reports, commendations, the Profiles review queue and the Admin officer profile. ?profile=empty shows an empty queue.
@@ -353,6 +354,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/screens/debouncedSave.walk.ts`: My options: a group's Reset clicked within the save delay of a change is not undone by that change's pending save (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/officer/screens/screenHead.walk.ts`: Officer screens tidy, part 1 against the browser mocks (node walk.mjs, a gate step): Home, Mission Board, Active Mission and Dispatch share one header (title, one line of help: <Screen head>, shared/screenHeads.ts) and one set of loading, error, empty and stale lines (the shared ScreenStatus).
 - `Crimson-Police/web/src/officer/screens/screenHead2.walk.ts`: Officer screens tidy, part 2 against the browser mocks (node walk.mjs, a gate step): Unit, Profile, Leaderboard and My options share the part 1 header (title, one line of help) and load states; the field training card counts the tasks ready to sign; the live case card says which step of three the case is on.
+- `Crimson-Police/web/src/shared/NoticesCard.tsx`: The one notices card (modules/supervisor/notices.lua), the same for both kinds: post a notice, the notices running
 - `Crimson-Police/web/src/shared/components/Avatar.tsx`: An officer's picture: a preset image, an approved link (the initials when it fails to load) or the initials, in a ring of their XP level badge colour.
 - `Crimson-Police/web/src/shared/components/Icon.tsx`: Inline stroke icons (24×24 grid).
 - `Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx`: The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
@@ -389,7 +391,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/types.ts`: Every NUI data shape (docs/dev/ARCHITECTURE.md §9.2–§9.6, verbatim) plus the UI-side helper types.
 - `Crimson-Police/web/src/styles/order.ts`: Every stylesheet of the NUI, in one fixed order, loaded with the page.
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
-- `Crimson-Police/web/src/supervisor/components/DeptNoticesCard.tsx`: Supervisor UI · Department → Calls & notices · Department notices (the notices Mission control): post a short notice
 - `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
 - `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
 - `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
@@ -429,6 +430,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/economy.ts`: Response shapes of the economy slice's supervisor/admin callbacks and actions (modules/payouts/server.lua; documented in docs/dev/ARCHITECTURE.md §5.18).
 - `Crimson-Police/web/src/types/fieldTraining.ts`: Shapes of field training (modules/supervisor/fieldtraining.lua, Config.Recognition.fieldTraining).
 - `Crimson-Police/web/src/types/missioncalls.ts`: Shapes of the Dispatch screen (mission calls): getMissionCalls and push topic 'calls', the supervisor panel and the admin area coverage matrix.
+- `Crimson-Police/web/src/types/notices.ts`: The one notice system (modules/supervisor/notices.lua): notices:get { kind } and the actions server:notice:post and server:notice:end.
 - `Crimson-Police/web/src/types/options.ts`: Shapes of My options: the officer options (callback getOptions, action server:options:set) and My keys (client action getKeyLabels).
 - `Crimson-Police/web/src/types/oversight.ts`: Shapes of the oversight slice's callbacks (modules/admin, modules/review/disputes).
 - `Crimson-Police/web/src/types/profile.ts`: Shapes of the officer profile: commendations, the Edit profile dialog and the supervisors' Profiles queue.
@@ -478,7 +480,6 @@ docs/dev/ARCHITECTURE.md.
 - `tests/custody_clearance_spec.lua`: Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
 - `tests/custody_spec.lua`: CP.Custody: truths and cues, grading, knowing errors, police actions (begin/finish), facts, probable cause, the custody chain, service vehicles, impound, the sc-police listener, excessive force and stats.
 - `tests/dept_goals_spec.lua`: A department's goals: a supervisor picks which of the admin's daily and weekly goals (Config.Objectives) his department's officers draw theirs from, counting from the next weekly reset; the points never change, other departments and the setter keep the admin's whole lists.
-- `tests/dept_notices_spec.lua`: Department notices (the notices Mission control): a supervisor posts a short notice for his own department only (cp_staff_notices, shared with the admin's staff notices); it shows on that department's Home Announcements card, never another's.
 - `tests/dept_tod_spec.lua`: A department's Type of the Day: a supervisor picks one mission type for tomorrow; that day his
 - `tests/dept_twists_spec.lua`: The twists a department offers and pre-ticks: the twists Mission control narrows the accept step's offer (Mission Board, mission call claims) to the twists the leader's department offers, marks the ones it pre-ticks and refuses a chosen twist the department does not offer.
 - `tests/difficulty_unit_spec.lua`: Difficulty and unit size: two per-department Mission controls. difficulty picks one of the presets the admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its leaders may lead, never above Config.Limits.maxUnitSize.
@@ -552,6 +553,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/missions_c_spec.lua`: The five newer built-in missions (parking_patrol, traffic_enforcement, suspicious_activity, drug_lab_raid, gang_hideout_raid) and the changed cards: files, guardrails, and end-to-end runs at every tier they support.
 - `tests/my_keys_spec.lua`: My options -> My keys (modules/tablet/client.lua): the client action getKeyLabels names the key bound to each Crimson-Police key mapping, or says it is not set.
 - `tests/net_spec.lua`: CP.Net.request on the client never raises: an ox_lib raise or a server that never answers is an error reply.
+- `tests/notices_spec.lua`: The one notice system (CP.Notices, modules/supervisor/notices.lua): staff notices and department notices are kinds
 - `tests/npc_combat_spec.lua`: Config.NpcCombat: no automatic weapons, the accuracy caps, and an officer's run-scoped damage settings.
 - `tests/npc_spec.lua`: Slice npc: modules/npc/server.lua driven through a fake entity world, stubbed
 - `tests/nui_bundle_spec.lua`: The NUI bundle (docs/dev/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and

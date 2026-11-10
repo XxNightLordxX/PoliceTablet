@@ -131,9 +131,11 @@ function O.setLocal(key, value)
 end
 
 -- The sound groups and the option that turns each on or off on this PC (shared/options_sounds.lua).
-local SOUND_OPTION = { calls = 'soundCalls', unit = 'soundUnit', cues = 'soundCues' }
+-- notices: the notice tone of a notice alert (Config.Notices.<kind>.alert = 'sound') follows the Mission call tone
+local SOUND_OPTION = { calls = 'soundCalls', notices = 'soundCalls', unit = 'soundUnit', cues = 'soundCues' }
 
--- Plays a frontend sound of a group ('calls', 'unit' or 'cues') unless the officer turned that group off on this PC.
+-- Plays a frontend sound of a group ('calls', 'notices', 'unit' or 'cues') unless the officer turned that group off
+-- on this PC.
 -- Returns true when it played.
 function O.sound(group, name, set, p3)
     local key = SOUND_OPTION[group]

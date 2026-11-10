@@ -24,7 +24,7 @@
 --       silent = true (the theme fetch at login) skips that. nil fields arrive in the NUI as missing keys.
 --   CP.Tablet.notify(src, kind, key, vars, opts) -> boolean
 --       kind 'info'|'success'|'warning'|'error'; key/vars a locale key and its variables (translated on
---       the client); opts = { title = localeKey, duration = ms }
+--       the client); opts = { title = localeKey, duration = ms, channel, sound = true (the notice tone) }
 --   CP.Tablet.notifyMany(srcs, kind, key, vars)       the same toast for a list of players (deduplicated)
 --   CP.Tablet.push(src, topic, data) -> boolean       NUI { type = 'push', topic, data } (vectors serialised)
 --   CP.Tablet.openAdmin(src) -> ok, errKey            builds the admin session and opens the Admin UI
@@ -708,7 +708,8 @@ end, { rate = 3 })
 -- ============================================================================
 
 -- opts: title (a locale key), duration (ms), channel ('social' = unit invites, commendations, rewards and profile
--- news: the officer option quietRun keeps its info and success toasts in the bell during a run; nil = always shown).
+-- news: the officer option quietRun keeps its info and success toasts in the bell during a run; nil = always shown),
+-- sound (true = the client plays the notice tone with it, CP.Notices alerts).
 function T.notify(src, kind, key, vars, opts)
     local n = CP.U.toSrc(src)
     if not n or type(key) ~= 'string' or key == '' then return false end
@@ -722,6 +723,7 @@ function T.notify(src, kind, key, vars, opts)
         title = type(opts.title) == 'string' and opts.title ~= '' and opts.title or nil,
         duration = duration and math.floor(duration) or nil,
         channel = opts.channel == 'social' and 'social' or nil,
+        sound = opts.sound == true or nil,
     })
     return true
 end

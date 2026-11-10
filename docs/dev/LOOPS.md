@@ -456,4 +456,4 @@ strings do not count.
 | `web/src/shared/hooks.ts` | 4 | 0 | `useRequest` poll, `useCountdown` (a timer per second), `useDebounced` (one-shot) |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |
-| `web/src/supervisor/components/DeptNoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
+| `web/src/shared/NoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |

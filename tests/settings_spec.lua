@@ -1090,13 +1090,15 @@ do
             'step P12: the call lane (120-600 s, 2 open) and the staff call wait (60-120 s) ship off, with comments'
         )
         H.ok(
-            d.notices.on == false and d.crossDept.on == false and E('MissionControls.noticeMaxLength').default == 280
-                and E('MissionControls.noticeMaxLength').max == 280
-                and E('MissionControls.noticeMaxLength').desc:find('characters a department notice may hold', 1, true) ~= nil
-                and E('MissionControls.noticesPerDay').default == 5 and E('MissionControls.noticesPerDay').max == 50
-                and E('MissionControls.noticesPerDay').desc:find('department notices one supervisor', 1, true)
-                    ~= nil,
-            'step P13: department notices (280 characters, 5 a day) and Cross-Department participation ship off'
+            d.notices.on == false and d.crossDept.on == false and E('Notices.department.maxLength').default == 280
+                and E('Notices.department.maxLength').max == 280
+                and E('Notices.department.maxLength').desc:find('characters a department notice may hold', 1, true) ~= nil
+                and E('Notices.department.perDay').default == 5 and E('Notices.department.perDay').max == 50
+                and E('Notices.department.perDay').desc:find('department notices one supervisor', 1, true) ~= nil
+                and E('Notices.staff.alert').default == 'off' and E('Notices.department.alert').kind == 'enum'
+                and E('Notices.staff.on').default == true and S.entry('MissionControls.noticesPerDay') == nil,
+            'FM6: department notices (280 characters, 5 a day) and Cross-Department participation ship off; the'
+                .. ' notice kinds live in Config.Notices, alerts off'
         )
         local cfgFile = io.open('Crimson-Police/config/config.lua', 'r')
         local cfgText = cfgFile and cfgFile:read('a') or ''

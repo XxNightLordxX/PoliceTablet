@@ -380,6 +380,7 @@ local CONFIG_SECTIONS = {
     'Recognition',
     'Objectives',
     'Leaderboard',
+    'Notices',
     'Events',
     'Profile',
     'OfficerOptions',

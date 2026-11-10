@@ -516,10 +516,10 @@ Config.Database = {
 
 ### 5.2 What ships off and how to turn it on
 
-Crimson-Police ships so that a new server runs plain NPC missions with points and cash, and nothing that
-involves real players as suspects, extra money or item rewards. Every switch below is one setting: turn it on
-in game in Admin UI → **Settings** → **Features** (it works at once, is audited, and **Reset** puts the
-`config.lua` value back), or set it to `true` in `config/config.lua` and restart Crimson-Police.
+As shipped, a new server runs plain NPC missions with points and cash: no real players as suspects, no extra
+money, no item rewards. Every switch below is one setting: turn it on
+in game in Admin UI → **Settings** → **Features** (at once, audited; **Reset** puts the `config.lua` value
+back), or in `config/config.lua` (then restart Crimson-Police).
 
 The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-storage)) ship for testing:
 `Config.Debug = true` (extra console lines; set `false` before go-live) and `Config.Database.enabled = false`
@@ -591,6 +591,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Type of the Day | Police teamwork | `Config.Objectives.typeOfTheDay.enabled` |
 | Weekly top 3 announcement | Police teamwork | `Config.Leaderboard.announceWeekly` |
 | Monthly top 3 announcement | Police teamwork | `Config.Leaderboard.announceMonthly` |
+| Staff notices | Police teamwork | `Config.Notices.staff.on` |
 | Officers set their own options | Police teamwork | `Config.OfficerOptions.enabled` |
 | Admin test mode | System | `Config.Testing.enabled` |
 | Spawn check in test mode | System | `Config.Testing.spawnCheck.enabled` |

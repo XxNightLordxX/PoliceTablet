@@ -165,8 +165,13 @@ do
     local mc = byKey.mission_controls
     H.ok(
         mc ~= nil and Has(mc.limits, 'MissionControls.missionBanPerDay')
-            and Has(mc.limits, 'MissionControls.noticesPerDay') and Has(mc.limits, 'MissionControls.awardPointsPerDay'),
-        'Mission controls link the ban, notice and points caps'
+            and Has(mc.limits, 'MissionControls.awardPointsPerDay'),
+        'Mission controls link the ban and points caps'
+    )
+    H.ok(
+        byKey.staff_notices and byKey.staff_notices.path == 'Notices.staff.on'
+            and Has(byKey.staff_notices.limits, 'Notices.staff.alert'),
+        'staff notices: one feature switch with its limits and alert'
     )
     H.ok(byKey.field_training and Has(byKey.field_training.limits, 'Recognition.fieldTraining.rookiesPerTrainer'),
         'field training links rookies per trainer')

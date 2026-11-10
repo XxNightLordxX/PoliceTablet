@@ -1,5 +1,5 @@
-// Leaderboards → Recognition: what officers' Home shows, the last closed weeks (Recount, Post again) and the staff
-// notices (Post, Remove).
+// Leaderboards → Recognition: what officers' Home shows, the last closed weeks (Recount, Post again) and the notices
+// (shared/NoticesCard, kind staff: post, end any running notice, the history).
 
 import { useState } from 'react';
 import {
@@ -8,40 +8,25 @@ import {
     Card,
     Checkbox,
     ConfirmDialog,
-    Dialog,
     EmptyState,
     ErrorState,
-    Field,
     LoadingBlock,
-    NumberInput,
     Row,
-    Textarea,
 } from '../../../shared/components';
-import { fmtDateTime, formatNumber } from '../../../shared/format';
+import { formatNumber } from '../../../shared/format';
 import { useRequest } from '../../../shared/hooks';
 import { request } from '../../../shared/nui';
 import { t } from '../../../shared/i18n';
-import { useSession } from '../../../shared/session';
-import type { RecognitionData, StaffNotice, WeekRecognition } from '../../../types/admin_officers';
+import type { RecognitionData, WeekRecognition } from '../../../types/admin_officers';
+import { NoticesCard } from '../../../shared/NoticesCard';
 import { useAdminAction } from '../kit';
 import '../officers/OfficerTools.css';
 
-const NOTICE_MAX = 280;
-
 export function RecognitionPanel() {
-    const session = useSession();
     const { data, loading, error, refetch } = useRequest<RecognitionData>('admin:getRecognition', {});
     const { run, busy } = useAdminAction();
     const [recount, setRecount] = useState<{ week: WeekRecognition; post: boolean } | null>(null);
     const [repost, setRepost] = useState<WeekRecognition | null>(null);
-    const [notice, setNotice] = useState<{
-        text: string;
-        days: number | null;
-        departments: string[];
-        reason: string;
-    } | null>(null);
-    const [remove, setRemove] = useState<StaffNotice | null>(null);
-
     const openRecount = async (week: WeekRecognition) => {
         const res = await request<WeekRecognition>('admin:previewRecount', { weekKey: week.weekKey });
         if (res.ok && res.data) setRecount({ week: res.data, post: true });
@@ -71,36 +56,9 @@ export function RecognitionPanel() {
         );
         setRepost(null);
     };
-    const noticeOk =
-        !!notice && !!notice.text.trim() && notice.text.length <= NOTICE_MAX && !!notice.days && !!notice.reason.trim();
-    const doNotice = async () => {
-        if (!notice || !noticeOk) return;
-        const res = await run(
-            'server:admin:postNotice',
-            {
-                text: notice.text.trim(),
-                departments: notice.departments.length ? notice.departments : undefined,
-                expiresAt: Math.floor(Date.now() / 1000) + (notice.days ?? 1) * 86400,
-                reason: notice.reason.trim(),
-            },
-            { requestId: false, success: 'ui.admin_officers.done' },
-        );
-        if (res.ok) {
-            setNotice(null);
-            void refetch();
-        }
-    };
-    const doRemove = async (reason: string) => {
-        if (!remove) return;
-        const res = await run('server:admin:removeNotice', { id: remove.id, reason }, { requestId: false });
-        setRemove(null);
-        if (res.ok) void refetch();
-    };
-
     if (!data && loading) return <LoadingBlock />;
     if (!data && error) return <ErrorState error={error} onRetry={() => void refetch()} />;
     if (!data) return null;
-    const depts = session.config?.departments ?? [];
 
     return (
         <div className="admin-otools">
@@ -144,40 +102,7 @@ export function RecognitionPanel() {
                 )}
             </Card>
 
-            <Card
-                title={t('ui.admin_officers.recognition.notices')}
-                icon="bell"
-                padding="md"
-                actions={
-                    <Button
-                        size="sm"
-                        variant="primary"
-                        icon="plus"
-                        onClick={() => setNotice({ text: '', days: 3, departments: [], reason: '' })}
-                    >
-                        {t('ui.admin_officers.recognition.post_notice')}
-                    </Button>
-                }
-            >
-                {data.notices.length ? (
-                    <ul className="admin-otools__badges">
-                        {data.notices.map(n => (
-                            <li key={n.id}>
-                                <span>{n.text}</span>
-                                <span className="admin-otools__soft">
-                                    {t('ui.admin_officers.recognition.until', { date: fmtDateTime(n.expiresAt) })}
-                                    {n.departments ? ` · ${n.departments.join(', ')}` : ''}
-                                </span>
-                                <Button size="sm" variant="ghost" icon="trash" onClick={() => setRemove(n)}>
-                                    {t('ui.admin_officers.recognition.remove')}
-                                </Button>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <EmptyState compact icon="bell" title={t('ui.admin_officers.recognition.no_notices')} />
-                )}
-            </Card>
+            <NoticesCard kind="staff" />
 
             <Card
                 title={t('ui.admin_officers.recognition.weeks')}
@@ -253,91 +178,6 @@ export function RecognitionPanel() {
                 onCancel={() => setRepost(null)}
                 busy={busy}
             />
-            <ConfirmDialog
-                open={!!remove}
-                tone="danger"
-                title={t('ui.admin_officers.recognition.remove')}
-                message={remove?.text}
-                reason={{ required: true, maxLength: 255 }}
-                onConfirm={doRemove}
-                onCancel={() => setRemove(null)}
-                busy={busy}
-            />
-            <Dialog
-                open={!!notice}
-                onClose={() => setNotice(null)}
-                size="sm"
-                title={t('ui.admin_officers.recognition.post_notice')}
-                description={t('ui.admin_officers.recognition.notice_desc')}
-                footer={
-                    <>
-                        <Button variant="ghost" onClick={() => setNotice(null)} disabled={busy}>
-                            {t('common.cancel')}
-                        </Button>
-                        <Button variant="primary" loading={busy} disabled={!noticeOk} onClick={() => void doNotice()}>
-                            {t('ui.admin_officers.recognition.post_notice')}
-                        </Button>
-                    </>
-                }
-            >
-                {notice ? (
-                    <div className="admin-otools__form">
-                        <Field label={t('ui.admin_officers.recognition.notice_text')} required>
-                            <Textarea
-                                value={notice.text}
-                                onChange={v => setNotice({ ...notice, text: v })}
-                                maxLength={NOTICE_MAX}
-                                rows={3}
-                            />
-                        </Field>
-                        <Field label={t('ui.admin_officers.recognition.notice_days')} required>
-                            <NumberInput
-                                value={notice.days}
-                                onChange={v => setNotice({ ...notice, days: v })}
-                                min={1}
-                                max={30}
-                                stepper
-                            />
-                        </Field>
-                        <Field
-                            label={t('ui.admin_officers.recognition.notice_depts')}
-                            hint={t('ui.admin_officers.recognition.notice_depts_hint')}
-                        >
-                            <Row gap={2} wrap>
-                                {depts.map(d => (
-                                    <Checkbox
-                                        key={d.key}
-                                        checked={notice.departments.includes(d.key)}
-                                        onChange={v =>
-                                            setNotice({
-                                                ...notice,
-                                                departments: v
-                                                    ? [...notice.departments, d.key]
-                                                    : notice.departments.filter(k => k !== d.key),
-                                            })
-                                        }
-                                        label={d.short}
-                                    />
-                                ))}
-                            </Row>
-                        </Field>
-                        {notice.text.trim() ? (
-                            <div>
-                                <span className="admin-otools__soft">{t('ui.admin_officers.recognition.preview')}</span>
-                                <p>{notice.text.trim()}</p>
-                            </div>
-                        ) : null}
-                        <Field label={t('common.reason')} required>
-                            <Textarea
-                                value={notice.reason}
-                                onChange={v => setNotice({ ...notice, reason: v })}
-                                maxLength={255}
-                                rows={2}
-                            />
-                        </Field>
-                    </div>
-                ) : null}
-            </Dialog>
         </div>
     );
 }

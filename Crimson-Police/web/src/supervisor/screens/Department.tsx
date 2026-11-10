@@ -2,7 +2,7 @@
 
 // Supervisor UI · Department (screen key 'sup_department'): Officers (supervisor/screens/DeptReport), Controls
 // (supervisor/screens/MissionControls, each control's admin limits and today's use inline), Review
-// (supervisor/screens/ReviewQueue), Calls & notices (supervisor/components/MissionCallsPanel and DeptNoticesCard) and
+// (supervisor/screens/ReviewQueue), Calls & notices (supervisor/components/MissionCallsPanel and shared/NoticesCard) and
 // Training (supervisor/components/FieldTrainingPanel), each the old screen or panel itself. params.deptTab picks the
 // tab; layouts/supDepartment.ts keeps each tab's permission. Above the tabs, today at a glance (UI4, sup:getToday and
 // the sidebar's Review Queue count): officers on duty, runs going, waiting for review and the supervisor's controls
@@ -20,7 +20,7 @@ import { screensFor } from '../../layouts/screens';
 import { deptTabOf, deptTabsFor, todayTiles, type DeptTab, type TodayKey } from '../../layouts/supDepartment';
 import type { SupToday } from '../../types/oversight';
 import './Department.css';
-import { DeptNoticesCard } from '../components/DeptNoticesCard';
+import { NoticesCard } from '../../shared/NoticesCard';
 import { FieldTrainingPanel } from '../components/FieldTrainingPanel';
 import MissionCallsPanel from '../components/MissionCallsPanel';
 import DeptReport from './DeptReport';
@@ -33,7 +33,7 @@ function CallsAndNotices() {
     return (
         <Screen head="sup_calls">
             {can('missionCalls') ? <MissionCallsPanel scope={session.officer ? 'sup' : 'admin'} /> : null}
-            <DeptNoticesCard />
+            <NoticesCard kind="department" />
         </Screen>
     );
 }

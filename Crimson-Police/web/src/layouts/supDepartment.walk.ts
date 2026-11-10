@@ -93,7 +93,10 @@ async function steps(): Promise<void> {
     const counts = { invites: 0, calls: 0, review: 3, commendations: 0, rewards: 0, onRun: false };
     ok(navBadge('sup_department', counts).badge === '3', 'the open review items show on Department');
     ok(!liveSrc.includes('<MissionCallsPanel'), 'Live Missions has no mission calls panel');
-    ok(deptSrc.includes('<MissionCallsPanel') && deptSrc.includes('<DeptNoticesCard />'), 'Calls & notices has both');
+    ok(
+        deptSrc.includes('<MissionCallsPanel') && deptSrc.includes('<NoticesCard kind="department" />'),
+        'Calls & notices has both',
+    );
     ok(deptSrc.includes('<FieldTrainingPanel showOff />'), 'Training says so while field training is off');
 
     await today(session, keys);

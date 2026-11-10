@@ -42,7 +42,7 @@
 --   CP.Tablet.cpProgressActive() -> boolean  a progress bar started by Crimson-Police runs (lib.progressBar
 --                                           and lib.progressCircle of this resource's ox_lib are wrapped
 --                                           once, at load and at runtime wiring, to count them)
--- Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration }, translated with
+-- Events handled: crimson-police:client:notify ({ kind, key, vars, title, duration, sound }, translated with
 -- CP.L), client:push (topic, data), client:openAdmin (session). This file registers NO handler for
 -- client:hud or client:runEnded: the run engine's client (modules/runs/client.lua) is the one path that
 -- forwards them, to CP.Tablet.hud (patches, the ended HUD, hud(nil) when it hides) and CP.Tablet.result.
@@ -728,6 +728,9 @@ end
 --                                SERVER EVENTS
 -- ============================================================================
 
+local NOTICE_SOUND_NAME = 'Event_Message_Purple'
+local NOTICE_SOUND_SET = 'GTAO_FM_Events_Soundset'
+
 RegisterNetEvent(CP.e('client:notify'), function(n)
     if type(n) ~= 'table' or type(n.key) ~= 'string' then return end
     local vars = type(n.vars) == 'table' and n.vars or nil
@@ -737,6 +740,10 @@ RegisterNetEvent(CP.e('client:notify'), function(n)
         duration = tonumber(n.duration),
         channel = n.channel == 'social' and 'social' or nil,
     })
+    -- a notice alert (CP.Notices, alert = 'sound'): the notice tone, muted with the Mission call tone option
+    if n.sound == true and CP.Options and CP.Options.sound then
+        CP.Options.sound('notices', NOTICE_SOUND_NAME, NOTICE_SOUND_SET, true)
+    end
 end)
 
 RegisterNetEvent(CP.e('client:push'), function(topic, data)

@@ -331,7 +331,6 @@ export interface WeekRecognition {
 
 export interface RecognitionData {
     home: HomeAnnouncement[];
-    notices: StaffNotice[];
     weeks: WeekRecognition[];
     announceWeekly: boolean;
     announceMonthly: boolean;

@@ -487,26 +487,8 @@ export interface MissionControlState {
     goalsAll?: { daily: { id: string; label: string }[]; weekly: { id: string; label: string }[] };
     goalsFrom?: string;
     goalsNow?: { daily: string[]; weekly: string[] };
-    // notices: characters a department notice may hold (Config.MissionControls.noticeMaxLength)
+    // notices: characters a department notice may hold (Config.Notices.department.maxLength)
     maxLength?: number;
-}
-// Supervisor UI · Department notices (sup:getDeptNotices): his department's notices still running.
-export interface DeptNotice {
-    id: number;
-    text?: string;
-    expiresAt?: number;
-    createdAt?: number;
-}
-export interface DeptNoticesView {
-    department: string;
-    short: string;
-    maxLength: number;
-    // supervisors only (admins post any number)
-    perDay?: number;
-    usedToday?: number;
-    activeMax: number;
-    maxDays: number;
-    notices: DeptNotice[];
 }
 // sup:getMyControls: the controls this player may use now, for Department -> Controls (each control's limits and
 // today's use inline, MG3). perDay / usedToday: supervisors only, for a control with a day count.

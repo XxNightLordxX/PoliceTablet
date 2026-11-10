@@ -1070,7 +1070,8 @@ do
         H.ok(Runs.cooldowns(CID[1]).types.patrol ~= nil, 'abandon: ...with the Patrol type cooldown (docs)')
     end
     Config.DisabledMissions = {}
-    ok, data = Act('server:sup:postNotice', 3, { text = 'Briefing at 20:00 at Mission Row.', days = 1 })
+    ok, data = Act('server:notice:post', 3,
+        { kind = 'department', text = 'Briefing at 20:00 at Mission Row.', days = 1 })
     H.eq(ok, true, 'notice: the supervisor posts a SAST notice: ' .. tostring(data))
     H.eq(Count('SELECT COUNT(*) AS n FROM cp_staff_notices'), 1, 'notice: saved')
 end

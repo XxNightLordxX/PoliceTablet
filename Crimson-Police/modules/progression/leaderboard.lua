@@ -979,7 +979,6 @@ local function StaffNotices()
     end
     return out
 end
-LB.staffNotices = StaffNotices
 
 local function NoticeFor(n, dept)
     if not n.departments or dept == nil then return true end
@@ -1279,7 +1278,8 @@ end
 if CP.AdminKit and CP.AdminKit.callback then
     local Kit = CP.AdminKit
 
-    -- Leaderboards → Recognition: exactly what Home shows (every staff notice) and the last closed weeks.
+    -- Leaderboards → Recognition: exactly what Home shows (every running notice) and the last closed weeks (the notices
+    -- card itself: CP.Notices, notices:get).
     Kit.callback('admin:getRecognition', 'boardsAdmin', function()
         CP.Db()
         local weeks = {}
@@ -1289,7 +1289,6 @@ if CP.AdminKit and CP.AdminKit.callback then
         end
         return {
             home = LB.announcements(nil),
-            notices = StaffNotices(),
             weeks = weeks,
             announceWeekly = Cfg('Leaderboard', 'announceWeekly', true) ~= false,
             announceMonthly = Cfg('Leaderboard', 'announceMonthly', true) ~= false,

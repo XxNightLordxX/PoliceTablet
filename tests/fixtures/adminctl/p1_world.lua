@@ -181,6 +181,7 @@ return function(H)
         'modules/payouts/server.lua',
         'modules/cash/server.lua',
         'modules/review/corrections.lua',
+        'modules/supervisor/notices.lua',
     }) do
         H.load(m)
     end

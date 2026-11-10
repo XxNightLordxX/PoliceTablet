@@ -40,6 +40,7 @@ import '../supervisor/screens/DeptReport.css';
 import '../supervisor/screens/Department.css';
 import '../admin/components/ReasonChips.css';
 import '../supervisor/screens/MissionControls.css';
+import '../shared/NoticesCard.css';
 import '../admin/components/RewardPoolEditor.css';
 import '../admin/screens/Settings.css';
 import '../admin/screens/Home.css';

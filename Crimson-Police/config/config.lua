@@ -1741,9 +1741,8 @@ Config.MissionControls = {
         -- seconds a supervisor of his department waits between two mission calls he creates
         -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
         staffCallWait = { on = false, min = 60, max = 120 },
-        -- Supervisor UI: a supervisor posts a short notice (up to noticeMaxLength characters, 1 to 30 days) for his
-        -- own department only; its officers see it on Home -> Announcements, other departments never do. At most 5
-        -- run at once per department, the banned-word list applies, and every post and end is audited
+        -- Supervisor UI: a supervisor posts a short notice for his own department only; its officers see it on
+        -- Home -> Announcements, other departments never do. Its limits, sound and history: Config.Notices.department
         notices = { on = false },
         -- Cross-Department Missions: a supervisor keeps his department's officers out of them (they cannot join)
         -- or caps how many of them may take part in one; every board still shows only the running operation and
@@ -1806,10 +1805,6 @@ Config.MissionControls = {
     missionBanPerDay = 3,
     -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
     callLaneMaxOpen = 2,
-    -- characters a department notice may hold (at most 280, the length of an admin's staff notice)
-    noticeMaxLength = 280,
-    -- department notices one supervisor may post a day (admins any)
-    noticesPerDay = 5,
     -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
     pushMissionPerDay = 5,
     -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
@@ -1905,6 +1900,38 @@ Config.Leaderboard = {
     minDecisions = 10,       -- Judgement: decisions needed in the window
     announceWeekly = true,   -- the weekly top 3 on Home and the board webhook
     announceMonthly = true,  -- the monthly top 3 on Home and the board webhook
+}
+
+-- ============================================================================
+--                                   NOTICES
+-- ============================================================================
+-- One notice system for the short notices officers read on Home -> Announcements. Each kind keeps its own audience,
+-- limits, sound and switch: a staff notice (an admin with the officerRecords permission, Leaderboards ->
+-- Recognition) goes to every department or the ones he picks; a department notice (a supervisor, Supervisor UI ->
+-- Department -> Calls & notices) goes to his own department only and is switched on with the notices Mission control
+-- (Config.MissionControls.controls.notices). Both share one list of running notices and one history of ended ones;
+-- the banned-word list applies to both and every post and end is in the audit log.
+Config.Notices = {
+    postWait = 60,       -- seconds one player waits between two notices he posts (either kind)
+    historyShown = 20,   -- ended notices (run out or ended early) the notices cards list under History
+    staff = {
+        on = true,          -- false = admins post no staff notices (the ones running still show until they end)
+        maxLength = 280,    -- characters a staff notice may hold
+        maxDays = 30,       -- days a staff notice may run at most
+        maxRunning = 5,     -- staff notices that may run at once
+        -- what on-duty officers of its departments get when one is posted: 'off' = it only shows on Home, 'toast' =
+        -- a toast too, 'sound' = a toast with the notice tone (an officer's Mission call tone option mutes it)
+        alert = 'off',
+    },
+    department = {
+        maxLength = 280,    -- characters a department notice may hold
+        maxDays = 30,       -- days a department notice may run at most
+        maxRunning = 5,     -- department notices that may run at once in one department
+        perDay = 5,         -- department notices one supervisor may post a day (admins any)
+        -- what on-duty officers of his department get when one is posted: 'off' = it only shows on Home, 'toast' =
+        -- a toast too, 'sound' = a toast with the notice tone (an officer's Mission call tone option mutes it)
+        alert = 'off',
+    },
 }
 
 -- ============================================================================

@@ -156,8 +156,8 @@ do
     Config.Leaderboard.announceWeekly = true
 
     -- a notice for one department
-    ok, e = Act('server:admin:postNotice', 1,
-        { text = 'FIB briefing at 9', departments = { 'fib' }, expiresAt = H.time + DAY, reason = 'brief' })
+    ok, e = Act('server:notice:post', 1,
+        { kind = 'staff', text = 'FIB briefing at 9', departments = { 'fib' }, days = 1, reason = 'brief' })
     H.ok(ok == true, 'a notice for FIB: ' .. tostring(e))
     local function Has(dept)
         for _, a in ipairs(W.async(function() return LB.announcements(dept) end) or {}) do
@@ -166,9 +166,9 @@ do
         return false
     end
     H.ok(Has('fib') and not Has('sast'), 'shown to FIB only')
-    rec = Data('admin:getRecognition', 1, {})
-    H.ok(rec and #rec.notices >= 1, 'the admin preview lists every notice')
-    ok = Act('server:admin:removeNotice', 1, { id = e.id, reason = 'done' })
+    local nv = Data('notices:get', 1, { kind = 'staff' })
+    H.ok(nv and #nv.running >= 1, 'the admin notices card lists every notice')
+    ok = Act('server:notice:end', 1, { id = e.id, reason = 'done' })
     H.eq(ok, true, 'removed')
     H.ok(not Has('fib'), 'gone')
     H.eq(W.auditCount('noticeRemove'), 1, 'audited')

@@ -10,7 +10,7 @@ import fieldTraining from '../../../../locales/parts/field_training.json';
 import missionControls from '../../../../locales/parts/mission_controls.json';
 import ui from '../../../../locales/parts/ui.json';
 import type { MyControl } from '../../types/oversight';
-import noticesSrc from '../components/DeptNoticesCard.tsx?raw';
+import noticesSrc from '../../shared/NoticesCard.tsx?raw';
 import ftoSrc from '../components/FieldTrainingPanel.tsx?raw';
 import cardSrc from '../components/MyControlsCard.tsx?raw';
 import { actionControlRows, myControlRow, myControlRows } from '../components/myControls';

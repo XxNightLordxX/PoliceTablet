@@ -182,7 +182,7 @@
   "sup.lane.types": "Mission types and how often (0 = never)",
   "mc.unit.callLaneGap": "{n} s",
   "mc.control.notices": "Department notices",
-  "mc.control_desc.notices": "Post a short notice for your own department: its officers see it on Home under Announcements, other departments never do. At most 5 run at once, the banned-word list applies and every post and end is in the audit log.",
+  "mc.control_desc.notices": "Post a short notice for your own department: its officers see it on Home under Announcements, other departments never do. The banned-word list applies and every post and end is in the audit log.",
   "mc.control.crossDept": "Cross-Department participation",
   "mc.control_desc.crossDept": "Whether your department's officers may join Cross-Department Missions, and how many places they may take in one (0 = no cap). Every board still shows only the running operation, and the wait between launches stays server-wide.",
   "mc.value.crossDept_open": "Joins, no cap",

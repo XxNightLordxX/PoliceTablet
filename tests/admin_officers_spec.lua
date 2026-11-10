@@ -41,7 +41,7 @@ do
         { 'server:admin:fixXp', { citizenid = 'OFF00003', reason = 'x' } },
         { 'server:admin:grantBadge', { citizenid = 'OFF00003', badgeId = 'iron_wheels', reason = 'x' } },
         { 'server:admin:moveRecord', { from = 'OLD00009', to = 'NEW00009', reason = 'x', requestId = Rid() } },
-        { 'server:admin:postNotice', { text = 'hi', expiresAt = H.time + 3600, reason = 'x' } },
+        { 'server:notice:post', { kind = 'staff', text = 'hi', days = 1, reason = 'x' } },
         { 'server:admin:resetLook', { citizenid = 'OFF00003', reason = 'x' } },
         { 'server:admin:resetOfficerOptions', { citizenid = 'OFF00003', reason = 'x' } },
     }) do
@@ -630,8 +630,8 @@ do
     H.ok(test and test.banned == true, 'the new word is caught at once (live reload)')
 
     -- staff notices
-    ok, e = Act('server:admin:postNotice', 1,
-        { text = 'Training night Friday 8 pm', expiresAt = H.time + DAY, reason = 'event' })
+    ok, e = Act('server:notice:post', 1,
+        { kind = 'staff', text = 'Training night Friday 8 pm', days = 1, reason = 'event' })
     H.ok(ok == true, 'a staff notice is posted: ' .. tostring(e))
     local nid = ok and e.id
     local ann = W.async(function() return CP.Leaderboard.announcements('sast') end)
@@ -640,9 +640,9 @@ do
         if type(a) == 'table' and tostring(a.text):find('Training night', 1, true) then shown = true end
     end
     H.ok(shown, 'shown on Home')
-    ok, e = Act('server:admin:postNotice', 1, { text = 'you zorkle', expiresAt = H.time + DAY, reason = 'x' })
+    ok, e = Act('server:notice:post', 1, { kind = 'staff', text = 'you zorkle', days = 1, reason = 'x' })
     H.ok(not ok and (e == 'err.notice_banned' or e == 'err.rate_limited'), 'a banned word is refused: ' .. tostring(e))
-    ok, e = Act('server:admin:postNotice', 5, { text = 'Too long', expiresAt = H.time + 31 * DAY, reason = 'x' })
+    ok, e = Act('server:notice:post', 5, { kind = 'staff', text = 'Too long', days = 31, reason = 'x' })
     H.ok(not ok and e == 'err.notice_expiry', 'expiry over 30 days is refused')
     H.time = H.time + DAY + 60
     CP.Leaderboard.invalidate()

@@ -2571,7 +2571,7 @@ admin switched them on and only inside the admin's bounds.
 | `missionBan` | action 1–168 h (1–24) | supervisor/missionban | `cp_officers.mission_ban` (migration 012) `{ until, by, name, dept, reason, at }`, all kept in memory; `server:sup:missionBan { citizenid, hours, reason }` (online, own department, a lower grade, `missionBanPerDay`; audit `missionBan`), `server:sup:liftMissionBan` (only the setter); admins extend (missionControls) or lift (antiFarmOverride, also while off) in the restrictions list; accept, operations join and claims refuse `err.mission_banned` / `err.member_mission_banned`; a live run is never ended |
 | `callLane` | map `{ spawnEvery = { lo, hi }, maxOpen, areas, types = { [type] = 0–10 } }` 30–3600 s (120–600) | missioncalls | one call per due lane for idle units all of that department (`cp_mission_calls.department`, migration 013); counts against `maxOpen`; `err.mc_other_department`, `err.mc_own_call` (the setter) |
 | `staffCallWait` | number 0–3600 s (60–120) | missioncalls | `MC.staffWait`; a shorter wait relaxes |
-| `notices` | action, unbounded | deptnotices | `server:sup:postNotice { text, days, reason? }` (own department, `noticeMaxLength`, 1–30 days, one a minute, `noticesPerDay`, `NOTICES_ACTIVE`; a `cp_staff_notices` row with `by_actor = 'sup:<cid>'` shown on that department's Home), `server:sup:endNotice { id }`, `sup:getDeptNotices` |
+| `notices` | action, unbounded | supervisor/notices | the `department` kind of CP.Notices: `server:notice:post { kind = 'department', text, days }` (own department, `Config.Notices.department` limits, one per `postWait`; a `cp_staff_notices` row with `by_actor = 'sup:<cid>'` shown on that department's Home), `server:notice:end { id }`, `notices:get { kind }` |
 | `crossDept` | map `{ join, places }` (never relaxes) | operations | `err.op_department_out`, `err.op_department_full`; lock and cooldown stay server-wide |
 | `boards` | map `{ showToOthers, metrics }` (never relaxes) | leaderboard | `LB.boardMetrics(dept)` (the Rank by tabs; another tab `err.invalid_metric`), `LB.hidesNamesFrom(dept, viewerDept)` (callsigns only); cached boards and admin views unchanged |
 | `reviewRules` | map `{ secondVoid, adminOnlyKinds }` (never relaxes) | reviewrules | `RR.voidStep`: a first supervisor Void is pending (`voidPending`), a second supervisor of the row's department voids (`err.void_second_needed`, `err.void_second_dept`); `RR.adminOnly(dept, kind)` hides such rows from supervisors (`err.review_admin_only`) |
@@ -3153,7 +3153,7 @@ Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday` (UI4,
 modules/suptoday: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
-`sup:getDeptNotices` (§5.49), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
+`notices:get` (`{ kind }`, CP.Notices: limits, running, history), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -3165,7 +3165,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:setMissionControl` / `server:admin:setMissionControl` | `{ key, value, reason, requestId, department? (admin) }` → `{ department, key, value }` (rate 2; §5.49) | missionControls (supervisor: own department) / admin | deptcontrols |
 | `server:sup:resetMissionControl` / `server:admin:resetMissionControl` | `{ key, reason, requestId, department? (admin) }` → `{ department, key }` | missionControls / admin | deptcontrols |
 | `server:sup:clearCooldowns` | `{ citizenid, scope = type\|mission, key, reason }` → `{ used, max }` (§5.49) | Mission control clearCooldown | livectl |
-| `server:sup:postNotice` / `server:sup:endNotice` | `{ text, days, reason? }` → `{ id, department }` / `{ id, reason? }` → `{ id }` (§5.49) | Mission control notices (own department) | deptnotices |
+| `server:notice:post` / `server:notice:end` | `{ kind, text, days, departments? (staff), reason (staff) }` → `{ id, kind, department? }` / `{ id, reason (admin) }` → `{ id }` | staff: officerRecords (admin); department: Mission control notices (own department) | supervisor/notices |
 | `server:sup:addRunTime` | `{ runId, minutes, reason }` → `{ runId, timeAdded }` (§5.49) | Mission control addRunTime (own department) | livectl |
 | `server:sup:opLaunch` / `server:admin:opLaunch` | `{ missionId }` | launchCrossDept | operations |
 | `server:sup:opStart` / `server:admin:opStart` | — | launchCrossDept | operations |
@@ -3246,7 +3246,6 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `server:admin:setBoardExcluded` | action | officerRecords | `{ citizenid, excluded, reason }` | K; self allowed (a staff test character) |
 | `server:admin:refreshOfficer` | action | officerRecords | `{ citizenid }` | online; 1 per 10 s per officer |
 | `admin:previewRecordMove` / `server:admin:moveRecord` / `undoRecordMove` | callback / actions | recordMove | `{ from, to, reason, confirm, previewToken, requestId }` / `{ jobId, reason }` | `AdminControl.recordMove`; T = the new citizenid or `UNVERIFIED <cid>` |
-| `server:admin:postNotice` / `removeNotice` | action | officerRecords | `{ text, departments?, expiresAt, reason }` / `{ id, reason }` | 1 per 60 s per admin; ≤ 5 running |
 | `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/realplayers/staff; server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
 | `admin:getRestrictions` | callback | openAdmin (each kind: the admin may lift or extend it) | `{}` → `{ kinds = { key, maxHours, canLift, canExtend }, rows = { kind, citizenid, name, other?, untilAt, by, byName, reason, dept?, auto? }, serverTime }` | modules/supervisor/restrictions; who set it and why from the kind's row, else its newest audit row (500 read) |

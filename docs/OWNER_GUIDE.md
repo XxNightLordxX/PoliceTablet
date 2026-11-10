@@ -265,13 +265,12 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
     who shortens it keeps the config wait for himself.
 
 - **Department** (per department, off when you install, under the master switch):
-  - `notices = { on = false }` (**Department notices**): in Supervisor UI → Mission controls a supervisor posts a
-    short notice for his own department only (1 to 30 days). Its officers see it on Home → **Announcements**; other
-    departments never do. Up to `Config.MissionControls.noticeMaxLength` (`280`) characters, the banned-word list
-    applies, at most `Config.MissionControls.noticesPerDay` (`5`) a supervisor a day (admins any) and at most 5
-    running per department (they do not count against the 5 staff notices an admin may run). Any supervisor of the
-    department may **End** one early. Every post and end is in the audit log; admins see and remove them with the
-    staff notices (Leaderboards → Recognition, posted by `sup:<citizenid>`).
+  - `notices = { on = false }` (**Department notices**): in Supervisor UI → Department → **Calls & notices** a
+    supervisor posts a short notice for his own department only. Its officers see it on Home → **Announcements**;
+    other departments never do. Its limits live with the staff notices in `Config.Notices.department` (see
+    [Notices](#notices-one-system-for-staff-and-department-notices)). Any supervisor of the department may **End**
+    one early. Every post and end is in the audit log; admins see and end them on the staff notices card
+    (Leaderboards → Recognition).
   - `crossDept = { on = false }` (**Cross-Department participation**): a supervisor keeps his department's officers
     out of Cross-Department Missions (their Join is refused and the card says why) or caps how many places they may
     take in one (0 = no cap, at most `Config.CrossDept.maxParticipants`). It applies to him too. Every department's
@@ -1852,9 +1851,26 @@ Voids and restores:
 window…** (the same batch tool, instead of a board wipe), **Open** on each run, and **Approve all rows of this run**
 in the flagged panel. **Give or take points** works as on the officer's record. The **Recognition** tab shows exactly
 what officers' Home shows, the last four closed weeks with their Officer of the Week (**Recount** after a void moves
-the badge, **Post again** reposts the top 3 to Discord) and the **staff notices**: short plain-text notes on Home for
-every department or a few, for up to 30 days. The weekly and monthly top 3 on Home are the Settings switches
+the badge, **Post again** reposts the top 3 to Discord) and the **staff notices** card: short plain-text notes on
+Home for every department or a few. The weekly and monthly top 3 on Home are the Settings switches
 `Leaderboard.announceWeekly` and `Leaderboard.announceMonthly`.
+
+#### Notices: one system for staff and department notices
+
+Every notice on Home → **Announcements** is one kind of the same notice system (`Config.Notices`, Settings →
+**Notices**, also under the Leaderboards and Departments gears). The admin's card (Leaderboards → Recognition) and the
+supervisor's card (Department → Calls & notices) are the same card: **Post a notice**, **Running now** with **End**,
+and **History** (the newest `historyShown` ended notices, ended early or run out). One player posts one notice per
+`postWait` (`60`) seconds; the banned-word list applies to both kinds.
+
+| Kind | Who posts | Audience | Switch | Limits (shipped) |
+|---|---|---|---|---|
+| `staff` | an admin with `officerRecords`, with a reason | every department, or the ones he picks | `Notices.staff.on` (`true`) | `maxLength` 280, `maxDays` 30, `maxRunning` 5 |
+| `department` | a supervisor (admins: their own department) | his own department only | the `notices` Mission control (`false`) | `maxLength` 280, `maxDays` 30, `maxRunning` 5 per department, `perDay` 5 a supervisor |
+
+Each kind's `alert` says what on-duty officers of its audience get when one is posted: `'off'` (shipped: it only
+shows on Home), `'toast'` (a toast too) or `'sound'` (a toast with the notice tone; an officer's Mission call tone
+option mutes it). An admin may end any running notice (with a reason); a supervisor ends his department's own.
 
 **Seasons** gains **Season tools**: **Rename**, **Plan the end** (the first daily reset on or after the date ends the
 season and can start the next one by name; admins get a reminder a day and an hour before), **Reopen** the season
