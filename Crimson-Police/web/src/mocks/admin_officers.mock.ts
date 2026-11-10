@@ -172,6 +172,26 @@ const preview = (total: number): VoidPreview => ({
 registerMock('request', 'admin:previewBulkVoid', () => preview(12));
 registerMock('request', 'admin:previewRetire', () => ({ ...preview(131), confirmWord: 'ABC12345' }));
 
+// Move a record: the preview of what moves (WF4: admin/components/officers/OfficerTools.tsx sends it)
+registerMock('request', 'admin:previewRecordMove', (a: { from?: string; to?: string }) => ({
+    from: a.from ?? 'ABC12345',
+    to: a.to ?? 'XYZ67890',
+    verified: false,
+    confirmWord: `UNVERIFIED ${a.to ?? 'XYZ67890'}`,
+    effect: {
+        rows: 131,
+        live: 120,
+        archived: 11,
+        points: 9420,
+        held: 0,
+        badges: 6,
+        commendations: 2,
+        disputes: 0,
+        rewards: 1,
+    },
+    previewToken: 'mock-token',
+}));
+
 const batches: CorrectionBatch[] = [
     {
         id: '11111111-0000-4000-8000-000000000001',

@@ -11,6 +11,48 @@ folder, as shipped) with every switch the workflow needs turned on through the A
 file loaded again from the same saves folder, the players still online). "Drop" means the player's game quits
 (`playerDropped`) and he comes back later (Qbox's player loaded).
 
+**Two city setups.** `tests/workflows_full_spec.lua` runs with the owner's scripts (sc-dispatch, sc-ambulance,
+Renewed-Banking and sc-police running), and `tests/workflows_none_spec.lua` runs the very same walk on a city with none
+of them (and none of ps-dispatch, qbx_ambulancejob or qbx_policejob): their exports fail, and the admin sets every
+`Config.Integrations` kind to `none` in Settings first. Every workflow there ends with the same rows, pay and state;
+the one difference checked is that a payout gets no bank history entry without a banking script.
+
+**Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
+from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
+checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
+locale), checks that every request a screen sends has a mock that answers it, and renders each criminal tablet screen.
+
+| Workflow | Spec | Restart | Drop and reconnect | No scripts | Result |
+| --- | --- | --- | --- | --- | --- |
+| Patrol mission | workflows_e2e (2) | e2e (9) | the solo drop of Training (same run code) | Training, full (2) | Pass |
+| Training mission (EVOC) | full (2) | yes | the officer mid-run: Failed, no cash, cooldown | yes | Pass |
+| Investigation, tactical, raids, traffic, parking, downed | e2e (2, 4, 7, 11-14), workflows_e2e (3) | e2e (9) | a unit member mid-fight, full (3) | Gang Shootout, full (5) | Pass |
+| Weekly Boss | full (3) | yes | the partner mid-fight | yes | Pass |
+| Unit | full (4), e2e (16) | yes | the leader: the lead passes on | yes | Pass |
+| Mission call | full (6), workflows_e2e (4), e2e (15) | yes (open and claimed) | the claimer on its run: call closed, Failed | yes | Pass |
+| Goals and the challenge | full (7) | yes | - (counted from the rows) | yes | Pass |
+| Live crime, backup, talk-down, booking | live_fto_e2e (2, 3, 5), realsuspects_e2e (2, 4) | yes | a suspect and the partner | off (needs a police script) | Pass |
+| Surrender | live_fto_e2e (2, 3) | yes | live_fto_e2e (5) | off (needs a police script) | Pass |
+| Cross-department mission | full (5), teams | yes | a joiner | yes | Pass |
+| Happy hour | full (7) | yes | the supervisor who started it | yes | Pass |
+| Type of the Day | full (7) | yes | the supervisor after his pick | yes | Pass |
+| Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5) | yes | the supervisor; the partner on the pushed run | yes | Pass |
+| Supervisor actions and awards | full (8), workflows_e2e (5) | yes | the barred officer (the ban stays) | yes | Pass |
+| Review, void, dispute | workflows_e2e (6) | full (9) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass |
+| Mission Builder | full (11), admin_control_e2e (2) | yes | the supervisor in his test run | yes | Pass |
+| Field training | live_fto_e2e (4, 5) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass |
+| Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7) | yes | the volunteer and the partner | off (needs a police script) | Pass |
+| Settings, Features, Rewards, grant | full (1) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
+| Corrections | full (9), admin_control_e2e (1) | yes | the officer offline for the void and restore | yes | Pass |
+| Backups and restore | full (10), admin_control_e2e (4) | yes | the admin before the restart (the lock holds) | yes | Pass |
+| Storage copy | full (12), storage_copy | - | the admin after the copy | yes | Pass |
+| Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
+
+"full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
+= tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
+with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's
+stack only.
+
 The workflows are grouped by who does them: **Officer**, **Supervisor**, **Field training**, **Criminal**,
 **Admin** and **System** (what the resource does on its own). Each group's screens sit in the matching tablet: the
 Officer UI (`/CrimsonPolice`), the Supervisor UI (the switch in the Officer UI header, for supervisors; its sidebar
@@ -46,8 +88,8 @@ is paid the Training payout. A restart of Crimson-Police mid-run drops the run w
 simply accept again.
 
 Spec: tests/workflows_full_spec.lua (2). Covers: Accept, take the wheel, two checkpoints, **restart** (no row, pay, XP
-or cooldown, per SPEC), accept again, every checkpoint, result card with $350 and the item, paid row, XP. Result:
-**Pass**.
+or cooldown, per SPEC), accept again, every checkpoint, result card with $350 and the item, paid row, XP; **drop**
+mid-run (his row Failed, no cash, EVOC on its cooldown, back on no run). Result: **Pass**.
 
 ### Investigation mission (Suspicious Activity)
 
@@ -101,8 +143,8 @@ The leader can hand the lead over or remove a member; a member leaves with Leave
 
 Spec: tests/workflows_full_spec.lua (4), tests/e2e_spec.lua (16). Covers: An invite declined, a unit of three, a ready
 check one member declines (no run, no cooldown), the lead handed over, a kick refused for the old leader and done by
-the new one, **restart** (units live in memory, so the unit is gone), formed again, leave (a unit of one dissolves). Result:
-**Pass**.
+the new one, **restart** (units live in memory, so the unit is gone), formed again, the leader **drops** (the lead
+passes on, the two others stay; back, he is in no unit), leave (a unit of one dissolves). Result: **Pass**.
 
 Steps: Every unit change is pushed to all members at once. The unit errors now say what to
 do ("The unit is full. Its leader can remove a member to make room", "You are not in a unit. Form one on the Unit
@@ -116,8 +158,9 @@ distance, the unit gets a ready check and the run starts. A mission a supervisor
 
 Spec: tests/workflows_full_spec.lua (6), tests/workflows_e2e_spec.lua (4), tests/e2e_spec.lua (15). Covers: The
 officer with the extra grant creates a call, Dispatch lists it, **restart** with it open (gone, row Lapsed), a new
-call claimed, **restart** with it claimed (run dropped, no row, call row closed: Ended by a restart), the claim race
-and re-dispatch. Result: **Pass (after fix 1)**.
+call claimed, **restart** with it claimed (run dropped, no row, call row closed: Ended by a restart), the claimer
+**drops** on the call's run (the call row closed with outcome Failed, off Dispatch, not back after the reconnect), the
+claim race and re-dispatch. Result: **Pass (after fix 1)**.
 
 Steps: Decline answered and then Dispatch asked the server again; now the reply carries the new Dispatch view
 (before: 2 requests; after: 1). Claim errors now name the next step ("Another unit took this call. Pick another call
@@ -173,8 +216,8 @@ How it works: a supervisor starts a happy hour (for example 10 minutes); while i
 for his department. One per day, it survives a restart, and it ends on its own.
 
 Spec: tests/workflows_full_spec.lua (7), tests/happy_hour_spec.lua. Covers: EVOC on cooldown, an officer refused, the
-supervisor starts 10 minutes, **restart** (still running, per SPEC), EVOC again at once and paid, over after 10
-minutes. Result: **Pass**.
+supervisor starts 10 minutes, he **drops** (it runs on), **restart** (still running, per SPEC), EVOC again at once
+and paid, over after 10 minutes. Result: **Pass**.
 
 Steps: Its error now says when to try again ("A happy hour is already running. Start
 another one after it ends").
@@ -198,8 +241,9 @@ Spec: tests/workflows_full_spec.lua (8, 8B), tests/workflows_e2e_spec.lua (5). C
 the admin, every number and choice control of SAST set inside its bounds, **restart** (each kept), each reset to
 config.lua; the hourly cap and its bounds; a cooldown clear; pushMission (the Page dialog's missions, the push to a
 unit, only that unit sees it, its accept with no draw, audited) and "+ minutes" (addRunTime on the running pushed
-mission, the unit told, audited, an officer refused), then a **restart** (the run and the push gone). Result:
-**Pass**.
+mission, the unit told, audited, an officer refused), the partner **drops** (the run goes on with the minutes), the
+supervisor **drops** after the sweep (back, every value shown as he set it), then a **restart** (the run and the push
+gone). Result: **Pass**.
 
 Steps: Posting, paging, pushing or withdrawing a mission call, Recall and "+ minutes" on Live Missions were answered
 and then the screen asked again; now the reply carries the fresh panel or Live Missions view (before: 2 requests;
@@ -228,8 +272,9 @@ How it works: Supervisor UI -> Review Queue lists the runs the server held for r
 disputes. The supervisor opens one, presses Approve (the held cash is paid once) or Void, with a reason; a dispute is
 approved or rejected the same way. A department can ask for a second supervisor's Void.
 
-Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, approved (cash and items released once), voided,
-disputed and restored. Result: **Pass**.
+Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, the reviewer **drops** with the queue open (back,
+the run is still there), approved (cash and items released once), voided, disputed, the officer **drops** while his
+dispute is decided, restored and paid once. Result: **Pass**.
 
 Steps: A decision was answered and then the queue was asked for again; now the reply carries the fresh queue
 and the row leaves at once (before: 2 requests; after: 1). The other supervisors of that department who have the
@@ -243,8 +288,8 @@ it (a test pays nothing) and publishes it; from then on officers can draw it and
 survives a restart and is never playable.
 
 Spec: tests/workflows_full_spec.lua (11), tests/admin_control_e2e_spec.lua (2), tests/builder_server_spec.lua. Covers:
-A supervisor creates a mission from EVOC, edits and saves it, **restart** (the draft kept, not playable), a test run
-(pays nothing), publish, **restart** (still plays), an officer draws it and is paid the Training payout. Result:
+A supervisor creates a mission from EVOC, edits and saves it, **restart** (the draft kept, not playable), he **drops**
+in a first test run (it ends, pays nothing, the draft stays), a test run (pays nothing), publish, **restart** (still plays), an officer draws it and is paid the Training payout. Result:
 **Pass**.
 
 ## Field training
@@ -286,8 +331,9 @@ whole features on and off; Rewards edits the item pools; an extra grant lets one
 (for example create mission calls). Every change is kept across a restart.
 
 Spec: tests/workflows_full_spec.lua (1). Covers: Settings opened, the Features tab lists the switch, a supervisor
-refused, item rewards toggled on, the Rewards pools edited, an extra grant (mission calls for one officer), the hourly
-cap, a season started; **restart**: every change kept. Result: **Pass**.
+refused, item rewards toggled on, the Rewards pools edited, the admin **drops** half way through (what he saved is
+kept; back, Settings opens), an extra grant (mission calls for one officer), the hourly cap, a season started, every
+Other scripts choice set to none (tests/workflows_none_spec.lua); **restart**: every change kept. Result: **Pass**.
 
 Steps: A Setting's save reply carries the changed setting and the screen
 applies it (no second fetch); Reset all's reply carries the whole Settings view (before: 2 requests; after: 1); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
@@ -299,8 +345,9 @@ made by Export in Settings.").
 How it works: an admin gives points, voids a run (its XP goes, the cash is never taken back) or restores it, and
 retires or unretires an officer; each needs a reason and is audited.
 
-Spec: tests/workflows_full_spec.lua (9), tests/admin_control_e2e_spec.lua (1). Covers: Give points, void a run (XP
-down), **restart** (still voided), restore (XP back, cash never taken back); retire and unretire. Result: **Pass**.
+Spec: tests/workflows_full_spec.lua (9), tests/admin_control_e2e_spec.lua (1). Covers: Give points, the officer
+**dropped** (offline), void a run (XP down), **restart** (still voided), restore (XP back, cash never taken back), he
+reconnects and sees it; retire and unretire. Result: **Pass**.
 
 Steps: Each correction needs its reason and is audited, so the dialog stays
 (its rules require it). Void, Restore, Change kind and Flag were answered and then the run, the run list and the
@@ -313,8 +360,8 @@ How it works: Admin UI -> System makes a backup, previews one and restores it af
 until the next restart; nothing is ever paid twice.
 
 Spec: tests/workflows_full_spec.lua (10), tests/admin_control_e2e_spec.lua (4), tests/admin_backup_spec.lua. Covers:
-Backup, a payment after it, preview, RESTORE, no new run until the restart, **restart**: the payment stays paid,
-nothing paid twice, runs start again. Result: **Pass**.
+Backup, a payment after it, preview, RESTORE, the admin **drops** and reconnects, no new run until the restart,
+**restart**: the payment stays paid, nothing paid twice, runs start again. Result: **Pass**.
 
 Steps: Backup now, Restore and Delete answered and then the Backups list was asked for again; now each reply
 carries the fresh list (2 tablet requests -> 1, a pure speed-up). RESTORE and the typed backup name stay (risky). The
@@ -327,8 +374,9 @@ How it works: Admin UI -> System copies the saves folder into MariaDB (or back).
 and runs start again at once.
 
 Spec: tests/workflows_full_spec.lua (12), tests/storage_copy_spec.lua. Covers: The saves folder copied into MariaDB
-(every run row, the XP, the Builder missions), the folder in use unchanged, runs start at once; the switch, force and
-both directions in storage_copy_spec. Result: **Pass**.
+(every run row, the XP, the Builder missions), the folder in use unchanged, the admin **drops** and reconnects
+(System -> Storage opens, still the saves folder), runs start at once; the switch, force and both directions in
+storage_copy_spec. Result: **Pass**.
 
 Steps: Copy, Switch storage and Use again answered and then the Storage panel was asked for again, and
 admin:getStorage allows one read in 5 seconds, so that second read could be refused and leave the panel stale; now each

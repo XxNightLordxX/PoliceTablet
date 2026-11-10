@@ -503,6 +503,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   (WF1)
 - [ ] Play through docs/dev/WORKFLOWS.md once on a test server with every switch on, with one `restart Crimson-Police`
   and one player quitting and coming back in the middle; each row's result matches. (WF1)
+- [ ] On a test server without sc-dispatch, sc-ambulance, Renewed-Banking and sc-police (or with Admin UI -> Settings
+  -> Other scripts all set to none): a patrol, a unit mission, a mission call and a supervisor award each run to the
+  same result and pay as with them; the console names each script that is off once. Then click through every screen
+  of the Officer, Supervisor and Admin UI and the criminal tablet: none shows an error card. (WF4)
 - [ ] Review Queue: Approve or Void a flagged run: the row leaves the list at once, with no reload flicker; the same
   for answering a dispute. (Pure speed-up: the reply carries the new queue.)
 - [ ] Dispatch: Decline a pushed mission: the card leaves at once. Business Check: log a door on Active Mission: the

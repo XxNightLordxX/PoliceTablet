@@ -491,6 +491,18 @@ end
 
 Config.Events.modifierChance = 0     -- no random twist: every pay below is exact
 
+-- WF4: a player's game quits (FXServer's playerDropped) and he joins again with the same character (Qbox's loaded).
+local function Drop(src)
+    offline[src] = true
+    H.fire('playerDropped', src, 'Exiting')
+    Secs(2)
+end
+local function Reconnect(src)
+    offline[src] = nil
+    TriggerEvent('QBCore:Server:PlayerLoaded', QbxPlayer(src))
+    Secs(2)
+end
+
 -- ============================================================================
 --                      1. THE ADMIN TURNS EVERY SWITCH ON
 -- ============================================================================
@@ -763,6 +775,14 @@ do
     local seen = false
     for _, f in ipairs(H.reviewItems(queue, 'flag')) do if f.id == r.id or f.rowId == r.id then seen = true end end
     H.eq(seen, true, 'review: the run is in the FIB supervisor\'s Review Queue')
+    -- WF4: the FIB supervisor's game quits with the queue open; back online the run is still there to review
+    Drop(4)
+    Reconnect(4)
+    seen = false
+    for _, f in ipairs(H.reviewItems(Cb('review:getQueue', 4), 'flag')) do
+        if f.id == r.id or f.rowId == r.id then seen = true end
+    end
+    H.eq(seen, true, 'reconnect: the run is still in his Review Queue')
     local ok, data = Act('server:review:decide', 3, { type = 'flag', id = r.id, decision = 'approve', reason = 'SAST' })
     H.eq(ok, false, 'review: a SAST supervisor cannot review a FIB run (' .. tostring(data) .. ')')
     ok, data = Act('server:review:decide', 4, { type = 'flag', id = r.id, decision = 'approve', reason = 'GPS glitch' })
@@ -791,6 +811,7 @@ do
     H.eq(ok, false, 'dispute: nobody disputes someone else\'s run (' .. tostring(data) .. ')')
     ok, data = Act('server:dispute', 7, { rowId = v.id, reason = 'My game crashed and respawned me, check the log' })
     H.eq(ok, true, 'dispute: the officer disputes the void: ' .. tostring(data))
+    Drop(7)                                  -- WF4: the officer is offline when his dispute is decided
     local disputeId = data and (data.id or data.disputeId)
     for _, d in ipairs(CP.Disputes.forSupervisor(4) or {}) do
         if d.rowId == v.id then disputeId = disputeId or d.id end
@@ -799,6 +820,8 @@ do
     ok, data = Act('server:review:decide', 4,
         { type = 'dispute', id = disputeId, decision = 'approve', reason = 'crash' })
     H.eq(ok, true, 'dispute: approved: ' .. tostring(data))
+    Secs(5)
+    Reconnect(7)
     Secs(5)
     v = Rows('id = ?', { v.id })[1] or {}
     H.eq(Bit(v.voided), false, 'dispute: the run is restored')

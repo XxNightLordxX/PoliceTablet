@@ -19,7 +19,7 @@ What to update with each change is at the end, in "Working on the code".
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 94 s |
 | `suite-shadow` | `lua5.4 tests/run.lua --storage=shadow`: MariaDB, the oxmysql twin and the engine compared, 0 differences | 172 s |
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 14 s |
-| `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish | 15 s |
+| `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish, and every screen of every tablet rendered (`everyScreen.walk.ts`); `node walk.mjs <text>` runs only the walks whose path holds that text | 15 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
 
 A whole run takes about 8.5 minutes (the times above are from one run of every step on the full suite). Every

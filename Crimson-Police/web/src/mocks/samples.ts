@@ -115,6 +115,25 @@ const ADMIN_ACTIONS = [
     'reloadMissions',
     'testRun',
     'openAdmin',
+    // full admin control: admins only, as modules/access/permissions.lua ADMIN_ONLY_LIST gives them
+    'officerRecords',
+    'pointsAdjust',
+    'bulkVoid',
+    'restoreRun',
+    'progression',
+    'antiFarmOverride',
+    'liveRuns',
+    'editBuiltins',
+    'missionAdmin',
+    'boardsAdmin',
+    'payments',
+    'rewardsAdmin',
+    'deptFunds',
+    'departmentsAdmin',
+    'storageAdmin',
+    'playerSupport',
+    'recordMove',
+    'jobs',
 ];
 
 // ?missionControls=off: no Mission controls (the master switch off, no control outside it on); ?missionControls=shipped:

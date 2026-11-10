@@ -1,5 +1,6 @@
 // node walk.mjs · runs every src/**/*.walk.ts against the browser mocks (vite's module loader, so the mocks load as
 // they do in the browser preview) and prints one line per walk. Exit status 1 when a walk fails.
+// node walk.mjs <text> runs only the walks whose path contains that text.
 
 import { readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
@@ -30,8 +31,10 @@ const server = await createServer({
 const quiet = ['info', 'log', 'debug', 'warn'].map(k => [k, console[k]]);
 let failed = 0;
 try {
+    const only = process.argv[2] ?? '';
     for (const file of find(join(WEB, 'src'), []).sort()) {
         const rel = relative(WEB, file).split(sep).join('/');
+        if (only && !rel.includes(only)) continue;
         quiet.forEach(([k]) => (console[k] = () => {}));
         let res;
         try {

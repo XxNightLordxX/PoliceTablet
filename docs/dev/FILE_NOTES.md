@@ -292,6 +292,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/layouts/adminMoney.walk.ts`: The Money screen and one request per screen open against the browser mocks (node walk.mjs, a gate step): one Money screen with Pay rates, Rewards, Payments and Department funds tabs (a link names its tab), and Payments gets its totals with its list.
 - `Crimson-Police/web/src/layouts/adminNav.ts`: The Admin UI layout, organised by job: Home on top, then People, Missions, Real players, Money, Review and System, each with a one-line description, the rarely used tools under More, and a breadcrumb.
 - `Crimson-Police/web/src/layouts/adminNav.walk.ts`: The Admin UI layout against the browser mocks (node walk.mjs, a gate step): Home, then the screens by job (People, Missions, Real players, Money, Review, System) each with a description, the rare tools under More, the search that jumps to any screen or tab, officer, mission or setting (Ctrl+K), the Review screen and the breadcrumb.
+- `Crimson-Police/web/src/layouts/everyScreen.walk.ts`: Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step; WF4).
 - `Crimson-Police/web/src/layouts/navBadges.ts`: Sidebar badges: the NavCounts of getNavCounts, kept fresh by the 'nav' push (the server sends one after every push that can change a count).
 - `Crimson-Police/web/src/layouts/officerMe.ts`: The Officer UI with fewer screens (UI5): the Me screen's tabs, Home's next step and the run bar's quick links.
 - `Crimson-Police/web/src/layouts/officerMe.walk.ts`: The Officer UI with fewer screens (UI5) against the browser mocks (node walk.mjs, a gate step).
@@ -652,5 +653,6 @@ docs/dev/ARCHITECTURE.md.
 - `tests/volunteers_spec.lua`: Volunteer opt-in: CP.Volunteers on the server, the command's event (open, join, renew, roles, stop), the window, the ends (expired, on duty, excluded, disabled, left) and strikes.
 - `tests/workflow_errors_spec.lua`: Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 - `tests/workflows_e2e_spec.lua`: End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch turned on by the admin through the Admin UI's own Settings action.
-- `tests/workflows_full_spec.lua`: Full workflow testing, (the owner: "do a full workflow testing of everything"): every workflow the other
+- `tests/workflows_full_spec.lua`: Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
+- `tests/workflows_none_spec.lua`: WF4: every workflow of tests/workflows_full_spec.lua on a city with none of the owner's scripts.
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.

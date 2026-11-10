@@ -1,14 +1,19 @@
--- Full workflow testing, (the owner: "do a full workflow testing of everything"): every workflow the other
+-- Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
 
--- Full workflow testing (the owner: "do a full workflow testing of everything"): every workflow the other
--- end-to-end specs leave out, driven start to finish on the REAL server side of Crimson-Police (every server file
--- loaded as in game, database off: the saves folder, as shipped), every switch on through the Admin UI's own Settings,
--- and a `restart Crimson-Police` and a player drop and reconnect in the middle. docs/dev/WORKFLOWS.md lists every workflow
--- with the spec that drives it. Only the other resources and the natives are stubs.
+-- Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
+-- Every workflow the other end-to-end specs leave out, driven start to finish on the REAL server side of
+-- Crimson-Police (every server file loaded as in game, database off: the saves folder, as shipped), every switch on
+-- through the Admin UI's own Settings, and a `restart Crimson-Police` and a player drop and reconnect in the middle of
+-- each. docs/dev/WORKFLOWS.md lists every workflow with the spec that drives it. Only the other resources and the
+-- natives are stubs. WF4: the same walk runs twice: here with the owner's scripts (sc-dispatch, sc-ambulance,
+-- Renewed-Banking and sc-police running), and in tests/workflows_none_spec.lua (CP_WF_STACK = 'none') on a city with
+-- none of them, every Config.Integrations kind set to 'none' in Settings.
 
 local H = dofile('tests/harness.lua')
 H.useFiles()
-H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_wf_full'
+local STACK = rawget(_G, 'CP_WF_STACK') or 'owner'   -- 'owner' | 'none' (tests/workflows_none_spec.lua)
+local NONE = STACK == 'none'
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. (NONE and '_wf_none' or '_wf_full')
 H.resetSaves()
 local cjson = require('cjson')
 local U, Runs
@@ -55,6 +60,20 @@ end
 
 -- The Mission Builder's files go to this spec's own resource folder (H.resourcePath(), where GetResourcePath points),
 -- never into the repository's missions/custom/.
+-- The owner's dispatch, ambulance, banking and police scripts; CP_WF_STACK = 'none': a city without them.
+local OWNER_STACK = {
+    ['sc-dispatch'] = true,
+    ['sc-ambulance'] = true,
+    ['Renewed-Banking'] = true,
+    ['sc-police'] = true,
+}
+-- the other scripts 'auto' would take (CP.Integrations.ORDER): not on that city either
+local OTHER_STACK = {
+    ['ps-dispatch'] = true,
+    ['qbx_ambulancejob'] = true,
+    ['qbx_medical'] = true,
+    ['qbx_policejob'] = true,
+}
 local function OwnFile(path) return type(path) == 'string' and path:find('^missions/custom/') ~= nil end
 local function Natives()
     local realSave, realLoad = _G.SaveResourceFile, _G.LoadResourceFile
@@ -161,6 +180,7 @@ local function Natives()
     local realState = _G.GetResourceState
     _G.GetResourceState = function(name)
         if name == 'ox_inventory' then return 'started' end
+        if NONE and (OWNER_STACK[name] or OTHER_STACK[name]) then return 'missing' end
         return realState and realState(name) or 'missing'
     end
 end
@@ -241,8 +261,12 @@ H.exportsMock['sc-dispatch'] = {
 H.exportsMock['sc-ambulance'] = {
     GetDoctorCount = function() return 0 end,
 }
+local bankEntries = 0     -- Renewed-Banking history entries (handleTransaction)
 H.exportsMock['Renewed-Banking'] = {
-    handleTransaction = function() return {} end,
+    handleTransaction = function()
+        bankEntries = bankEntries + 1
+        return {}
+    end,
     removeAccountMoney = function() return true end,
     getAccountMoney = function() return 100000 end,
     addAccountMoney = function() return true end,
@@ -262,6 +286,8 @@ H.exportsMock.ox_inventory = {
     RemoveItem = function() return true end,
 }
 H.exportsMock.ox_target = {}
+-- a city without the owner's scripts: calling one of their exports fails, as FXServer's does for a missing resource
+if NONE then for name in pairs(OWNER_STACK) do H.exportsMock[name] = nil end end
 
 -- ============================================================================
 --                                   PLAYERS
@@ -578,6 +604,7 @@ do
     H.eq(ok, false, 'settings: a supervisor cannot change a setting (' .. tostring(err) .. ')')
 
     local pool = { chance = 1.0, rolls = 1, pool = { { item = 'water', count = 2, weight = 1, value = 20 } } }
+    local saved = 0
     for _, c in ipairs({
         { 'Rewards.enabled', true },                                               -- a feature toggle
         { 'Rewards.byType', { training = pool, tactical = pool } },                -- the Rewards edit
@@ -589,6 +616,28 @@ do
     }) do
         ok, err = Setting(c[1], c[2])
         H.eq(ok, true, ('settings: %s saved: %s'):format(c[1], tostring(err)))
+        saved = saved + 1
+        -- WF4: the admin's game quits half way through; back online he carries on where he was
+        if saved == 3 then
+            Drop(5)
+            H.eq(Config.Rewards.byType.training and Config.Rewards.byType.training.chance, 1.0,
+                'drop: the settings saved before it are kept')
+            Reconnect(5)
+            H.ok(Cb('admin:getSettings', 5) ~= nil, 'reconnect: the admin opens Settings again')
+        end
+    end
+    -- WF4: a city without the owner's scripts sets every kind to 'none' in Settings (Other scripts)
+    if NONE then
+        for _, kind in ipairs(CP.Integrations.KINDS) do
+            ok, err = Setting('Integrations.' .. kind, 'none')
+            H.eq(ok, true, ('integrations: %s set to none: %s'):format(kind, tostring(err)))
+            H.eq(select(2, CP.Integrations.pick(kind)), 'off', 'integrations: ' .. kind .. ' served by no script')
+        end
+    else
+        H.eq(CP.Integrations.pick('dispatch'), 'sc-dispatch', 'integrations: the owner\'s dispatch')
+        H.eq(CP.Integrations.pick('ambulance'), 'sc-ambulance', 'integrations: ...ambulance')
+        H.eq(CP.Integrations.pick('banking'), 'Renewed-Banking', 'integrations: ...banking')
+        H.eq(CP.Integrations.pick('police'), 'sc-police', 'integrations: ...and police')
     end
     H.eq(Config.Rewards.enabled, true, 'features: item rewards on at once')
     H.eq(Config.Limits.maxCompletionsHour, 12, 'settings: the hourly cap at once')
@@ -614,6 +663,9 @@ do
     H.eq(Config.Limits.maxCompletionsHour, 12, 'restart: the hourly cap kept')
     H.eq(CP.Permissions.can(7, 'missionCalls'), true, 'restart: the extra grant kept')
     H.eq(Config.Database.enabled, false, 'restart: still the saves folder')
+    for _, kind in ipairs(CP.Integrations.KINDS) do
+        H.eq(Config.Integrations[kind], NONE and 'none' or 'auto', 'restart: Integrations.' .. kind .. ' kept')
+    end
 end
 
 -- ============================================================================
@@ -657,9 +709,34 @@ do
     H.eq(r.state, 'completed', 'training: completed row')
     H.eq(r.cash_status, 'paid', 'training: paid')
     H.eq(select(2, Paid(cid)), 350, 'training: one Qbox AddMoney of $350')
+    if NONE then
+        H.eq(bankEntries, 0, 'training: no banking script: paid with no bank history entry (Integrations.banking)')
+    else
+        H.ok(bankEntries > 0, 'training: Renewed-Banking got the bank history entry')
+    end
     H.eq(Xp(cid), tonumber(r.final_points), 'training: XP = the row points')
     Secs(5)
     H.eq(ItemsGiven(src, 'water'), 2, 'training: ox_inventory got the 2 water')
+
+    -- WF4: his game quits half way through the next EVOC (docs: Disconnected = Failed, no cash, the cooldown)
+    H.time = H.time + 601
+    run = Accept(src, 'training', TRAINING_OTHERS)
+    H.eq(run and run.missionId, 'evoc_course', 'drop: EVOC again')
+    if run then
+        veh = TakeWheel(src, run)
+        DriveCheckpoints(src, run, veh, 1, 2, 2)
+        local money1 = #addMoney
+        Drop(src)
+        H.eq(Runs.getBySrc(src), nil, 'drop: the run ends for him')
+        local rd = Rows('run_uuid = ?', { run.id })[1] or {}
+        H.eq(rd.state, 'failed', 'drop: his row is Failed')
+        H.eq(tonumber(rd.cash_paid) or 0, 0, 'drop: ...with no cash')
+        H.eq(#addMoney, money1, 'drop: nothing paid')
+        Reconnect(src)
+        H.eq(Runs.getBySrc(src), nil, 'reconnect: he is not put back on the run')
+        H.ok(Runs.cooldowns(cid).missions.evoc_course ~= nil, 'reconnect: EVOC is on its cooldown')
+        H.ok(Cb('getSession', src, { ui = 'officer' }) ~= nil, 'reconnect: he opens the Officer UI')
+    end
     Config.DisabledMissions = {}
 end
 
@@ -780,10 +857,18 @@ do
     H.eq(CP.Units.unitOf(1), nil, 'restart: the unit is gone')
     H.eq(CP.Units.unitOf(2), nil, 'restart: ...for both')
     FormUnit(1, 2)
-    ok, data = Act('server:teamLeave', 2)
-    H.eq(ok, true, 'unit: the FIB agent leaves: ' .. tostring(data))
-    H.eq(CP.Units.unitOf(2), nil, 'unit: ...and is in no unit')
-    H.eq(CP.Units.unitOf(1), nil, 'unit: a unit of one is no unit')
+    FormUnit(1, 6)
+    -- WF4: the leader's game quits: the lead passes on, the unit stays for the others
+    Drop(1)
+    local left = CP.Units.unitOf(2)
+    H.ok(left ~= nil and #left.members == 2, 'drop: the unit goes on with the two others')
+    H.ok(left ~= nil and left.leader ~= 1, 'drop: ...one of them leads it')
+    Reconnect(1)
+    H.eq(CP.Units.unitOf(1), nil, 'reconnect: he is in no unit (his partners can invite him again)')
+    ok, data = Act('server:teamLeave', 6)
+    H.eq(ok, true, 'unit: Cleo leaves: ' .. tostring(data))
+    H.eq(CP.Units.unitOf(6), nil, 'unit: ...and is in no unit')
+    H.eq(CP.Units.unitOf(2), nil, 'unit: a unit of one is no unit')
 end
 
 -- ============================================================================
@@ -906,6 +991,24 @@ do
     local open = 0
     for _, c in ipairs(hist.rows or hist.calls or hist) do if c.status == 'open' then open = open + 1 end end
     H.eq(open, 0, 'restart: Dispatch history shows no call open')
+
+    -- WF4: a call claimed, then the claimer's game quits on its run
+    Secs(65)
+    ok, data = Act('server:sup:mcPost', 7, { type = 'patrol', area = 'south_ls' })
+    H.eq(ok, true, 'call: a third call: ' .. tostring(data))
+    local callC = data and data.id
+    ok, data = Act('server:answerMissionCall', 6, { callId = callC })
+    H.eq(ok, true, 'call: Cleo claims it: ' .. tostring(data))
+    local crun = Runs.getBySrc(6)
+    H.ok(crun ~= nil and crun.missionCall ~= nil, 'call: ...her run carries it')
+    Drop(6)
+    H.eq(Runs.getBySrc(6), nil, 'drop: her run ends')
+    H.eq(CallRow(callC).status, 'closed', 'drop: the call row is closed, not claimed for ever')
+    H.eq(CallRow(callC).outcome, 'failed', 'drop: ...its outcome Failed, as her run')
+    H.eq(Listed(1, callC), false, 'drop: the claimed call is not left on Dispatch')
+    Reconnect(6)
+    H.eq(Runs.getBySrc(6), nil, 'reconnect: she is not put back on the run')
+    H.eq(Listed(6, callC), false, 'reconnect: ...nor is the call back on her Dispatch')
     Config.DisabledMissions = {}
 end
 
@@ -956,6 +1059,11 @@ do
     })
     H.eq(ok, true, 'happy hour: the supervisor starts 10 minutes: ' .. tostring(data))
     H.ok(CP.HappyHour.state(nil) ~= nil, 'happy hour: running')
+    -- WF4: the supervisor who started it quits: the happy hour runs on
+    Drop(3)
+    H.ok(CP.HappyHour.state(nil) ~= nil, 'drop: the happy hour runs on without him')
+    Reconnect(3)
+    H.ok(CP.HappyHour.state(nil) ~= nil, 'reconnect: ...and still runs')
     Restart()
     local hh = CP.HappyHour.state(nil)
     H.ok(hh ~= nil and hh.minutes == 10, 'restart: the happy hour still runs')
@@ -975,6 +1083,8 @@ do
         { key = 'typeOfTheDay', value = 'training', reason = 'EVOC week', requestId = RequestId() })
     H.eq(ok, true, 'tod: the SAST supervisor picks Training for tomorrow: ' .. tostring(data))
     local today = CP.Events.typeOfTheDay(nil, 'sast', { citizenid = cid })
+    Drop(3)                                        -- WF4: the supervisor quits after his pick
+    Reconnect(3)
     Restart()
     H.eq(CP.Events.typeOfTheDay(nil, 'sast', { citizenid = cid }), today, 'tod: a pick never moves today\'s type')
     H.time = H.time + 24 * 3600
@@ -1021,6 +1131,14 @@ do
         end
     end
     H.ok(next(set) ~= nil, 'controls: the sweep set some controls')
+    -- WF4: the supervisor quits right after; back online his Mission controls show what he set
+    Drop(3)
+    Reconnect(3)
+    local back = {}
+    for _, d in ipairs((Cb('sup:getMissionControls', 3) or {}).departments or {}) do
+        if d.key == 'sast' then for _, c in ipairs(d.controls or {}) do back[c.key] = c.saved end end
+    end
+    for key, value in pairs(set) do H.eq(back[key], value, ('reconnect: %s still %s'):format(key, tostring(value))) end
     Restart()
     local seen = {}
     for _, d in ipairs((Cb('sup:getMissionControls', 3) or {}).departments or {}) do
@@ -1052,6 +1170,10 @@ do
     Config.DisabledMissions = PATROL_OTHERS
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.mission_banned', 'ban: the officer cannot take a mission')
+    Drop(1)                                        -- WF4: a drop and reconnect never clears a ban
+    Reconnect(1)
+    ok, data = Act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.mission_banned', 'reconnect: still barred')
     Restart()
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.mission_banned', 'restart: the ban is kept (cp_officers.mission_ban)')
@@ -1140,6 +1262,14 @@ do
             { runId = run.id, minutes = 1, reason = 'Not a supervisor', requestId = RequestId() })
         H.eq(ok, false, 'live: an officer cannot add time (' .. tostring(data) .. ')')
 
+        -- WF4: the partner quits on the pushed run: it goes on for the leader, with the minutes added
+        Drop(6)
+        H.eq(Runs.getBySrc(6), nil, 'drop: the partner is off the pushed run')
+        H.eq(run.state, 'in_progress', 'drop: it goes on for the leader')
+        H.eq((tonumber(run.timeAdded) or 0) - before, added, 'drop: ...with the added minutes')
+        Reconnect(6)
+        H.eq(Runs.getBySrc(6), nil, 'reconnect: she is not put back on it')
+
         -- a restart ends the run (no row); the push is not offered again
         Restart()
         H.eq(Runs.getBySrc(1), nil, 'restart: the pushed run is gone')
@@ -1147,8 +1277,8 @@ do
         for _, c in ipairs((CP.MissionCalls.list(1) or {}).calls or {}) do if c.pushed then again = c end end
         H.eq(again, nil, 'restart: no pushed call is left on Dispatch')
     end
-    CP.Units.remove(1, { reason = 'left', silent = true })
-    CP.Units.remove(6, { reason = 'left', silent = true })
+    if CP.Units.unitOf(1) then CP.Units.remove(1, { reason = 'left', silent = true }) end
+    if CP.Units.unitOf(6) then CP.Units.remove(6, { reason = 'left', silent = true }) end
 end
 
 -- ============================================================================
@@ -1165,6 +1295,7 @@ do
     local xp0 = Xp(cid)
     local row = Rows('citizenid = ? AND mission_id = ? AND state = ?', { cid, 'evoc_course', 'completed' })[1] or {}
     H.ok(row.id ~= nil, 'correction: the officer has a completed EVOC row')
+    Drop(1)                                        -- WF4: the officer is offline for the void and the restore
     ok, data = Act('server:admin:voidRun', 5, { rowId = row.id, reason = 'Bugged course', kind = 'correction' })
     H.eq(ok, true, 'correction: the admin voids it: ' .. tostring(data))
     Secs(3)
@@ -1177,6 +1308,10 @@ do
     Secs(3)
     H.eq(Bit((Rows('id = ?', { row.id })[1] or {}).voided), false, 'correction: restored')
     H.eq(Xp(cid), xp0, 'correction: the XP is back')
+    Reconnect(1)
+    local prof = Cb('getProfile', 1) or {}
+    H.ok(prof ~= nil, 'reconnect: the officer opens his Profile')
+    H.eq(Xp(cid), xp0, 'reconnect: ...with the XP back')
     H.eq((Rows('id = ?', { row.id })[1] or {}).cash_status, 'paid', 'correction: the paid cash was never taken back')
 end
 
@@ -1207,6 +1342,8 @@ do
         'restore: done, a restart asked: ' .. tostring(type(res) == 'table' and cjson.encode(res) or res))
     Config.DisabledMissions = PATROL_OTHERS
     H.time = H.time + 301                          -- the officer's Patrol abandon cooldown of section 8 is over
+    Drop(5)                                        -- WF4: the admin quits before the restart
+    Reconnect(5)
     local okA, why = Act('server:acceptType', 1, 'patrol')
     H.eq(okA, false, 'restore: no new run until the restart (' .. tostring(why) .. ')')
     Restart()
@@ -1243,7 +1380,19 @@ do
     H.eq(CP.Missions.get(id), nil, 'restart: ...and not playable before it is published')
 
     Place(sup, vec3(-1100.0, -2900.0, 13.9))
+    -- WF4: his game quits in the first test run: it ends, pays nothing, the draft stays
     local okT, t = Act('server:builder:test', sup, { id = id, location = 1, useStartRoute = false })
+    H.eq(okT, true, 'builder: a first test run: ' .. tostring(t))
+    local money1 = #addMoney
+    Drop(sup)
+    H.eq(Runs.getBySrc(sup), nil, 'drop: the test run ends')
+    H.eq(#addMoney, money1, 'drop: ...paying nothing')
+    Reconnect(sup)
+    got = Cb('builder:get', sup, { id = id })
+    H.eq(got and got.definition and got.definition.description, 'The EVOC course after dark.',
+        'reconnect: the draft is kept')
+    Place(sup, vec3(-1100.0, -2900.0, 13.9))
+    okT, t = Act('server:builder:test', sup, { id = id, location = 1, useStartRoute = false })
     H.eq(okT, true, 'builder: he starts a test run: ' .. tostring(t))
     local run = Runs.getBySrc(sup)
     H.ok(run ~= nil and run.test ~= nil, 'builder: a test run')
@@ -1308,6 +1457,11 @@ do
     H.eq(tonumber(Maria('SELECT COUNT(*) FROM cp_custom_missions')),
         Count('SELECT COUNT(*) AS n FROM cp_custom_missions'), 'copy: ...and the Mission Builder missions')
     H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs'), before, 'copy: the saves folder in use is unchanged')
+    Drop(5)                                        -- WF4: the admin quits; back online System shows the same store
+    Reconnect(5)
+    local st = Cb('admin:getStorage', 5)
+    H.ok(st ~= nil, 'reconnect: the admin opens System -> Storage')
+    H.eq(Config.Database.enabled, false, 'reconnect: ...the saves folder still in use')
     Config.DisabledMissions = PATROL_OTHERS
     H.time = H.time + 601
     local okA, why = Act('server:acceptType', 6, 'patrol')

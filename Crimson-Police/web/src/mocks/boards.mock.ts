@@ -1002,6 +1002,61 @@ reg('action', 'server:admin:endSeason', () => {
     return { season: seasonView(cur), champion: 'fib', standings: standings(), top10: [] };
 });
 
+// The season tools' previews (WF4: every request a screen sends has a mock; admin/screens/Seasons.tsx and
+// admin/components/boards/SeasonTools.tsx)
+reg('request', 'admin:previewSeasonEnd', () => {
+    const cur = currentSeason();
+    if (!cur) throw new Error('err.no_season');
+    return {
+        season: seasonView(cur),
+        champion: 'fib',
+        championShort: 'FIB',
+        trophies: 3,
+        standings: standings(),
+        top10: [{ rank: 1, citizenid: 'ABC12345', name: 'Ada Lane', departmentShort: 'SAST', points: 940 }],
+    };
+});
+reg('request', 'admin:previewReopen', (a: { id?: number } | null) => {
+    const s = SEASONS.find(x => x.id === a?.id) ?? latestSeason();
+    if (!s) throw new Error('err.no_season');
+    return {
+        season: seasonView(s),
+        champion: 'fib',
+        championShort: 'FIB',
+        trophies: [{ citizenid: 'ABC12345', name: 'Ada Lane', callsign: '1-A-12', earnedAt: now() - DAY }],
+        top10: [],
+        rewards: [],
+        gapRows: 4,
+        previewToken: 'mock-token',
+    };
+});
+reg('request', 'admin:previewBountyRecount', (a: { week?: number } | null) => ({
+    seasonId: currentSeason()?.id ?? 1,
+    week: a?.week ?? 1,
+    objective: BOUNTIES[0].id,
+    label: BOUNTIES[0].label,
+    old: 'sast',
+    oldShort: 'SAST',
+    new: 'fib',
+    newShort: 'FIB',
+    changed: true,
+    previewToken: 'mock-token',
+}));
+reg('request', 'admin:previewChampionRecount', (a: { seasonId?: number } | null) => ({
+    seasonId: a?.seasonId ?? 1,
+    seasonName: (SEASONS.find(x => x.id === a?.seasonId) ?? SEASONS[0])?.name ?? 'Season',
+    old: 'fib',
+    oldShort: 'FIB',
+    new: 'fib',
+    newShort: 'FIB',
+    changed: false,
+    badgeId: 'season_champion_1',
+    oldHolders: [],
+    newHolders: [],
+    rewards: [],
+    previewToken: 'mock-token',
+}));
+
 reg('action', 'server:admin:overrideBounty', (payload: { objective?: string } | null) => {
     if (!currentSeason()) throw new Error('err.no_season');
     if (!BOUNTIES.some(b => b.id === payload?.objective)) throw new Error('err.invalid_bounty');
