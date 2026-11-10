@@ -547,6 +547,8 @@ Settings._playGroups = Play.groups
 Play.screens = {
     admin_home = { 'general', 'tablet_and_commands', 'formats' },
     admin_officers = { 'officer_profile', 'recognition', 'admin_control' },
+    -- Restrictions: Config.AdminUi.restrictionsExtend, the mission ban control, the Real players lift switches
+    admin_restrictions = { 'tablet_and_commands', 'mission_controls', 'real_players' },
     admin_departments = {
         'departments',
         'names',

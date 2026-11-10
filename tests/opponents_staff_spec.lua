@@ -63,6 +63,7 @@ CP.AntiCheat = {
 H.load('modules/integrations/qbx/server.lua')
 H.load('modules/realplayers/opponents.lua')
 H.load('modules/realplayers/staff.lua')
+H.load('modules/supervisor/restrictions.lua')
 H.step(0)
 local Opp = CP.Opponents
 local RS = Config.RealPlayers
@@ -291,48 +292,98 @@ do
             audit = function(...) audits[#audits + 1] = { ... } end,
         })
     end
-    -- lift: an admin action with a reason, audited, refused on an unknown row and on his own characters
+    -- lift (the one restrictions action, kinds pairBlock, exclusion, rsSuspension): a reason, audited, refused on an
+    -- unknown row and on his own characters
     local lifted = {}
     Opp.lift = function(kind, officer, suspect)
         lifted[#lifted + 1] = { kind, officer, suspect }
         if suspect == 'GONE0001' then return false, 'no_row' end
         return true, os.time() + 86400
     end
-    H.ok(
-        acts['server:admin:rsLift'] and acts['server:admin:rsLift'].key == 'antiFarmOverride'
-            and acts['server:admin:rsLift'].opts.reason == true,
-        'rsLift: an admin action with a reason'
-    )
-    local ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    local canPerm = true
+    CP.Permissions = {
+        can = function(_, key) return canPerm and key == 'antiFarmOverride' end,
+    }
+    local RA = 'server:admin:restriction'
+    local function Lift(kind, cid, other)
+        return Act(RA, { op = 'lift', kind = kind, citizenid = cid, other = other })
+    end
+    H.ok(acts[RA] and acts[RA].opts.reason == true, 'the restrictions action needs a reason')
+    H.eq(acts['server:admin:rsLift'], nil, 'rsLift is gone (merged into the restrictions action)')
+    local ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.rs_off', 'lift is refused while both features are off')
     Config.RealPlayers.liveCrime.enabled = true
     local nAudit = #audits
-    ok = Act('server:admin:rsLift', { kind = 'block', officer = 'OFF00001', suspect = 'CRIM0001' })
+    ok = Lift('pairBlock', 'OFF00001', 'CRIM0001')
     H.ok(ok == true and lifted[1][1] == 'block' and lifted[1][2] == 'OFF00001' and lifted[1][3] == 'CRIM0001',
         'a pair block is lifted')
     H.eq(audits[nAudit + 1] and audits[nAudit + 1][1], 'rsLift', 'and audited')
-    ok = Act('server:admin:rsLift', { kind = 'suspend', officer = 'OFF00001', suspect = 'CRIM0001' })
+    ok = Lift('rsSuspension', 'OFF00001')
     H.ok(ok == true and lifted[2][2] == 'OFF00001' and lifted[2][3] == nil, 'a suspension names only the officer')
-    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'GONE0001' })
+    ok, e = Lift('exclusion', 'GONE0001')
     H.ok(ok == false and e == 'err.rs_no_row', 'a row that is not running: err.rs_no_row')
-    ok, e = Act('server:admin:rsLift', { kind = 'ban', suspect = 'CRIM0001' })
-    H.ok(ok == false and e == 'err.rs_no_row', 'an unknown kind: err.rs_no_row')
-    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'bad id!' })
+    ok, e = Lift('ban', 'CRIM0001')
+    H.ok(ok == false and e == 'err.restriction_kind', 'an unknown kind: err.restriction_kind')
+    ok, e = Lift('exclusion', 'bad id!')
     H.ok(ok == false and e == 'err.invalid_citizenid', 'a bad citizenid')
     selfCids.CRIM0001 = true
-    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.self_target', 'never one of the admin\'s own characters')
+    ok, e = Lift('pairBlock', 'OFF00001', 'CRIM0001')
+    H.ok(ok == false and e == 'err.self_target', 'nor a pair that names one')
     selfCids.CRIM0001 = nil
+    canPerm = false
+    ok, e = Lift('exclusion', 'CRIM0001')
+    H.ok(ok == false and e == 'err.no_permission', 'without antiFarmOverride: refused')
+    canPerm = true
     H.eq(Config.RealPlayers.staffLift, true, 'staffLift ships true')
     Config.RealPlayers.staffLift = false
-    ok, e = Act('server:admin:rsLift', { kind = 'exclude', suspect = 'CRIM0001' })
+    ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.rs_lift_off', 'staffLift = false: lifting is refused')
     H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).lift, false, 'and the screen offers no Lift')
     Config.RealPlayers.staffLift = true
+
+    -- the list: the running rows of each kind with their setter and reason from the audit; extend through the
+    -- tool that set it
+    Opp.adminRows = function()
+        return {
+            { kind = 'block', officer = 'OFF00001', suspect = 'CRIM0001', untilAt = os.time() + 3600 },
+            { kind = 'exclude', suspect = 'CRIM0002', untilAt = os.time() + 7200 },
+        }
+    end
+    H.sql('DELETE FROM cp_audit')
+    H.sql([[INSERT INTO cp_audit (actor, role, category, action, target, new_value, reason) VALUES
+        ('ADM00009', 'admin', 'audit', 'rsBlockPair', 'OFF00001', 'suspect CRIM0001, 1 days', 'Farming'),
+        ('ADM00009', 'admin', 'audit', 'rsExclude', 'CRIM0002', '1 days', 'Exploit')]])
+    local view = cbs['admin:getRestrictions'].fn({ src = 9, args = {} })
+    local byKind = {}
+    for _, r in ipairs(view.rows) do byKind[r.kind] = r end
+    H.ok(
+        byKind.pairBlock and byKind.pairBlock.other == 'CRIM0001' and byKind.pairBlock.reason == 'Farming'
+            and byKind.pairBlock.by == 'ADM00009',
+        'a pair block is listed with its suspect, setter and reason'
+    )
+    H.ok(byKind.exclusion and byKind.exclusion.citizenid == 'CRIM0002' and byKind.exclusion.reason == 'Exploit',
+        'an exclusion is listed with its reason')
+    nAudit = #audits
+    ok = Act(RA, { op = 'extend', kind = 'exclusion', citizenid = 'CRIM0002', hours = 24 })
+    local w = writes[#writes]
+    H.ok(ok == true and w[1] == 'exclude' and w[2] == 'CRIM0002' and math.abs(w[3] - (2 + 24) / 24) < 0.001,
+        'an exclusion is extended by 24 h through Opp.exclude')
+    H.eq(audits[nAudit + 1] and audits[nAudit + 1][1], 'rsExclude', 'audited as the exclusion tool')
+    ok = Act(RA, { op = 'extend', kind = 'pairBlock', citizenid = 'OFF00001', other = 'CRIM0001', hours = 1 })
+    w = writes[#writes]
+    H.ok(ok == true and w[1] == 'block' and w[2] == 'OFF00001' and w[3] == 'CRIM0001', 'a pair block is extended')
+    ok, e = Act(RA, { op = 'extend', kind = 'rsSuspension', citizenid = 'OFF00001', hours = 1 })
+    H.ok(ok == false and e == 'err.rs_no_row', 'nothing running: nothing to extend')
+    ok, e = Act(RA, { op = 'extend', kind = 'exclusion', citizenid = 'CRIM0002', hours = 3650 * 24 + 1 })
+    H.ok(ok == false and e == 'err.restriction_hours', 'never past 3650 days')
+    Opp.adminRows = nil
     Config.RealPlayers.liveCrime.enabled = false
 
-    -- clear strikes: volunteers on, a reason, audited, nothing to clear refused
+    -- clear strikes: the volunteerBlock kind; volunteers on, a reason, audited, nothing to clear refused
     local cleared = {}
+    local extended = {}
     CP.Volunteers = {
         clearStrikes = function(cid)
             cleared[#cleared + 1] = cid
@@ -340,29 +391,43 @@ do
             return true, { strikes = 2 }
         end,
         staffList = function() return { { citizenid = 'OFF00001', roles = { 'runner' }, strikes = 2 } } end,
+        blocks = function() return { { citizenid = 'VOL00002', untilAt = os.time() + 600 } } end,
+        extendBlock = function(cid, hours)
+            extended[#extended + 1] = { cid, hours }
+            return true, os.time() + 600 + hours * 3600
+        end,
     }
-    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    local function Clear(cid) return Act(RA, { op = 'lift', kind = 'volunteerBlock', citizenid = cid }) end
+    H.eq(acts['server:admin:rsClearStrikes'], nil, 'rsClearStrikes is gone (merged into the restrictions action)')
+    ok, e = Clear('VOL00001')
     H.ok(ok == false and e == 'err.rs_off' and #cleared == 0, 'clear strikes is refused while volunteers are off')
     Config.RealPlayers.volunteer.enabled = true
     H.eq(Config.RealPlayers.volunteer.staffClearStrikes, true, 'staffClearStrikes ships true')
-    H.ok(acts['server:admin:rsClearStrikes'].opts.reason == true, 'rsClearStrikes needs a reason')
     nAudit = #audits
-    ok = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    ok = Clear('VOL00001')
     H.ok(ok == true and cleared[1] == 'VOL00001', 'a volunteer\'s strikes are cleared')
     H.eq(audits[nAudit + 1] and audits[nAudit + 1][1], 'rsClearStrikes', 'and audited')
-    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00009' })
+    ok, e = Clear('VOL00009')
     H.ok(ok == false and e == 'err.rs_no_strikes', 'nothing to clear: err.rs_no_strikes')
-    H.eq(acts['server:admin:rsClearStrikes'].opts.self({ citizenid = 'VOL00001' }).citizenid, 'VOL00001',
-        'the self rule runs on the citizenid')
+    selfCids.VOL00001 = true
+    ok, e = Clear('VOL00001')
+    H.ok(ok == false and e == 'err.self_target', 'the self rule runs on the citizenid')
+    selfCids.VOL00001 = nil
+    local vview = cbs['admin:getRestrictions'].fn({ src = 9, args = {} })
+    H.ok(vview.rows[1] and vview.rows[1].kind == 'volunteerBlock' and vview.rows[1].auto == true,
+        'a strikes block is listed, set by the strikes')
+    ok = Act(RA, { op = 'extend', kind = 'volunteerBlock', citizenid = 'VOL00002', hours = 12 })
+    H.ok(ok == true and extended[1][1] == 'VOL00002' and extended[1][2] == 12, 'a strikes block is extended')
     local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
     H.eq(list.clearStrikes, true, 'the Volunteers tab offers Clear strikes')
     H.eq(list.listed[1].name, 'Ada Test', 'a listed volunteer with no name gets his character name')
     Config.RealPlayers.volunteer.staffClearStrikes = false
-    ok, e = Act('server:admin:rsClearStrikes', { citizenid = 'VOL00001' })
+    ok, e = Clear('VOL00001')
     H.ok(ok == false and e == 'err.rs_clear_off', 'staffClearStrikes = false: refused')
     Config.RealPlayers.volunteer.staffClearStrikes = true
     Config.RealPlayers.volunteer.enabled = false
     CP.Volunteers = nil
+    CP.Permissions = nil
 
     -- names: one batched lookup per screen load (online from the cache, offline from Qbox's players table, then
     -- cp_officers), never a query per row

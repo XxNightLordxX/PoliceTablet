@@ -9,6 +9,7 @@ import type {
     RsSuspect,
     RsTool,
 } from '../../types/admin_rs';
+import { restrictionPayload, rsRestriction } from './restrictions';
 
 export const RS_DAYS_MAX = 3650;
 export const RS_REASON_MAX = 255;
@@ -36,9 +37,8 @@ export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLi
     return cases;
 }
 
-// The lift action and the clear-strikes action.
-export const RS_LIFT_ACTION = 'server:admin:rsLift';
-export const RS_CLEAR_STRIKES_ACTION = 'server:admin:rsClearStrikes';
+// Lift early and Clear strikes go through the one restrictions action (admin/components/restrictions.ts).
+export { RESTRICTION_ACTION as RS_LIFT_ACTION, RESTRICTION_ACTION as RS_CLEAR_STRIKES_ACTION } from './restrictions';
 
 // "Name (CITIZENID)", the citizenid alone, or '-'.
 export function personText(p: RsPerson | null | undefined): string {
@@ -126,10 +126,12 @@ export function weaponText(line: RsLedgerLine): string {
     return line.weapon ? `#${line.weapon}` : '-';
 }
 
-// The payload that lifts one running row early: its kind, the citizenids it names and the reason.
+// The payload that lifts one running row early: its restriction kind, the citizenids it names and the reason.
 export function liftPayload(row: RsAdminRow, reason: string): Record<string, unknown> {
-    const out: Record<string, unknown> = { kind: row.kind, reason: reason.trim() };
-    if (row.kind !== 'exclude') out.officer = row.officer;
-    if (row.kind !== 'suspend') out.suspect = row.suspect;
-    return out;
+    return restrictionPayload('lift', rsRestriction(row), reason);
+}
+
+// The payload that clears a volunteer's strikes and his strikes block.
+export function clearStrikesPayload(citizenid: string, reason: string): Record<string, unknown> {
+    return restrictionPayload('lift', { kind: 'volunteerBlock', citizenid }, reason);
 }

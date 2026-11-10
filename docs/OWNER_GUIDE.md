@@ -1446,12 +1446,23 @@ A click fills the box; you can still type your own. Change the list in `Config.A
 
 | Group (with its one-line description) | Screens in it (plain name, old name) |
 |---|---|
-| **People**: officers, departments, who can do what, and the boards | Officers; Departments; Who can do what (Permissions); Leaderboards and Seasons and challenges (under More) |
+| **People**: officers, restrictions, departments, who can do what, and the boards | Officers; Restrictions; Departments; Who can do what (Permissions); Leaderboards and Seasons and challenges (under More) |
 | **Missions**: NPC missions, the Mission Builder, the runs going on now, map markers and tests | Missions (with the Mission Builder tab); Running now (Live); Map markers; Test tools (Testing) |
 | **Real players**: real players as suspects | Player suspects (Real suspects; the whole group shows only while live crimes or volunteers are on) |
 | **Money**: pay rates, rewards, every payment made and the department funds | Money (Pay rates, Rewards, Payments and Department funds tabs) |
 | **Review**: flagged runs, profiles, disputes, corrections and the activity log | Review (Queue, Profiles and Corrections tabs; the queue holds the flagged runs and disputes); Activity log (Audit Log) |
 | **System**: settings, storage, backups and problems | Settings; Server health (System: Storage, Backups, Webhooks, Problems, Integrations, Clean-up tabs) |
+
+**Restrictions** (under People) is the one list of everything that bars someone right now: tablet suspensions,
+mission bans, the Real suspects pair blocks, exclusions and suspensions, and volunteers' strikes blocks. Each row says
+the kind, who it names, until when, who set it and why; a filter shows one kind. **Extend** adds hours (up to that
+kind's longest: a suspension 3650 days, a mission ban a week from now, the Real suspects tools 3650 days, a strikes
+block a year) and **Lift** ends it early; both ask for a reason and are audited as before. Each kind keeps its own
+rules: lifting or extending a suspension needs `suspend`, a mission ban `antiFarmOverride` to lift and
+`missionControls` to extend, the Real suspects kinds `antiFarmOverride` (Lift follows `Config.RealPlayers.staffLift`,
+clearing strikes `Config.RealPlayers.volunteer.staffClearStrikes`), and never on one of your own characters.
+`Config.AdminUi.restrictionsExtend = false` keeps only Lift. Setting a restriction stays where it was (Officers →
+Suspend, the supervisor's officer dialog for a mission ban, Real suspects → Pairs and blocks).
 
 The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing waiting is hidden,
 a link or notification that opens one of them unfolds it, and the panel remembers whether you left it open.

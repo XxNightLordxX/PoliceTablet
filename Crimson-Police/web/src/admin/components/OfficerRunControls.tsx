@@ -25,6 +25,7 @@ import { useCan } from '../../shared/session';
 import type { OfficerSlotProps } from '../../types/admin_control';
 import type { AdminFreeAbandon, AdminOfficerRunState } from '../../types/admin_live';
 import { useAdminAction } from './kit';
+import { RESTRICTION_ACTION, restrictionPayload } from './restrictions';
 import '../screens/Live.css';
 
 type Pending =
@@ -120,11 +121,9 @@ export function OfficerRunControls({ citizenid, officer, onChanged }: OfficerSlo
                 { success: 'admin.runctl.boss_done' },
             );
         } else if (p.kind === 'ban') {
-            res = await run(
-                'server:admin:liftMissionBan',
-                { citizenid, reason },
-                { success: 'admin.runctl.ban_lifted' },
-            );
+            res = await run(RESTRICTION_ACTION, restrictionPayload('lift', { kind: 'missionBan', citizenid }, reason), {
+                success: 'admin.runctl.ban_lifted',
+            });
         } else {
             res = await run(
                 'server:admin:reclassifyAbandon',

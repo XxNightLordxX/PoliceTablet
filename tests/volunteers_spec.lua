@@ -253,13 +253,22 @@ do
     H.ok(not V.isListed('VOL00001'), 'the block ends the listing')
     H.eq(LastNote(1), 'volunteer.ended.strikes', 'told why')
 
+    -- FM5: the block is a row of the one restrictions list, under the citizenid it was set on, and can be extended
+    local rows = V.blocks()
+    H.ok(#rows == 1 and rows[1].citizenid == 'VOL00001' and rows[1].untilAt == untilAt,
+        'the strikes block is listed for the restrictions list')
+    local okE, newUntil = V.extendBlock('VOL00001', 6)
+    H.ok(okE == true and newUntil == untilAt + 6 * 3600, 'an admin extends it by 6 hours')
+    H.eq(V.blocks()[1].untilAt, newUntil, 'the list shows the new end')
+    H.eq(V.extendBlock('NOBODY01', 6), false, 'nothing to extend: refused')
+
     -- the block is per player (license): another character of the same player is refused too
     Player(1, 'VOL00009', 'license:aaa')
     Fire(1, 'open')
     local key, vars = LastNote(1)
     H.eq(key, 'volunteer.refused.blocked', 'another character of the player is blocked')
-    H.eq(vars and vars.hours, 24, 'the hours left')
-    H.time = H.time + 24 * 3600
+    H.eq(vars and vars.hours, 30, 'the hours left (24 and the 6 added)')
+    H.time = H.time + 30 * 3600
     Fire(1, 'open')
     H.eq(LastMenu(1) and LastMenu(1).active, false, 'after blockHours he may volunteer again')
 end

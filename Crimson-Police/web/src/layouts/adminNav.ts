@@ -12,6 +12,7 @@ export const ADMIN_GROUPS: AdminGroup[] = ['people', 'missions', 'players', 'mon
 // The group each Admin screen is listed under (Home has none: it stays on top).
 export const ADMIN_GROUP_OF: Record<string, AdminGroup> = {
     admin_officers: 'people',
+    admin_restrictions: 'people',
     admin_departments: 'people',
     admin_permissions: 'people',
     admin_leaderboards: 'people',

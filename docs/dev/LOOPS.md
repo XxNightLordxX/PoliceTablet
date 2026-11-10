@@ -389,7 +389,6 @@ strings do not count.
 | `modules/livectl/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/markers/client.lua` | 2 | 0 | objective pointer; a start-up hook |
 | `modules/migrations/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/missionban/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/missioncalls/server.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
 | `modules/missions/client.lua` | 1 | 0 | bounded definitions retry at start |
 | `modules/missions/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -419,6 +418,7 @@ strings do not count.
 | `modules/spawn/server.lua` | 2 | 0 | open spawn asks while any; a one-shot |
 | `modules/storage/memsql.lua` | 2 | 18 | the saves folder SQL engine: parser and scan loops with no Wait, async query threads |
 | `modules/storage/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/supervisor/missionban.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/sysadmin/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/tablet/client.lua` | 14 | 0 | prop keeper, open watcher, Escape guard; bounded loads; one-shots |
 | `modules/tablet/server.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |

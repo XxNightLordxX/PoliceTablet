@@ -109,8 +109,9 @@ async function steps(): Promise<void> {
     // the groups hold what the owner looks for there
     const of = (g: string) => keys.filter(k => ADMIN_GROUP_OF[k] === g).join(',');
     ok(
-        of('people') === 'admin_officers,admin_departments,admin_permissions,admin_leaderboards,admin_seasons',
-        'People: officers, departments, permissions (and the boards)',
+        of('people') ===
+            'admin_officers,admin_restrictions,admin_departments,admin_permissions,admin_leaderboards,admin_seasons',
+        'People: officers, restrictions, departments, permissions (and the boards)',
     );
     ok(
         of('missions') === 'admin_missions,admin_live,admin_markers,admin_testing',

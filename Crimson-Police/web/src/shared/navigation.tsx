@@ -25,6 +25,7 @@ export type AdminScreenKey =
     | 'admin_money'
     | 'admin_system'
     | 'admin_rs'
+    | 'admin_restrictions'
     | 'admin_markers';
 export type ScreenKey = OfficerScreenKey | SupervisorScreenKey | AdminScreenKey;
 

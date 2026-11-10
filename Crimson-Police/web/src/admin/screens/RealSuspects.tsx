@@ -60,6 +60,7 @@ import {
     RS_LIFT_ACTION,
     RS_REASON_MAX,
     cidText,
+    clearStrikesPayload,
     filterCases,
     ledgerSuspect,
     liftPayload,
@@ -775,11 +776,9 @@ function ClearStrikesDialog({
             setError('rs.ui.tool.need_reason');
             return;
         }
-        const res = await run(
-            RS_CLEAR_STRIKES_ACTION,
-            { citizenid: c, reason: reason.trim() },
-            { success: 'rs.ui.clear_done' },
-        );
+        const res = await run(RS_CLEAR_STRIKES_ACTION, clearStrikesPayload(c, reason), {
+            success: 'rs.ui.clear_done',
+        });
         if (res.ok) {
             onDone();
             onClose();

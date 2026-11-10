@@ -166,6 +166,10 @@ Config.AdminUi = {
     -- missions on or off), 'pay' (Change pay), 'points' (Give or take points), 'settings' (Quick settings), 'live'
     -- (Running now), 'review' (Review) and 'activity' (Activity log); {} = no shortcuts
     homeShortcuts = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' },
+    -- true = Admin UI -> Restrictions (every tablet suspension, mission ban, real-suspect pair block, exclusion and
+    -- suspension, and volunteer strikes block running now, in one list) also offers Extend: add hours to one, up to
+    -- that kind's longest; false = the list offers only Lift. Each kind keeps its own permission for both
+    restrictionsExtend = true,
     -- The presets on Admin UI -> Settings -> Presets: each sets a group of settings in one click, after a preview of
     -- every change and a confirm (each change is saved and audited like a single setting, with the preset as the
     -- reason). Each preset is a list of { path = 'Config path of the setting', value = its new value }. A preset never

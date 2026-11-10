@@ -1,6 +1,7 @@
 // Browser mocks for full admin control: Live runs, units and anti-farm overrides (modules/livectl/server.lua).
 
 import { registerMock } from '../shared/nui';
+import { registerRestrictionKind } from './restrictions.mock';
 import type {
     AdminLiveRun,
     AdminLiveRunsData,
@@ -329,11 +330,32 @@ registerMock('action', 'server:admin:grantBossAttempt', (p: { reason?: string })
     return { week: '2026-W41' };
 });
 
-registerMock('action', 'server:admin:liftMissionBan', (p: { citizenid: string; reason?: string }) => {
-    needReason(p);
-    if (!state.missionBan) throw new Error('err.mission_ban_none');
-    state.missionBan = null;
-    return { citizenid: p.citizenid };
+// the mission ban: a kind of the one restrictions list (restrictions.mock.ts)
+registerRestrictionKind('missionBan', {
+    maxHours: 168,
+    rows: () =>
+        state.missionBan
+            ? [
+                  {
+                      citizenid: 'OFF00002',
+                      name: 'Jamie Rook',
+                      untilAt: state.missionBan.until,
+                      byName: state.missionBan.by,
+                      reason: state.missionBan.reason,
+                      dept: 'lspd',
+                  },
+              ]
+            : [],
+    lift: p => {
+        if (!state.missionBan) throw new Error('err.mission_ban_none');
+        state.missionBan = null;
+        return { citizenid: p.citizenid };
+    },
+    extend: (p, hours) => {
+        if (!state.missionBan) throw new Error('err.mission_ban_none');
+        state.missionBan = { ...state.missionBan, until: state.missionBan.until + hours * 3600 };
+        return { citizenid: p.citizenid, untilAt: state.missionBan.until };
+    },
 });
 
 registerMock('action', 'server:admin:reclassifyAbandon', (p: { runUuid: string; reason?: string }) => {

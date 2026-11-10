@@ -564,35 +564,129 @@ if CP.AdminKit and CP.AdminKit.action then
         targetRate = { 1, 10000 },
         self = function(p) return { citizenid = p.citizenid } end,
     })
+end
 
-    -- lift a running block, exclusion or suspension early (Config.RealPlayers.staffLift). Never one that names
-    -- the admin's own characters; a row that is not running (ended, already lifted, never there) is err.rs_no_row.
-    local LIFT_KINDS = { block = true, exclude = true, suspend = true }
-    Kit.action('server:admin:rsLift', 'antiFarmOverride', function(ctx)
-        local p = ctx.payload
+-- ============================================================================
+--                      THE RESTRICTIONS LIST (four kinds)
+-- ============================================================================
+-- An admin pair block ('pairBlock': citizenid the officer, other the suspect), an exclusion from being a suspect
+-- ('exclusion'), an officer's real-suspect suspension ('rsSuspension') and a volunteer's strikes block
+-- ('volunteerBlock') are rows of the one restrictions list (modules/supervisor/restrictions.lua), each lifted or
+-- extended there with antiFarmOverride, never on one of the admin's own characters. Lifting early follows
+-- Config.RealPlayers.staffLift, clearing a volunteer's strikes Config.RealPlayers.volunteer.staffClearStrikes.
+
+local RS_KINDS = { { 'pairBlock', 'block' }, { 'exclusion', 'exclude' }, { 'rsSuspension', 'suspend' } }
+local RS_AUDIT = { block = 'rsBlockPair', exclude = 'rsExclude', suspend = 'rsSuspend' }
+local HOUR_S = 3600
+
+-- The officer and the suspect a row of this kind names (an exclusion names only the suspect, a suspension only the
+-- officer): officer, suspect | nil (a citizenid is missing or not valid).
+local function RowCids(kind, p)
+    if kind == 'block' then
+        if not ValidCid(p.citizenid) or not ValidCid(p.other) or p.citizenid == p.other then return nil end
+        return p.citizenid, p.other
+    end
+    if not ValidCid(p.citizenid) then return nil end
+    if kind == 'exclude' then return nil, p.citizenid end
+    return p.citizenid, nil
+end
+
+-- The end of the running row of this kind, or nil.
+local function RunningUntil(kind, officer, suspect)
+    for _, r in ipairs(Opp.adminRows and Opp.adminRows() or {}) do
+        if r.kind == kind and r.officer == officer and r.suspect == suspect then return r.untilAt end
+    end
+    return nil
+end
+
+local function RsLift(kind)
+    return function(ctx, p)
         if Cfg().staffLift == false then return false, 'err.rs_lift_off' end
         if not FeatureOn() then return false, 'err.rs_off' end
-        if not LIFT_KINDS[p.kind] then return false, 'err.rs_no_row' end
-        local officer = p.kind ~= 'exclude' and p.officer or nil
-        local suspect = p.kind ~= 'suspend' and p.suspect or nil
-        if (p.kind ~= 'exclude' and not ValidCid(officer)) or (p.kind ~= 'suspend' and not ValidCid(suspect)) then
-            return false, 'err.invalid_citizenid'
-        end
-        for _, cid in ipairs({ officer or false, suspect or false }) do
-            if cid and Kit.isSelf(ctx.src, cid) then return false, 'err.self_target' end
-        end
-        local ok, res = Opp.lift(p.kind, officer, suspect)
+        local officer, suspect = RowCids(kind, p)
+        if not (officer or suspect) then return false, 'err.invalid_citizenid' end
+        local ok, res = Opp.lift(kind, officer, suspect)
         if not ok then return false, res == 'invalid_citizenid' and 'err.invalid_citizenid' or 'err.rs_no_row' end
-        ctx.audit('rsLift', officer or suspect, nil, ('%s lifted early%s (it ran until %d)'):format(p.kind,
+        ctx.audit('rsLift', officer or suspect, nil, ('%s lifted early%s (it ran until %d)'):format(kind,
             (officer and suspect) and (', suspect ' .. suspect) or '', res))
-        CP.log(TAG, 'admin %s lifted the %s of %s early', tostring(ctx.actor), p.kind, tostring(officer or suspect))
-        return true, { kind = p.kind, officer = officer, suspect = suspect }
-    end, { reason = true })
+        CP.log(TAG, 'admin %s lifted the %s of %s early', tostring(ctx.actor), kind, tostring(officer or suspect))
+        return true, { kind = kind, officer = officer, suspect = suspect }
+    end
+end
 
-    -- clear a volunteer's strikes and strike block (Config.RealPlayers.volunteer.staffClearStrikes), refused on the
-    -- admin's own characters; nothing to clear is err.rs_no_strikes.
-    Kit.action('server:admin:rsClearStrikes', 'antiFarmOverride', function(ctx)
-        local p = ctx.payload
+-- Extend: the running row's end moves on by hours (at most 3650 days from now), audited as the tool that set it.
+local function RsExtend(kind)
+    return function(ctx, p, hours)
+        if not FeatureOn() then return false, 'err.rs_off' end
+        local officer, suspect = RowCids(kind, p)
+        if not (officer or suspect) then return false, 'err.invalid_citizenid' end
+        local untilAt = RunningUntil(kind, officer, suspect)
+        if not untilAt then return false, 'err.rs_no_row' end
+        local days = (untilAt + hours * HOUR_S - os.time()) / 86400
+        local ok, res
+        if kind == 'block' then
+            ok, res = Answer(Opp.block(officer, suspect, days))
+        else
+            ok, res = Answer(Opp[kind](officer or suspect, days))
+        end
+        if not ok then return false, res end
+        ctx.audit(RS_AUDIT[kind], officer or suspect, tostring(untilAt), ('%sextended %d h, until %d'):format(
+            suspect and officer and ('suspect ' .. suspect .. ', ') or '', hours, res))
+        return true, { kind = kind, officer = officer, suspect = suspect, untilAt = res }
+    end
+end
+
+for _, pair in ipairs(RS_KINDS) do
+    local key, kind = pair[1], pair[2]
+    CP.Restriction(key, {
+        perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
+        maxHours = 3650 * 24,
+        self = true,
+        on = FeatureOn,
+        liftOn = function() return Cfg().staffLift ~= false end,
+        list = function()
+            local out = {}
+            for _, r in ipairs(Opp.adminRows and Opp.adminRows() or {}) do
+                if r.kind == kind then
+                    out[#out + 1] = {
+                        citizenid = kind == 'exclude' and r.suspect or r.officer,
+                        other = kind == 'block' and r.suspect or nil,
+                        untilAt = r.untilAt,
+                    }
+                end
+            end
+            return out
+        end,
+        audit = {
+            actions = { RS_AUDIT[kind] },
+            match = function(row, a)
+                return row.other == nil or tostring(a.new_value or ''):find('suspect ' .. row.other, 1, true) ~= nil
+            end,
+        },
+        lift = RsLift(kind),
+        extend = RsExtend(kind),
+    })
+end
+
+local function VolunteersOn() return select(2, CP.RealPlayers('volunteer')) end
+
+-- A volunteer's strikes block. Lift clears his strikes and his block (also strikes with no block yet: the
+-- Volunteers tab's Clear strikes); nothing to clear is err.rs_no_strikes.
+CP.Restriction('volunteerBlock', {
+    perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
+    maxHours = 8760,
+    self = true,
+    on = VolunteersOn,
+    liftOn = function() return (CP.RealPlayers('volunteer')).staffClearStrikes ~= false end,
+    list = function()
+        local V = CP.Volunteers
+        local out = {}
+        for _, b in ipairs(V and V.blocks and V.blocks() or {}) do
+            out[#out + 1] = { citizenid = b.citizenid, untilAt = b.untilAt, auto = true }
+        end
+        return out
+    end,
+    lift = function(ctx, p)
         local vc = CP.RealPlayers('volunteer')
         if vc.enabled ~= true then return false, 'err.rs_off' end
         if vc.staffClearStrikes == false then return false, 'err.rs_clear_off' end
@@ -604,9 +698,15 @@ if CP.AdminKit and CP.AdminKit.action then
         ctx.audit('rsClearStrikes', p.citizenid, nil, ('%d strike(s) cleared%s'):format(res.strikes or 0,
             res.blockedUntil and (', block until ' .. res.blockedUntil .. ' lifted') or ''))
         return true, { citizenid = p.citizenid, strikes = res.strikes, blockedUntil = res.blockedUntil }
-    end, {
-        reason = true,
-        targetRate = { 1, 10000 },
-        self = function(p) return { citizenid = p.citizenid } end,
-    })
-end
+    end,
+    extend = function(ctx, p, hours)
+        if not VolunteersOn() then return false, 'err.rs_off' end
+        if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
+        local V = CP.Volunteers
+        local ok, res = false, nil
+        if V and V.extendBlock then ok, res = V.extendBlock(p.citizenid, hours) end
+        if not ok then return false, 'err.rs_no_row' end
+        ctx.audit('rsExtendBlock', p.citizenid, nil, ('strikes block extended %d h, until %d'):format(hours, res))
+        return true, { citizenid = p.citizenid, untilAt = res }
+    end,
+})

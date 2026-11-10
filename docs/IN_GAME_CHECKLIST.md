@@ -691,3 +691,8 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   line name the first automatic backup; the second one is gone and the first stays protected. (Z11)
 - [ ] Admin test run of a pursuit that hands off to a stop: Restart objective on the stop: the car and occupants stay
   and can be worked again; the stop does not complete with 0/0. (Z11)
+- [ ] One restrictions list (FM5): suspend an officer for 2 days (Officers), give another a mission ban (supervisor
+  officer dialog, Mission controls on): Admin UI -> People -> Restrictions lists both with who set them, until when
+  and why. Extend the ban by 2 hours: Until moves on 2 h and the officer is told; Lift the suspension with a reason:
+  he can open the tablet again and the Activity log has the unsuspend. With live crimes on, a pair block set under
+  Real suspects -> Pairs and blocks shows in Restrictions too and lifts from either place. (FM5)

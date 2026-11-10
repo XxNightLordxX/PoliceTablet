@@ -51,6 +51,7 @@ const AdminTesting = lazyScreen('admin', () => import('../admin/screens/Testing'
 const AdminLive = lazyScreen('admin', () => import('../admin/screens/Live'));
 const AdminSystem = lazyScreen('admin', () => import('../admin/screens/System'));
 const AdminRealSuspects = lazyScreen('admin', () => import('../admin/screens/RealSuspects'));
+const AdminRestrictions = lazyScreen('admin', () => import('../admin/screens/Restrictions'));
 const AdminMoney = lazyScreen('admin', () => import('../admin/screens/Money'));
 const AdminMapMarkers = lazyScreen('admin', () => import('../admin/screens/MapMarkers'));
 const AdminReview = lazyScreen('admin', () => import('../admin/screens/Review'));
@@ -154,6 +155,13 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         titleKey: 'ui.screen.admin_officers',
         icon: 'search',
         component: AdminOfficers,
+    },
+    {
+        // Restrictions: every suspension, ban and block running now, extended or lifted in one place
+        key: 'admin_restrictions',
+        titleKey: 'ui.screen.admin_restrictions',
+        icon: 'lock',
+        component: AdminRestrictions,
     },
     {
         key: 'admin_departments',

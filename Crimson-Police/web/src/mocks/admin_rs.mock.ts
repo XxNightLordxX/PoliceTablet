@@ -2,6 +2,7 @@
 // browser answers as with Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled both false.
 
 import { registerMock } from '../shared/nui';
+import { registerRestrictionKind, type MockRestrictionPayload } from './restrictions.mock';
 import type {
     RsAdminRow,
     RsCaseData,
@@ -364,36 +365,67 @@ for (const [name, kind] of [
     });
 }
 
-// lift a running row early (Opp.lift), and clear a volunteer's strikes (CP.Volunteers.clearStrikes)
-registerMock(
-    'action',
-    'server:admin:rsLift',
-    (p: { kind?: string; officer?: string; suspect?: string; reason?: string }) => {
-        if (rsOff()) throw new Error('err.rs_off');
-        needReason(p);
-        if (p.officer === 'ADM00001' || p.suspect === 'ADM00001') throw new Error('err.self_target');
-        const now = nowS();
-        const i = adminRows.findIndex(
-            r =>
-                r.kind === p.kind &&
-                r.untilAt > now &&
-                (r.kind === 'exclude' || r.officer === p.officer) &&
-                (r.kind === 'suspend' || r.suspect === p.suspect),
-        );
-        if (i < 0) throw new Error('err.rs_no_row');
-        adminRows.splice(i, 1);
-        return { kind: p.kind, officer: p.officer, suspect: p.suspect };
-    },
-);
+// lift a running row early (Opp.lift) or extend it, and clear a volunteer's strikes (CP.Volunteers.clearStrikes):
+// kinds of the one restrictions list (restrictions.mock.ts)
+const RS_KIND = { pairBlock: 'block', exclusion: 'exclude', rsSuspension: 'suspend' } as const;
 
-registerMock('action', 'server:admin:rsClearStrikes', (p: { citizenid?: string; reason?: string }) => {
-    if (rsOff()) throw new Error('err.rs_off');
-    if (!CID.test(p.citizenid ?? '')) throw new Error('err.invalid_citizenid');
-    needReason(p);
-    if (p.citizenid === 'ADM00001') throw new Error('err.self_target');
-    const v = listed.find(l => l.citizenid === p.citizenid);
-    if (!v || !v.strikes) throw new Error('err.rs_no_strikes');
-    const strikes = v.strikes;
-    v.strikes = 0;
-    return { citizenid: p.citizenid, strikes };
+function findRow(kind: RsAdminRow['kind'], p: MockRestrictionPayload): number {
+    const now = nowS();
+    const officer = kind === 'exclude' ? undefined : p.citizenid;
+    const suspect = kind === 'exclude' ? p.citizenid : kind === 'block' ? p.other : undefined;
+    return adminRows.findIndex(
+        r =>
+            r.kind === kind &&
+            r.untilAt > now &&
+            (kind === 'exclude' || r.officer === officer) &&
+            (kind === 'suspend' || r.suspect === suspect),
+    );
+}
+
+for (const [key, kind] of Object.entries(RS_KIND) as [keyof typeof RS_KIND, RsAdminRow['kind']][]) {
+    registerRestrictionKind(key, {
+        maxHours: 3650 * 24,
+        rows: () =>
+            rsOff()
+                ? []
+                : adminRows
+                      .filter(r => r.kind === kind)
+                      .map(r => ({
+                          citizenid: (kind === 'exclude' ? r.suspect : r.officer) ?? '',
+                          name: NAMES[(kind === 'exclude' ? r.suspect : r.officer) ?? ''] ?? null,
+                          other: kind === 'block' ? r.suspect : null,
+                          otherName: kind === 'block' ? (NAMES[r.suspect ?? ''] ?? null) : null,
+                          untilAt: r.untilAt,
+                      })),
+        lift: p => {
+            if (rsOff()) throw new Error('err.rs_off');
+            if (!CID.test(p.citizenid ?? '')) throw new Error('err.invalid_citizenid');
+            const i = findRow(kind, p);
+            if (i < 0) throw new Error('err.rs_no_row');
+            const row = adminRows[i];
+            adminRows.splice(i, 1);
+            return { kind, officer: row.officer, suspect: row.suspect };
+        },
+        extend: (p, hours) => {
+            if (rsOff()) throw new Error('err.rs_off');
+            const i = findRow(kind, p);
+            if (i < 0) throw new Error('err.rs_no_row');
+            adminRows[i].untilAt += hours * 3600;
+            return { kind, untilAt: adminRows[i].untilAt };
+        },
+    });
+}
+
+registerRestrictionKind('volunteerBlock', {
+    maxHours: 8760,
+    rows: () => [],
+    lift: p => {
+        if (rsOff()) throw new Error('err.rs_off');
+        if (!CID.test(p.citizenid ?? '')) throw new Error('err.invalid_citizenid');
+        const v = listed.find(l => l.citizenid === p.citizenid);
+        if (!v || !v.strikes) throw new Error('err.rs_no_strikes');
+        const strikes = v.strikes;
+        v.strikes = 0;
+        return { citizenid: p.citizenid, strikes };
+    },
 });

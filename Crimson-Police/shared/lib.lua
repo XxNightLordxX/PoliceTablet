@@ -16,6 +16,8 @@
 --   CP.Num       a finite number or the default, kept between lo and hi
 --   CP.RealPlayers one mode of Config.RealPlayers (liveCrime, volunteer, criminalTablet) or the shared rules, and its
 --                switch; CP.RealPlayersTakePart and CP.RealPlayersRowFilter: what a real-player case takes part in
+--   CP.Restriction one kind of restriction (a mission ban, a suspension, a pair block...) joins the one restrictions
+--                list (modules/supervisor/restrictions.lua)
 
 CP = CP or {}
 
@@ -372,4 +374,28 @@ function CP.RealPlayersRowFilter(what, alias)
                 alias)
     end
     return sql
+end
+
+-- ============================================================================
+--                                 RESTRICTIONS
+-- ============================================================================
+
+-- The kinds of the one restrictions list, in the order they register (modules/supervisor/restrictions.lua reads
+-- them). Here so a module loaded before or after the list can register its kind.
+CP.RestrictionKinds = CP.RestrictionKinds or { order = {}, byKey = {} }
+
+-- One kind of restriction joins the list. def: { perm = { lift = key, extend = key }, maxHours, self (true: never
+-- on one of the admin's own characters), on() -> shown, liftOn() -> the list offers Lift, list() -> rows,
+-- audit = { actions, match(row, auditRow) } (who set it and why, for a kind that keeps neither), lift(ctx, p),
+-- extend(ctx, p, hours) }.
+-- A row: { citizenid, other? (the second player of a pair), untilAt, by?, byName?, reason?, dept? }.
+---@param key string
+---@param def table
+function CP.Restriction(key, def)
+    if type(key) ~= 'string' or type(def) ~= 'table' then return false end
+    local R = CP.RestrictionKinds
+    if not R.byKey[key] then R.order[#R.order + 1] = key end
+    def.key = key
+    R.byKey[key] = def
+    return true
 end

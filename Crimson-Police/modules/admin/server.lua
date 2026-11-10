@@ -1266,6 +1266,34 @@ local function SuspendOfficer(src, citizenid, days, reason, untilTs)
     return true, { citizenid = cid, days = d, untilTs = exact or (d > 0 and (os.time() + d * 86400) or nil) }
 end
 
+-- Tablet suspensions are one kind ('suspension') of the one restrictions list (modules/supervisor/restrictions.lua):
+-- the 'suspend' permission lifts or extends one there, audited like the suspend command (suspend / unsuspend).
+local SUSPEND_ROWS = [[SELECT citizenid, department, UNIX_TIMESTAMP(suspended_until) AS until_ts FROM cp_officers
+    WHERE suspended_until IS NOT NULL AND suspended_until > NOW()]]
+
+CP.Restriction('suspension', {
+    perm = { lift = 'suspend', extend = 'suspend' },
+    maxHours = 3650 * 24,
+    list = function()
+        local out = {}
+        for _, r in ipairs(Query(SUSPEND_ROWS) or {}) do
+            out[#out + 1] = { citizenid = r.citizenid, untilAt = tonumber(r.until_ts), dept = r.department }
+        end
+        return out
+    end,
+    audit = { actions = { 'suspend', 'autoSuspend' } },
+    lift = function(ctx, p) return SuspendOfficer(ctx.src, p.citizenid, 0, ctx.reason) end,
+    extend = function(ctx, p, hours)
+        local cid = Admin.resolveCitizenId(p.citizenid)
+        if not cid then return false, 'err.unknown_officer' end
+        local prev = Single('SELECT UNIX_TIMESTAMP(suspended_until) AS until_ts FROM cp_officers WHERE citizenid = ?',
+            { cid })
+        local prevTs = prev and tonumber(prev.until_ts) or nil
+        if not prevTs or prevTs <= os.time() then return false, 'err.not_suspended' end
+        return SuspendOfficer(ctx.src, cid, nil, ctx.reason, math.floor(prevTs) + hours * 3600)
+    end,
+})
+
 SUB.suspend = function(src, args)
     local reason = JoinFrom(args, 3)
     local ok, res = SuspendOfficer(src, args[1], args[2], reason)

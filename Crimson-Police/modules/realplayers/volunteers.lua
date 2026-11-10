@@ -19,6 +19,7 @@ local cidOf = {}        -- [server id] = citizenid of a listed volunteer
 local whoOf = {}        -- [citizenid] = the player key strikes are kept under (his license, else 'cid:<citizenid>')
 local strikesOf = {}    -- [who] = { os.time(), ... } strikes within strikeHours
 local blockedUntil = {} -- [who] = os.time() the strikes block ends
+local blockCid = {}     -- [who] = the citizenid the block was set on (the restrictions list names him)
 local sweep = { on = false, token = 0 }
 local reserved = {} -- [holder: a run id or a pending accept's token] = citizenid of the volunteer it counts on
 local slotCache = setmetatable({}, { __mode = 'k' }) -- [mission definition] = { [location index] = slot | false }
@@ -137,8 +138,9 @@ local function PruneStrikes(now)
 end
 
 local function LoadStrikes(now)
-    local ok, rows = pcall(MySQL.query.await, [[SELECT kind, suspect_license, UNIX_TIMESTAMP(created_at) AS created_ts,
-        UNIX_TIMESTAMP(until_at) AS until_ts FROM cp_pvp_pairs WHERE kind IN ('vol_strike', 'vol_block')]])
+    local ok, rows = pcall(MySQL.query.await, [[SELECT kind, suspect_citizenid, suspect_license,
+        UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(until_at) AS until_ts FROM cp_pvp_pairs
+        WHERE kind IN ('vol_strike', 'vol_block')]])
     if not ok then
         CP.err(TAG, 'reading the saved strikes failed: %s', tostring(rows))
         return false
@@ -156,6 +158,9 @@ local function LoadStrikes(now)
                 n = n + 1
             elseif r.kind == 'vol_block' and untilAt > now and untilAt > (blockedUntil[who] or 0) then
                 blockedUntil[who] = untilAt
+                if type(r.suspect_citizenid) == 'string' and r.suspect_citizenid ~= '' then
+                    blockCid[who] = r.suspect_citizenid
+                end
                 n = n + 1
             end
         end
@@ -343,6 +348,7 @@ function V.strike(cid, why)
         strikesOf[who] = nil
         local untilAt = now + math.floor(Num(Cfg().blockHours, 24, 1, 8760) * 3600)
         blockedUntil[who] = untilAt
+        blockCid[who] = cid
         SaveStrike(cid, who, now, untilAt)
         for other, entry in pairs(listed) do
             if entry.who == who then End(other, 'strikes') end
@@ -407,7 +413,7 @@ function V.clearStrikes(cid)
     end
     if count == 0 and not blocked then return false, 'no_row' end
     for _, who in ipairs(keys) do
-        strikesOf[who], blockedUntil[who] = nil, nil
+        strikesOf[who], blockedUntil[who], blockCid[who] = nil, nil, nil
     end
     CreateThread(function()
         if not DbReady() then return end
@@ -420,6 +426,41 @@ function V.clearStrikes(cid)
     end)
     CP.log(TAG, 'strikes of %s cleared (%d strike(s)%s)', cid, count, blocked and ', a block' or '')
     return true, { strikes = count, blockedUntil = blocked }
+end
+
+-- Every strikes block running now, for the restrictions list: { { citizenid, untilAt } }.
+function V.blocks()
+    local now, out = os.time(), {}
+    for who in pairs(blockedUntil) do
+        local untilAt = BlockedAt(who, now)
+        local cid = blockCid[who] or (type(who) == 'string' and who:match('^cid:(.+)$')) or nil
+        if untilAt and cid then out[#out + 1] = { citizenid = cid, untilAt = untilAt } end
+    end
+    return out
+end
+
+-- An admin extends this citizenid's player's running strikes block by hours (at most a year from now), saved like a
+-- new block. -> true, untilAt | false, 'no_row'.
+function V.extendBlock(cid, hours)
+    if type(cid) ~= 'string' or cid == '' then return false, 'no_row' end
+    local now = os.time()
+    for _, who in ipairs({ whoOf[cid] or false, 'cid:' .. cid }) do
+        local key = who
+        if not key or not BlockedAt(key, now) then
+            for w, c in pairs(blockCid) do
+                if c == cid and BlockedAt(w, now) then key = w end
+            end
+        end
+        local old = key and BlockedAt(key, now)
+        if old then
+            local untilAt = math.min(old + math.floor(Num(hours, 1, 1, 8760)) * 3600, now + 8760 * 3600)
+            blockedUntil[key] = untilAt
+            blockCid[key] = cid
+            SaveStrike(cid, key, now, untilAt)
+            return true, untilAt
+        end
+    end
+    return false, 'no_row'
 end
 
 -- His strikes and block for the criminal tablet's History: { strikes = { expiresAt (os.time), ... } oldest first,

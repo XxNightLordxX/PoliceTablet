@@ -374,7 +374,7 @@ do
     end
     H.eq(
         table.concat(main, ','),
-        'admin_home,admin_officers,admin_departments,admin_permissions,admin_missions,admin_live,admin_markers,'
+        'admin_home,admin_officers,admin_restrictions,admin_departments,admin_permissions,admin_missions,admin_live,admin_markers,'
             .. 'admin_testing,admin_rs,admin_money,admin_review,admin_audit,admin_settings,admin_system',
         'the everyday admin screens stay in the sidebar, by job'
     )

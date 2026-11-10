@@ -676,7 +676,7 @@ old layout switches and where each one lives now.
 | Group | Screen | What it is for |
 |---|---|---|
 | | **Home** | A dashboard: **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`: new mission, missions on or off, change pay, give or take points, quick settings) |
-| People | **Officers** | Search officers: history, suspensions, disputes about failed runs, commendations and the officer tools |
+| People | **Officers**, **Restrictions** | Search officers (history, disputes, commendations, tools); every suspension, ban and block now (extend, lift) |
 | | **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
 | | **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |
 | | **Leaderboards**, **Seasons** (under More) | Every board, cash paid, voids, awards, item rewards; start, plan or end a season, the bounty |

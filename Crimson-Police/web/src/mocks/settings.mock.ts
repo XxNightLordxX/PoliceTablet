@@ -385,6 +385,7 @@ const data: SettingsData = {
         admin_home: ['general', 'tablet_and_commands'],
         admin_markers: ['map_markers'],
         admin_rs: ['real_players'],
+        admin_restrictions: ['tablet_and_commands', 'mission_controls', 'real_players'],
         admin_money: ['limits_and_cash', 'feature_rewards', 'gone_section'],
         admin_departments: ['departments'],
     },

@@ -1,7 +1,8 @@
 -- Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
 
 -- Mission ban: a supervisor bars one officer of his department (a lower grade, never himself) from taking
--- missions for some hours, with a reason; the one who set it and admins lift it. Real missionban, livectl,
+-- missions for some hours, with a reason; the one who set it lifts it, admins lift or extend it in the one
+-- restrictions list (server:admin:restriction, kind 'missionBan'). Real missionban, restrictions, livectl,
 -- deptcontrols, adminkit, admin, access and permissions (tests/fixtures/admin_live_world.lua). The accept, call
 -- claim and Cross-Department join checks are in board_types_spec, missioncalls_spec and teams_spec.
 
@@ -10,7 +11,8 @@ H.boot({ side = 'server', realLocale = true })
 Config.Debug = false
 H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)
 local W = dofile('tests/fixtures/admin_live_world.lua')(H)
-H.load('modules/missionban/server.lua')
+H.load('modules/supervisor/missionban.lua')
+H.load('modules/supervisor/restrictions.lua')
 H.step(0)
 local MB, DC = CP.MissionBan, CP.DeptControls
 
@@ -137,11 +139,32 @@ H.eq(err, 'err.mission_ban_none', 'nothing left to lift')
 
 ok = Ban(2, 'OFF00009', 1)
 H.eq(ok, true, 'a second ban')
-ok = W.act('server:admin:liftMissionBan', 1, { citizenid = 'OFF00009', reason = 'Appeal' })
+-- the restrictions list: the ban is a row with who set it and why; an admin extends it, then lifts it
+local list = W.cb('admin:getRestrictions', 1, {})
+list = list and list.data
+local row
+for _, r in ipairs(list and list.rows or {}) do
+    if r.kind == 'missionBan' and r.citizenid == 'OFF00009' then row = r end
+end
+H.ok(row and row.by == 'SUP00002' and row.reason == 'Ignored an order',
+    'the restrictions list shows the ban, its setter and reason')
+local untilBefore = MB.get('OFF00009')['until']
+ok, err = W.act('server:admin:restriction', 1,
+    { op = 'extend', kind = 'missionBan', citizenid = 'OFF00009', hours = 2, reason = 'Again' })
+H.eq(ok, true, 'an admin extends it: ' .. tostring(err))
+H.eq(MB.get('OFF00009')['until'], untilBefore + 7200, 'by two hours')
+H.clockMs = H.clockMs + 4000
+ok, err = W.act('server:admin:restriction', 1,
+    { op = 'extend', kind = 'missionBan', citizenid = 'OFF00009', hours = 169, reason = 'x' })
+H.eq(err, 'err.restriction_hours', 'never past a week')
+H.clockMs = H.clockMs + 4000
+ok = W.act('server:admin:restriction', 1,
+    { op = 'lift', kind = 'missionBan', citizenid = 'OFF00009', reason = 'Appeal' })
 H.eq(ok, true, 'an admin lifts any ban')
 H.eq(MB.get('OFF00009'), nil, 'lifted')
 H.eq(#W.audits('missionBanLift'), 2, 'audited')
-ok, err = W.act('server:admin:liftMissionBan', 7, { citizenid = 'OFF00009', reason = 'x' })
+ok, err = W.act('server:admin:restriction', 7,
+    { op = 'lift', kind = 'missionBan', citizenid = 'OFF00009', reason = 'x' })
 H.eq(err, 'err.no_permission', 'an officer has no admin lift')
 
 -- ============================================================================
@@ -181,7 +204,8 @@ ok, err = W.act('server:sup:liftMissionBan', 11, { citizenid = 'OFF00009', reaso
 H.eq(err, 'err.mission_ban_not_yours', 'nor lift it')
 ok = Ban(12, 'OFF00009', 2)
 H.eq(ok, true, 'the setter may change his own ban')
-ok = W.act('server:admin:liftMissionBan', 1, { citizenid = 'OFF00009', reason = 'x' })
+H.clockMs = H.clockMs + 4000
+ok = W.act('server:admin:restriction', 1, { op = 'lift', kind = 'missionBan', citizenid = 'OFF00009', reason = 'x' })
 H.eq(ok, true, 'an admin lifts it')
 
 MC.controls.missionBan.on = false
@@ -199,7 +223,7 @@ do
     local okA, errA = Ban(3, 'OFF00007', 10)
     H.ok(okA == true, 'Z7: and bans him for 10 hours (above FIB\'s max): ' .. tostring(errA))
     H.clockMs = H.clockMs + 4000
-    W.act('server:admin:liftMissionBan', 1, { citizenid = 'OFF00007', reason = 'x' })
+    W.act('server:admin:restriction', 1, { op = 'lift', kind = 'missionBan', citizenid = 'OFF00007', reason = 'x' })
     Config.Departments.sast.missionControls, Config.Departments.fib.missionControls = savedS, savedF
     Config.Permissions.supervisor.missionControls = false
 end
@@ -211,5 +235,47 @@ do
     if f then f:close() end
     local _, n = src:gsub('oneAtATime = true', '')
     H.eq(n, 2, 'Z5: clearCooldowns and addRunTime run one at a time per supervisor')
+end
+-- FM5: a tablet suspension is a row of the same restrictions list (who set it and why from the audit), extended and
+-- lifted there with the suspend permission, audited like the suspend command
+do
+    H.clockMs = H.clockMs + 4000
+    local okS, errS = W.act('server:admin:suspend', 1, { citizenid = 'OFF00008', days = 2, reason = 'No-shows' })
+    H.ok(okS == true, 'an admin suspends an officer: ' .. tostring(errS))
+    local res = W.cb('admin:getRestrictions', 1, {})
+    local srow
+    for _, r in ipairs(res and res.data and res.data.rows or {}) do
+        if r.kind == 'suspension' and r.citizenid == 'OFF00008' then srow = r end
+    end
+    H.ok(srow and srow.reason == 'No-shows' and srow.by ~= nil, 'the suspension is listed with its reason and setter')
+    local before = srow and srow.untilAt or 0
+    H.clockMs = H.clockMs + 4000
+    okS, errS = W.act('server:admin:restriction', 1,
+        { op = 'extend', kind = 'suspension', citizenid = 'OFF00008', hours = 24, reason = 'Again' })
+    H.ok(okS == true, 'extended by a day: ' .. tostring(errS))
+    local untilTs = tonumber(
+        H.sql('SELECT UNIX_TIMESTAMP(suspended_until) AS t FROM cp_officers WHERE citizenid = ?', { 'OFF00008' })[1].t)
+    H.eq(untilTs, before + 86400, 'the suspension now ends a day later')
+    H.clockMs = H.clockMs + 4000
+    okS = W.act('server:admin:restriction', 1,
+        { op = 'lift', kind = 'suspension', citizenid = 'OFF00008', reason = 'Appeal' })
+    H.eq(okS, true, 'and lifted early')
+    H.eq(W.audits('unsuspend')[1] ~= nil, true, 'audited as unsuspend')
+    H.clockMs = H.clockMs + 4000
+    local _, errO = W.act('server:admin:restriction', 1,
+        { op = 'grow', kind = 'suspension', citizenid = 'OFF00008', reason = 'x' })
+    H.eq(errO, 'err.restriction_op', 'only extend or lift')
+    local _, errK = W.act('server:admin:restriction', 1,
+        { op = 'lift', kind = 'nope', citizenid = 'OFF00008', reason = 'x' })
+    H.eq(errK, 'err.restriction_kind', 'an unknown kind is refused')
+    Config.AdminUi.restrictionsExtend = false
+    H.clockMs = H.clockMs + 4000
+    local _, errE = W.act('server:admin:restriction', 1,
+        { op = 'extend', kind = 'missionBan', citizenid = 'OFF00008', hours = 1, reason = 'x' })
+    H.eq(errE, 'err.restriction_extend_off', 'restrictionsExtend = false: no Extend')
+    local off = W.cb('admin:getRestrictions', 1, {})
+    H.eq(off and off.data and off.data.kinds[1].canExtend, false, 'and the list offers none')
+    Config.AdminUi.restrictionsExtend = true
+    H.eq(Config.AdminUi.restrictionsExtend, true, 'restrictionsExtend ships true')
 end
 return H

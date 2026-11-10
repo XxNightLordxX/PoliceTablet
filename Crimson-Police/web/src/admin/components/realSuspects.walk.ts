@@ -12,6 +12,7 @@ import {
     RS_CLEAR_STRIKES_ACTION,
     RS_LIFT_ACTION,
     cidText,
+    clearStrikesPayload,
     filterCases,
     ledgerSuspect,
     liftPayload,
@@ -168,8 +169,9 @@ async function steps(): Promise<void> {
     if (row) {
         const payload = liftPayload(row, '  Appeal accepted ');
         ok(
-            JSON.stringify(payload) === '{"kind":"exclude","reason":"Appeal accepted","suspect":"CRIM0042"}',
-            'a lift sends the kind, the citizenid it names and the trimmed reason',
+            JSON.stringify(payload) ===
+                '{"op":"lift","kind":"exclusion","citizenid":"CRIM0042","reason":"Appeal accepted"}',
+            'a lift sends the restriction kind, the citizenid it names and the trimmed reason',
         );
         ok((await refused(action(RS_LIFT_ACTION, { ...payload, reason: ' ' }))) !== '', 'a lift needs a reason');
         ok((await action(RS_LIFT_ACTION, payload)).ok, 'the exclusion is lifted');
@@ -180,7 +182,7 @@ async function steps(): Promise<void> {
     const blockRow = { kind: 'block' as const, officer: 'ABC12345', suspect: 'CRIM0009', untilAt: 0 };
     ok(
         JSON.stringify(liftPayload(blockRow, 'x')) ===
-            '{"kind":"block","reason":"x","officer":"ABC12345","suspect":"CRIM0009"}',
+            '{"op":"lift","kind":"pairBlock","citizenid":"ABC12345","reason":"x","other":"CRIM0009"}',
         'a pair block names both',
     );
 
@@ -188,11 +190,11 @@ async function steps(): Promise<void> {
     const cl = await request<RsCasesData>('admin:getRsCases', {});
     ok(cl.data?.clearStrikes === true, 'the server offers Clear strikes');
     ok(
-        (await refused(action(RS_CLEAR_STRIKES_ACTION, { citizenid: 'VOL00002', reason: 'Lag' }))) ===
+        (await refused(action(RS_CLEAR_STRIKES_ACTION, clearStrikesPayload('VOL00002', 'Lag')))) ===
             'err.rs_no_strikes',
         'a volunteer with no strikes: nothing to clear',
     );
-    ok((await action(RS_CLEAR_STRIKES_ACTION, { citizenid: 'VOL00001', reason: 'Lag' })).ok, 'his strikes clear');
+    ok((await action(RS_CLEAR_STRIKES_ACTION, clearStrikesPayload('VOL00001', 'Lag'))).ok, 'his strikes clear');
     const cl2 = await request<RsCasesData>('admin:getRsCases', {});
     ok((cl2.data?.listed ?? []).find(v => v.citizenid === 'VOL00001')?.strikes === 0, 'and read 0');
 }

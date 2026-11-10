@@ -42,6 +42,7 @@ export const SCREEN_HEADS = {
     admin_markers: { title: 'ui.nav.plain.admin_markers', help: 'ui.help.admin_markers' },
     admin_rs: { title: 'ui.nav.plain.admin_rs', help: 'ui.help.admin_rs' },
     admin_officers: { title: 'ui.nav.plain.admin_officers', help: 'ui.help.admin_officers' },
+    admin_restrictions: { title: 'ui.nav.plain.admin_restrictions', help: 'ui.help.admin_restrictions' },
     admin_departments: { title: 'ui.nav.plain.admin_departments', help: 'ui.help.admin_departments' },
     admin_seasons: { title: 'ui.nav.plain.admin_seasons', help: 'ui.help.admin_seasons' },
     admin_leaderboards: { title: 'ui.nav.plain.admin_leaderboards', help: 'ui.help.admin_leaderboards' },
