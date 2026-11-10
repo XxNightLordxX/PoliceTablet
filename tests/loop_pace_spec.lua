@@ -133,8 +133,10 @@ for _, rel in ipairs({
     'blocks/skill_check/client.lua',
 }) do
     Has(rel, 'local MARKER_FAR_MS = 1500', 'block markers far away every 1.5 s')
-    Has(rel, 'CP.Perf.ms(MARKER_FAR_MS)', 'the far marker wait is scaled')
+    Has(rel, 'Kit.markers(', 'its markers are drawn by the block client kit\'s one marker loop')
+    H.eq(Read(rel):find('Wait(0)', 1, true), nil, rel .. ': no per-frame marker loop of its own')
 end
+Has('blocks/_kit/client.lua', 'Wait(drew and 0 or CP.Perf.ms(far))', 'the kit\'s far marker wait is scaled')
 -- per frame stays per frame: the armed shooting check and the in-range markers never go through CP.Perf
 Has('modules/runs/client/runs.lua', 'if IsPedArmed(ped, 6) then\n                Wait(0)',
     'armed: the shot check every frame')
@@ -231,8 +233,10 @@ for _, rel in ipairs({
     'blocks/interact_points/client.lua',
     'blocks/skill_check/client.lua',
 }) do
-    H.ok(Read(rel):find('CP.Perf.rangeSq(', 1, true) ~= nil, rel .. ': its in-range distance goes through the cap')
+    Has(rel, 'range = MARKER_', 'its marker range goes to the kit')
 end
+Has('blocks/_kit/client.lua', 'CP.Perf.rangeSq(src.rangeSq)',
+    'every block marker\'s in-range distance goes through the cap')
 H.ok(Read('blocks/checkpoint_route/client.lua'):find('CP.Perf.rangeSq', 1, true) == nil,
     'the checkpoint course keeps its own distance (it samples the pass through a checkpoint in range)')
 
@@ -275,7 +279,7 @@ do
     waits, drawn = {}, 0
     H.advance(3000, 50)
     local frame = 0
-    for _, ms in ipairs(WaitsOf('blocks/skill_check/client.lua')) do if ms == 0 then frame = frame + 1 end end
+    for _, ms in ipairs(WaitsOf('blocks/_kit/client.lua')) do if ms == 0 then frame = frame + 1 end end
     H.ok(frame > 0 and drawn > 0, ('shipped, a device 20 m away: drawn every frame (%d frames)'):format(frame))
     Config.Performance.markerRange = 10
     H.advance(1000, 50)
@@ -283,7 +287,7 @@ do
     H.advance(6000, 50)
     frame = 0
     local far = 0
-    for _, ms in ipairs(WaitsOf('blocks/skill_check/client.lua')) do
+    for _, ms in ipairs(WaitsOf('blocks/_kit/client.lua')) do
         if ms == 0 then frame = frame + 1 elseif ms == 1500 then far = far + 1 end
     end
     H.eq(frame, 0, 'markerRange 10: the device 20 m away is not drawn every frame')

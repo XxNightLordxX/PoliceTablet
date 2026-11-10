@@ -48,31 +48,13 @@ local STATUS_MS = 700            -- lifetime of status lines refreshed every fra
 local EVENT_MS = 4000            -- lifetime of one-off lines
 local ROUTE_CHECK_MS = 1000      -- how often the GPS line's rule is checked (arrived at the start, own waypoint)
 
-local live = {}     -- [state] = ctx, for resource-stop cleanup
-local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
-
-local function KeyOf(ctx)
-    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
-end
-
-local function StateOf(ctx)
-    local key = KeyOf(ctx)
-    local st = states[key]
-    if not st then
-        st = type(ctx.state) == 'table' and ctx.state or {}
-        st.runKey = tostring(ctx.runId)
-        states[key] = st
-    end
-    return st
-end
-
--- Drop the states of other runs that are no longer running (late snapshots after a stop).
-local function Purge(ctx)
-    local run = tostring(ctx.runId)
-    for key, st in pairs(states) do
-        if st.runKey ~= run and not st.alive then states[key] = nil end
-    end
-end
+local Kit = CP.BlockKit
+local Cleanup
+-- one state per run and objective across every hook call (the engine may hand each hook a fresh ctx.state)
+local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st)
+    Cleanup(st.ctx, st)
+end)
+local StateOf = states.of
 
 -- Squared distance of two points (no square root, no vector): the frame loop's range checks.
 local function DistSq(a, b)
@@ -441,7 +423,7 @@ local function Apply(ctx, st, data)
     end
 end
 
-local function Cleanup(ctx, st)
+function Cleanup(ctx, st)
     st.alive = false
     st.token = (st.token or 0) + 1
     ClearBlips(st)
@@ -449,27 +431,23 @@ local function Cleanup(ctx, st)
         st.line = nil
         ctx.hudDetail(nil)
     end
-    live[st] = nil
-    if states[KeyOf(ctx)] == st then states[KeyOf(ctx)] = nil end
+    states.drop(st)
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.blips = st.blips or {}
         st.track = st.track or {}
     end,
 
     start = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.blips = st.blips or {}
         st.track = st.track or {}
         st.points = st.points or {}
         st.alive = true
         st.token = (st.token or 0) + 1
-        live[st] = ctx
         if st.pending then
             local data = st.pending
             st.pending = nil
@@ -493,8 +471,3 @@ CP.Blocks.register(BLOCK, {
         Cleanup(ctx, StateOf(ctx))
     end,
 })
-
-AddEventHandler('onResourceStop', function(resource)
-    if resource ~= GetCurrentResourceName() then return end
-    for st, ctx in pairs(live) do Cleanup(ctx, st) end
-end)

@@ -32,7 +32,6 @@ local function Cue(name)
 end
 
 local MARKER_DISTANCE = 40.0
-local MARKER_DISTANCE_SQ = MARKER_DISTANCE * MARKER_DISTANCE
 local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local NONE = {}                 -- the marker loop's empty list (no new table each pass)
 local TARGET_DISTANCE = 2.5
@@ -48,31 +47,13 @@ local ANIMS = {
     photo = { scenario = 'WORLD_HUMAN_PAPARAZZI' },
 }
 
-local live = {}     -- [state] = ctx, for resource-stop cleanup
-local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
-
-local function KeyOf(ctx)
-    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
-end
-
-local function StateOf(ctx)
-    local key = KeyOf(ctx)
-    local st = states[key]
-    if not st then
-        st = type(ctx.state) == 'table' and ctx.state or {}
-        st.runKey = tostring(ctx.runId)
-        states[key] = st
-    end
-    return st
-end
-
--- Drop the states of other runs that are no longer running (late snapshots after a stop).
-local function Purge(ctx)
-    local run = tostring(ctx.runId)
-    for key, st in pairs(states) do
-        if st.runKey ~= run and not st.alive then states[key] = nil end
-    end
-end
+local Kit = CP.BlockKit
+local Cleanup
+-- one state per run and objective across every hook call (the engine may hand each hook a fresh ctx.state)
+local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st)
+    Cleanup(st.ctx, st)
+end)
+local StateOf = states.of
 
 local function V3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
@@ -290,20 +271,15 @@ local function Interact(ctx, st, n, kind, duration, label)
     if st.busy or not st.alive then return end
     if lib.progressActive and lib.progressActive() then return end
     st.busy = true
-    -- ox_lib raises when the mission's animation dictionary fails to load: the step counts as cancelled and busy
-    -- is still cleared
-    local okBar, ok = pcall(lib.progressBar, {
+    -- the mission's animation can fail to load: the step then counts as cancelled and busy is still cleared
+    local ok = Kit.progress({
         duration = duration,
         label = label,
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = AnimFor(ctx.obj.progress and ctx.obj.progress.anim),
-    })
-    if not okBar then
-        CP.warn('blocks', 'interact_points bar failed: %s', tostring(ok))
-        ok = false
-    end
+    }, 'interact_points')
     st.busy = false
     if ok and st.alive then
         st.seq = (st.seq or 0) + 1
@@ -381,18 +357,18 @@ end
 
 local function Loop(ctx, st)
     local token = st.token
-    CreateThread(function()
-        while st.alive and st.token == token do
-            local sleep = CP.Perf.ms(MARKER_FAR_MS)
-            local pts = (st.data and st.data.points) or NONE
-            local pos = GetEntityCoords(cache.ped)
-            local rangeSq = CP.Perf.rangeSq(MARKER_DISTANCE_SQ)
-            for _, p in ipairs(pts) do
+    Kit.markers(ctx, st, {
+        range = MARKER_DISTANCE,
+        far = MARKER_FAR_MS,
+        keep = function() return st.token == token end,
+        draw = function(_, pos, rangeSq)
+            local drew = false
+            for _, p in ipairs((st.data and st.data.points) or NONE) do
                 if p.status == 'pending' or p.status == 'followup' then
                     local c = p.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
                     if dx * dx + dy * dy + dz * dz < rangeSq then
-                        sleep = 0
+                        drew = true
                         local r, g, b = 240, 200, 60
                         if p.status == 'followup' then r, g, b = 220, 60, 60 end
                         DrawMarker(2, c.x, c.y, c.z + 0.9, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.25, 0.25, 0.25, r, g, b,
@@ -401,9 +377,9 @@ local function Loop(ctx, st)
                 end
             end
             RefreshLine(ctx, st)
-            Wait(sleep)
-        end
-    end)
+            return drew
+        end,
+    })
 end
 
 -- ============================================================================
@@ -464,10 +440,10 @@ local function Apply(ctx, st, data)
     RefreshBlips(ctx, st)
 end
 
-local function Cleanup(ctx, st)
+function Cleanup(ctx, st)
     st.alive = false
     st.token = (st.token or 0) + 1
-    if st.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
+    if st.busy then Kit.cancelProgress() end
     st.busy = false
     ClearZones(st)
     ClearBlips(st)
@@ -475,26 +451,22 @@ local function Cleanup(ctx, st)
         st.line = nil
         ctx.hudDetail(nil)
     end
-    live[st] = nil
-    if states[KeyOf(ctx)] == st then states[KeyOf(ctx)] = nil end
+    states.drop(st)
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
     end,
 
     start = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
         st.alive = true
         st.token = (st.token or 0) + 1
-        live[st] = ctx
         if st.pending then
             local data = st.pending
             st.pending = nil
@@ -520,8 +492,3 @@ CP.Blocks.register(BLOCK, {
         Cleanup(ctx, StateOf(ctx))
     end,
 })
-
-AddEventHandler('onResourceStop', function(resource)
-    if resource ~= GetCurrentResourceName() then return end
-    for st, ctx in pairs(live) do Cleanup(ctx, st) end
-end)

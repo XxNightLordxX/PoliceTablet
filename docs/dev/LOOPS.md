@@ -156,8 +156,8 @@ Checked and kept:
   Auto-Ready (only control reads see it; it runs only while the option is on), the walk-away distance at a desk (a
   zone exit would need a second ox_lib zone per desk for the same 1 s answer).
 - Not merged: the tablet's animation keeper has its own token (the prop lives across a reopen); the criminal
-  tablet's downed watch belongs to another UI with its own token; the block loops each draw their own objective and
-  end with it.
+  tablet's downed watch belongs to another UI with its own token; the block AI loops each run their own objective
+  and end with it. The block markers are merged (MOD2): one loop per run in blocks/_kit/client.lua draws them all.
 - Deadlines stay exact: the server deadline ticks (run engine, route, custody, NPC, live crime) keep 1 s; the unit
   ready check keeps its timer at the deadline; the checkpoint course keeps its own 150 m view distance, because
   inside it the same pass samples your pass through the checkpoint, so `markerRange` does not apply to it.
@@ -226,7 +226,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | testing/client debug drawing | no: drawn lines need every frame | yes, debug on, within 600 m | per frame near, 1000 ms far | yes, cache.ped | one loop | lines vanish after one frame |
 | testing/client panel focus watch | no blur event from the game | yes, panel focused | 250 ms | yes | one loop | ends on blur |
 | builder/client placement, recording, drive test | no: draws and reads controls | yes, a tool open (admin) | per frame (required) | yes, cache.ped | one loop per open tool | admin only, never at play |
-| blocks marker loops (escort, flee_arrest, process_scene, protect_rescue, search_area, skill_check, interact_points) | no: markers need every frame | yes, objective current | per frame in range (`markerRange`), 1500 ms far | yes, squared distances, hoisted ranges | one per objective | far away they sleep |
+| blocks/_kit marker loop (the markers of escort, flee_arrest, process_scene, protect_rescue, search_area, skill_check, interact_points; the HUD line of the last two on the same pass) | no: markers need every frame | yes, while an objective of the run draws, ends with the last | per frame in range (`markerRange`), 1500 ms far | yes, squared distances, hoisted ranges | one per run (MOD2: was one per objective, seven copies) | far away it sleeps |
 | blocks suspect AI (flee_arrest, search_area, pursuit, field_contact) | no event for distance | yes, objective live | 250 ms near, 2000 ms far | yes | one per objective | reaction time near, cheap far |
 | blocks host AI (protect_rescue, escort, hostile_waves, pursuit ram) | no event | yes, objective live | 1000 ms, 250 ms while control is asked | yes | one per objective | AI retasks are not frame critical |
 | blocks/checkpoint_route course | no: contact sampling | yes, course on | per frame near, 100 ms running | yes | markers and sampling in one pass | the sampling deadline |
@@ -284,9 +284,9 @@ async callbacks, audit writes) run once. The census marks them.
 | modules/missions/client/testing.lua | test area debug drawing | Testing debug on, within 600 m | per frame near, 500 -> 1000 ms far (scaled) | drawn lines need every frame |
 | modules/missions/client/testing.lua | panel focus watch | panel focused | 250 ms | ends on blur |
 | modules/missions/client/builder.lua | placement, recording, drive test | a Builder tool open (admin only) | per frame | draws and reads controls |
-| blocks/escort, flee_arrest, process_scene, protect_rescue marker loops | objective markers | objective current | per frame in range (capped by `markerRange`), 750 -> 1500 ms far (scaled) | markers need every frame in range |
-| blocks/search_area/client.lua | clue markers | objective current | per frame in 150 m (capped by `markerRange`), 750 -> 1500 ms far (scaled) | no allocation per frame |
-| blocks/skill_check, interact_points | markers and HUD line | objective current | per frame in range (capped by `markerRange`), 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
+| blocks/_kit marker loop (escort, flee_arrest, process_scene, protect_rescue) | objective markers | objective current | per frame in range (capped by `markerRange`), 750 -> 1500 ms far (scaled) | markers need every frame in range |
+| blocks/_kit marker loop (search_area) | clue markers | objective current | per frame in 150 m (capped by `markerRange`), 750 -> 1500 ms far (scaled) | no allocation per frame |
+| blocks/_kit marker loop (skill_check, interact_points) | markers and HUD line | objective current | per frame in range (capped by `markerRange`), 500 -> 1500 ms far (scaled) | far away, a new HUD message shows up to 1.5 s later |
 | blocks/flee_arrest, search_area, pursuit, field_contact | suspect AI and reports | objective live | 250 ms near, 1000 -> 2000 ms far (scaled) | reaction time near, cheap far |
 | blocks/protect_rescue, escort, hostile_waves | host AI and blips | objective live | 500 -> 1000 ms, scaled (250 ms while control is asked) | AI retasks are not frame critical |
 | blocks/checkpoint_route/client.lua | course markers and contact sampling | course on | per frame near, 100 ms while the course runs, 500 -> 1000 ms else (scaled) | contact sampling deadline |
@@ -344,20 +344,21 @@ strings do not count.
 
 | Lua file | `CreateThread` | `while true do` | What they are |
 | --- | --- | --- | --- |
+| `blocks/_kit/client.lua` | 1 | 0 | the one marker loop of a run (every block's markers but the checkpoint course) |
 | `blocks/checkpoint_route/client.lua` | 1 | 0 | course markers and contact sampling |
-| `blocks/escort/client.lua` | 2 | 0 | marker loop, host AI |
+| `blocks/escort/client.lua` | 1 | 0 | host AI |
 | `blocks/field_contact/client.lua` | 1 | 0 | suspect AI and reports |
 | `blocks/field_contact/server.lua` | 2 | 0 | one-shot: a walk-in callback, a contact answer |
-| `blocks/flee_arrest/client.lua` | 3 | 0 | marker loop, suspect AI; a one-shot |
+| `blocks/flee_arrest/client.lua` | 2 | 0 | suspect AI; a one-shot |
 | `blocks/hostile_waves/client.lua` | 2 | 0 | host AI and blips; a one-shot |
-| `blocks/interact_points/client.lua` | 2 | 0 | markers and HUD line; a one-shot |
+| `blocks/interact_points/client.lua` | 1 | 0 | one-shot: a step's bar |
 | `blocks/live_response/client.lua` | 1 | 0 | one-shot: End case from the radial |
-| `blocks/process_scene/client.lua` | 4 | 0 | marker loop; one-shots |
-| `blocks/protect_rescue/client.lua` | 3 | 0 | marker loop, host AI; a one-shot |
+| `blocks/process_scene/client.lua` | 3 | 0 | one-shots: a step's bar |
+| `blocks/protect_rescue/client.lua` | 2 | 0 | host AI; a one-shot |
 | `blocks/protect_rescue/server.lua` | 1 | 0 | respawn retry, ends when the hosts are out or the objective stops |
 | `blocks/pursuit/client.lua` | 2 | 0 | suspect AI and reports, ram loop |
-| `blocks/search_area/client.lua` | 3 | 0 | clue markers, suspect AI; a one-shot |
-| `blocks/skill_check/client.lua` | 3 | 0 | markers and HUD line, the rounds (bounded); a one-shot |
+| `blocks/search_area/client.lua` | 2 | 0 | suspect AI; a one-shot |
+| `blocks/skill_check/client.lua` | 2 | 0 | the rounds (bounded); a one-shot |
 | `modules/access/client/access.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/access/access.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/admin/admin.lua` | 4 | 0 | push queue while queued; one-shots |

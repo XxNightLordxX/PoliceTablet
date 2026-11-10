@@ -67,60 +67,34 @@ local PULL_MPS = 7.0           -- speed while pulling over
 local DRIVEBY_RANGE = 40.0     -- metres: armed passengers of a fighting car shoot at the named participant
 local NEAR_STEP = 10           -- metres: the HUD gives the nearest car's distance in these steps (whole metres)
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = {
-            key = k,
-            vehicles = {},
-            suspects = {},
-            byNet = {},
-            blips = {},
-            applied = {},
-            tasked = {},
-            drive = {},
-            routeDone = {},
-            left = {},
-            lost = {},
-            lastReport = {},
-            aimSince = {},
-            touching = {},
-            seen = {},
-            alive = true,
-            data = {},
-        }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
+local Kit = CP.BlockKit
+local EntityFor, BagOf, ToVec3 = Kit.entity, Kit.bag, Kit.vec3
+local Cleanup
+local states = Kit.states(function()
+    return {
+        vehicles = {},
+        suspects = {},
+        byNet = {},
+        blips = {},
+        applied = {},
+        tasked = {},
+        drive = {},
+        routeDone = {},
+        left = {},
+        lost = {},
+        lastReport = {},
+        aimSince = {},
+        touching = {},
+        seen = {},
+        alive = true,
+        data = {},
+    }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
 
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
-end
-
-local function EntityFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
-end
-
-local function ToVec3(v)
-    local x, y, z = U.xyz(v)
-    if not x then return nil end
-    return vector3(x + 0.0, y + 0.0, z + 0.0)
 end
 
 local function RouteInfo(S)
@@ -746,7 +720,7 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     for k in pairs(S.blips) do DropBlip(S, k) end
@@ -754,7 +728,7 @@ local function Cleanup(S)
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -792,12 +766,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

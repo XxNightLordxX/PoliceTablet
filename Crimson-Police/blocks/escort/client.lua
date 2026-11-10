@@ -3,7 +3,7 @@
 -- What it does (while the objective is current on this participant's client)
 --   - blips for the escorted truck, the destination and living attackers (Radio Silence 'area': the
 --     destination alone);
---     the arrival marker at the destination (DrawMarker only within MARKER_RANGE, otherwise Wait(750));
+--     the arrival marker at the destination (CP.BlockKit draws it within MARKER_RANGE);
 --   - a HUD line (ctx.hudDetail): truck health, stop wait, stopped countdown, attackers alive, and at the
 --     destination how many attackers are still within clearRadius (or, with none that close, how many are
 --     left to neutralise anywhere); nothing once a stop cleaned up while the host AI waited for control;
@@ -35,45 +35,19 @@ local RETASK_MS = 12000
 local STUCK_MPS = 1.0
 local STOP_RANGE = 4.0
 local MARKER_RANGE = 150.0
-local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, blips = {}, applied = {}, lost = {}, data = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
+local Kit = CP.BlockKit
+local EntityFor, BagOf, ToVec3 = Kit.entity, Kit.bag, Kit.vec3
+local Cleanup
+local states = Kit.states(function()
+    return { blips = {}, applied = {}, lost = {}, data = {}, alive = true }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
 
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
-end
-
-local function EntityFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
-end
-
-local function ToVec3(v)
-    local x, y, z = U.xyz(v)
-    if not x then return nil end
-    return vector3(x + 0.0, y + 0.0, z + 0.0)
 end
 
 -- The route of this location: points (vector3) and sorted stop waypoints.
@@ -323,23 +297,20 @@ local function HudText(S, truck)
 end
 
 local function MarkerLoop(S)
-    if S.drawing then return end
-    S.drawing = true
-    CreateThread(function()
-        while S.alive and S.current do
+    Kit.markers(S.ctx, S, {
+        range = MARKER_RANGE,
+        far = MARKER_FAR_MS,
+        keep = function() return S.current end,
+        draw = function(_, pos, rangeSq)
             local r = RouteOf(S)
             local p = r.points[#r.points]
+            if not p or U.distSq(pos, p) > rangeSq then return false end
             local arrival = tonumber(S.ctx.obj.arrival) or 20.0
-            if p and U.distSq(GetEntityCoords(cache.ped), p) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
-                DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, arrival * 2.0, arrival * 2.0, 1.5, 60,
-                    140, 240, 70, false, false, 2, false, nil, nil, false)
-                Wait(0)
-            else
-                Wait(CP.Perf.ms(MARKER_FAR_MS))
-            end
-        end
-        S.drawing = false
-    end)
+            DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, arrival * 2.0, arrival * 2.0, 1.5, 60, 140,
+                240, 70, false, false, 2, false, nil, nil, false)
+            return true
+        end,
+    })
 end
 
 local function Loop(S)
@@ -391,7 +362,7 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     for k in pairs(S.blips) do DropBlip(S, k) end
@@ -399,7 +370,7 @@ local function Cleanup(S)
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -439,12 +410,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

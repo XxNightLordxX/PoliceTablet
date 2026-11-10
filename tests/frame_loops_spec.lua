@@ -89,13 +89,9 @@ end
 
 -- the files, and how many of their frame loops read cache.ped
 local FILES = {
-    ['blocks/flee_arrest/client.lua'] = 1,
-    ['blocks/protect_rescue/client.lua'] = 1,
-    ['blocks/escort/client.lua'] = 1,
-    ['blocks/process_scene/client.lua'] = 1,
-    ['blocks/search_area/client.lua'] = 1,
-    ['blocks/skill_check/client.lua'] = 1,
-    ['blocks/interact_points/client.lua'] = 1,
+    -- the one marker loop of every block's markers (escort, flee_arrest, interact_points, process_scene,
+    -- protect_rescue, search_area, skill_check), and the checkpoint course
+    ['blocks/_kit/client.lua'] = 1,
     ['blocks/checkpoint_route/client.lua'] = 1,
     ['modules/runs/client/runs.lua'] = 1,
     -- the Testing debug drawing (step LP1)

@@ -39,22 +39,16 @@ local CONTROL_MS = 250          -- control request timeout per hostile
 local TRAFFIC_Z = 100.0         -- half height of the SetRoadsInArea box
 local HOLD_POLL_MS = 500        -- how often a held traffic block checks that its run is still going
 
-local active = {}            -- [runId:index] = S
+local Kit = CP.BlockKit
+local PedFor, BagOf = Kit.entity, Kit.bag
+local Cleanup
+local states = Kit.states(function()
+    return { peds = {}, blips = {}, applied = {}, reported = {}, alive = true }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
+
 local held = {}              -- [runId] = { traffic, ... } kept after the objective stopped (later objectives)
 local watching = {}          -- [runId] = true while a thread waits for that run to end
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, peds = {}, blips = {}, applied = {}, reported = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
 
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
@@ -65,18 +59,6 @@ end
 -- the host already runs their fight and everyone sees them on the map.
 local function Live(S)
     return S.alive and (S.current or S.awake) == true
-end
-
-local function PedFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
 end
 
 -- ============================================================================
@@ -317,7 +299,7 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     for netId in pairs(S.blips) do removeBlip(S, netId) end
@@ -326,7 +308,7 @@ local function Cleanup(S)
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -366,7 +348,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if not S then return end
         -- the objective is done but the run goes on at the same location: keep NPC traffic out
         if S.traffic and LaterObjectives(ctx) then HoldTraffic(S) end
@@ -374,8 +356,7 @@ CP.Blocks.register(BLOCK, {
     end,
 })
 
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
+-- after every objective's cleanup (the kit runs those first): the traffic blocks held for later objectives
+Kit.onStop(function()
     for _, runId in ipairs(U.keys(held)) do ReleaseHeld(runId) end
 end)

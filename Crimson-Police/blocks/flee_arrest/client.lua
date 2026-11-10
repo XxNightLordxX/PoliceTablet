@@ -3,7 +3,7 @@
 -- What it does (while the objective is current on this participant's client)
 --   - door mode: ox_target sphere zone "Knock and announce" on the door (option crimson-police:knock),
 --     selecting it reports 'knock_start', runs lib.progressBar(knock.duration) and reports 'knock';
---     a marker over the door (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and a door
+--     a marker over the door (CP.BlockKit draws it within MARKER_RANGE) and a door
 --     blip until the knock (Radio Silence 'none': no blip); all three come back when a test restart
 --     sends knocked = false again (restart sends no stop or start);
 --   - every participant checks the suspects near them: 'aim' when IsPlayerFreeAimingAtEntity (or
@@ -34,47 +34,21 @@ local WATCH_RANGE = 40.0
 local REPORT_MS = 1500           -- the same report for the same suspect at most this often
 local CONTROL_MS = 250
 local MARKER_RANGE = 150.0
-local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local KNOCK_RANGE = 2.5
 local KNOCK_ANIM = { dict = 'timetable@jimmy@doorknock@', clip = 'knockdoor_idle' }
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, peds = {}, blips = {}, applied = {}, tasked = {}, lastReport = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
+local Kit = CP.BlockKit
+local PedFor, BagOf, ToVec3 = Kit.entity, Kit.bag, Kit.vec3
+local Cleanup
+local states = Kit.states(function()
+    return { peds = {}, blips = {}, applied = {}, tasked = {}, lastReport = {}, alive = true }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
 
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
-end
-
-local function PedFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
-end
-
-local function ToVec3(v)
-    local x, y, z = U.xyz(v)
-    if not x then return nil end
-    return vector3(x + 0.0, y + 0.0, z + 0.0)
 end
 
 local function Points(location, ref)
@@ -167,19 +141,15 @@ local function Knock(S)
     local ctx = S.ctx
     local k = ctx.obj.knock or {}
     ctx.report({ type = 'knock_start' })
-    -- ox_lib raises when the animation fails to load: the knock counts as cancelled and busy is still cleared
-    local okBar, done = pcall(lib.progressBar, {
+    -- the knock animation can fail to load: the knock then counts as cancelled and busy is still cleared
+    local done = Kit.progress({
         duration = tonumber(k.duration) or 3000,
         label = k.label or CP.L('block.flee_arrest.knock'),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = KNOCK_ANIM,
-    })
-    if not okBar then
-        CP.warn('blocks', 'flee_arrest knock bar failed: %s', tostring(done))
-        done = false
-    end
+    }, 'flee_arrest knock')
     if done and S.alive and S.current and not S.knocked then
         ctx.report({ type = 'knock' })
     end
@@ -231,21 +201,19 @@ local function AddDoor(S)
 end
 
 local function MarkerLoop(S)
-    if S.drawing or not S.door then return end
-    S.drawing = true
-    CreateThread(function()
-        while S.alive and S.current and not S.knocked do
+    if not S.door then return end
+    Kit.markers(S.ctx, S, {
+        range = MARKER_RANGE,
+        far = MARKER_FAR_MS,
+        keep = function() return S.current and not S.knocked end,
+        draw = function(_, pos, rangeSq)
             local d = S.door
-            if U.distSq(GetEntityCoords(cache.ped), d) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
-                DrawMarker(0, d.x, d.y, d.z + 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.35, 240, 200, 40, 180,
-                    true, true, 2, false, nil, nil, false)
-                Wait(0)
-            else
-                Wait(CP.Perf.ms(MARKER_FAR_MS))
-            end
-        end
-        S.drawing = false
-    end)
+            if U.distSq(pos, d) > rangeSq then return false end
+            DrawMarker(0, d.x, d.y, d.z + 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.35, 240, 200, 40, 180, true,
+                true, 2, false, nil, nil, false)
+            return true
+        end,
+    })
 end
 
 -- ============================================================================
@@ -386,18 +354,18 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     -- a "Knock and announce" progress bar still running when the objective or run ends is cancelled
-    if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
+    if S.busy then Kit.cancelProgress() end
     DropDoor(S)
     for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -447,12 +415,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

@@ -4,6 +4,7 @@ One line per source file: what it is for, the first sentence of its header. tool
 the full header, with the details, stays at the top of the file itself (docs/dev/STYLE.md). The module APIs are in
 docs/dev/ARCHITECTURE.md.
 
+- `Crimson-Police/blocks/_kit/client.lua`: The objective blocks' client kit (CP.BlockKit): what every block client did with its own copy of the code.
 - `Crimson-Police/blocks/checkpoint_route/client.lua`: Objective block "checkpoint_route" (client half)
 - `Crimson-Police/blocks/checkpoint_route/server.lua`: Objective block "checkpoint_route" (server half)
 - `Crimson-Police/blocks/escort/client.lua`: Objective block "escort" (client half)
@@ -465,6 +466,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/backup_index_spec.lua`: Backups: saves/_backups/index.json and each <name>.manifest.json are written through the storage engine's atomic writer (.tmp, then a rename), so a full disk keeps the old index; a missing or unreadable index.json is rebuilt from the manifests in the backup folder instead of listing no backups.
 - `tests/backup_restore_spec.lua`: Backup restore: money and voids only move forward, the oldest backup of a full list restores, a damaged backup changes nothing, and a restore that stops part way keeps payments held, also after a restart, until a restore works (details below).
 - `tests/baked_in_spec.lua`: One way to do each thing (BK1): the switches that only chose between an old and a new layout of the same screens
+- `tests/block_kit_spec.lua`: The block client kit (CP.BlockKit, blocks/_kit/client.lua): one state per run and objective, one resource-stop cleanup, the entity helpers, a progress bar that never raises and one marker loop per run; and every block client uses it instead of its own copy.
 - `tests/blocks_a_spec.lua`: Objective blocks checkpoint_route, interact_points and skill_check (server halves) driven with a fake ctx, plus the locale part check for every key the six files use.
 - `tests/blocks_b_spec.lua`: Slice blocks_b: the server halves of hostile_waves, protect_rescue and flee_arrest driven through a FAKE ctx (spies for complete/fail/award/penalize/spawnPed/canSpawn/ coords/send/hud), a stubbed CP.Npc and a tiny entity world.
 - `tests/blocks_c_spec.lua`: Objective blocks pursuit, escort and search_area (server halves) driven with a fake ctx, plus the locale part check for every key the six block files use.

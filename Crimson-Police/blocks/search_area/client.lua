@@ -7,8 +7,8 @@
 --   - an ox_target sphere zone on every clue not yet checked (option crimson-police:check_clue, label by
 --     clue kind; offered only once the clue is there, its netId in the update: clues appear when an
 --     officer is near, Config.Spawning); selecting it reports 'clue_start', runs
---     lib.progressBar(clueProgress) and reports 'clue'; a marker over each clue not yet checked (DrawMarker
---     only within MARKER_RANGE, otherwise Wait(750));
+--     lib.progressBar(clueProgress) and reports 'clue'; a marker over each clue not yet checked (CP.BlockKit
+--     draws them within MARKER_RANGE);
 --   - 'stunned' reports for fugitives seen stunned (IsPedBeingStunned); the server re-checks distances;
 --   - a HUD line (ctx.hudDetail): enter the area, clues checked and circle size while a clue is still
 --     pending (a lost one is handled), then fugitives in custody, escape countdown, and "stay close" while
@@ -38,55 +38,34 @@ local SLOW_MS = 2000
 local WATCH_RANGE = 40.0
 local REPORT_MS = 1500
 local MARKER_RANGE = 150.0
-local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local CLUE_RANGE = 2.5
 local SEARCH_ANIM = { dict = 'amb@prop_human_bum_bin@idle_b', clip = 'idle_d' }
 local TALK_ANIM = { dict = 'missfbi3_party_d', clip = 'stand_talk_loop_a_male1' }
 local WITNESS_SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = {
-            key = k,
-            data = {},
-            clues = {},
-            fugitives = {},
-            zones = {},
-            blips = {},
-            applied = {},
-            tasked = {},
-            lost = {},
-            lastReport = {},
-            alive = true,
-        }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
+local Kit = CP.BlockKit
+local EntityFor, BagOf = Kit.entity, Kit.bag
+local Cleanup
+local states = Kit.states(function()
+    return {
+        data = {},
+        clues = {},
+        fugitives = {},
+        zones = {},
+        blips = {},
+        applied = {},
+        tasked = {},
+        lost = {},
+        lastReport = {},
+        alive = true,
+    }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
 
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
-end
-
-local function EntityFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
 end
 
 local function ClueVec(cl) return vector3(cl.x + 0.0, cl.y + 0.0, cl.z + 0.0) end
@@ -183,19 +162,15 @@ local function CheckClue(S, cl)
     local ctx = S.ctx
     local p = ctx.obj.clueProgress or {}
     ctx.report({ type = 'clue_start', clue = cl.i })
-    -- ox_lib raises when the animation fails to load: the search counts as cancelled and busy is still cleared
-    local okBar, done = pcall(lib.progressBar, {
+    -- an animation that fails to load counts as cancelled (CP.BlockKit.progress), and busy is still cleared
+    local done = Kit.progress({
         duration = tonumber(p.duration) or 4000,
         label = p.label or CP.L('block.search_area.clue_progress'),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = cl.kind == 'witness' and TALK_ANIM or SEARCH_ANIM,
-    })
-    if not okBar then
-        CP.warn('blocks', 'search_area clue bar failed: %s', tostring(done))
-        done = false
-    end
+    }, 'search_area clue')
     if done and S.alive and S.current and S.clues[cl.i] and S.clues[cl.i].status == 'pending' then
         ctx.report({ type = 'clue', clue = cl.i })
     end
@@ -251,14 +226,13 @@ local function SyncClues(S)
 end
 
 local function MarkerLoop(S)
-    if S.drawing then return end
-    S.drawing = true
-    CreateThread(function()
-        while S.alive and S.current do
-            local pos = GetEntityCoords(cache.ped)
+    Kit.markers(S.ctx, S, {
+        range = MARKER_RANGE,
+        far = MARKER_FAR_MS,
+        keep = function() return S.current end,
+        draw = function(_, pos, rangeSq)
             local px, py, pz = pos.x, pos.y, pos.z
             local drew = false
-            local rangeSq = CP.Perf.rangeSq(MARKER_RANGE_SQ)
             for _, cl in pairs(S.clues) do
                 if cl.status == 'pending' then
                     -- squared distance: no vector per clue and frame
@@ -270,10 +244,9 @@ local function MarkerLoop(S)
                     end
                 end
             end
-            Wait(drew and 0 or CP.Perf.ms(MARKER_FAR_MS))
-        end
-        S.drawing = false
-    end)
+            return drew
+        end,
+    })
 end
 
 -- ============================================================================
@@ -447,18 +420,18 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     -- a clue check still running would otherwise keep the player frozen in its progress bar
-    if S.busy and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
+    if S.busy then Kit.cancelProgress() end
     for i in pairs(S.zones) do DropZone(S, i) end
     for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -506,12 +479,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

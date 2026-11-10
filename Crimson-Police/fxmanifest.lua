@@ -117,7 +117,20 @@ client_scripts {
     'modules/realplayers/client/*.lua',
     'modules/dispatch/client/*.lua',
     'modules/teams/client/*.lua',
-    'blocks/**/client.lua',
+    -- the block client kit (CP.BlockKit) first, then every block's client half (each listed once)
+    'blocks/_kit/client.lua',
+    'blocks/checkpoint_route/client.lua',
+    'blocks/escort/client.lua',
+    'blocks/field_contact/client.lua',
+    'blocks/flee_arrest/client.lua',
+    'blocks/hostile_waves/client.lua',
+    'blocks/interact_points/client.lua',
+    'blocks/live_response/client.lua',
+    'blocks/process_scene/client.lua',
+    'blocks/protect_rescue/client.lua',
+    'blocks/pursuit/client.lua',
+    'blocks/search_area/client.lua',
+    'blocks/skill_check/client.lua',
 }
 
 ui_page 'web/dist/index.html'

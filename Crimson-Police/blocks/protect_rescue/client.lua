@@ -12,7 +12,7 @@
 --   - ox_target "Cut restraints" (exports.ox_target:addLocalEntity, option crimson-police:cut_restraints)
 --     on every restrained hostage, re-attached when the entity handle changes, removed in stop;
 --     selecting it reports 'free_start', runs lib.progressBar(freeTime) and reports 'freed';
---   - the safe marker (DrawMarker only within MARKER_RANGE, otherwise Wait(750)) and blips for the
+--   - the safe marker (CP.BlockKit draws it within MARKER_RANGE) and blips for the
 --     hostages and the safe point (Radio Silence 'area': the safe point alone);
 --   - a HUD line (ctx.hudDetail) while freed hostages are walking to the safe point.
 --
@@ -29,31 +29,24 @@ local LOOP_MS = 1000
 local RETASK_MS = 8000          -- re-issue "follow" to a walking hostage this often
 local CONTROL_MS = 250          -- the next pass after a hostage was asked for (the old wait for control)
 local MARKER_RANGE = 150.0
-local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local FREE_ANIM = { dict = 'mp_arresting', clip = 'a_uncuff' }
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
+local Kit = CP.BlockKit
+local PedFor, BagOf = Kit.entity, Kit.bag
+local Cleanup
+local states = Kit.states(function()
+    return { peds = {}, byNet = {}, blips = {}, targets = {}, applied = {}, tasked = {}, alive = true }
+end, function(S) Cleanup(S) end)
 
 local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, peds = {}, byNet = {}, blips = {}, targets = {}, applied = {}, tasked = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
+    local S = states.of(ctx)
     if not S.safe then
         local obj, loc = ctx.obj or {}, ctx.location or {}
         local ref = obj.safe
         local v = type(ref) == 'string' and loc[ref] or ref
         if type(v) == 'table' and v.x == nil and v[1] ~= nil and type(v[1]) ~= 'number' then v = v[1] end
-        if v ~= nil then
-            local x, y, z = U.xyz(v)
-            if x then S.safe = vector3(x + 0.0, y + 0.0, z + 0.0) end
-        end
+        if v ~= nil then S.safe = Kit.vec3(v) end
     end
     return S
 end
@@ -61,18 +54,6 @@ end
 local function IsHost(S)
     if S.isHost ~= nil then return S.isHost end
     return S.ctx.isHost == true
-end
-
-local function PedFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local st = Entity(ent).state
-    return st and st.cp or nil
 end
 
 local function StateOf(S, netId, ent)
@@ -135,19 +116,15 @@ local function Free(S, netId)
     local ctx = S.ctx
     local obj = ctx.obj
     ctx.report({ type = 'free_start', netId = netId })
-    -- ox_lib raises when the animation fails to load: the cut counts as cancelled and busy is still cleared
-    local okBar, done = pcall(lib.progressBar, {
+    -- an animation that fails to load counts as cancelled (CP.BlockKit.progress), and busy is still cleared
+    local done = Kit.progress({
         duration = tonumber(obj.freeTime) or 6000,
         label = (obj.target and obj.target.label) or CP.L('block.protect_rescue.cut_restraints'),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = FREE_ANIM,
-    })
-    if not okBar then
-        CP.warn('blocks', 'protect_rescue free bar failed: %s', tostring(done))
-        done = false
-    end
+    }, 'protect_rescue free')
     if done and S.alive and S.current then
         ctx.report({ type = 'freed', netId = netId })
     end
@@ -222,22 +199,20 @@ end
 -- ============================================================================
 
 local function MarkerLoop(S)
-    if S.drawing or not S.safe then return end
-    S.drawing = true
-    CreateThread(function()
-        local d = (tonumber(S.ctx.obj.safeRadius) or 6.0) * 2.0
-        while S.alive and S.current do
+    if not S.safe then return end
+    Kit.markers(S.ctx, S, {
+        range = MARKER_RANGE,
+        far = MARKER_FAR_MS,
+        keep = function() return S.current end,
+        draw = function(_, pos, rangeSq)
             local safe = S.safe
-            if U.distSq(GetEntityCoords(cache.ped), safe) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
-                DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, d, d, 1.0, 60, 200, 90, 110,
-                    false, false, 2, false, nil, nil, false)
-                Wait(0)
-            else
-                Wait(CP.Perf.ms(MARKER_FAR_MS))
-            end
-        end
-        S.drawing = false
-    end)
+            if U.distSq(pos, safe) > rangeSq then return false end
+            local d = (tonumber(S.ctx.obj.safeRadius) or 6.0) * 2.0
+            DrawMarker(1, safe.x, safe.y, safe.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, d, d, 1.0, 60, 200, 90, 110,
+                false, false, 2, false, nil, nil, false)
+            return true
+        end,
+    })
 end
 
 local function Loop(S)
@@ -283,18 +258,18 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     -- a "Cut restraints" progress bar still running when the objective or run ends is cancelled
-    if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
+    if S.busy then Kit.cancelProgress() end
     for netId in pairs(S.targets) do DropTarget(S, netId) end
     for k in pairs(S.blips) do DropBlip(S, k) end
     if S.hint then
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -329,12 +304,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

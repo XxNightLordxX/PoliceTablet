@@ -10,33 +10,13 @@ local WATCH_RANGE = 40.0
 local AIM_RANGE = 10.0
 local REPORT_MS = 1500
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, contacts = {}, blips = {}, lastReport = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
-
-local function EntityFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function BagOf(ent)
-    local ok, v = pcall(function() return Entity(ent).state.cp end)
-    if ok and type(v) == 'table' then return v end
-    return nil
-end
+local Kit = CP.BlockKit
+local EntityFor, BagOf = Kit.entity, Kit.bag
+local Cleanup
+local states = Kit.states(function()
+    return { contacts = {}, blips = {}, lastReport = {}, alive = true }
+end, function(S) Cleanup(S) end)
+local S_of = states.of
 
 -- ============================================================================
 --                                    BLIPS
@@ -151,7 +131,7 @@ local function Loop(S)
     end)
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
     for k in pairs(S.blips) do DropBlip(S, k) end
@@ -159,7 +139,7 @@ local function Cleanup(S)
         S.hint = nil
         S.ctx.hudDetail(nil)
     end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -188,7 +168,7 @@ CP.Blocks.register(BLOCK, {
     -- a car and its people handed over by a pursuit: nothing to set up here, the loop reads the new list
     adopt = function(ctx) S_of(ctx) end,
     release = function(ctx, netId)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then DropBlip(S, netId) end
     end,
 
@@ -198,12 +178,7 @@ CP.Blocks.register(BLOCK, {
     end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

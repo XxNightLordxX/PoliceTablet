@@ -29,7 +29,6 @@ local function Cue(name)
 end
 
 local MARKER_DISTANCE = 30.0
-local MARKER_DISTANCE_SQ = MARKER_DISTANCE * MARKER_DISTANCE
 local MARKER_FAR_MS = 1500      -- the marker loop's pace while too far away to draw (per frame in range)
 local NONE = {}                 -- the marker loop's empty list (no new table each pass)
 local TARGET_RADIUS = 1.0
@@ -41,31 +40,13 @@ local EXPLOSION_TYPE = 2        -- sticky bomb
 local ANIM_DICT = 'amb@medic@standing@kneel@base'
 local ANIM_CLIP = 'base'
 
-local live = {}     -- [state] = ctx, for resource-stop cleanup
-local states = {}   -- ['<runId>:<index>'] = state, one per objective across every hook call
-
-local function KeyOf(ctx)
-    return tostring(ctx.runId) .. ':' .. tostring(ctx.index)
-end
-
-local function StateOf(ctx)
-    local key = KeyOf(ctx)
-    local st = states[key]
-    if not st then
-        st = type(ctx.state) == 'table' and ctx.state or {}
-        st.runKey = tostring(ctx.runId)
-        states[key] = st
-    end
-    return st
-end
-
--- Drop the states of other runs that are no longer running (late snapshots after a stop).
-local function Purge(ctx)
-    local run = tostring(ctx.runId)
-    for key, st in pairs(states) do
-        if st.runKey ~= run and not st.alive then states[key] = nil end
-    end
-end
+local Kit = CP.BlockKit
+local Cleanup
+-- one state per run and objective across every hook call (the engine may hand each hook a fresh ctx.state)
+local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st)
+    Cleanup(st.ctx, st)
+end)
+local StateOf = states.of
 
 local function V3(t)
     return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
@@ -276,14 +257,14 @@ local function Recover(ctx, st, i)
     local sb = st.data and st.data.setback or {}
     st.busy = true
     st.recovering = true   -- Cleanup cancels this bar when the objective or run ends
-    local ok = lib.progressBar({
+    local ok = Kit.progress({
         duration = tonumber(sb.duration) or 10000,
         label = sb.label or CP.L('block.skill_check.recover_default'),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = { scenario = 'WORLD_HUMAN_CLIPBOARD' },
-    })
+    }, 'skill_check recover')
     st.recovering = false
     st.busy = false
     if ok and st.alive then
@@ -379,17 +360,18 @@ end
 
 local function Loop(ctx, st)
     local token = st.token
-    CreateThread(function()
-        while st.alive and st.token == token do
-            local sleep = CP.Perf.ms(MARKER_FAR_MS)
-            local pos = GetEntityCoords(cache.ped)
-            local rangeSq = CP.Perf.rangeSq(MARKER_DISTANCE_SQ)
+    Kit.markers(ctx, st, {
+        range = MARKER_DISTANCE,
+        far = MARKER_FAR_MS,
+        keep = function() return st.token == token end,
+        draw = function(_, pos, rangeSq)
+            local drew = false
             for _, t in ipairs((st.data and st.data.targets) or NONE) do
                 if t.status == 'armed' or t.status == 'setback' then
                     local c = t.coords
                     local dx, dy, dz = pos.x - c.x, pos.y - c.y, pos.z - c.z
                     if dx * dx + dy * dy + dz * dz < rangeSq then
-                        sleep = 0
+                        drew = true
                         DrawMarker(2, c.x, c.y, c.z + 0.8, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.25, 0.25, 0.25, 220, 40,
                             50, 170, true, true, 2, false, nil, nil, false)
                     end
@@ -398,13 +380,13 @@ local function Loop(ctx, st)
             -- near a device (a frame loop) the line is checked every LINE_MS, and on the next frame after a snapshot,
             -- a message, a round change or the end of a message; far away, every pass as before
             local now = GetGameTimer()
-            if sleep ~= 0 or now >= (st.lineAt or 0) or (st.transient ~= nil and now >= (st.transientUntil or 0)) then
+            if not drew or now >= (st.lineAt or 0) or (st.transient ~= nil and now >= (st.transientUntil or 0)) then
                 st.lineAt = now + LINE_MS
                 RefreshLine(ctx, st)
             end
-            Wait(sleep)
-        end
-    end)
+            return drew
+        end,
+    })
 end
 
 -- ============================================================================
@@ -457,13 +439,13 @@ local function Apply(ctx, st, data)
     st.lineAt = 0
 end
 
-local function Cleanup(ctx, st)
+function Cleanup(ctx, st)
     st.alive = false
     st.cancelled = true
     st.token = (st.token or 0) + 1
     if st.busy and lib.skillCheckActive and lib.skillCheckActive() then lib.cancelSkillCheck() end
     -- the setback's recovery bar (e.g. Ventilate) stops with the objective, like every other block's bar
-    if st.recovering and lib.progressActive and lib.progressActive() then pcall(lib.cancelProgress) end
+    if st.recovering then Kit.cancelProgress() end
     st.recovering = false
     StopAnim(st)
     st.busy, st.working, st.round = false, nil, nil
@@ -473,26 +455,22 @@ local function Cleanup(ctx, st)
         st.line = nil
         ctx.hudDetail(nil)
     end
-    live[st] = nil
-    if states[KeyOf(ctx)] == st then states[KeyOf(ctx)] = nil end
+    states.drop(st)
 end
 
 CP.Blocks.register(BLOCK, {
     prepare = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
     end,
 
     start = function(ctx)
-        Purge(ctx)
         local st = StateOf(ctx)
         st.zones = st.zones or {}
         st.blips = st.blips or {}
         st.alive = true
         st.token = (st.token or 0) + 1
-        live[st] = ctx
         if st.pending then
             local data = st.pending
             st.pending = nil
@@ -528,8 +506,3 @@ CP.Blocks.register(BLOCK, {
         Cleanup(ctx, StateOf(ctx))
     end,
 })
-
-AddEventHandler('onResourceStop', function(resource)
-    if resource ~= GetCurrentResourceName() then return end
-    for st, ctx in pairs(live) do Cleanup(ctx, st) end
-end)

@@ -1777,7 +1777,8 @@ do
     S = Boot()
     local blocks = {}
     local p = io.popen('ls ' .. H.root .. 'blocks')
-    for b in p:lines() do blocks[#blocks + 1] = b end
+    -- blocks/_kit holds the block client kit, no block
+    for b in p:lines() do if b:sub(1, 1) ~= '_' then blocks[#blocks + 1] = b end end
     p:close()
     for _, b in ipairs(blocks) do H.load('blocks/' .. b .. '/server.lua') end
     CP.Missions = nil

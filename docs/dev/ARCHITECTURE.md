@@ -159,7 +159,7 @@ PoliceTablet/                      (git repo)
     saves/                         database-off data (JSON documents, _tables.json); only README.md is committed;
                                    saves/_backups/ (System → Backups, both storage modes), saves/exports/ (audit CSV),
                                    both shipped empty with a .gitkeep
-    blocks/<block_id>/server.lua + client.lua
+    blocks/<block_id>/server.lua + client.lua; blocks/_kit/client.lua (CP.BlockKit, §7.2)
     web/                           React 18 + TS + Vite; builds to web/dist (committed); README.md points to
                                    §12
     sql/migrations/001_initial.sql, 002_test_def_hash.sql, 003_run_stats.sql, 004_profile.sql,
@@ -175,7 +175,8 @@ order the files loaded in before the module folders existed (some read another m
 order is pinned by tests/module_layout_spec.lua), with the folders made only of their own parts listed as globs
 (`modules/progression/*.lua`, `modules/review/*.lua`, `modules/realplayers/*.lua`, `modules/dispatch/*.lua`,
 `modules/teams/*.lua`; client: `modules/realplayers/client/*.lua`, `modules/dispatch/client/*.lua`,
-`modules/teams/client/*.lua`), then `blocks/**/server.lua` / `blocks/**/client.lua`. Every file is listed once.
+`modules/teams/client/*.lua`), then `blocks/**/server.lua`; client: `blocks/_kit/client.lua`, then each
+`blocks/<id>/client.lua` by name (a new block's client half is added to that list). Every file is listed once.
 Server also gets `@oxmysql/lib/MySQL.lua`, then `modules/system/memsql.lua` and
 `modules/system/storage.lua` before every other server module (so the `MySQL` global is settled before
 any module can query), then `modules/admin/adminkit.lua` (so any module may register its admin actions with
@@ -2814,8 +2815,10 @@ Rules for blocks:
 - ox_target options: `exports.ox_target:addLocalEntity(entity, options)` / `addSphereZone` /
   `addBoxZone` — only participants' clients register them, so non-participants never see them.
   Remove them in `stop` (`removeLocalEntity`, `removeZone`).
-- Progress bars: `lib.progressBar({ duration, label, useWhileDead = false, canCancel = true, disable = { move = true, car = true, combat = true }, anim = {...} })`.
-  Skill checks: `lib.skillCheck({ 'easy', 'medium' }, { 'w', 'a', 's', 'd' })`.
+- `CP.BlockKit` (`blocks/_kit/client.lua`, before every block client): `states(fresh, cleanup)` (`of`, `find`,
+  `drop`; resource-stop cleanup), `onStop`, `entity`, `bag`, `vec3`, `progress(opts, what)` (a `lib.progressBar`
+  that never raises), `cancelProgress` and `markers(ctx, S, { range, far, keep, draw })`, one marker loop per run.
+- Skill checks: `lib.skillCheck({ 'easy', 'medium' }, { 'w', 'a', 's', 'd' })`.
 - Evidence sent with `ctx.report({ type = 'checkpoint', index = 3, netId = n, ... })`; the engine adds
   `coords` and `time`. The server half validates distances with server-side coordinates.
 - Radio Silence (`ctx.radioSilence`): after the start a client half draws a blip or a line only when

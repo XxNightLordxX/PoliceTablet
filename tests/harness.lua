@@ -2672,6 +2672,10 @@ end
 -- ============================================================================
 
 function H.load(rel)
+    -- a block client half needs the block client kit first, as fxmanifest.lua loads it
+    if rel:match('^blocks/[%w_]+/client%.lua$') and rel ~= 'blocks/_kit/client.lua' and not (CP and CP.BlockKit) then
+        H.load('blocks/_kit/client.lua')
+    end
     local path = ROOT .. rel
     local chunk, err = loadfile(path)
     if not chunk then error(err, 2) end

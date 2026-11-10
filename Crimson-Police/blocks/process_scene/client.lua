@@ -10,7 +10,6 @@ local CORONER_OPTION = 'crimson-police:coroner'
 local REACH = 2.5
 local VAN_REACH = 6.0
 local MARKER_RANGE = 120.0
-local MARKER_RANGE_SQ = MARKER_RANGE * MARKER_RANGE
 local MARKER_FAR_MS = 1500       -- the marker loop's pace while too far away to draw (per frame in range)
 local SCENE_KEY = 'scene'        -- the scene blip's key in the objective pointer (the server's marker)
 local ANIMS = {
@@ -19,33 +18,13 @@ local ANIMS = {
     release = { dict = 'missheistdockssetup1clipboard@base', clip = 'base', flag = 49 },
 }
 
-local active = {}
-
-local function KeyOf(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
-
-local function S_of(ctx)
-    local k = KeyOf(ctx)
-    local S = active[k]
-    if not S then
-        S = { key = k, bodies = {}, targets = {}, alive = true }
-        active[k] = S
-    end
-    S.ctx = ctx
-    return S
-end
-
-local function EntityFor(netId)
-    if not netId or not NetworkDoesNetworkIdExist(netId) then return nil end
-    local e = NetworkGetEntityFromNetworkId(netId)
-    if e and e ~= 0 and DoesEntityExist(e) then return e end
-    return nil
-end
-
-local function ToVec3(v)
-    local x, y, z = U.xyz(v)
-    if not x then return nil end
-    return vector3(x + 0.0, y + 0.0, z + 0.0)
-end
+local Kit = CP.BlockKit
+local EntityFor, ToVec3 = Kit.entity, Kit.vec3
+local Cleanup
+local states = Kit.states(function() return { bodies = {}, targets = {}, alive = true } end, function(S)
+    Cleanup(S)
+end)
+local S_of = states.of
 
 -- ============================================================================
 --                                  THE STEPS
@@ -57,18 +36,15 @@ local function Step(S, kind, netId)
     local ctx = S.ctx
     local step = ctx.obj[kind] or {}
     ctx.report({ type = kind .. '_begin', netId = netId })
-    -- ox_lib raises when the animation fails to load (release): the step counts as cancelled and busy is still
-    -- cleared
-    local okBar, done = pcall(lib.progressBar, {
+    -- the release animation can fail to load: the step then counts as cancelled and busy is still cleared
+    local ok = Kit.progress({
         duration = tonumber(step.duration) or 5000,
         label = step.label or CP.L('block.process_scene.' .. kind),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true, combat = true },
         anim = ANIMS[kind],
-    })
-    if not okBar then CP.warn('blocks', 'process_scene %s bar failed: %s', kind, tostring(done)) end
-    local ok = okBar and done == true
+    }, 'process_scene ' .. kind)
     if ok and S.alive and S.current then ctx.report({ type = kind, netId = netId }) end
     S.busy = false
 end
@@ -157,27 +133,24 @@ local function AddRelease(S)
 end
 
 local function MarkerLoop(S)
-    if S.drawing then return end
-    S.drawing = true
-    CreateThread(function()
-        while S.alive and S.current and not S.released do
+    Kit.markers(S.ctx, S, {
+        range = MARKER_RANGE,
+        far = MARKER_FAR_MS,
+        keep = function() return S.current and not S.released end,
+        draw = function(_, pos, rangeSq)
             local p = S.scene
-            if p and U.distSq(GetEntityCoords(cache.ped), p) <= CP.Perf.rangeSq(MARKER_RANGE_SQ) then
-                DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 0.6, 200, 200, 200, 90,
-                    false, false, 2, false, nil, nil, false)
-                Wait(0)
-            else
-                Wait(CP.Perf.ms(MARKER_FAR_MS))
-            end
-        end
-        S.drawing = false
-    end)
+            if not p or U.distSq(pos, p) > rangeSq then return false end
+            DrawMarker(1, p.x, p.y, p.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 0.6, 200, 200, 200, 90, false,
+                false, 2, false, nil, nil, false)
+            return true
+        end,
+    })
 end
 
-local function Cleanup(S)
+function Cleanup(S)
     S.alive = false
     S.current = false
-    if S.busy and lib.progressActive and lib.progressActive() then lib.cancelProgress() end
+    if S.busy then Kit.cancelProgress() end
     DropTargets(S)
     -- the objective pointer takes the scene blip back first, so its GPS line goes off before it goes
     if S.handed then
@@ -185,7 +158,7 @@ local function Cleanup(S)
         S.handed = nil
     end
     if S.blip and DoesBlipExist(S.blip) then RemoveBlip(S.blip) end
-    active[S.key] = nil
+    states.drop(S)
 end
 
 CP.Blocks.register(BLOCK, {
@@ -224,12 +197,7 @@ CP.Blocks.register(BLOCK, {
     hostChanged = function() end,
 
     stop = function(ctx)
-        local S = active[KeyOf(ctx)]
+        local S = states.find(ctx)
         if S then Cleanup(S) end
     end,
 })
-
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-    for _, S in pairs(active) do Cleanup(S) end
-end)

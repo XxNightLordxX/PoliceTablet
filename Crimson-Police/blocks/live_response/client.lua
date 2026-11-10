@@ -99,8 +99,8 @@ CP.Blocks.register(BLOCK, {
     end,
 })
 
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
+local Kit = CP.BlockKit
+Kit.onStop(function()
     RemoveRadial()
     RemoveTalk()
     active = nil
