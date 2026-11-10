@@ -1,5 +1,5 @@
 // Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw,
-// page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
+// one New call dialog that posts, pages or pushes (server:<scope>:mcPost), today's calls), plus the Admin area coverage matrix and location plays.
 
 import { useMemo, useState } from 'react';
 import {
@@ -40,7 +40,6 @@ const POLL_MS = 15000;
 const COUNTY = 'county';
 
 type TodayRow = SupCallsView['today'][number];
-type Staff = null | { kind: 'create' | 'page' };
 type StaffPayload = { type: string; area: string | null; leaderSrc?: number; missionId?: string };
 const ANY = '';
 
@@ -58,15 +57,17 @@ function useAreas(): { key: string; label: string }[] {
 //                                 STAFF DIALOG
 // ============================================================================
 
+// One dialog for every staff call: no unit = an open call for every unit; a unit = paged to it first; a unit and a
+// mission = that mission pushed to it (the pushMission Mission control).
 function StaffDialog({
-    staff,
+    open,
     units,
     push,
     busy,
     onClose,
     onSubmit,
 }: {
-    staff: Staff;
+    open: boolean;
     units: PageableUnit[];
     // pushing a chosen mission when paging (absent: the mission is drawn at random)
     push: PushView | null;
@@ -80,17 +81,17 @@ function StaffDialog({
     const [area, setArea] = useState(COUNTY);
     const [leader, setLeader] = useState('');
     const [mission, setMission] = useState(ANY);
-    const page = staff?.kind === 'page';
+    const page = leader !== '';
     const missions = asArray(push?.missions).filter(m => m.type === type);
     const pushLeft = push && typeof push.perDay === 'number' ? Math.max(0, push.perDay - (push.usedToday ?? 0)) : null;
     const canPush = page && !!push && pushLeft !== 0 && missions.length > 0;
-    const ready = type !== '' && (!page || leader !== '');
+    const ready = type !== '';
     return (
         <Dialog
-            open={!!staff}
+            open={open}
             onClose={onClose}
-            title={page ? t('mc.staff.page_title') : t('mc.staff.create_title')}
-            description={page ? t('mc.staff.page_text') : t('mc.staff.create_text')}
+            title={t('mc.staff.new_title')}
+            description={t('mc.staff.new_text')}
             size="sm"
             footer={
                 <>
@@ -138,23 +139,26 @@ function StaffDialog({
                         ]}
                     />
                 </Field>
-                {page ? (
-                    <Field label={t('mc.staff.unit')} hint={units.length ? undefined : t('mc.staff.no_units')}>
-                        <Select
-                            value={leader}
-                            onChange={setLeader}
-                            placeholder={t('mc.staff.pick_unit')}
-                            options={units.map(u => ({
+                <Field label={t('mc.staff.unit')} hint={units.length ? undefined : t('mc.staff.no_units')}>
+                    <Select
+                        value={leader}
+                        onChange={v => {
+                            setLeader(v);
+                            if (v === '') setMission(ANY);
+                        }}
+                        options={[
+                            { value: '', label: t('mc.staff.unit_any') },
+                            ...units.map(u => ({
                                 value: String(u.src),
                                 label: t('mc.staff.unit_option', {
                                     callsign: u.callsign ?? u.name,
                                     department: u.departmentShort,
                                     size: u.size,
                                 }),
-                            }))}
-                        />
-                    </Field>
-                ) : null}
+                            })),
+                        ]}
+                    />
+                </Field>
                 {page && push ? (
                     <Field
                         label={t('mc.staff.mission')}
@@ -195,7 +199,7 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     );
     const { run, busy } = useAction();
     const [withdrawing, setWithdrawing] = useState<MissionCall | null>(null);
-    const [staff, setStaff] = useState<Staff>(null);
+    const [staff, setStaff] = useState(false);
     const [stamp, setStamp] = useState(0);
     // Post anyway: an admin posting during the wait between staff calls (with a reason; supervisors still wait)
     const [early, setEarly] = useState<{ type: string; area: string | null } | null>(null);
@@ -226,13 +230,13 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     };
 
     const submit = async (payload: StaffPayload) => {
-        const page = staff?.kind === 'page';
-        const res = await run(page ? `server:${scope}:mcPage` : `server:${scope}:mcCreate`, payload, {
+        const page = payload.leaderSrc !== undefined;
+        const res = await run(`server:${scope}:mcPost`, payload, {
             success: page ? (payload.missionId ? 'mc.staff.pushed' : 'mc.staff.paged') : 'mc.staff.created',
             silent: !page && scope === 'admin',
         });
         if (res.ok) {
-            setStaff(null);
+            setStaff(false);
             applyReply(res.data);
         } else if (!page && scope === 'admin') {
             if (res.error === 'err.mc_staff_cooldown') setEarly({ type: payload.type, area: payload.area });
@@ -243,13 +247,13 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
     const postEarly = async (reason: string) => {
         if (!early) return;
         const res = await run(
-            'server:admin:mcCreate',
+            'server:admin:mcPost',
             { ...early, skipWait: true, reason },
             { success: 'mc.staff.created' },
         );
         setEarly(null);
         if (res.ok) {
-            setStaff(null);
+            setStaff(false);
             applyReply(res.data);
         }
     };
@@ -336,11 +340,8 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
             padding="none"
             actions={
                 <div className="mc-panel__actions">
-                    <Button size="sm" variant="secondary" icon="bell" onClick={() => setStaff({ kind: 'page' })}>
-                        {t('mc.staff.page')}
-                    </Button>
-                    <Button size="sm" variant="primary" icon="plus" onClick={() => setStaff({ kind: 'create' })}>
-                        {t('mc.staff.create')}
+                    <Button size="sm" variant="primary" icon="plus" onClick={() => setStaff(true)}>
+                        {t('mc.staff.new')}
                     </Button>
                     <IconButton icon="refresh" label={t('sup.refresh')} variant="ghost" onClick={() => void reload()} />
                 </div>
@@ -400,11 +401,11 @@ export default function MissionCallsPanel({ scope }: { scope: 'sup' | 'admin' })
             />
             {staff ? (
                 <StaffDialog
-                    staff={staff}
+                    open={staff}
                     units={units}
                     push={push}
                     busy={busy}
-                    onClose={() => setStaff(null)}
+                    onClose={() => setStaff(false)}
                     onSubmit={submit}
                 />
             ) : null}

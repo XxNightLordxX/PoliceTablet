@@ -368,7 +368,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -2612,15 +2612,15 @@ do
     Place(near, vec3(area.center.x + 300.0, area.center.y, area.center.z))
     Place(far, vec3(area.center.x + 5000.0, area.center.y, area.center.z))
     Secs(12)                                   -- both on duty and idle in the calls' cache
-    local ok, data = Act('server:admin:mcCreate', 5, { type = 'patrol', area = 'south_ls' })
+    local ok, data = Act('server:admin:mcPost', 5, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, true, 'mission call: an admin creates a Patrol call in South Los Santos: ' .. tostring(data))
     local callId = data and data.id
     H.eq(PX.callRow(callId).status, 'open', 'mission call: the call is open')
     local toDispatch = 0
     H.exportsMock['sc-dispatch'].AddNotification = function() toDispatch = toDispatch + 1 end
-    local idFar = PX.fire('server:claimMissionCall', far, { callId = callId })
+    local idFar = PX.fire('server:answerMissionCall', far, { callId = callId })
     Adv(400, 100)
-    local idNear = PX.fire('server:claimMissionCall', near, { callId = callId })
+    local idNear = PX.fire('server:answerMissionCall', near, { callId = callId })
     local gotFar, gotNear
     for _ = 1, 40 do
         gotFar, gotNear = PX.result(idFar), PX.result(idNear)
@@ -2658,10 +2658,10 @@ do
     H.sql('UPDATE mdt_dispatch SET active = 0 WHERE id = 7515')
     Secs(2)
     H.eq(Runs.cooldowns(CID[near]).types.patrol, nil, 'mission call: the real call cost no cooldown')
-    local okAgain, errAgain = Act('server:claimMissionCall', near, { callId = callId })
+    local okAgain, errAgain = Act('server:answerMissionCall', near, { callId = callId })
     H.eq(okAgain, false, 'mission call: the old claimant can\'t claim it again')
     H.eq(errAgain, 'err.mc_excluded', 'mission call: excluded')
-    local okOther = Act('server:claimMissionCall', far, { callId = callId })
+    local okOther = Act('server:answerMissionCall', far, { callId = callId })
     H.eq(okOther, true, 'mission call: another officer claims the re-dispatched call')
     local run2 = Runs.getBySrc(far)
     H.ok(run2 ~= nil, 'mission call: the second claim starts a run')

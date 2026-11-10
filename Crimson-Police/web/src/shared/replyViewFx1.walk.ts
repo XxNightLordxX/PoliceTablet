@@ -48,7 +48,7 @@ async function steps(): Promise<void> {
     }
 
     // Supervisor -> Mission calls: post a call and withdraw it, each reply the panel's view
-    const made = await action('server:sup:mcCreate', { type: 'patrol', area: null });
+    const made = await action('server:sup:mcPost', { type: 'patrol', area: null });
     const id = made.ok && made.data ? (made.data as { id?: number }).id : undefined;
     const after = replyView<SupCallsView>(made.data, 'view');
     ok(made.ok && !!after && after.open.some(c => c.id === id), 'Post a call answers with the panel, the call in it');

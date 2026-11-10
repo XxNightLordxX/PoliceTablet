@@ -279,7 +279,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -470,7 +470,7 @@ end
 -- The unit claims the only LIVE card, then holds the reported place for secureSeconds (Respond, Secure the scene).
 local function ClaimAndSecure(leader, partner)
     local card = LiveCards(leader)[1] or {}
-    local ok, data = Act('server:claimMissionCall', leader, { callId = card.id })
+    local ok, data = Act('server:answerMissionCall', leader, { callId = card.id })
     H.eq(ok, true, 'live: the leader claims the LIVE call: ' .. tostring(data))
     local run = Runs.getBySrc(leader)
     H.ok(run ~= nil and run.realSuspect == 'live', 'live: the case opened as a live run')

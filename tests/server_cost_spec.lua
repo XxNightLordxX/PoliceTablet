@@ -89,7 +89,7 @@ for _, m in ipairs({
     H.ok(n <= most, ('idle server, two minutes: %s wakes at most %d times (%d)'):format(m[2], most, n))
 end
 do
-    local n = wakes['modules/missioncalls/server.lua'] or 0
+    local n = wakes['modules/dispatch/missioncalls.lua'] or 0
     local every = math.max(1, tonumber(Config.MissionCalls.checkEvery) or 10)
     H.ok(n <= math.ceil(120 / every) + 1,
         ('idle server, two minutes: mission calls wake only for their %d s check (%d; +120 before LP4)'):format(every,

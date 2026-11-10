@@ -905,7 +905,7 @@ end
 
 do
     H.load('modules/draw/server.lua')
-    H.load('modules/missioncalls/server.lua')
+    H.load('modules/dispatch/missioncalls.lua')
     local reqN = 0
     local function Act(name, src, payload)
         reqN = reqN + 1
@@ -919,7 +919,7 @@ do
         return nil, 'no reply'
     end
     local function Accept(src) return select(2, Act('server:acceptType', src, 'patrol')) end
-    local function Claim(src) return select(2, Act('server:claimMissionCall', src, { callId = 1 })) end
+    local function Claim(src) return select(2, Act('server:answerMissionCall', src, { callId = 1 })) end
 
     local inv = H.mockInventory({ crimson_police_tablet = { label = 'Police Tablet' } })
     local searches = 0
@@ -1236,14 +1236,14 @@ do
     CT.close()
     H.eq(#H.findEvents('crimson-police:server:tabletClosed'), 1, 'two closes: one server:tabletClosed')
     H.clockMs = H.clockMs + 1000
-    -- modules/missioncalls/client.lua no longer polls CP.Tablet.isOpen every second to send server:mcWatch
+    -- modules/dispatch/client/missioncalls.lua no longer polls CP.Tablet.isOpen every second to send server:mcWatch
     local threads = 0
     local realCreateThread = _G.CreateThread
     _G.CreateThread = function(fn)
         threads = threads + 1
         return realCreateThread(fn)
     end
-    H.load('modules/missioncalls/client.lua')
+    H.load('modules/dispatch/client/missioncalls.lua')
     _G.CreateThread = realCreateThread
     H.eq(threads, 0, 'the missioncalls client starts no thread')
     CT.open('officer')

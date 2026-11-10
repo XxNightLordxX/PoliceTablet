@@ -125,7 +125,7 @@ export interface AreaCoverage {
     cells: Record<string, Record<string, { missions: number; locations: number }>>;
 }
 
-// server:claimMissionCall: the run when the claim won, or pending while the unit answers its ready check.
+// server:answerMissionCall (answer 'claim'): the run when the claim won, or pending while the unit answers its ready check.
 export interface ClaimCallResult {
     runId?: string;
     pending?: boolean;

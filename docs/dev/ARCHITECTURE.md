@@ -184,7 +184,8 @@ Extra module folders beyond the spec's table (allowed: "each feature in its own 
   cuffed …), host-side AI, "Cuff suspect", surrender rolls, relationship groups.
 
 More folders (all in the spec's Feature folders table; §5.30–§5.34):
-`modules/custody/` (server, client), `modules/missioncalls/` (server, client), `modules/progression/` (server sub-files:
+`modules/custody/` (server, client), `modules/dispatch/` (calls §5.13, alerts §5.14, missioncalls §5.31; `modules/dispatch/*.lua`,
+client `modules/dispatch/client/*.lua`), `modules/progression/` (server sub-files:
 scoring, goals, challenge, events, leaderboard, profile; listed in fxmanifest as `modules/progression/*.lua`),
 `modules/supervisor/` (server sub-files: fieldtraining, missionban and restrictions, the one restrictions list (FM5);
 listed as `modules/supervisor/*.lua`),
@@ -645,7 +646,7 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
 5. `endRun` → per participant: `CP.Scoring.compute`, `CP.Cash.compute`, row insert, `CP.Cash.pay`,
    `CP.Scoring.onRowCounted`, `CP.Goals.onRunCompleted`, `client:runEnded`, cleanup of every
    entity/item/reservation, `CP.Operations.onRunEnded(run, state)` when `operationId`.
-6. Resource stop: every entity deleted, every flag removed (modules/alerts), no rows, no cooldowns.
+6. Resource stop: every entity deleted, every flag removed (modules/dispatch/alerts.lua), no rows, no cooldowns.
 
 ---
 
@@ -787,7 +788,7 @@ Server:
 
 An unknown `via` is the command; a request that names no way (switchUi, refreshSession) uses the src's last passed
 way.
-- `itemOk(src)` — requireItem again for `server:acceptType` and `server:claimMissionCall`.
+- `itemOk(src)` — requireItem again for `server:acceptType` and `server:answerMissionCall` (claim).
 - `notify(src, kind, key, vars, { title, duration })` (kind info|success|warning|error), `notifyMany(srcs, ...)`,
   `push(src, topic, data)` (NUI `{ type = 'push' }`), `pushAdmins(topic, data)`, `notifyAdmins(kind, key, vars)`,
   `onlineAdmins()` (only admins, never anyone else), `openAdmin(src)` (`false, 'err.not_in_game'` from the console).
@@ -1211,7 +1212,7 @@ Client (the host runs the AI; every participant sees targets):
 - `nearestParticipant(coords)`.
 
 ### 5.12 CP.Route — modules/route (Hard rule 17)
-Files for §5.12–§5.15: `modules/route/{server,client}.lua`, `modules/calls/server.lua`, `modules/alerts/server.lua`,
+Files for §5.12–§5.15: `modules/route/{server,client}.lua`, `modules/dispatch/calls.lua`, `modules/dispatch/alerts.lua`,
 `modules/downed/{server,client}.lua`, `locales/parts/safety.json`.
 
 Server: `begin(run, src)`, `stop(run, src)`, `status(run, src) -> { status, secondsLeft, recalcsLeft, distance,
@@ -1249,7 +1250,7 @@ the start pin and waypoint so the objective line is his one line).
 | `client:requestEMS` | S → C | runId | |
 | `client:downedEnded` | S → C | runId, reason | once, whenever a downed entry leaves the pending stages |
 
-### 5.13 CP.Calls — modules/calls (Hard rule 15)
+### 5.13 CP.Calls — modules/dispatch/calls.lua (Hard rule 15)
 - `isOnCall(src, { except })` — a live real-call responding entry (`Config.Calls.respondingExpiry`; each re-checked in
   mdt_dispatch at most every 10 s, may yield).
 - `exemptFor(run) -> { exact, prefixes }` — the case's own call (`run.live.dispatchId`) and `'<prefix><src>_'` for
@@ -1261,7 +1262,7 @@ the start pin and waypoint so the objective line is his one line).
   dispatcher detach looks the same) → `CP.Runs.reclassify(..., 'real_call_cancelled')`.
 - Every free abandon is audited (`free_abandon`, flags, with the count of the last 24 h).
 
-### 5.14 CP.Alerts — modules/alerts (Hard rule 16; the only writer of the crimsonArena bag)
+### 5.14 CP.Alerts — modules/dispatch/alerts.lua (Hard rule 16; the only writer of the crimsonArena bag)
 The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (rules 1–3, 9).
 - `set(src, run)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`.
 - `clear(src, { force })` — only our value; ignored while CP.Downed holds it (`hold(src, on)`) unless forced.
@@ -1832,8 +1833,8 @@ Client (`modules/npc/client.lua`, `modules/custody/client.lua`): ox_target optio
 on peds and vehicles, `crimson-police:custody_escort`, per door `crimson-police:seat_<action>_<door>` (bones
 door_dside_f, door_pside_f, door_dside_r, door_pside_r), all reading the cp bag only.
 
-### 5.31 CP.MissionCalls — modules/missioncalls (Dispatch)
-The tablet's own call board.
+### 5.31 CP.MissionCalls — modules/dispatch/missioncalls.lua (Dispatch, the one call flow)
+One list for every call (server, lane, staff, page, push, LIVE), one answer and one staff post.
 - `list(src) -> DispatchView` — only for officers with the tablet open (callback `getMissionCalls`, push `calls` to
   watchers).
 - `eligibility(src) -> { at, unit, types }` — every accept check (`CP.Draw.check`), the eligible pool after no-repeat,
@@ -1851,8 +1852,8 @@ The tablet's own call board.
   become `closed` with outcome `restart`; calls live in memory).
 - Hooks: run:arrived, run:ended (close with the outcome, or re-dispatch once — the claim's members excluded — when
   nobody arrived and the end reason is quit, off_route, start_timeout, idle, real_call or force_recall), row.
-- Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions `server:claimMissionCall`,
-  `server:declineMissionCall`, `server:sup:mcWithdraw|mcPage|mcCreate`, `server:admin:*`.
+- Net: callbacks `getMissionCalls`, `sup:getMissionCalls`, `admin:getAreaCoverage`; actions
+  `server:answerMissionCall`, `server:sup|admin:mcWithdraw|mcPost`.
 
 ### 5.32 CP.Profile — modules/progression/profile (pictures, bio, look, commendations, moderation)
 English only: a profile has no language.
@@ -2580,7 +2581,7 @@ admin switched them on and only inside the admin's bounds.
 | `happyHourPoints` / `twistPoints` | the same shape | happyhour / events | `Scoring.bonusOf(run)` after the cap and ToD; `CP.Twists.bonus(list, scale, pscale)` before `twistMaxPoints` |
 | `typeOfTheDay` | choice of every type (relaxes) | events | one change a day (`err.tod_picked_today`), counts from the next day (`Events.deptTypeOfTheDay(dept)` reads yesterday's last audit row); `Events.typeOfTheDay(dayKey, department, who)` unless `heldBy` |
 | `goals` | map `{ daily = { id }, weekly = { id } }` 1–20 (1–5; relaxes) | goals | the department's goals from the next weekly reset (`carry` saves `from` and `prev`); `Goals.forOfficer(cid, department)` |
-| `pushMission` | action | missioncalls | `MC.page(.., { missionId })`: own department, every member of it, `pushMissionPerDay` (`err.mc_push_used`), `Draw.checkMission` (enabled, not the boss, of the type, eligible, a location in the area); only the paged unit sees and may claim it; `FinishAccept` uses that mission; a decline (`server:declineMissionCall`) or failed accept withdraws it; never re-dispatched; audited `mcPush` |
+| `pushMission` | action | missioncalls | `MC.page(.., { missionId })`: own department, every member of it, `MissionCalls.pushPerDay` (`err.mc_push_used`), `Draw.checkMission` (enabled, not the boss, of the type, eligible, a location in the area); only the paged unit sees and may claim it; `FinishAccept` uses that mission; a decline (`server:answerMissionCall`, `answer = 'decline'`) or failed accept withdraws it; never re-dispatched; audited `mcPush` |
 | `awardPoints` | action 1–10000 (1–50) | supawards | `server:sup:awardPoints { citizenid, points, reason, confirm? }`: own department, `awardPointsPerDay` (`err.award_daily_limit`), `AdminControl.pointAdjust` (`err.award_off`), the confirm above `adjustConfirmAbove`; through `CP.Corrections.adjust` like the admin path |
 
 #### Screens and net
@@ -3106,9 +3107,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
 | `server:tabletItemGone` | — (plain event; 2 per s) | tablet |
 | `server:tabletClosed` | — (plain event, once per close; 4 per s): ends the `nav` watch, fires `tablet:closed` | tablet |
-| `server:mcWatch` | false = the tablet closed (plain event; deprecated, not sent: `server:tabletClosed` replaces it) | missioncalls |
-| `server:claimMissionCall` | `{ callId, twists? }` → `{ runId }` or `{ pending }` (the twists are checked before the claim joins the window) | missioncalls |
-| `server:declineMissionCall` | `{ callId }`: the paged unit's leader turns a pushed mission down | missioncalls |
+| `server:answerMissionCall` | `{ callId, answer?, twists? }`: claim (default) → `{ runId }` or `{ pending }` (twists checked before the window); decline: the paged leader turns a pushed mission down → `{ view }` | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |
 | `server:options:set` | `{ key = value, ... }` → `{ values }` (rate 4; see §5.48) | options |
@@ -3189,8 +3188,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
 | `server:builder:teleport` | `{ missionId, location, key, index }` → `{ missionId, location, key, index }` + `client:builder:teleport` with the stored point (no coordinates are accepted from the client) | builderEdit + `Config.Builder.teleport` + admin or a `Config.Permissions.builderTeleport` grant (department, grade) | builder; refused in the arena, on a run, while down; audit `builderTeleport` |
 | `server:sup:mcWithdraw` / `server:admin:mcWithdraw` | `{ callId, reason }` | missionCalls | missioncalls |
-| `server:sup:mcPage` / `server:admin:mcPage` | `{ type, area, leaderSrc, missionId? }` (missionId: the pushMission control) | missionCalls | missioncalls |
-| `server:sup:mcCreate` / `server:admin:mcCreate` | `{ type, area }` | missionCalls | missioncalls |
+| `server:sup:mcPost` / `server:admin:mcPost` | `{ type, area, leaderSrc?, missionId?, skipWait?, reason? }`: no leaderSrc = to every unit, leaderSrc = paged, missionId too = pushed | missionCalls | missioncalls |
 | `server:sup:commend` / `server:admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin | profile |
 | `server:sup:revokeCommendation` / `server:admin:revokeCommendation` | `{ id, reason }` | issuer or admin | profile |
 | `server:sup:reviewAvatar` / `server:admin:reviewAvatar` | `{ citizenid, decision, reason, what? }` | reviewProfiles / openAdmin | profile |
@@ -3299,7 +3297,7 @@ K = compare-and-set, M = refused during maintenance (every action). Shapes: `web
 | `admin:getMissionStats` (callback) | `{ from?, to?, missionId?, type? }` → MissionStatsData | openAdmin | P, 1 per 2 s |
 | `admin:getOperations` (callback) | `{ from?, to?, status?, page? }` → Paged OperationHistoryRow (20 a page) | openAdmin | P |
 | `admin:getMissionCalls` (callback) | `{ from?, to?, type?, area?, outcome?, issuer?, page? }` → Paged DispatchHistoryRow (25 a page) | openAdmin | P |
-| `server:admin:mcCreate` (existing) | adds `skipWait = true, reason` (admins only) | missionCalls | R; `mcCreateSkipWait` (operations) |
+| `server:admin:mcPost` (no leaderSrc) | adds `skipWait = true, reason` (admins only) | missionCalls | R; `mcCreateSkipWait` (operations) |
 | `server:admin:opLaunch` (existing) | adds `skipCooldown = true, reason` (admins only) | launchCrossDept | R; `opLaunchSkipCooldown` (operations) |
 | `server:admin:markLocationChecked` | `{ missionId, locationIndex, tier?, reason }` → `{ id, location, tier }` | testRun | P R; `testMarkChecked` |
 | `server:admin:hideTestResult` | `{ id, hidden, reason }` → `{ id, hidden }` | testRun | P R K (`hidden`); `testResultHide` |
@@ -3484,8 +3482,8 @@ without `acks` is never closed by the 6 s open check (§5.4).
 
 Replies that carry their screen's view (`shared/replyView.ts` applies `data.view` / `queue` / `activity` / `runs` /
 `officer`; the screen asks again only when it is missing): `server:sup|admin:reviewFlagged` and `handleDispute`
-(`queue`, `CP.Review.queueFor`), `server:declineMissionCall` (`MC.list`), `server:sup|admin:mcWithdraw|mcPage|
-mcCreate` (`MC.supView`), `server:sup:forceRecall` and `addRunTime` (`CP.Admin.liveRunsFor`), `server:sup:
+(`queue`, `CP.Review.queueFor`), `server:answerMissionCall` with `decline` (`MC.list`), `server:sup|admin:mcWithdraw|
+mcPost` (`MC.supView`), `server:sup:forceRecall` and `addRunTime` (`CP.Admin.liveRunsFor`), `server:sup:
 clearCooldowns` (`CP.LiveCtl.supCooldownsView`), `server:sup:commend|revokeCommendation|missionBan|liftMissionBan|
 awardPoints` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `server:admin:voidRun|restoreRun|
 setVoidKind|flagRow` sent with `views = { rowId, archived, citizenid, runs, officer }` (`CP.Corrections.withViews`),

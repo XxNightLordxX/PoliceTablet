@@ -187,7 +187,7 @@ local function LockStops(live)
 end
 
 -- Crimson-Arena rules 5 and 7: a foreign crimsonArena flag or a routing bucket other than 0.
--- CP.Alerts.inArena is the gate; the fallbacks only apply while modules/alerts is not loaded.
+-- CP.Alerts.inArena is the gate; the fallbacks only apply while modules/dispatch/alerts.lua is not loaded.
 local function InArena(src)
     if CP.Alerts and CP.Alerts.inArena then
         local _, res = Safe(CP.Alerts.inArena, src)

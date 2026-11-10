@@ -1,4 +1,4 @@
-// Browser mocks of the Dispatch screen (mission calls): getMissionCalls, server:claimMissionCall, the staff panel
+// Browser mocks of the Dispatch screen (mission calls): getMissionCalls, server:answerMissionCall, the staff panel
 // (sup:getMissionCalls and the mc* actions) and the admin area coverage and location plays.
 // ?calls=empty shows no calls, ?calls=run the "on a run" notice, ?calls=op the Cross-Department Mission banner.
 
@@ -168,7 +168,10 @@ function view(): DispatchView {
 
 registerMock('request', 'getMissionCalls', () => view());
 
-registerMock('action', 'server:claimMissionCall', (payload: { callId?: number }): ClaimCallResult => {
+// The one answer to a call: claim (any call) or decline (a mission pushed to this unit; only its leader).
+type Answer = { callId?: number; answer?: 'claim' | 'decline'; twists?: string[] };
+registerMock('action', 'server:answerMissionCall', (payload: Answer): ClaimCallResult | { view: DispatchView } => {
+    if (payload?.answer === 'decline') return decline(payload);
     const m = state.calls.find(c => c.call.id === Number(payload?.callId));
     if (!m) throw new Error('err.mc_gone');
     if (m.call.status === 'priority') throw new Error('err.mc_priority');
@@ -183,13 +186,13 @@ registerMock('action', 'server:claimMissionCall', (payload: { callId?: number })
 });
 
 // A mission command pushed to this unit: only the paged unit's leader declines it.
-registerMock('action', 'server:declineMissionCall', (payload: { callId?: number }) => {
+function decline(payload: Answer): { view: DispatchView } {
     const m = state.calls.find(c => c.call.id === Number(payload?.callId));
     if (!m || !m.call.missionLabel) throw new Error('err.mc_not_open');
     state.calls = state.calls.filter(c => c !== m);
     // the reply carries the leader's fresh Dispatch view
     return { view: view() };
-});
+}
 
 const supCallsView = (): SupCallsView => {
     const v = view();
@@ -244,20 +247,23 @@ for (const scope of ['sup', 'admin']) {
         state.calls = state.calls.filter(c => c.call.id !== Number(payload.callId));
         return { view: supCallsView() };
     });
-    registerMock('action', `server:${scope}:mcCreate`, (payload: { type?: string; area?: string | null }) => {
-        const id = Math.max(0, ...state.calls.map(c => c.call.id)) + 1;
-        const area = AREAS.find(a => a.key === payload?.area) ?? null;
-        state.calls.push({ postedAt: nowS(), offer: 180, call: base(id, { area, staff: true, rapidPoints: 0 }) });
-        return { id, code: `MC-04${20 + id}`, view: supCallsView() };
-    });
-    registerMock('action', `server:${scope}:mcPage`, (payload: { leaderSrc?: number; missionId?: string }) => {
-        if (!payload?.leaderSrc) throw new Error('err.mc_page_target');
+    // the one staff post: no leaderSrc = an open call, leaderSrc = paged, missionId too = pushed
+    type Post = { type?: string; area?: string | null; leaderSrc?: number; missionId?: string };
+    const page = (payload: Post) => {
         const id = Math.max(0, ...state.calls.map(c => c.call.id)) + 1;
         state.calls.push({
             postedAt: nowS(),
             offer: 180,
             call: base(id, { paged: true, pushed: !!payload.missionId, staff: true, rapidPoints: 0 }),
         });
+        return { id, code: `MC-04${20 + id}`, view: supCallsView() };
+    };
+    registerMock('action', `server:${scope}:mcPost`, (payload: Post) => {
+        if (payload?.leaderSrc) return page(payload);
+        if (payload?.missionId) throw new Error('err.mc_page_target');
+        const id = Math.max(0, ...state.calls.map(c => c.call.id)) + 1;
+        const area = AREAS.find(a => a.key === payload?.area) ?? null;
+        state.calls.push({ postedAt: nowS(), offer: 180, call: base(id, { area, staff: true, rapidPoints: 0 }) });
         return { id, code: `MC-04${20 + id}`, view: supCallsView() };
     });
 }

@@ -6,7 +6,7 @@
 -- the push is refused for his own unit, another department, another type, the wrong unit size, a mission with no start
 -- in the area and a member's mission cooldown; a push names the mission in the audit, only the paged unit gets the
 -- toast and sees the call (with the mission's name), even after the page time, and its accept starts that mission
--- (staff call, no rapid response); a decline ends it and tells the supervisor; pushMissionPerDay a supervisor a day,
+-- (staff call, no rapid response); a decline ends it and tells the supervisor; MissionCalls.pushPerDay a supervisor a day,
 -- admins any. Plain stubs (MySQL, CP.AdminKit.dailyCount from the stubbed audit rows); the real deptcontrols, draw
 -- and missioncalls modules. No database.
 
@@ -178,7 +178,7 @@ CP.Missions = {
 
 H.load('modules/deptcontrols/server.lua')
 H.load('modules/draw/server.lua')
-H.load('modules/missioncalls/server.lua')
+H.load('modules/dispatch/missioncalls.lua')
 local MC = CP.MissionCalls
 MC._setNextPost(H.time + 10 ^ 9)
 Config.MissionCalls.claimWindowMs = 0
@@ -218,7 +218,7 @@ local master = Config.Permissions.supervisor.missionControls
 -- ============================================================================
 
 H.eq(controls.pushMission.on, false, 'pushMission ships off')
-H.eq(Config.MissionControls.pushMissionPerDay, 5, 'five pushes a supervisor a day')
+H.eq(Config.MissionCalls.pushPerDay, 5, 'five pushes a supervisor a day')
 H.eq(CP.DeptControls.def('pushMission').kind, 'action', 'an action control (no saved value)')
 H.eq(select(2, Page(9, 11, 'pm_patrol_a')), 'err.no_permission', 'shipped: a supervisor can not push')
 H.eq(select(2, Page(99, 11, 'pm_patrol_a')), 'err.control_off', 'shipped: nor can an admin')
@@ -288,14 +288,14 @@ H.eq(MC._calls()[d2.id], nil, 'a declined push ends')
 H.ok(Find(notes, function(n)
     return n.src == 9 and n.key == 'mc.toast.push_declined'
 end) ~= nil, 'the supervisor is told')
-Config.MissionControls.pushMissionPerDay = 2
-H.eq(select(2, Page(9, 13, 'pm_patrol_b')), 'err.mc_push_used', 'pushMissionPerDay a supervisor a day')
+Config.MissionCalls.pushPerDay = 2
+H.eq(select(2, Page(9, 13, 'pm_patrol_b')), 'err.mc_push_used', 'MissionCalls.pushPerDay a supervisor a day')
 H.eq((Page(99, 13, 'pm_patrol_b')), true, 'admins any')
 H.eq(MC.supView(9).push.usedToday, 2, 'the dialog shows today\'s pushes')
 -- Z8B: two pushes sent at once while the per-day count's query waits: the second is refused (err.busy), so both
 -- can never pass a count of one left
 do
-    Config.MissionControls.pushMissionPerDay = 3
+    Config.MissionCalls.pushPerDay = 3
     local realCount = CP.AdminKit.dailyCount
     CP.AdminKit.dailyCount = function(action, opts)
         Wait(50)
@@ -309,13 +309,13 @@ do
     H.eq(second and second[2], 'err.busy', 'Z8B: a second push while the first is checked waits its turn')
     H.eq(first and first[1], true, 'Z8B: the first push goes out')
     H.eq(MC.supView(9).push.usedToday, 3, 'Z8B: one push counted')
-    Config.MissionControls.pushMissionPerDay = 2
+    Config.MissionCalls.pushPerDay = 2
 end
 -- step WF2: Decline on Dispatch answers with the leader's fresh view, so the screen needs no second request
 local _, d3 = Page(99, 13, 'pm_patrol_b')
 H.ok(CardOf(13, d3.id) ~= nil, 'WF2: the paged unit sees the pushed call')
 H.clockMs = H.clockMs + 1100
-H.fire('crimson-police:server:declineMissionCall', 13, { callId = d3.id }, 'wf2-decline')
+H.fire('crimson-police:server:answerMissionCall', 13, { callId = d3.id, answer = 'decline' }, 'wf2-decline')
 local declined
 for i = #H.events, 1, -1 do
     local e = H.events[i]
@@ -325,7 +325,7 @@ H.ok(declined and declined.args[2] == true, 'WF2: Decline is answered')
 local dview = declined and type(declined.args[3]) == 'table' and declined.args[3].view or nil
 H.ok(type(dview) == 'table' and type(dview.calls) == 'table', 'WF2: the reply carries the Dispatch view')
 H.eq(dview and Find(dview.calls, function(c) return c.id == d3.id end), nil, 'WF2: the declined call is gone from it')
-Config.MissionControls.pushMissionPerDay = 5
+Config.MissionCalls.pushPerDay = 5
 Config.Permissions.supervisor.missionControls = master
 controls.pushMission.on = false
 

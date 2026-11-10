@@ -1083,10 +1083,9 @@ do
         H.ok(
             d.callLane.on == false and d.callLane.min == 120 and d.callLane.max == 600 and d.staffCallWait.on == false
                 and d.staffCallWait.min == 60 and d.staffCallWait.max == 120
-                and E('MissionControls.callLaneMaxOpen').default == 2 and E('MissionControls.callLaneMaxOpen').min == 1
-                and E('MissionControls.callLaneMaxOpen').max == 10
-                and E('MissionControls.callLaneMaxOpen').desc:find('one department\'s lane may have open', 1, true)
-                    ~= nil,
+                and E('MissionCalls.laneMaxOpen').default == 2 and E('MissionCalls.laneMaxOpen').min == 1
+                and E('MissionCalls.laneMaxOpen').max == 10
+                and E('MissionCalls.laneMaxOpen').desc:find('one department\'s lane may have open', 1, true) ~= nil,
             'step P12: the call lane (120-600 s, 2 open) and the staff call wait (60-120 s) ship off, with comments'
         )
         H.ok(
@@ -1132,9 +1131,9 @@ do
             'step P20: the points bonuses ship off with bounds that move nothing, with comments'
         )
         H.ok(
-            d.pushMission.on == false and E('MissionControls.pushMissionPerDay').default == 5
-                and E('MissionControls.pushMissionPerDay').max == 50
-                and E('MissionControls.pushMissionPerDay').desc:find('missions one supervisor may push', 1, true) ~= nil
+            d.pushMission.on == false and E('MissionCalls.pushPerDay').default == 5
+                and E('MissionCalls.pushPerDay').max == 50
+                and E('MissionCalls.pushPerDay').desc:find('missions one supervisor may push', 1, true) ~= nil
                 and cfgText:find('with one mission he chooses instead', 1, true) ~= nil,
             'step P19: pushing a chosen mission to a unit ships off, 5 a supervisor a day, with comments'
         )

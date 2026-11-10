@@ -432,18 +432,18 @@ end
 
 do
     Config.MissionCalls.enabled = true
-    local ok1, c1 = X.act('server:admin:mcCreate', 5, { type = 'patrol', to = to })
+    local ok1, c1 = X.act('server:admin:mcPost', 5, { type = 'patrol', to = to })
     H.eq(ok1, true, 'an admin posts a mission call: ' .. tostring(c1))
-    local ok2, e2 = X.act('server:admin:mcCreate', 5, { type = 'patrol', to = to })
+    local ok2, e2 = X.act('server:admin:mcPost', 5, { type = 'patrol', to = to })
     H.ok(not ok2 and e2 == 'err.mc_staff_cooldown', 'the wait between staff calls applies: ' .. tostring(e2))
-    local ok3, e3 = X.act('server:admin:mcCreate', 5, { type = 'patrol', skipWait = true })
+    local ok3, e3 = X.act('server:admin:mcPost', 5, { type = 'patrol', skipWait = true })
     H.ok(not ok3, 'Post anyway needs a reason: ' .. tostring(e3))
-    local ok4, c4 = X.act('server:admin:mcCreate', 5, { type = 'patrol', skipWait = true, reason = 'shift change' })
+    local ok4, c4 = X.act('server:admin:mcPost', 5, { type = 'patrol', skipWait = true, reason = 'shift change' })
     H.eq(ok4, true, 'Post anyway: ' .. tostring(c4))
     H.eq(#X.audits('mcCreateSkipWait'), 1, 'audited: mcCreateSkipWait')
     if Config.Permissions.supervisor then Config.Permissions.supervisor.missionCalls = true end
-    X.act('server:sup:mcCreate', 3, { type = 'patrol', to = to })
-    local ok5, e5 = X.act('server:sup:mcCreate', 3, { type = 'patrol', skipWait = true, reason = 'me too' })
+    X.act('server:sup:mcPost', 3, { type = 'patrol', to = to })
+    local ok5, e5 = X.act('server:sup:mcPost', 3, { type = 'patrol', skipWait = true, reason = 'me too' })
     H.ok(not ok5, 'a supervisor still waits: ' .. tostring(e5))
 
     CP.Operations._setLastLaunch(os.time())

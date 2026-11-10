@@ -308,9 +308,9 @@ PlayerRec(22).state.crimsonArena = { active = true, matchId = 'm0' }
 --                                LOAD THE SLICE
 -- ============================================================================
 
-H.load('modules/alerts/server.lua')
+H.load('modules/dispatch/alerts.lua')
 H.load('modules/route/server.lua')
-H.load('modules/calls/server.lua')
+H.load('modules/dispatch/calls.lua')
 H.load('modules/downed/server.lua')
 H.step(0)   -- runtime wiring (every module registers its listeners after Wait(0))
 

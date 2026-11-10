@@ -259,7 +259,7 @@ end
 H.load('modules/schedule/server.lua')
 H.load('modules/draw/server.lua')
 H.load('modules/integrations/sc_dispatch/server.lua')
-H.load('modules/missioncalls/server.lua')
+H.load('modules/dispatch/missioncalls.lua')
 local MC = CP.MissionCalls
 local D = CP.Draw
 H.advance(500)
@@ -295,7 +295,7 @@ local function Act(name, src, payload, waitMs)
     local _, ok, data = Reply(id)
     return ok, data
 end
-local function Claim(src, callId) return Act('server:claimMissionCall', src, { callId = callId }) end
+local function Claim(src, callId) return Act('server:answerMissionCall', src, { callId = callId }) end
 local function Cb(name, src, args)
     H.clockMs = H.clockMs + 1000
     return H.callback('crimson-police:' .. name, src, args)
@@ -646,8 +646,8 @@ do
     units = {}
     -- the rate limit: one claim per claimRate per player
     H.clockMs = H.clockMs + 5000
-    local id1 = Fire('server:claimMissionCall', 1, { callId = 999999 })
-    local id2 = Fire('server:claimMissionCall', 1, { callId = 999999 })
+    local id1 = Fire('server:answerMissionCall', 1, { callId = 999999 })
+    local id2 = Fire('server:answerMissionCall', 1, { callId = 999999 })
     H.advance(200)
     local _, ok1, e1 = Reply(id1)
     local _, ok2, e2 = Reply(id2)
@@ -669,9 +669,9 @@ do
     local call = NewCall('patrol', 'south_ls')
     -- two claims 400 ms apart: the unit nearer the area wins
     H.clockMs = H.clockMs + 3000
-    local a = Fire('server:claimMissionCall', 1, { callId = call.id })
+    local a = Fire('server:answerMissionCall', 1, { callId = call.id })
     H.advance(400)
-    local b = Fire('server:claimMissionCall', 2, { callId = call.id })
+    local b = Fire('server:answerMissionCall', 2, { callId = call.id })
     H.advance(3000)
     local _, okA, errA = Reply(a)
     local _, okB, dataB = Reply(b)
@@ -714,9 +714,9 @@ do
     local second = NewCall('patrol', 'downtown')
     second.area = 'south_ls'
     H.clockMs = H.clockMs + 3000
-    local c2 = Fire('server:claimMissionCall', 2, { callId = second.id })
+    local c2 = Fire('server:answerMissionCall', 2, { callId = second.id })
     H.advance(300)
-    local c1 = Fire('server:claimMissionCall', 1, { callId = second.id })
+    local c1 = Fire('server:answerMissionCall', 1, { callId = second.id })
     H.advance(3000)
     local _, ok1 = Reply(c1)
     local _, ok2, e2 = Reply(c2)
@@ -731,8 +731,8 @@ do
     AddPlayer(2, vec3(S.x, S.y, 30.0))
     local pure = NewCall('patrol', 'south_ls')
     H.clockMs = H.clockMs + 3000
-    local p1 = Fire('server:claimMissionCall', 1, { callId = pure.id })
-    local p2 = Fire('server:claimMissionCall', 2, { callId = pure.id })
+    local p1 = Fire('server:answerMissionCall', 1, { callId = pure.id })
+    local p2 = Fire('server:answerMissionCall', 2, { callId = pure.id })
     H.advance(1000)
     local _, okP1 = Reply(p1)
     local _, okP2, eP2 = Reply(p2)
@@ -817,9 +817,9 @@ do
     CP.Runs.readySeconds = function() return 40 end
     local call = NewCall('tactical', 'south_ls')
     H.clockMs = H.clockMs + 3000
-    local a = Fire('server:claimMissionCall', 1, { callId = call.id })
+    local a = Fire('server:answerMissionCall', 1, { callId = call.id })
     H.advance(200)
-    local b = Fire('server:claimMissionCall', 3, { callId = call.id })
+    local b = Fire('server:answerMissionCall', 3, { callId = call.id })
     H.advance(3000)
     local _, okA, dA = Reply(a)
     local _, okB, eB = Reply(b)
@@ -942,14 +942,14 @@ do
     AddPlayer(12, vec3(S.x, S.y, 30.0))
     units = { { id = 1, leader = 10, members = { 10, 9 } }, { id = 2, leader = 11, members = { 11, 12 } } }
     -- page refused for the issuer's own unit
-    local okP, eP = Act('server:sup:mcPage', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 10 })
+    local okP, eP = Act('server:sup:mcPost', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 10 })
     H.eq(okP, false, 'page refused for the issuer\'s unit')
     H.eq(eP, 'err.mc_page_self', 'page self key')
-    local _, eL = Act('server:sup:mcPage', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 12 })
+    local _, eL = Act('server:sup:mcPost', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 12 })
     H.eq(eL, 'err.mc_page_not_leader', 'only leaders or solo officers are paged')
-    local _, eT = Act('server:sup:mcPage', 9, { type = 'training', area = 'south_ls', leaderSrc = 11 })
+    local _, eT = Act('server:sup:mcPost', 9, { type = 'training', area = 'south_ls', leaderSrc = 11 })
     H.eq(eT, 'err.mc_type_not_callable', 'training is never a call')
-    local okP2, dP2 = Act('server:sup:mcPage', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 11 })
+    local okP2, dP2 = Act('server:sup:mcPost', 9, { type = 'patrol', area = 'south_ls', leaderSrc = 11 })
     H.eq(okP2, true, 'paged another unit')
     local paged = MC._calls()[dP2.id]
     H.eq(Toasts(11) + Toasts(12), 2, 'only the paged unit gets the toast')
@@ -978,12 +978,12 @@ do
 
     -- create: staffCooldown per issuer, audited, the issuer's unit refused for the whole offer
     onRun = {}
-    local okC, dC = Act('server:sup:mcCreate', 9, { type = 'investigation', area = 'vinewood' })
+    local okC, dC = Act('server:sup:mcPost', 9, { type = 'investigation', area = 'vinewood' })
     H.eq(okC, true, 'created')
-    local _, eC2 = Act('server:sup:mcCreate', 9, { type = 'patrol', area = 'downtown' })
+    local _, eC2 = Act('server:sup:mcPost', 9, { type = 'patrol', area = 'downtown' })
     H.eq(eC2, 'err.mc_staff_cooldown', 'staffCooldown')
     H.time = H.time + 121
-    H.eq((Act('server:sup:mcCreate', 9, { type = 'patrol', area = 'downtown' })), true, 'after the cooldown')
+    H.eq((Act('server:sup:mcPost', 9, { type = 'patrol', area = 'downtown' })), true, 'after the cooldown')
     local createdCall = MC._calls()[dC.id]
     H.eq(createdCall.staff, true, 'a staff call')
     units[1] = { id = 1, leader = 10, members = { 10, 9 } }
@@ -991,7 +991,7 @@ do
     H.eq(eOwn, 'err.mc_own_call', 'the issuer\'s unit can\'t claim a created call')
     H.ok(Find(audits, function(x) return x.action == 'mcCreate' end) ~= nil, 'create audited')
     H.eq(CardOf(11, createdCall.id).rapidPoints, 0, 'no rapid response on a staff call card')
-    local _, eA = Act('server:admin:mcCreate', 9, { type = 'patrol' })
+    local _, eA = Act('server:admin:mcPost', 9, { type = 'patrol' })
     H.eq(eA, 'err.no_permission', 'admin actions need an admin')
     -- the console command
     local sub = subcommands.missioncall
@@ -1028,7 +1028,7 @@ do
     AddPlayer(12, vec3(S.x, S.y, 30.0))
     AddPlayer(13, vec3(S.x, S.y, 30.0))
     units = { { id = 1, leader = 10, members = { 10, 9 } }, { id = 2, leader = 11, members = { 11, 12 } } }
-    local okP, dP = Act('server:sup:mcPage', 9, { type = 'investigation', area = 'south_ls', leaderSrc = 11 })
+    local okP, dP = Act('server:sup:mcPost', 9, { type = 'investigation', area = 'south_ls', leaderSrc = 11 })
     H.eq(okP, true, 'paged')
     H.eq(Toasts(13), 0, 'during pageTime only the paged unit hears it')
     H.events = {}
@@ -1122,14 +1122,14 @@ do
     MC._pushAll()
     H.ok(Find(pushes, function(p) return p.src == 1 and p.topic == 'calls' end) ~= nil, 'the open tablet gets the push')
     H.eq(Find(pushes, function(p) return p.src == 2 end), nil, 'a closed tablet gets nothing')
-    H.fire('crimson-police:server:mcWatch', 1, false)
-    -- the tablet's own close (server:tabletClosed in modules/tablet fires 'tablet:closed') ends a watch the same way
+    -- the tablet's own close (server:tabletClosed in modules/tablet fires 'tablet:closed') ends a watch
+    CP.Hooks.fire('tablet:closed', 1)
     Cb('getMissionCalls', 2)
     CP.Hooks.fire('tablet:closed', 2)
     pushes = {}
     NewCall('investigation', 'vinewood')
     MC._pushAll()
-    H.eq(Find(pushes, function(p) return p.src == 1 end), nil, 'mcWatch false (older clients): no more pushes')
+    H.eq(Find(pushes, function(p) return p.src == 1 end), nil, 'tablet:closed (officer 1): no more pushes')
     H.eq(Find(pushes, function(p) return p.src == 2 end), nil, 'tablet:closed: no more pushes')
     H.eq(#pushes, 0, 'the tablets closed: nothing is pushed')
 
@@ -1186,8 +1186,8 @@ do
     -- the claim race (two units within the window), then one more check with every tablet open
     local t1 = os.clock()
     H.clockMs = H.clockMs + 3000
-    local r1 = Fire('server:claimMissionCall', 1, { callId = target.id })
-    local r2 = Fire('server:claimMissionCall', 3, { callId = target.id })
+    local r1 = Fire('server:answerMissionCall', 1, { callId = target.id })
+    local r2 = Fire('server:answerMissionCall', 3, { callId = target.id })
     H.advance(2000)
     MC._tick()
     MC._pushAll()
@@ -1274,7 +1274,7 @@ do
     run.state = 'ended'
     CP.Hooks.fire('run:ended', run, 'abandoned', 'quit')
     Act('server:sup:mcWithdraw', 9, { callId = call.id, reason = 'test' })
-    Act('server:sup:mcCreate', 9, { type = 'patrol' })
+    Act('server:sup:mcPost', 9, { type = 'patrol' })
     H.time = H.time + 400
     MC._tick()
     H.eq(#scdCalls, 0, 'no sc-dispatch export was called (no AddNotification)')
@@ -1525,16 +1525,16 @@ do
         'the call card offers its type\'s twists (no Armored Hostiles: no armed NPCs in the pool)')
     H.ok(view.twistMax and view.twistMax.points == 0.70 and view.twistMax.cash == 1.95, 'and the caps')
 
-    local ok, err = Act('server:claimMissionCall', 1, { callId = call.id, twists = { 'armored_hostiles' } })
+    local ok, err = Act('server:answerMissionCall', 1, { callId = call.id, twists = { 'armored_hostiles' } })
     H.eq(ok, false, 'a twist the type does not offer is refused')
     H.eq(err, 'err.twist_unavailable', '...as not available')
     H.eq(call.window, nil, 'the refused claim never joined the claim window')
-    ok, err = Act('server:claimMissionCall', 1, { callId = call.id, twists = 'radio_silence' })
+    ok, err = Act('server:answerMissionCall', 1, { callId = call.id, twists = 'radio_silence' })
     H.eq(err, 'err.invalid_payload', 'twists must be a list')
 
     local before = #created
     local data
-    ok, data = Act('server:claimMissionCall', 1, { callId = call.id, twists = { 'radio_silence', 'time_crunch' } })
+    ok, data = Act('server:answerMissionCall', 1, { callId = call.id, twists = { 'radio_silence', 'time_crunch' } })
     H.eq(ok, true, 'the claim with two twists wins')
     H.ok(type(data) == 'table' and data.runId ~= nil, 'a run')
     local opts = created[before + 1]
@@ -1706,7 +1706,7 @@ do
     H.eq(MC._cleanLane({ spawnEvery = { 120, 240 }, maxOpen = 1, areas = { 'mars' }, types = { patrol = 1 } }, b, true),
         nil, 'check: an unknown area is refused')
     H.eq(MC._cleanLane({ spawnEvery = { 120, 240 }, maxOpen = 3, types = { patrol = 1 } }, b, true), nil,
-        'check: more open calls than callLaneMaxOpen is refused')
+        'check: more open calls than laneMaxOpen is refused')
     local moved = MC._cleanLane({ spawnEvery = { 60, 900 }, maxOpen = 1, types = { patrol = 1 } }, b, false)
     H.ok(moved and moved.spawnEvery[1] == 120 and moved.spawnEvery[2] == 600, 'clamp: a saved gap moves inside')
 

@@ -301,7 +301,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/runs/server.lua | engine thread (one thread): run timeouts, arrivals, arena exit sweeps, job recheck | while a run or an orphaned item is kept | 1000 ms; arena sweeps every 5th pass; job recheck every `Config.AntiCheat.jobRecheck` passes | run deadlines and HUD timers are in seconds |
 | modules/runs/server.lua | maintenance | always | 60 s | housekeeping |
 | modules/route/server.lua | drive-to-start safety net | while a run or a tracked participant exists | 1000 ms | the warning deadline is in seconds |
-| modules/alerts/server.lua | crimsonArena flag reconcile | always | 1000 -> 2000 ms, scaled | a lost flag is restored within two seconds |
+| modules/dispatch/alerts.lua | crimsonArena flag reconcile | always | 1000 -> 2000 ms, scaled | a lost flag is restored within two seconds |
 | modules/review/anticheat.lua | buckets, idle, presence sampling | always | 1000 -> 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
 | modules/custody/server.lua | custody timers | while a run has a custody book | 1000 ms (kept) | each service vehicle step (road point ask, spawn, drive, park, leave) is one pass: 2 s would make every transport and coroner arrive seconds later |
 | modules/npc/server.lua | death watcher, health, cuff reach, flee clock | while a run is live or a ped record is kept | 1000 ms (kept) | the flee clock adds a second a pass (sprint, jog, walk), and a vanished ped must be seen before the engine's own 2-pass vanish rule |
@@ -311,8 +311,8 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/units/server.lua | invite expiry, lock safety net | while a unit exists | 2000 -> 5000 ms, scaled | invites last 120 s; accepting checks the expiry itself. A ready check has its own timer at the deadline, and Units.ready refuses an answer after it |
 | modules/realplayers/volunteers.lua | volunteer window and duty | while someone volunteers | 15 -> 30 s, scaled | the window is minutes; its end is checked at the draw (`V.available`), so the sweep only tidies |
 | modules/realplayers/match.lua | asking, travel, engagement | while a run has a match | 1000 -> 2000 ms | the travel time is minutes |
-| modules/missioncalls/server.lua | call posting and expiry | always | `checkEvery` s | the feature is on all day |
-| modules/missioncalls/server.lua | coalesced screen push | a change | one `SetTimeout`, 1 s after the first change | a burst of changes is one push |
+| modules/dispatch/missioncalls.lua | call posting and expiry | always | `checkEvery` s | the feature is on all day |
+| modules/dispatch/missioncalls.lua | coalesced screen push | a change | one `SetTimeout`, 1 s after the first change | a burst of changes is one push |
 | modules/testing/server.lua | debug stream, invites | while a test, an invitation or a waiting result is kept | 1000 -> 2000 ms base, debug 2 s, upkeep 5 s (on the next pass) | |
 | modules/downed/server.lua | downed checks | while a run is live or an entry is kept | `Config.Downed.checkEvery` s (min 0.5) | owner setting |
 | modules/markers/server.lua | the extra parts of each officer's map | while `Config.Markers.extraParts` and a part are on and a run is going, or a map still has parts | `Config.Markers.refreshEvery` s (1-30), scaled | owner setting; a list is sent only when it changed |
@@ -320,7 +320,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/schedule/server.lua | daily jobs | always | 30 -> 60 s | minute precision |
 | modules/happyhour/server.lua | happy hour end | while a happy hour may be on: armed at start, by a start and by a Settings change; ends after a pass that sees none | 15 -> 30 s, scaled | the screens hear the end then |
 | modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
-| modules/calls/server.lua | prune | always | 60 s | |
+| modules/dispatch/calls.lua | prune | always | 60 s | |
 | modules/draw/server.lua | housekeeping | always | 60 s | |
 | modules/cash/server.lua, rewards/server.lua | forfeit sweeps | always | 10 min | |
 
@@ -362,11 +362,11 @@ strings do not count.
 | `modules/access/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/admin/server.lua` | 4 | 0 | push queue while queued; one-shots |
 | `modules/adminkit/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/alerts/server.lua` | 2 | 1 | flag reconcile (always, players); one-shots |
+| `modules/dispatch/alerts.lua` | 2 | 1 | flag reconcile (always, players); one-shots |
 | `modules/review/anticheat.lua` | 2 | 1 | buckets, idle, presence (always, players); one-shots |
 | `modules/builder/client.lua` | 4 | 4 | Builder tools (admin, per frame while open); bounded loads |
 | `modules/builder/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/calls/server.lua` | 2 | 1 | prune, 60 s; one-shots |
+| `modules/dispatch/calls.lua` | 2 | 1 | prune, 60 s; one-shots |
 | `modules/cash/server.lua` | 4 | 1 | forfeit sweep, 10 min; one-shots |
 | `modules/progression/challenge.lua` | 3 | 1 | planned-end reminders, 60 s; one-shots |
 | `modules/confighealth/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -389,7 +389,7 @@ strings do not count.
 | `modules/livectl/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/markers/client.lua` | 2 | 0 | objective pointer; a start-up hook |
 | `modules/migrations/server.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/missioncalls/server.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
+| `modules/dispatch/missioncalls.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
 | `modules/missions/client.lua` | 1 | 0 | bounded definitions retry at start |
 | `modules/missions/server.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/npc/client.lua` | 19 | 1 | owned ped AI, pace, governor, cuff guard; bounded control waits; one-shots |

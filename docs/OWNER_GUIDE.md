@@ -254,7 +254,7 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
   his own department in Supervisor UI → Mission controls → Calls:
   - `callLane = { on = false, min = 120, max = 600 }` (**Department call lane**): his department's own mission calls
     next to the server's. He picks the gap between two lane calls (a range inside `min` to `max` seconds), how many
-    may be open at once (up to `Config.MissionControls.callLaneMaxOpen`, `2`), the areas (none picked = every area)
+    may be open at once (up to `Config.MissionCalls.laneMaxOpen`, `2`), the areas (none picked = every area)
     and a weight 0-10 per mission type of `Config.MissionCalls.types`. Only his department's officers get the pop-up,
     see the call on Dispatch (tagged "SAST call") and may claim it; a unit with an officer of another department
     cannot, and neither can the unit of the supervisor who set the lane. Lane calls count against
@@ -337,13 +337,13 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
   A goal you remove or switch off later is left out of the pick (none left = every goal). Switching the control off
   or **Back to config** goes back to every goal at once; a goal already rewarded this period never pays twice.
 - **Push a chosen mission** (per department, off when you install, under the master switch):
-  `pushMission = { on = false }`. In **Page a unit** (Live Missions) the supervisor may pick one mission of the call's
+  `pushMission = { on = false }`. In **New call** (Department → Calls & notices, Admin UI → Missions), once he picks a unit, the supervisor may pick one mission of the call's
   type instead of **Any (drawn at random)**, for a unit of his own department (never his own unit). Only that unit gets
   the call, for its whole offer, and only that unit sees the mission's name ("Mission: ..." on Dispatch); its leader
   accepts or declines it. Every accept rule stays (cooldowns, caps, unit size, missions switched off for the
   department, a start in the area named); only the random pick of the mission is skipped. A decline, a refused accept
   or a failed ready check ends the call (the supervisor is told), an abandoned run is never re-dispatched, and a push
-  never earns rapid response. `Config.MissionControls.pushMissionPerDay` (`5`): pushes one supervisor may make a day
+  never earns rapid response. `Config.MissionCalls.pushPerDay` (`5`): pushes one supervisor may make a day
   (admins any). Every push is in the audit log (**Mission pushed to a unit**) with the mission.
 - **Give points** (per department, off when you install, under the master switch):
   `awardPoints = { on = false, min = 1, max = 50 }`. In **Department** → **Officers** the officer's dialog gets a **Give

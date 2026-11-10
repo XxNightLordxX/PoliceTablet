@@ -393,8 +393,8 @@ export default function Dispatch() {
 
     const claimCall = async (call: MissionCall, picked: string[]) => {
         const res = await run<ClaimCallResult>(
-            'server:claimMissionCall',
-            picked.length ? { callId: call.id, twists: picked } : { callId: call.id },
+            'server:answerMissionCall',
+            picked.length ? { callId: call.id, answer: 'claim', twists: picked } : { callId: call.id, answer: 'claim' },
         );
         setPending(null);
         if (res.ok && res.data?.runId) navigate('active');
@@ -415,8 +415,8 @@ export default function Dispatch() {
     // a pushed mission: the leader turns it down; nobody else gets it
     const decline = async (call: MissionCall) => {
         const res = await run<{ view?: DispatchView }>(
-            'server:declineMissionCall',
-            { callId: call.id },
+            'server:answerMissionCall',
+            { callId: call.id, answer: 'decline' },
             { success: 'mc.card.declined' },
         );
         // the reply carries the fresh view (an older server: ask for it)

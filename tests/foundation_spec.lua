@@ -1964,7 +1964,7 @@ do
     CP.Dispatch = nil
     _G.AddStateBagChangeHandler = nil
     _G.GetPlayerFromStateBagName = function() return nil end
-    H.load('modules/alerts/server.lua')
+    H.load('modules/dispatch/alerts.lua')
     local exits = {}
     CP.Hooks.on('arena:exited', function(src) exits[#exits + 1] = src end)
     H.players[1].state = H.players[1].state or {}
@@ -2016,7 +2016,7 @@ do
     end
     CP.Alerts = nil
     CP.Dispatch = nil
-    H.load('modules/alerts/server.lua')
+    H.load('modules/dispatch/alerts.lua')
     H.step(0)
     H.eq(#bagHandlers, 1, 'alerts watches the crimsonArena key')
     H.eq(H.players[199].state.crimsonArena, nil, 'start: the leftover Crimson-Police flag is removed')

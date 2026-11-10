@@ -36,16 +36,18 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/admin/server.lua`: CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the audit log (cp_audit) and the Discord webhooks.
 - `Crimson-Police/modules/adminhome/server.lua`: CP.AdminHome (server): Admin UI -> Home, a dashboard in one batched callback (admin:getHome): live now (officers on
 - `Crimson-Police/modules/adminkit/server.lua`: CP.AdminKit (server): the one wrapper every new admin action goes through (permission, rate, request id, reason, typed word, preview, self, compare-and-set, audit, caches, toasts), bulk jobs, day counts and the busy lock.
-- `Crimson-Police/modules/alerts/server.lua`: CP.Alerts (server): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag (docs/dev/ARCHITECTURE.md §5.14, Crimson-Arena rules 1, 2, 3, 9, 11).
 - `Crimson-Police/modules/builder/client.lua`: CP.Builder (client): the Mission Builder's in-world tools.
 - `Crimson-Police/modules/builder/server.lua`: CP.Builder (server): the Mission Builder's drafts, edit locks, versions,
-- `Crimson-Police/modules/calls/server.lua`: CP.Calls (server): Hard rule 15, real calls first (docs/dev/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
 - `Crimson-Police/modules/cash/server.lua`: CP.Cash (server): the cash formula and every payment Crimson-Police makes.
 - `Crimson-Police/modules/confighealth/server.lua`: CP.ConfigHealth (server): the Config health list of Admin UI → Permissions.
 - `Crimson-Police/modules/custody/client.lua`: CP.Custody (client): the police action flow (begin, progress bar, finish), the case-fail confirm, the service vehicles this client drives for the server and their blips, and the road point the server asks for.
 - `Crimson-Police/modules/custody/server.lua`: CP.Custody (server): contact truths and facts, police actions, grading, the custody chain and the service vehicles (prisoner transport, tow truck, coroner van).
 - `Crimson-Police/modules/deptcontrols/server.lua`: CP.DeptControls (server): Mission controls.
 - `Crimson-Police/modules/diag/client.lua`: CP.Diag (client): the F8 command CrimsonPoliceState prints what holds the screen, the camera, the controls and the NUI focus right now, and which part of it is Crimson-Police's; `CrimsonPoliceState unstick` undoes only ours.
+- `Crimson-Police/modules/dispatch/alerts.lua`: CP.Alerts (server, the dispatch module): Hard rule 16 (no mission alerts) and the only writer of the crimsonArena state bag (docs/dev/ARCHITECTURE.md §5.14, docs/dev/INTEGRATIONS.md, Crimson-Arena rules 1, 2, 3, 9, 11).
+- `Crimson-Police/modules/dispatch/calls.lua`: CP.Calls (server, the dispatch module): Hard rule 15, real calls first (docs/dev/ARCHITECTURE.md §5.13, SPEC "Real calls end missions; NPC calls never do", INTEGRATIONS sc-dispatch and sc-npcpolice).
+- `Crimson-Police/modules/dispatch/client/missioncalls.lua`: CP.MissionCalls (client, the dispatch module): the new-call toast and tone.
+- `Crimson-Police/modules/dispatch/missioncalls.lua`: CP.MissionCalls (server): the dispatch module's one call flow, the tablet's Dispatch list.
 - `Crimson-Police/modules/downed/client.lua`: CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client (docs/dev/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
 - `Crimson-Police/modules/downed/server.lua`: CP.Downed (server): Hard rule 18, downed participants (docs/dev/ARCHITECTURE.md §5.15, SPEC "Downed participants", Crimson-Arena rules 1 and 3).
 - `Crimson-Police/modules/draw/server.lua`: CP.Draw: mission pools, the random draw, locations and the Mission Board.
@@ -63,8 +65,6 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/markers/client.lua`: CP.Markers (client): the current objective on this officer's map, one pointer (a blip, or a circle with its centre)
 - `Crimson-Police/modules/markers/server.lua`: CP.Markers (server): every part of a mission besides its objective on the officers' maps (Config.Markers.parts).
 - `Crimson-Police/modules/migrations/server.lua`: Applies sql/migrations/NNN_*.sql in order on start.
-- `Crimson-Police/modules/missioncalls/client.lua`: CP.MissionCalls (client): the new-call toast and tone.
-- `Crimson-Police/modules/missioncalls/server.lua`: CP.MissionCalls: the tablet's own call board (Dispatch): posting, claims, lapses, re-dispatch, staff calls, the Dispatch screen data and call toasts.
 - `Crimson-Police/modules/missions/client.lua`: CP.Missions (client): the mission definitions sent by the server.
 - `Crimson-Police/modules/missions/server.lua`: CP.Missions: the mission registry (loader, normaliser, validator).
 - `Crimson-Police/modules/npc/client.lua`: CP.Npc (client): host-side NPC AI helpers, "Cuff suspect" and the police action options (contacts, custody).
@@ -309,7 +309,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/foundation.mock.ts`: Browser mocks of the foundation slice: a result with every optional section (?result=parity shows it).
 - `Crimson-Police/web/src/mocks/index.ts`: Browser dev mode only (main.tsx imports this only when isEnvBrowser()).
 - `Crimson-Police/web/src/mocks/logos.ts`: Placeholder department logos for browser mode (inline SVG data URIs; no external URLs).
-- `Crimson-Police/web/src/mocks/missioncalls.mock.ts`: Browser mocks of the Dispatch screen (mission calls): getMissionCalls, server:claimMissionCall, the staff panel (sup:getMissionCalls and the mc* actions) and the admin area coverage and location plays. ?calls=empty shows no calls, ?calls=run the "on a run" notice, ?calls=op the Cross-Department Mission banner.
+- `Crimson-Police/web/src/mocks/missioncalls.mock.ts`: Browser mocks of the Dispatch screen (mission calls): getMissionCalls, server:answerMissionCall, the staff panel (sup:getMissionCalls and the mc* actions) and the admin area coverage and location plays. ?calls=empty shows no calls, ?calls=run the "on a run" notice, ?calls=op the Cross-Department Mission banner.
 - `Crimson-Police/web/src/mocks/notices.mock.ts`: Mock: the one notice system (modules/supervisor/notices.lua): notices:get { kind }, server:notice:post and server:notice:end, with one list of rows for both kinds like the server's cp_staff_notices.
 - `Crimson-Police/web/src/mocks/options.mock.ts`: Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions, setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 - `Crimson-Police/web/src/mocks/oversight.mock.ts`: Browser mocks for the oversight slice: Supervisor Mission List, Live Missions, Review Queue and Admin Officers, Departments, Permissions and Audit Log.
@@ -392,7 +392,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/styles/order.ts`: Every stylesheet of the NUI, in one fixed order, loaded with the page.
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
 - `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
-- `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, page a unit, create a call, today's calls), plus the Admin area coverage matrix and location plays.
+- `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, one New call dialog that posts, pages or pushes (server:<scope>:mcPost), today's calls), plus the Admin area coverage matrix and location plays.
 - `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
 - `Crimson-Police/web/src/supervisor/components/OfficerActions.tsx`: Supervisor UI · Department → Officers: the action forms of the officer's side panel (UI4).
 - `Crimson-Police/web/src/supervisor/components/OperationPanel.tsx`: Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
@@ -483,6 +483,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/dept_tod_spec.lua`: A department's Type of the Day: a supervisor picks one mission type for tomorrow; that day his
 - `tests/dept_twists_spec.lua`: The twists a department offers and pre-ticks: the twists Mission control narrows the accept step's offer (Mission Board, mission call claims) to the twists the leader's department offers, marks the ones it pre-ticks and refuses a chosen twist the department does not offer.
 - `tests/difficulty_unit_spec.lua`: Difficulty and unit size: two per-department Mission controls. difficulty picks one of the presets the admin lists (Config.NpcDifficulty) for runs the department leads, read at the accept; unitSize caps the units its leaders may lead, never above Config.Limits.maxUnitSize.
+- `tests/dispatch_spec.lua`: The one dispatch flow: every kind of call on one list, one answer and one staff post (modules/dispatch).
 - `tests/docs_restart_spec.lua`: The docs say what an ox_inventory restart does while Crimson-Police runs, and match the code: the swapItems hook is dropped and registered again 1 s after ox_inventory starts.
 - `tests/docs_spec.lua`: The documents stay true to the code: the SPEC links the config files instead of copying them and every Config key it names exists, every document a file names exists, the short README and the owner guide keep their contents, commands, config keys and "What ships off" table in step with the code, and FILE_NOTES is one line per file.
 - `tests/draw_zones_spec.lua`: Modules/draw: areas, footprints, zone clearance, location memory and freshness, the county-wide weighting, the daily cap and its board lock, the ready-check call site and admin:getLocationStats.

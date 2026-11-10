@@ -248,7 +248,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -466,7 +466,7 @@ do
     H.ok(not OfficersSaw(H.players[9].coords, mark, OFFICERS), 'live: no suspect position reaches officers')
     H.eq(CP.LiveCrime.availablePolice(), 2, 'live: GetAvailablePolice counts the two idle officers')
 
-    local ok, data = Act('server:claimMissionCall', 1, { callId = card.id })
+    local ok, data = Act('server:answerMissionCall', 1, { callId = card.id })
     H.eq(ok, true, 'live: the leader claims the LIVE call: ' .. tostring(data))
     liveRun = Runs.getBySrc(1)
     H.ok(liveRun ~= nil and liveRun.realSuspect == 'live', 'live: the case opened as a live run')

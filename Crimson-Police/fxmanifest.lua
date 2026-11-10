@@ -43,12 +43,14 @@ server_scripts {
     'modules/supervisor/*.lua',
     'modules/review/*.lua',
     'modules/realplayers/*.lua',
+    'modules/dispatch/*.lua',
     'blocks/**/server.lua',
 }
 
 client_scripts {
     'modules/**/client.lua',
     'modules/realplayers/client/*.lua',
+    'modules/dispatch/client/*.lua',
     'blocks/**/client.lua',
 }
 

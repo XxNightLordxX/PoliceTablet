@@ -285,7 +285,7 @@ local admin = ReadRepo('Crimson-Police/modules/admin/server.lua') or ''
 local subs = {}
 for sub in admin:gmatch('\nSUB%.([%w_]+) = function') do subs[sub] = true end
 for _, rel in ipairs(files) do
-    if rel:match('server%.lua$') then
+    if rel:match('^%.?/?Crimson%-Police/modules/.*%.lua$') then
         local s = ReadRepo(rel:gsub('^%./', '')) or ''
         for sub in s:gmatch('CP%.Admin%.registerSubcommand%(\'([%w_]+)\'') do subs[sub] = true end
     end

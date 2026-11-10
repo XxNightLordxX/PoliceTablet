@@ -76,7 +76,10 @@ async function steps(): Promise<void> {
     const call = Object.values(view.data?.calls ?? []).find(c => c.status === 'ready');
     ok(call, 'the mock has a ready call');
     if (call) {
-        const claim = await action<{ pending?: boolean }>('server:claimMissionCall', { callId: call.id });
+        const claim = await action<{ pending?: boolean }>('server:answerMissionCall', {
+            callId: call.id,
+            answer: 'claim',
+        });
         ok(claim.ok && claim.data?.pending === true, 'a one-click claim is a plain claim: the ready check starts');
     }
 }

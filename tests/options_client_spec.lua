@@ -243,7 +243,7 @@ do
     for _, name in ipairs({ 'RegisterKeyMapping', 'RegisterCommand', 'AddStateBagChangeHandler' }) do
         _G[name] = _G[name] or function() end
     end
-    H.load('modules/missioncalls/client.lua')
+    H.load('modules/dispatch/client/missioncalls.lua')
     H.load('modules/units/client.lua')
     local function Call()
         H.clockMs = H.clockMs + 10000
@@ -346,7 +346,7 @@ do
     local toasts = {}
     stub.keyLabel = tabletModule.keyLabel
     stub.notify = function(_, text) toasts[#toasts + 1] = text end
-    H.load('modules/missioncalls/client.lua')
+    H.load('modules/dispatch/client/missioncalls.lua')
     local function Call()
         H.clockMs = H.clockMs + 10000
         H.fire('crimson-police:client:missionCall', nil, { code = 'MC-7', typeLabel = 'Patrol', priority = 2 })

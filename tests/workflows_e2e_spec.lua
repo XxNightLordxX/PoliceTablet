@@ -262,7 +262,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -640,9 +640,9 @@ do
     Place(6, vec3(area.center.x + 300.0, area.center.y, area.center.z))
     Place(3, vec3(area.center.x - 300.0, area.center.y, area.center.z))
     Secs(12)
-    local ok, data = Act('server:sup:mcCreate', 6, { type = 'patrol', area = 'south_ls' })
+    local ok, data = Act('server:sup:mcPost', 6, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, false, 'call: an officer cannot create a call (' .. tostring(data) .. ')')
-    ok, data = Act('server:sup:mcCreate', 3, { type = 'patrol', area = 'south_ls' })
+    ok, data = Act('server:sup:mcPost', 3, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, true, 'call: the SAST supervisor creates a Patrol call in South Los Santos: ' .. tostring(data))
     local callId = data and data.id
     local function CallRow()
@@ -653,14 +653,14 @@ do
     local listed = false
     for _, c in ipairs((CP.MissionCalls.list(6) or {}).calls or {}) do if c.id == callId then listed = true end end
     H.eq(listed, true, 'call: the officer sees it on Dispatch')
-    ok, data = Act('server:claimMissionCall', 6, { callId = callId })
+    ok, data = Act('server:answerMissionCall', 6, { callId = callId })
     H.eq(ok, true, 'call: the officer claims it: ' .. tostring(data))
     local run = Runs.getBySrc(6)
     H.ok(run ~= nil and run.missionCall ~= nil, 'call: the run carries the call')
     H.eq(run and run.missionCall and run.missionCall.code, CallRow().code, 'call: ...this call')
     H.eq(run and run.missionId, 'beat_patrol', 'call: a Patrol mission is drawn')
     H.eq(CallRow().status, 'claimed', 'call: claimed')
-    ok = Act('server:claimMissionCall', 1, { callId = callId })
+    ok = Act('server:answerMissionCall', 1, { callId = callId })
     H.eq(ok, false, 'call: a second claim is refused')
     local veh = StartPatrolRun(6, run)
     DriveCheckpoints(6, run, veh)

@@ -300,7 +300,7 @@ local loadedFiles = {}
 do
     local p = io.popen(
         'cd ' .. H.root .. ' && find modules -name server.lua | sort'
-            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua'
+            .. ' && ls modules/progression/*.lua modules/supervisor/*.lua modules/review/*.lua modules/realplayers/*.lua modules/dispatch/*.lua'
             .. ' && find blocks -name server.lua | sort'
     )
     for file in p:lines() do loadedFiles[#loadedFiles + 1] = file end
@@ -599,7 +599,7 @@ do
     H.eq(ok, true, 'season: the admin starts the season the department challenge counts in: ' .. tostring(err))
 
     -- the extra grant: an officer who is not a supervisor may now create mission calls
-    ok, err = Act('server:sup:mcCreate', 6, { type = 'patrol', area = 'south_ls' })
+    ok, err = Act('server:sup:mcPost', 6, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, false, 'grant: an officer without the grant cannot create a call (' .. tostring(err) .. ')')
     H.eq(CP.Permissions.can(7, 'missionCalls'), true, 'grant: the granted officer has the power')
 
@@ -878,7 +878,7 @@ do
     Place(6, vec3(area.center.x + 300.0, area.center.y, area.center.z))
     Place(1, vec3(area.center.x + 310.0, area.center.y, area.center.z))
     Secs(12)
-    local ok, data = Act('server:sup:mcCreate', 7, { type = 'patrol', area = 'south_ls' })
+    local ok, data = Act('server:sup:mcPost', 7, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, true, 'call: the officer with the extra grant creates a Patrol call: ' .. tostring(data))
     local callA = data and data.id
     H.eq(CallRow(callA).status, 'open', 'call: open')
@@ -890,11 +890,11 @@ do
     H.eq(CallRow(callA).status, 'lapsed', 'restart: ...and its row is lapsed, not open for ever')
 
     Secs(65)
-    ok, data = Act('server:sup:mcCreate', 7, { type = 'patrol', area = 'south_ls' })
+    ok, data = Act('server:sup:mcPost', 7, { type = 'patrol', area = 'south_ls' })
     H.eq(ok, true, 'call: a new call after the restart: ' .. tostring(data))
     local callB = data and data.id
     Config.DisabledMissions = PATROL_OTHERS
-    ok, data = Act('server:claimMissionCall', 6, { callId = callB })
+    ok, data = Act('server:answerMissionCall', 6, { callId = callB })
     H.eq(ok, true, 'call: Cleo claims it: ' .. tostring(data))
     local run = Runs.getBySrc(6)
     H.ok(run ~= nil and run.missionCall ~= nil, 'call: the run carries the call')
@@ -1096,7 +1096,7 @@ do
     -- the Page dialog offers the missions; the push names one, its reply carries the panel (step FX1)
     local view = Cb('sup:getMissionCalls', 3)
     H.ok(view and view.push and #(view.push.missions or {}) > 0, 'push: the Page dialog lists the missions to push')
-    local ok, data = Act('server:sup:mcPage', 3, { type = 'patrol', leaderSrc = 1, missionId = 'traffic_enforcement' })
+    local ok, data = Act('server:sup:mcPost', 3, { type = 'patrol', leaderSrc = 1, missionId = 'traffic_enforcement' })
     H.eq(ok, true, 'push: the supervisor pushes Traffic Enforcement to the unit: ' .. tostring(data))
     local panel = type(data) == 'table' and data.view or nil
     H.ok(type(panel) == 'table' and type(panel.open) == 'table', 'push: the reply carries the panel view (FX1)')
@@ -1109,7 +1109,7 @@ do
     local other
     for _, c in ipairs((CP.MissionCalls.list(7) or {}).calls or {}) do if c.id == data.id then other = c end end
     H.eq(other, nil, 'push: another officer never sees it')
-    ok, data = Act('server:claimMissionCall', 1, { callId = card and card.id })
+    ok, data = Act('server:answerMissionCall', 1, { callId = card and card.id })
     H.eq(ok, true, 'push: the unit accepts it: ' .. tostring(data))
     Secs(2)
     local run = Runs.getBySrc(1)

@@ -466,7 +466,7 @@ export interface MissionControlState {
     // the types control: every mission it may switch off on its own
     missions?: TypeSwitchMission[];
     // callLane: the callable mission types (their server weight), the areas, the most open calls a lane
-    // may have (Config.MissionControls.callLaneMaxOpen) and the highest weight
+    // may have (Config.MissionCalls.laneMaxOpen) and the highest weight
     laneTypes?: { key: string; label: string; weight: number }[];
     laneAreas?: { key: string; label: string }[];
     maxOpenCap?: number;

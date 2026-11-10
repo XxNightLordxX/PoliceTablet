@@ -201,9 +201,9 @@ local function ClientEvents(name, target)
     return out
 end
 
-H.load('modules/alerts/server.lua')
+H.load('modules/dispatch/alerts.lua')
 H.load('modules/route/server.lua')
-H.load('modules/calls/server.lua')
+H.load('modules/dispatch/calls.lua')
 H.load('modules/downed/server.lua')
 H.step(0)
 

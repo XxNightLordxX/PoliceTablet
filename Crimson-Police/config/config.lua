@@ -818,8 +818,12 @@ Config.Draw = {
 -- ============================================================================
 --                           DISPATCH (MISSION CALLS)
 -- ============================================================================
--- Tablet-only NPC calls. The first unit to claim one gets a random mission of that type that starts in
--- the call's area. Mission calls are never sent to SC-Dispatch, and real calls always come first.
+-- Tablet-only NPC calls, all on one Dispatch list: the server's random calls, a department's own lane (the callLane
+-- Mission control), calls staff post or page to one unit, and missions a supervisor pushes to one unit (the
+-- pushMission Mission control). The first unit to claim a call gets a random mission of that type that starts in
+-- the call's area (a pushed call: the mission chosen); a pushed call's unit may decline it. Every claim goes through
+-- the same accept checks and the unit's ready check (Units.readyCheck). Mission calls are never sent to
+-- SC-Dispatch, and real calls always come first.
 Config.MissionCalls = {
     enabled = true,                  -- true = the server posts NPC mission calls to the tablet
     checkEvery = 10,                 -- seconds between server checks
@@ -863,6 +867,11 @@ Config.MissionCalls = {
     -- a call the issuer paged or created)
     staffCooldown = 120,
     claimRate = 1500,                -- milliseconds between claim attempts per player
+    -- calls one department's lane may have open at once (the callLane Mission control; every open call still
+    -- counts against maxOpen)
+    laneMaxOpen = 2,
+    -- missions one supervisor may push to a unit a day (the pushMission Mission control; admins any)
+    pushPerDay = 5,
     realCallStrip = true,            -- show the read-only SC-Dispatch real-call count
     realCallCache = 15,              -- seconds
     -- A location belongs to the area whose centre is nearest. Labels show on the calls.
@@ -1735,8 +1744,8 @@ Config.MissionControls = {
         -- and admins (Officers -> Today & cooldowns) may lift it early
         missionBan = { on = false, min = 1, max = 24 },
         -- Dispatch: his department's own lane of mission calls next to the server's: min to max seconds between two
-        -- lane calls (he picks a range inside it), how many may be open at once (up to callLaneMaxOpen), the areas
-        -- and the mission types (MissionCalls.types) with a weight each; only his department sees and claims them
+        -- lane calls (he picks a range inside it), how many may be open at once (up to MissionCalls.laneMaxOpen), the
+        -- areas and the mission types (MissionCalls.types) with a weight each; only his department sees and claims them
         callLane = { on = false, min = 120, max = 600 },
         -- seconds a supervisor of his department waits between two mission calls he creates
         -- (MissionCalls.staffCooldown); the one who shortens it keeps the config wait for himself
@@ -1803,10 +1812,6 @@ Config.MissionControls = {
     addRunTimeMax = 300,
     -- mission bans one supervisor may set a day (admins any)
     missionBanPerDay = 3,
-    -- calls one department's lane may have open at once (every open call still counts against MissionCalls.maxOpen)
-    callLaneMaxOpen = 2,
-    -- missions one supervisor may push to a unit a day (the pushMission control; admins any)
-    pushMissionPerDay = 5,
     -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
     awardPointsPerDay = 100,
 }

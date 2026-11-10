@@ -92,7 +92,7 @@ async function steps(): Promise<void> {
     const pushed = dv.ok && dv.data ? dv.data.calls.find(c => !!c.missionLabel) : undefined;
     ok(!!pushed, 'the mock Dispatch lists a pushed mission');
     if (pushed) {
-        const res = await action('server:declineMissionCall', { callId: pushed.id });
+        const res = await action('server:answerMissionCall', { callId: pushed.id, answer: 'decline' });
         const v = replyView<DispatchView>(res.data, 'view');
         ok(res.ok && !!v, 'Decline answers with the Dispatch view');
         ok(!!v && !v.calls.some(c => c.id === pushed.id), 'the declined call is gone from it');

@@ -54,7 +54,7 @@ cannot cheat points or cash.
 What is in it, one line each:
 
 - **Missions**: 18 NPC missions plus a Weekly Boss, from traffic stops to hostage rescues and drug lab raids.
-- **Dispatch**: the tablet posts its own NPC mission calls; the first unit to claim one gets a mission in that area.
+- **Dispatch**: one list of NPC mission calls (the tablet's, a lane's, staff calls); the first claim gets a mission.
 - **Police actions**: talk, frisk, search, run plates, cite, arrest and impound, graded against what was really going
   on.
 - **Custody**: arrested NPCs go to a prisoner van, impounded cars to a tow truck, scenes to a coroner van.
