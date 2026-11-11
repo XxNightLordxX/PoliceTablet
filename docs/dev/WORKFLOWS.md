@@ -29,6 +29,15 @@ from the Mission Board and played to its result card there; checkpoint routes, i
 worked with their real evidence, the other blocks finish through their own completion after their minimum time (the
 block specs drive each of their steps).
 
+**Every supervisor action.** `tests/workflows_supervisor_spec.lua` (WF5B) drives every workflow and every action a
+supervisor can take on the same world, with a second SAST supervisor and a SAST cadet added: the Department screen's
+Today and Officers tabs, every action of an officer's panel (commend and revoke, Give points, Mission ban, Clear
+cooldown), every Mission control set inside the admin's limits and refused outside them, the happy hour, the Review
+Queue, mission calls and department notices, field training, extra grants for officers who are not supervisors,
+department scoping and the self rule, two supervisors at once and the maintenance lock. Each part runs on the shipped
+config first where it is on, then with the switches on, with a restart and a drop and reconnect in the middle and
+every refusal a supervisor meets. Its sections are named "supervisor (n)" below.
+
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
@@ -53,13 +62,19 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Live crime, backup, talk-down, booking | live_fto_e2e (2, 3, 5), realsuspects_e2e (2, 4) | yes | a suspect and the partner | off (needs a police script) | Pass |
 | Surrender | live_fto_e2e (2, 3) | yes | live_fto_e2e (5) | off (needs a police script) | Pass |
 | Cross-department mission | full (5), teams, officer (7) | yes | a joiner | yes | Pass |
-| Happy hour | full (7) | yes | the supervisor who started it | yes | Pass |
+| Supervisor UI: Today, Officers, the officer panel | supervisor (1-3) | yes | the officer, the supervisor | owner stack only | Pass |
+| Commend and revoke | supervisor (2, 9) | yes | the commended officer | owner stack only | Pass |
+| Give points, Mission ban, Clear cooldown (caps, limits) | supervisor (3), full (8) | yes (the day's counts kept) | the supervisor, the barred officer | owner stack only | Pass |
+| Happy hour | full (7), supervisor (4, 9) | yes | the supervisor who started it | yes | Pass |
 | Type of the Day | full (7) | yes | the supervisor after his pick | yes | Pass |
-| Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5) | yes | the supervisor; the partner on the pushed run | yes | Pass |
+| Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5), supervisor (4, 9) | yes | the supervisor; the partner on the pushed run | yes | Pass (after fix WF5B-1) |
+| Calls and department notices | supervisor (6), full (6, 8) | yes | the supervisor who posted | owner stack only | Pass |
+| Extra grants for non-supervisors | supervisor (8), full (1) | yes | - | owner stack only | Pass |
+| Two supervisors at once, maintenance lock | supervisor (9, 10) | - | - | owner stack only | Pass |
 | Supervisor actions and awards | full (8), workflows_e2e (5) | yes | the barred officer (the ban stays) | yes | Pass |
-| Review, void, dispute | workflows_e2e (6) | full (9) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass |
+| Review, void, dispute | workflows_e2e (6), supervisor (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after fix WF5B-2) |
 | Mission Builder | full (11), admin_control_e2e (2) | yes | the supervisor in his test run | yes | Pass |
-| Field training | live_fto_e2e (4, 5), officer (9) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass |
+| Field training | live_fto_e2e (4, 5), officer (9), supervisor (7) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass (after fix WF5B-3) |
 | Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7) | yes | the volunteer and the partner | off (needs a police script) | Pass |
 | Settings, Features, Rewards, grant | full (1) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
 | Corrections | full (9), admin_control_e2e (1) | yes | the officer offline for the void and restore | yes | Pass |
@@ -308,6 +323,12 @@ Spec: tests/workflows_full_spec.lua (7), tests/happy_hour_spec.lua. Covers: EVOC
 supervisor starts 10 minutes, he **drops** (it runs on), **restart** (still running, per SPEC), EVOC again at once
 and paid, over after 10 minutes. Result: **Pass**.
 
+tests/workflows_supervisor_spec.lua (4, 9): 31 and 4 minutes and a scale the admin does not allow refused, an officer
+refused, started for 10 minutes (an officer's and FIB's cooldowns lifted, never the starter's: the self rule), a
+second one refused while it runs, the starter **drops** and a **restart** (runs on, still not for him), the self rule
+off (it applies to him too), over after 10 minutes, a second one that day refused (perDay 1), an admin may, the next
+day a supervisor may again, two supervisors pressing Start together (one runs). Result: **Pass**.
+
 Steps: Its error now says when to try again ("A happy hour is already running. Start
 another one after it ends").
 
@@ -332,7 +353,17 @@ config.lua; the hourly cap and its bounds; a cooldown clear; pushMission (the Pa
 unit, only that unit sees it, its accept with no draw, audited) and "+ minutes" (addRunTime on the running pushed
 mission, the unit told, audited, an officer refused), the partner **drops** (the run goes on with the minutes), the
 supervisor **drops** after the sweep (back, every value shown as he set it), then a **restart** (the run and the push
-gone). Result: **Pass**.
+gone). tests/workflows_supervisor_spec.lua (4, 8, 9): every control of his department and of the whole server listed;
+each number control refused above the admin's max, each other control refused a bad value; each set inside the limits,
+the second supervisor then refused for the change wait; his **drop** and a **restart** keep every value; each reset
+(a reset of a control not set, an unknown control, an action control and a missing reason refused); an officer has
+neither the screen nor a change; a control the admin switched off refused; the master switch off (its controls
+refused, the server-wide ones still set); a department's grade rule (SAST from grade 4: refused at grade 3, FIB not
+bound, allowed once promoted); the Type of the Day once a day; the same request sent twice saves and audits once; the
+other department keeps its own value. Result: **Pass (after fix WF5B-1)**.
+
+Fix WF5B-1: a control saved as false (the no-repeat rule switched off) showed as not changed (no "changed by", no
+Reset) because the screen's saved value read `row.value or nil`; it now carries the saved false.
 
 Steps: Posting, paging, pushing or withdrawing a mission call, Recall and "+ minutes" on Live Missions were answered
 and then the screen asked again; now the reply carries the fresh panel or Live Missions view (before: 2 requests;
@@ -346,7 +377,20 @@ department notice goes to everyone on duty.
 
 Spec: tests/workflows_full_spec.lua (8), tests/workflows_e2e_spec.lua (5). Covers: Mission ban (refused accept,
 **restart** keeps it, lifted), abandon with the type cooldown, a department notice; Give points with its money and
-item, a commendation. Result: **Pass**.
+item, a commendation. tests/workflows_supervisor_spec.lua (1-3): Today (his department's officers on duty and runs
+going; an officer refused), Officers (his department only; another department, an unknown one and an officer refused;
+an admin any), an officer's panel (not another department's, not an officer's, a bad citizenid). Shipped: Give points
+and Mission ban not offered and refused, Clear cooldown offered; commend from the panel (the reply carries the panel),
+a citation too short, an unknown kind, himself, another department, the same kind within 7 days, an officer, three a
+day (the second supervisor has his own), **restart** and the officer's **drop** (kept), revoke (another supervisor and
+no reason refused, the issuer), commendations off and the commend power off. Switches on: Give points 50 (51 and 0
+refused, a reason, himself, another department, an officer), 100 a day kept by a **restart** and his **drop**, the
+second supervisor's own 100, point adjusts off, the control off (not offered); Mission ban (25 hours, the same grade,
+another department, himself, an officer refused), she cannot accept, another supervisor cannot replace or lift it,
+her **drop** and a **restart** keep it, lifted by the setter with a reason, three a day, an offline officer, the
+Restrictions tab; Clear cooldown (a reason, never all, an unknown type, his own, an officer refused), a FIB agent's
+too (server-wide), refused on a run, three a day per officer by all staff kept by a **restart**, five a day per
+supervisor. Result: **Pass**.
 
 Steps: Give points, Mission ban (set or lift), a commendation (give or revoke) and Clear cooldown were answered and
 then the dialog asked again; now the reply carries the officer's fresh activity or cooldown list (before: 2 requests;
@@ -363,12 +407,51 @@ approved or rejected the same way. A department can ask for a second supervisor'
 
 Spec: tests/workflows_e2e_spec.lua (6). Covers: A flagged run held, the reviewer **drops** with the queue open (back,
 the run is still there), approved (cash and items released once), voided, disputed, the officer **drops** while his
-dispute is decided, restored and paid once. Result: **Pass**.
+dispute is decided, restored and paid once. tests/workflows_supervisor_spec.lua (5): a SAST flagged run in both SAST
+supervisors' queues, not FIB's, no queue for an officer, FIB and the officer refused, a reason needed; a **restart**
+and the reviewer's **drop** (still there); approved (the reply carries his queue, the other supervisor's open queue
+pushed at once, paid once, his approve of the same row refused); voided; Undo and a batch Undo refused to a
+supervisor, the admin's Undo restores it, Undo switched off refused; the department's second Void: the first is
+taken and waits, the same supervisor cannot be the second, a **restart**, the other supervisor's Void voids it; the
+review power off; his own flagged run never in his queue and approved by the other supervisor. Result: **Pass (after
+fix WF5B-2)**.
+
+Fix WF5B-2: the first Void waiting for a second supervisor lived in memory only, so a restart forgot it (the queue no
+longer said who voided first and the next Void became a first Void again). The start now reads the waiting first
+Voids back from the audit log (voidPending rows that are still the newest entry of their row, the last 90 days).
 
 Steps: A decision was answered and then the queue was asked for again; now the reply carries the fresh queue
 and the row leaves at once (before: 2 requests; after: 1). The other supervisors of that department who have the
 Review Queue open get their updated queue at once (tests/oversight_spec.lua), so two supervisors never work the same
 row.
+
+### Calls and department notices
+
+How it works: Supervisor UI -> Dispatch creates a mission call for every unit (a wait between two of his), withdraws
+one with a reason or pages a unit. A department notice (the notices Mission control) shows on his department's Home
+only, for 1 to 30 days; five may run at once and he may post five a day.
+
+Spec: tests/workflows_supervisor_spec.lua (6). Covers: the panel (not for an officer), a call created (the reply carries
+the panel, officers see it), a second at once refused (the staff wait), an unknown type and an officer refused, the
+second supervisor's own wait, his **drop** (the call stays), withdraw (a reason, an officer, twice refused), a
+**restart** (the open call gone), the power off; a notice (31 days, no text, an officer, a staff notice refused),
+posted (SAST Home only, his count of today), a **restart** keeps it, FIB cannot end it, the other SAST supervisor ends
+it, five a day, five running at most, the control off. Result: **Pass**.
+
+### Extra grants, department scoping, two supervisors, the maintenance lock
+
+How it works: Admin UI -> Permissions -> Extra grants gives one power to officers who are not supervisors (by
+citizenid, or by department from a grade); a power switched off stays off for them too. Config.MissionControls.grants
+limits a department's controls to some grades. Two supervisors of one department share its controls (the change
+wait), each keeps his own day counts. During a restore or a storage copy every supervisor action waits.
+
+Spec: tests/workflows_supervisor_spec.lua (4, 8, 9, 10). Covers: Mission controls and field training granted to one
+trooper (he opens and changes a control, pairs; another trooper cannot), mission calls from grade 1 (a trooper may,
+the cadet and FIB may not), a **restart** keeps them, the power off and the master switch off refuse the granted too,
+taken back; the grade rule; the same request twice, the change wait between the two, FIB's own value, two happy hours
+at once, both giving points (each his own day), the same commendation kind twice; the lock (Give points, Mission ban,
+Clear cooldown, a control, a notice, pairing, a commendation, a call and a review decision refused; Today, Officers
+and the Review Queue still open; a commendation again after it). Result: **Pass**.
 
 ### Mission Builder
 
@@ -394,7 +477,17 @@ Spec: tests/live_fto_e2e_spec.lua (4, 5). Covers: Pair, a counted run, sign-off,
 and does not count; back, still in training) and the trainer **drops** before the sign-off (back, the task still
 ready, signed off, done). tests/workflows_officer_spec.lua (9), as the rookie: he sees his training, a tactical run
 alone is refused (requireTrainerFor), he cannot sign himself off, with his trainer in the unit he can, he **drops**
-mid-run and is still in training back. Result: **Pass**.
+mid-run and is still in training back. tests/workflows_supervisor_spec.lua (7, 8): off as shipped; an officer, a FIB
+rookie, the rookie as his own trainer, a trooper below the trainer grade, a FIB trainer and an offline trainer refused;
+paired, twice refused, the Training tab lists it (not for an officer); a sign-off before a run together refused; a
+**restart** keeps it; the unit's accept of a type with no mission for two (the leader told why after Ready); a run
+together, a sign-off by someone else and of a type that is no task refused, the trainer signs off, twice refused;
+unpair (an officer refused, twice refused); the feature off; an officer with the extra grant pairs. Result: **Pass
+(after fix WF5B-3)**.
+
+Fix WF5B-3: when a unit's accept failed after everyone answered Ready (no mission left for the unit, a member barred
+or on a call meanwhile, the lock), the leader was never told: his Accept had already answered "ready check sent".
+He now gets the reason as a toast (a mission call claim keeps its own messages).
 
 ## Criminal
 

@@ -795,6 +795,9 @@ local function ControlFields(def, dept)
         local v = Clamp(def, row.value, bounds)
         if v ~= nil then value = v end
     end
+    -- the saved change itself, a false one too (no-repeat switched off), so the screen shows it changed with Reset
+    local saved = nil
+    if row ~= nil and not expired then saved = row.value end
     return {
         key = def.key,
         kind = def.kind,
@@ -807,7 +810,7 @@ local function ControlFields(def, dept)
         max = tonumber(bounds.max),
         value = value,
         configValue = configValue,
-        saved = row ~= nil and not expired and row.value or nil,
+        saved = saved,
         setBy = row and row.setBy or nil,
         setRole = row and row.setRole or nil,
         at = row and row.at or nil,

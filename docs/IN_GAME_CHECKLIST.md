@@ -851,3 +851,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   asks you: nobody gets a run or a cooldown and the leader can accept again. Decline a pushed mission on Dispatch: it
   leaves the list at once. Pick call pop-ups for favourites only: another type shows on Dispatch with no pop-up. Turn
   Hide my name on: another officer sees your callsign on the leaderboard. (WF5A)
+- [ ] Supervisor workflows (WF5B): open the Supervisor UI as a supervisor (an officer and a cadet are refused); Today
+  counts your department's officers on duty and its runs. From an officer's panel commend, then revoke with a reason;
+  with the Mission controls on give 50 points (51 refused, 100 a day), bar an officer for 2 hours (another supervisor
+  cannot lift it), clear one cooldown. Switch the no-repeat rule off in Mission controls: the row shows it changed by
+  you with Reset. Start a 10 minute happy hour: an officer's cooldowns are lifted, yours are not. With the department's
+  second Void on, void a flagged run, restart the resource, and have the other supervisor void it: it is voided (the
+  first Void was kept). As a unit leader accept a type that has no mission for your unit size: after Ready you get a
+  toast saying no mission was left. (WF5B)

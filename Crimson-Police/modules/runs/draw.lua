@@ -1895,6 +1895,12 @@ local function AcceptStart(src, typeKey, opts, note)
                 if not okCb then CP.err(TAG, 'accept callback failed: %s', tostring(err)) end
             end
         end
+        -- refused after everyone answered Ready: the Mission Board's leader is told why (his Accept reply said
+        -- pending long ago); a caller with its own onDone (a mission call claim) tells the unit itself
+        local function refused(key)
+            if opts.tellLeader and type(key) == 'string' then CP.notify(src, 'error', key) end
+            return done(false, key)
+        end
         local function onReady()
             CreateThread(function()
                 -- the members answered: check them again, the unit stayed locked meanwhile
@@ -1902,24 +1908,25 @@ local function AcceptStart(src, typeKey, opts, note)
                     local own = o.src == src
                     if IsOnCall(o.src, ctx.except) then
                         UnlockUnit(unit)
-                        return done(false, own and 'err.on_call' or 'err.member_on_call')
+                        return refused(own and 'err.on_call' or 'err.member_on_call')
                     end
                     -- a mission ban set while the check waited
                     if BannedOf({ o }, os.time()) then
                         UnlockUnit(unit)
-                        return done(false, own and 'err.mission_banned' or 'err.member_mission_banned')
+                        return refused(own and 'err.mission_banned' or 'err.member_mission_banned')
                     end
                 end
                 if LockStops(ctx.live) then
                     UnlockUnit(unit)
-                    return done(false, 'err.operation_locked')
+                    return refused('err.operation_locked')
                 end
                 local okCall, ok, data = pcall(FinishAccept, src, typeKey, ctx, opts)
                 if not okCall then
                     CP.err(TAG, 'accept after the ready check failed: %s', tostring(ok))
                     UnlockUnit(unit)
-                    return done(false, 'err.internal')
+                    return refused('err.internal')
                 end
+                if ok == false then return refused(data) end
                 done(ok, data)
             end)
         end
@@ -1960,6 +1967,7 @@ local function Accept(src, typeKey, opts)
     end
     local onDone, own = opts.onDone, {}
     for k, v in pairs(opts) do own[k] = v end
+    own.tellLeader = type(onDone) ~= 'function'
     own.onDone = function(ok, data, who)
         if ok == false then Keep(data) end
         if type(onDone) == 'function' then return onDone(ok, data, who) end

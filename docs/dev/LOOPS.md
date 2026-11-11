@@ -376,6 +376,7 @@ strings do not count.
 | `modules/npc/client/custody.lua` | 3 | 0 | bounded control and load waits; one-shots |
 | `modules/npc/custody.lua` | 1 | 0 | one-shot; the custody tick is a `CP.Perf.armed` loop |
 | `modules/review/disputes.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/review/reviewrules.lua` | 1 | 0 | one-shot thread (the waiting first Voids read back at the start); no loop |
 | `modules/runs/client/downed.lua` | 1 | 0 | bounded waits |
 | `modules/runs/downed.lua` | 3 | 0 | start-up hooks; the check is a `CP.Perf.armed` loop |
 | `modules/runs/draw.lua` | 2 | 1 | holder housekeeping, 60 s; a one-shot |

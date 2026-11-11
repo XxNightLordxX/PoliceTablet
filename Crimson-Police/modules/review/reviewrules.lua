@@ -153,5 +153,45 @@ end
 -- The row was voided or approved: a waiting Void is gone.
 function RR.clear(rowId) pending[rowId] = nil end
 
+-- ============================================================================
+--                       A RESTART KEEPS THE FIRST VOIDS
+-- ============================================================================
+-- Every first Void is in the audit log (voidPending, target '#<row id> <citizenid>'). At the start the ones still
+-- waiting are read back: a voidPending that is the newest audit row of its target (no approval, void or restore
+-- came after it), of the last KEEP_DAYS days.
+
+local KEEP_DAYS = 90
+
+local function Restore()
+    if not (CP.Migrations and CP.Migrations.started and CP.Migrations.started()) then return end
+    CP.Db()
+    local ok, rows = pcall(MySQL.query.await, [[SELECT target, actor, UNIX_TIMESTAMP(created_at) AS ts FROM cp_audit
+        WHERE action = 'voidPending' AND created_at >= FROM_UNIXTIME(?) ORDER BY id]],
+        { os.time() - KEEP_DAYS * 86400 })
+    if not ok then
+        CP.err(TAG, 'reading the waiting first Voids failed: %s', tostring(rows))
+        return
+    end
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local id = math.tointeger(tonumber(tostring(r.target or ''):match('^#(%d+) ')))
+        if id and not pending[id] then
+            local okL, last = pcall(MySQL.single.await,
+                'SELECT action FROM cp_audit WHERE target = ? ORDER BY id DESC LIMIT 1', { r.target })
+            if okL and type(last) == 'table' and last.action == 'voidPending' then
+                local cid = tostring(r.actor)
+                local okN, name = pcall(MySQL.scalar.await, 'SELECT display_name FROM cp_officers WHERE citizenid = ?',
+                    { cid })
+                pending[id] = {
+                    citizenid = cid,
+                    name = okN and type(name) == 'string' and name ~= '' and name or cid,
+                    at = math.tointeger(tonumber(r.ts)) or os.time(),
+                }
+            end
+        end
+    end
+end
+
+CreateThread(Restore)
+
 -- Test hooks (not part of the contract).
 RR._reset = function() pending = {} end
