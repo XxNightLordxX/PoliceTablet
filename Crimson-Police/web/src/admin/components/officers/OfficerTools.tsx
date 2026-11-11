@@ -18,6 +18,7 @@ import {
     Textarea,
     Toggle,
 } from '../../../shared/components';
+import { asArray } from '../../../shared/data';
 import { fmtDateTime, formatMoney, formatNumber } from '../../../shared/format';
 import { useRequest } from '../../../shared/hooks';
 import { request } from '../../../shared/nui';
@@ -513,9 +514,9 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                     {lk ? (
                         <div className="admin-otools__options">
                             <div className="admin-otools__options-title">{t('ui.admin_officers.look.options')}</div>
-                            {(lk.options ?? []).length ? (
+                            {asArray(lk.options).length ? (
                                 <KVList
-                                    items={(lk.options ?? []).map(op => ({
+                                    items={asArray(lk.options).map(op => ({
                                         label: optionLabel(op.key),
                                         value: optionValueText(op.key, op.value),
                                     }))}
@@ -537,7 +538,7 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                         <Button
                             size="sm"
                             variant="secondary"
-                            disabled={own || busy || !(lk?.options ?? []).length}
+                            disabled={own || busy || !asArray(lk?.options).length}
                             onClick={() => setSimple({ kind: 'resetOptions' })}
                         >
                             {t('ui.admin_officers.look.reset_options')}
@@ -555,7 +556,7 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
 
                 <Card title={t('ui.admin_officers.badges.title')} icon="medal" padding="md">
                     <ul className="admin-otools__badges">
-                        {(o.badges ?? []).map(b => (
+                        {asArray(o.badges).map(b => (
                             <li key={b.id}>
                                 <span>{b.label}</span>
                                 <Badge

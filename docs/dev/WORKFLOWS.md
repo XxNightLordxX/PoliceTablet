@@ -77,6 +77,14 @@ from its browser-mock session (Officer, Supervisor, and Admin with every admin p
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
 locale), checks that every request a screen sends has a mock that answers it, and renders each criminal tablet screen.
 
+**Every click in a browser.** `tools/clickthrough.mjs` (WF5F; `npm run clickthrough` in Crimson-Police/web, needs
+Chromium, so it is not a gate step) opens the four tablets on the built UI in its browser mock mode and clicks every
+screen, tab and button, checking each dialog a button opens. It found three defects, fixed in WF5F: (1) the sidebar
+did not scroll, so on a 900 or 1080 px high screen the Admin UI's lower groups (Money, Review, System) could not be
+reached; it now scrolls; (2) Admin -> Officers crashed on an officer with no badges (Lua sends an empty list as {});
+(3) the Running now mocks named officers the Officers mocks did not have. `layouts/clickthrough.walk.ts` keeps (1) to (3)
+checked in the gate.
+
 | Workflow | Spec | Restart | Drop and reconnect | No scripts | Result |
 | --- | --- | --- | --- | --- | --- |
 | Duty and the tablet: command, key, desk, item | officer (1, 2b) | yes (the item kept) | the officer after the item setting | owner stack only | Pass |
@@ -138,6 +146,7 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Clean-up and daily backup jobs | system (4), system_db (4) | yes (before the reset) | the admin before the reset | owner stack only | Pass |
 | Idle check | system (5) | yes | - | owner stack only | Pass |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
+| Every screen, tab, button and dialog clicked in a real browser (79 screens and tabs of the four tablets) | tools/clickthrough.mjs (npm run clickthrough, WF5F), clickthrough.walk.ts | - | - | - | Pass (after fixes WF5F-1 to WF5F-3) |
 
 "system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
 tests/workflows_system_generic_spec.lua, "admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"

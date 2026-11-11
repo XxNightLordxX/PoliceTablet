@@ -50,7 +50,7 @@ const runs: AdminLiveRun[] = [
             },
             {
                 src: 21,
-                citizenid: 'FIB00021',
+                citizenid: 'FIB00042',
                 name: 'Dana Whitfield',
                 callsign: null,
                 departmentShort: 'FIB',
@@ -424,7 +424,7 @@ const refusals: AdminRefusal[] = [
         reason: 'err.member_on_run',
     },
     { at: nowS() - 1800, citizenid: 'ABC12345', name: 'Maria Lopez', type: 'patrol', reason: 'err.type_cooldown' },
-    { at: nowS() - 90000, citizenid: 'FIB00021', name: 'Dana Whitfield', type: 'tactical', reason: 'err.in_arena' },
+    { at: nowS() - 90000, citizenid: 'FIB00042', name: 'Dana Whitfield', type: 'tactical', reason: 'err.in_arena' },
 ];
 
 registerMock('request', 'admin:getRefusals', (): AdminRefusalsData => {

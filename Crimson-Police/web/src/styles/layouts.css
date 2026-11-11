@@ -181,7 +181,11 @@
     flex-direction: column;
     flex: none;
     width: 268px;
+    min-height: 0;
     padding: 16px 12px 14px;
+    /* a list taller than its column scrolls (the Admin UI's groups on a 900 or 1080 px high screen) */
+    overflow-x: hidden;
+    overflow-y: auto;
     background: rgba(var(--cp-surface-rgb), 0.72);
     border-right: 1px solid var(--cp-border);
 }

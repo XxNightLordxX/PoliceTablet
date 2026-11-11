@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build && node build-stamp.mjs",
     "typecheck": "tsc --noEmit",
     "walk": "node walk.mjs",
+    "clickthrough": "npm run build && node ../../tools/clickthrough.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

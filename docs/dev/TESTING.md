@@ -22,6 +22,14 @@ What to update with each change is at the end, in "Working on the code".
 | `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish, and every screen of every tablet rendered (`everyScreen.walk.ts`); `node walk.mjs <text>` runs only the walks whose path holds that text | 15 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
 
+**Not a gate step (needs a browser):** `cd Crimson-Police/web && npm run clickthrough` builds the web UI, serves it
+in its browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright): the Officer, Supervisor, Admin
+and criminal tablets, every screen, every tab, every button of each screen and each dialog a button opens. It fails
+on a console error, a crashed screen, a blank screen, a button covered by something else or overlapping another, or
+text that is a locale key. Screenshots go to the folder given as its first argument (default: a new folder in the
+system temp folder, never the repo); `node ../../tools/clickthrough.mjs <dir> admin` runs one tablet. About 15
+minutes for all four. Run it after a change to a screen or the layout; it is not in CI or `check_all.sh`.
+
 A whole run takes about 8.5 minutes (the times above are from one run of every step on the full suite). Every
 `tools/lint_<name>.py` and `tools/check_<name>.py` (other than `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
