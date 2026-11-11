@@ -666,4 +666,5 @@ docs/dev/ARCHITECTURE.md.
 - `tests/workflows_none_dispatch_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.dispatch set to none.
 - `tests/workflows_none_police_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.police set to none.
 - `tests/workflows_none_spec.lua`: WF4: every workflow of tests/workflows_full_spec.lua on a city with none of the owner's scripts.
+- `tests/workflows_officer_spec.lua`: WF5A: every officer workflow, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.

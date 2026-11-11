@@ -843,3 +843,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Deep sweep (Z13): test a Traffic Enforcement, stop the car, press Restart: the next contact stop takes only the
   new car. Test a Parking Patrol, let the returning driver take his ticket and Restart within 30 s: the new parked
   cars stay. (Z13)
+- [ ] Officer workflows (WF5A): open the Officer UI with /CrimsonPolice, the key and at the Mission Row desk (away from
+  it, the desk is refused); set Settings -> Tablet item and use it; require the item: without it the command and Accept
+  are refused, a desk still opens. Accept one mission of each built-in type from the Mission Board and play it to the
+  result card: the points and cash on the card match Profile -> Runs, the bank and the item. Fill your pockets and
+  finish a run: the item waits in the Rewards locker; make room and claim it once. In a unit, quit while the ready check
+  asks you: nobody gets a run or a cooldown and the leader can accept again. Decline a pushed mission on Dispatch: it
+  leaves the list at once. Pick call pop-ups for favourites only: another type shows on Dispatch with no pop-up. Turn
+  Hide my name on: another officer sees your callsign on the leaderboard. (WF5A)

@@ -18,7 +18,9 @@ local NONE = STACK == 'none'
 local ONE = STACK:match('^none:(%a+)$')
 -- Config.Integrations kind -> true when it is set to 'none' in Settings on this walk
 local function KindOff(kind) return NONE or ONE == kind end
-H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. (NONE and '_wf_none' or ONE and ('_wf_' .. ONE) or '_wf_full')
+local WORLD = rawget(_G, 'CP_WF_WORLD')
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test')
+    .. (WORLD and ('_wf_' .. WORLD) or NONE and '_wf_none' or ONE and ('_wf_' .. ONE) or '_wf_full')
 H.resetSaves()
 local cjson = require('cjson')
 local U, Runs
@@ -585,6 +587,54 @@ end
 local function RunEnded(src, since)
     local e = ClientEvents('crimson-police:client:runEnded', src, since)[1]
     return e and e.args[4]
+end
+
+-- WF5A: tests/workflows_officer_spec.lua (CP_WF_WORLD = 'officer') drives the officer workflows on this same world:
+-- the players, the natives, the outside exports and the helpers above, booted on the shipped config, no section run.
+if WORLD then
+    return {
+        H = H,
+        PD = PD,
+        CID = CID,
+        ents = ents,
+        addMoney = addMoney,
+        addItem = addItem,
+        realPrint = realPrint,
+        AddPlayer = AddPlayer,
+        QbxPlayer = QbxPlayer,
+        NewEnt = NewEnt,
+        Adv = Adv,
+        Secs = Secs,
+        Boot = Boot,
+        Restart = Restart,
+        Drop = Drop,
+        Reconnect = Reconnect,
+        Place = Place,
+        Act = Act,
+        Cb = Cb,
+        ClientEvents = ClientEvents,
+        Toasts = Toasts,
+        Rows = Rows,
+        Paid = Paid,
+        ItemsGiven = ItemsGiven,
+        Setting = Setting,
+        Xp = Xp,
+        Count = Count,
+        RequestId = RequestId,
+        FormUnit = FormUnit,
+        VehicleFor = VehicleFor,
+        Arrive = Arrive,
+        Objective = Objective,
+        CheckpointEv = CheckpointEv,
+        TakeWheel = TakeWheel,
+        DriveCheckpoints = DriveCheckpoints,
+        Accept = Accept,
+        ClearHostiles = ClearHostiles,
+        SecureScene = SecureScene,
+        RunEnded = RunEnded,
+        SetAutoReady = function(v) autoReady = v end,
+        BankEntries = function() return bankEntries end,
+    }
 end
 
 -- ============================================================================

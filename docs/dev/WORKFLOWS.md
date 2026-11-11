@@ -20,6 +20,15 @@ the one difference checked is that a payout gets no bank history entry without a
 more for each kind on its own: the owner's four scripts installed, only that one `Config.Integrations` kind set to
 `none` in Settings (the other three keep the owner's script), with the same results.
 
+**Every officer action.** `tests/workflows_officer_spec.lua` (WF5A) drives every workflow and every action an officer
+can take on the same world as the full walk (the owner's scripts running), booted on the shipped config: first with
+the shipped config, then with the switches on, a restart and a drop and reconnect in the middle of each part, and
+every refusal an officer can meet (no permission, wrong department, a cap reached, a feature off, the maintenance
+lock). Its sections are named "officer (n)" below. Every built-in mission but the Weekly Boss (full (3)) is accepted
+from the Mission Board and played to its result card there; checkpoint routes, interact points and hostile waves are
+worked with their real evidence, the other blocks finish through their own completion after their minimum time (the
+block specs drive each of their steps).
+
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
@@ -27,23 +36,30 @@ locale), checks that every request a screen sends has a mock that answers it, an
 
 | Workflow | Spec | Restart | Drop and reconnect | No scripts | Result |
 | --- | --- | --- | --- | --- | --- |
+| Duty and the tablet: command, key, desk, item | officer (1, 2b) | yes (the item kept) | the officer after the item setting | owner stack only | Pass |
+| Every built-in mission from the board, every block | officer (2a, 2c) | officer (2b) | officer (10) | owner stack only | Pass |
+| Rewards locker (no room, claimed later) | officer (2d) | yes | the officer with an item waiting | owner stack only | Pass |
 | Patrol mission | workflows_e2e (2) | e2e (9) | the solo drop of Training (same run code) | Training, full (2) | Pass |
 | Training mission (EVOC) | full (2) | yes | the officer mid-run: Failed, no cash, cooldown | yes | Pass |
 | Investigation, tactical, raids, traffic, parking, downed | e2e (2, 4, 7, 11-14), workflows_e2e (3), full (13) | e2e (9) | each block, full (13) | full (13) | Pass |
 | Weekly Boss | full (3) | yes | the partner mid-fight | yes | Pass |
-| Unit | full (4), e2e (16) | yes | the leader: the lead passes on | yes | Pass |
-| Mission call | full (6), workflows_e2e (4), e2e (15) | yes (open and claimed) | the claimer on its run: call closed, Failed | yes | Pass |
-| Goals and the challenge | full (7) | yes | - (counted from the rows) | yes | Pass |
+| Unit | full (4), e2e (16), officer (5) | yes | the leader: the lead passes on; a member or the leader in the ready check | yes | Pass |
+| Mission call | full (6), workflows_e2e (4), e2e (15), officer (6) | yes (open and claimed) | the claimer on its run: call closed, Failed | yes | Pass |
+| Goals and the challenge | full (7), officer (3, 8) | yes | - (counted from the rows) | yes | Pass |
+| Twists | officer (3) | - | - | owner stack only | Pass |
+| Accept refusals (permission, department, caps, feature off, maintenance) | officer (4) | - | - | owner stack only | Pass |
+| Me screen and My options | officer (8) | yes | the officer after saving them | owner stack only | Pass |
+| Abandon, off duty, logout, job change, downed mid-run | officer (10), e2e (10) | - | each block the full walk leaves out | owner stack only | Pass |
 | Live crime, backup, talk-down, booking | live_fto_e2e (2, 3, 5), realsuspects_e2e (2, 4) | yes | a suspect and the partner | off (needs a police script) | Pass |
 | Surrender | live_fto_e2e (2, 3) | yes | live_fto_e2e (5) | off (needs a police script) | Pass |
-| Cross-department mission | full (5), teams | yes | a joiner | yes | Pass |
+| Cross-department mission | full (5), teams, officer (7) | yes | a joiner | yes | Pass |
 | Happy hour | full (7) | yes | the supervisor who started it | yes | Pass |
 | Type of the Day | full (7) | yes | the supervisor after his pick | yes | Pass |
 | Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5) | yes | the supervisor; the partner on the pushed run | yes | Pass |
 | Supervisor actions and awards | full (8), workflows_e2e (5) | yes | the barred officer (the ban stays) | yes | Pass |
 | Review, void, dispute | workflows_e2e (6) | full (9) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass |
 | Mission Builder | full (11), admin_control_e2e (2) | yes | the supervisor in his test run | yes | Pass |
-| Field training | live_fto_e2e (4, 5) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass |
+| Field training | live_fto_e2e (4, 5), officer (9) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass |
 | Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7) | yes | the volunteer and the partner | off (needs a police script) | Pass |
 | Settings, Features, Rewards, grant | full (1) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
 | Corrections | full (9), admin_control_e2e (1) | yes | the officer offline for the void and restore | yes | Pass |
@@ -70,6 +86,53 @@ changes what players see is a Config option; a pure speed-up is on for everyone.
 USE and ENABLE words and the reason on every correction stay on purpose (risky or audited actions).
 
 ## Officer
+
+### Duty and the tablet
+
+How it works: an officer on duty in a police job opens the Officer UI with `/CrimsonPolice`, the key, a mission desk
+or (when the admin names one in `Config.Tablet.item`) the tablet item. Each way can be switched off in
+`Config.Tablet.access`; a desk can be kept for some departments; with `requireItem` every way but a desk needs the item
+in the pockets, and accepting a mission or claiming a call checks it again. Off duty, out of the job or a civilian:
+the tablet is refused with the reason.
+
+Spec: tests/workflows_officer_spec.lua (1, 2b). Covers: the command and the key; the item way off with no item; a desk
+at it, away from it and an unknown one; off duty and back; a civilian; the Supervisor UI refused to an officer; the
+item named, then required (no item: the command and an accept refused; with it: opens; a desk never needs it); the
+command way off; a desk kept for FIB; **restart** (the item setting kept); **drop** and reconnect. Result: **Pass**.
+
+### Every built-in mission, from the Mission Board to the result card
+
+How it works: the board shows each type with its payout; Accept draws one of its missions. Every objective block
+(checkpoint route, interact points, field contact, pursuit, search area, flee and arrest, process the scene, escort,
+skill check, hostile waves, protect and rescue) ends the run on the result card with the points, the cash and any item,
+and the row in the Profile. With no room in the pockets the item waits in the Rewards locker until he claims it.
+
+Spec: tests/workflows_officer_spec.lua (2a, 2c, 2d). Covers: the shipped config (Beat Patrol paid $250, no item, no
+type cooldown); with the switches on, every built-in mission but the Weekly Boss (full (3)) accepted from the board
+(a unit of two where the mission needs two) to the result card: the row Completed, the card's points and cash equal
+the row's, the XP grown by them, at least the type's payout paid once, the item given, not held for review, the
+partner's row Completed, the mission on its cooldown; the locker (no room: waiting; a claim refused while still full
+and for another officer; **restart** and **drop**: still waiting; room: given once; a second claim refused).
+Result: **Pass**.
+
+### Twists, refusals of an accept
+
+Spec: tests/workflows_officer_spec.lua (3, 4). Covers: EVOC with Time Crunch (the run carries it, still made in time,
+the pay raised, the card lists it), an unknown twist refused, Home's goals; a civilian and an unknown type; a
+department that switched a type off (its officer refused, another department's served); an officer refused a Mission
+control; the hourly cap; a type's daily limit; a mission ban and its lift; My options switched off; the maintenance
+lock (accept refused, the tablet still opens). Result: **Pass**.
+
+### Abandon, off duty, logout and a job change mid-run
+
+How it works: Abandon on Active Mission ends his part with an Abandoned row and the type's abandon cooldown. Going off
+duty does the same (off duty); a logout (character unload) or a quit is a Failed row; a job change takes him off the
+run. In a unit the run goes on for the others; the last one leaving ends it.
+
+Spec: tests/workflows_officer_spec.lua (10). Covers: abandon (twice refused, a run he is not on refused); off duty in
+progress; a logout and the login after; a drop in search area, flee and arrest, skill check, protect and rescue and a
+checkpoint route, and of the escort partner; a unit run where a member and then the leader abandon and the last one
+goes off duty; a job change; downed. Result: **Pass**.
 
 ### Patrol mission (Beat Patrol)
 
@@ -150,7 +213,11 @@ The leader can hand the lead over or remove a member; a member leaves with Leave
 Spec: tests/workflows_full_spec.lua (4), tests/e2e_spec.lua (16). Covers: An invite declined, a unit of three, a ready
 check one member declines (no run, no cooldown), the lead handed over, a kick refused for the old leader and done by
 the new one, **restart** (units live in memory, so the unit is gone), formed again, the leader **drops** (the lead
-passes on, the two others stay; back, he is in no unit), leave (a unit of one dissolves). Result: **Pass**.
+passes on, the two others stay; back, he is in no unit), leave (a unit of one dissolves).
+tests/workflows_officer_spec.lua (5): a civilian neither invited nor inviting, an invite taken back, a member refused
+accept, kick and promote, a kick refused on a run, a removed officer not invited again at once, a member and then the
+leader **dropping** while the ready check asks (no run, no cooldown, the unit not left locked), the unit full at four,
+an invite past its time, Disband. Result: **Pass**.
 
 Steps: Every unit change is pushed to all members at once. The unit errors now say what to
 do ("The unit is full. Its leader can remove a member to make room", "You are not in a unit. Form one on the Unit
@@ -166,11 +233,25 @@ Spec: tests/workflows_full_spec.lua (6), tests/workflows_e2e_spec.lua (4), tests
 officer with the extra grant creates a call, Dispatch lists it, **restart** with it open (gone, row Lapsed), a new
 call claimed, **restart** with it claimed (run dropped, no row, call row closed: Ended by a restart), the claimer
 **drops** on the call's run (the call row closed with outcome Failed, off Dispatch, not back after the reconnect), the
-claim race and re-dispatch. Result: **Pass (after fix 1)**.
+claim race and re-dispatch. tests/workflows_officer_spec.lua (6): an officer refused a post, a member refused claim and
+decline, an unknown call, a claimed call claimed again, a pushed mission declined by the leader (the reply carries
+Dispatch without it), another accepted and a **restart** (gone, not offered again). Result: **Pass (after fix 1)**.
 
 Steps: Decline answered and then Dispatch asked the server again; now the reply carries the new Dispatch view
 (before: 2 requests; after: 1). Claim errors now name the next step ("Another unit took this call. Pick another call
 on Dispatch").
+
+### Me screen and My options
+
+How it works: Me shows his Profile (edit it once in a while; report another officer's profile to the supervisors),
+the Leaderboard (Hide my name shows the callsign to others) and the Challenge. My options keeps his choices on the
+server (favourite types, call pop-ups for favourites only, ...); the HUD options stay on the PC.
+
+Spec: tests/workflows_officer_spec.lua (8). Covers: his profile and another's, an unknown one, Edit profile and the
+edit wait, a civilian, a report (twice and his own refused); the leaderboard counting his runs and hiding his name
+from another officer; the challenge; options saved, a local option, a wrong value and an empty change refused; call
+pop-ups for favourites only and muted; **restart** (options and Hide my name kept); **drop** and reconnect.
+Result: **Pass**.
 
 ### Goals and the department challenge
 
@@ -212,7 +293,9 @@ an admin can start it; a restart cancels it and keeps the launch wait.
 Spec: tests/workflows_full_spec.lua (5), tests/teams_spec.lua. Covers: An officer refused, the SAST supervisor
 launches, a SAST officer joins, **restart** (the operation cancelled, the launch wait kept), the admin launches inside
 the wait with a reason, a joiner **drops** (off the join list) and reconnects, SAST and FIB join, Start now (only the
-launcher), Gang Shootout to the paid rows with the cross-department bonus, the operation completed. Result: **Pass**.
+launcher), Gang Shootout to the paid rows with the cross-department bonus, the operation completed.
+tests/workflows_officer_spec.lua (7): nothing to join, a civilian and a barred officer refused, a second join refused,
+other accepts wait while it joins, Leave and join again, a joiner **drops**, a **restart** cancels it. Result: **Pass**.
 
 Steps: Joins are pushed to the panel and the board at once.
 
@@ -309,7 +392,9 @@ restart.
 Spec: tests/live_fto_e2e_spec.lua (4, 5). Covers: Pair, a counted run, sign-off, badge, trainer bonus, both payments;
 **restart**: the training record stays; the rookie **drops** mid-run (off the run, the run goes on for the trainer
 and does not count; back, still in training) and the trainer **drops** before the sign-off (back, the task still
-ready, signed off, done). Result: **Pass**.
+ready, signed off, done). tests/workflows_officer_spec.lua (9), as the rookie: he sees his training, a tactical run
+alone is refused (requireTrainerFor), he cannot sign himself off, with his trainer in the unit he can, he **drops**
+mid-run and is still in training back. Result: **Pass**.
 
 ## Criminal
 
