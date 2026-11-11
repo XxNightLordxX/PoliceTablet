@@ -1,7 +1,7 @@
 -- CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
 
 -- CP.Opponents saved cases (server): each closed real-suspect case is saved in cp_pvp_cases while
--- Config.RealPlayers.saveCases is on and live crimes or volunteers are on, and the newest casesKept are read back at
+-- RealPlayers.staff.saveCases is on and live crimes or volunteers are on, and the newest casesKept are read back at
 -- the start, so the Admin UI Real suspects screen keeps them over a restart. Only what staff read is saved (names,
 -- the timeline, the damage ledger, the volunteer's part): never a position. Written once per close, never per tick.
 
@@ -39,8 +39,6 @@ local REC_FIELDS = {
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers()) end
-
 local Num = CP.Num
 
 local function ValidCid(cid)
@@ -51,12 +49,12 @@ local function ValidRunId(v)
     return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
 end
 
-local function FeatureOn() return select(2, CP.RealPlayers()) end
+-- Saved only while either feature is on and Config.RealPlayers.staff.saveCases is not false.
+local function On() return CP.RealPlayers('staff').saveCases ~= false and CP.RealPlayersOn() end
 
--- Saved only while either feature is on and Config.RealPlayers.saveCases is not false.
-local function On() return Cfg().saveCases ~= false and FeatureOn() end
-
-local function Kept() return math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT)))) end
+local function Kept()
+    return math.min(CLOSED_MAX, math.max(1, math.floor(Num(CP.RealPlayers('staff').casesKept, CLOSED_KEPT))))
+end
 
 local function DbReady()
     if not (CP.Migrations and CP.Migrations.ready) then return true end
@@ -281,11 +279,11 @@ local function Load()
     return true
 end
 
--- Retention: rows older than Config.RealPlayers.pairLedgerDays (the case rows of cp_pvp_pairs keep as long) and
+-- Retention: rows older than RealPlayers.antiFarm.pairLedgerDays (the case rows of cp_pvp_pairs keep as long) and
 -- rows past casesKept. At the start and once a day, in a thread.
 local function Prune(now)
     if not DbReady() then return end
-    local cutoff = now - math.floor(math.max(1, Num(Cfg().pairLedgerDays, 30)) * DAY_S)
+    local cutoff = now - math.floor(math.max(1, Num(CP.RealPlayers('antiFarm').pairLedgerDays, 30)) * DAY_S)
     local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_pvp_cases WHERE closed_at < FROM_UNIXTIME(?)', { cutoff })
     if not ok then CP.errEvery(TAG, 'prune', 'the saved cases clean-up failed: %s', tostring(err)) end
     TrimKept()
@@ -330,7 +328,11 @@ CreateThread(function()
         CP.Schedule.job('pvp_cases', {
             when = 'daily',
             manual = true,
-            settings = { 'RealPlayers.saveCases', 'RealPlayers.casesKept', 'RealPlayers.pairLedgerDays' },
+            settings = {
+                'RealPlayers.staff.saveCases',
+                'RealPlayers.staff.casesKept',
+                'RealPlayers.antiFarm.pairLedgerDays',
+            },
             on = On,
             run = function(ctx) Prune(ctx.at) end,
         })

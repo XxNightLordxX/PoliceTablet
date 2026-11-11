@@ -243,7 +243,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.ObjectiveResetHour(kind)`, `CP.Progress.*` | shared/lib.lua | A kind's reset hour for `CP.Schedule.dayKey(ts, hour)` etc. (nil = Config.Time); the one progress engine (counted runs, goal and bounty conditions as `?` SQL) |
 | `CP.Num0`, `CP.Int`, `CP.Cfg`, `CP.NonEmpty`, `CP.cidOf`, `CP.now`, `CP.SqlTs`, `CP.warnOnce`, `CP.deptOfCitizen` | shared/lib.lua | Shared small reads |
 | `CP.Recognition(part) -> cfg, on` | shared/lib.lua | One part of `Config.Recognition` (`levels`, `levelCurve`, `badges`, `weeklyBadges`, `commendations`, `fieldTraining`) as it is now, never nil, and its switch (commendations `enabled ~= false`, field training `enabled == true`, the others always on). Scoring (levels, auto badges), the boards (weekly badges), profiles (commendations), the tablet and field training read their settings only through it |
-| `CP.RealPlayers(mode?) -> cfg, on` | shared/lib.lua | One mode of `Config.RealPlayers` (`liveCrime`, `volunteer`, `criminalTablet`) as it is now, never nil, and its switch (`enabled == true`: every mode ships off); with no mode the whole section (the rules both modes share) and whether live crimes or volunteers are on. Every real-player reader goes through it |
+| `CP.RealPlayers(part?) -> cfg, on`, `CP.RealPlayersOn(part?)` | shared/lib.lua | The one reader of `Config.RealPlayers`: a part, never nil, and whether it is on (a mode: its switch, off while the police script sends no cuff and jail facts; `criminalTablet`: its switch; `staff`, `antiFarm`, `surrender`: either mode on); no part: the section, either mode on. Modules keep no Cfg()/On() copy |
 | `CP.RealPlayersTakePart(run, what)`, `CP.RealPlayersRowFilter(what, alias)` | shared/lib.lua | Whether a live or volunteer case takes part in `typeOfTheDay`, `goals`, `challenge`, `cash` or `items` (that switch of its mode; any other run: true), and the SQL that leaves such rows out of goal and challenge sums while the switch is off. Cash, item rewards, scoring, goals and the challenge use them; the modes keep no copy |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText`, `toSrc(v, console?)` (a player source: an integer above 0, or nil; 0 too with `console = true`) |
 
@@ -2306,7 +2306,7 @@ Server-only (never on an officer's tablet).
   `cp_pvp_pairs`), `pairStats(cid?)` (at most 200 lines), `adminRows()`, `staffCases()`, `staffCase(runId)` (suspects
   with names, times from open to contact/cuff/detain/booking, the timeline as text, flag and note lines, the ledger by
   name; never a trail point).
-- Closed cases are saved in `cp_pvp_cases` (migration 016) while `Config.RealPlayers.saveCases` (shipped true) and a
+- Closed cases are saved in `cp_pvp_cases` (migration 016) while `Config.RealPlayers.staff.saveCases` (shipped true) and a
   feature are on: one row per case (`case_json = Opp.savedForm(case)`, plain values, never a position), written one
   frame after the close.
 - The self rule: `Kit.selfRun` and `P.canReviewRun` count a suspect of the run's case as taking part (fails closed).
@@ -2466,8 +2466,7 @@ Memory only; only for runs with `run.volunteer`.
   (false), `driverReportEvery` (30, 0–300), `fugitiveNpcs` (false), `fugitiveOutSeconds` (30, 0–300) (§7.3).
 
 #### Scoring, results and staff
-- `V.isCase(run)` (`run.realSuspect == 'volunteer'`), `V.counts(run, what)` for typeOfTheDay, goals, challenge, cash
-  (`payCash`), items (`payRewards`), all shipped false.
+- `V.isCase(run)` (`run.realSuspect == 'volunteer'`); take-part switches: `CP.RealPlayersTakePart`.
 - `V.sendEnded(m, run, state, reason)`, once per run with a yes, never for tests, while `Config.RealPlayers.volunteer.endEvent ~=
   false`.
 - Staff: the case keeps `case.volunteer = { role, mode, phase, why, engaged }`; `V.staffView(runId, case)` is added to
@@ -3247,7 +3246,7 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/realplayers/staff; server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
 | `admin:getRestrictions`, `sup:getRestrictions` | callbacks | openAdmin (each kind the admin may lift or extend); viewMissionList and `MissionControls.restrictionsTab` (his department, kinds with `def.sup`) | `{}` → `{ kinds = { key, maxHours, canLift, canExtend }, rows = { kind, citizenid, name, other?, untilAt, by, byName, reason, dept?, auto?, canLift? }, dept?, serverTime }` | modules/supervisor/restrictions; setter and reason from the row, else its newest audit row (500 read) |
-| `server:restriction` | action (supAction) | supervisors: lift only, the kind's `def.sup.permission` (missionBan: missionControls, his own ban); admins: openAdmin, then the kind's key per step (suspension: suspend; missionBan: lift antiFarmOverride, extend missionControls; the Real suspects kinds: antiFarmOverride) | `{ op = 'lift' \| 'extend', kind, citizenid, other?, hours?, reason }` | one target per 3 s; hours 1 to the kind's longest; `AdminUi.restrictionsExtend` = false refuses extend; the Real suspects kinds keep `staffLift`, volunteerBlock lift `staffClearStrikes`; each kind keeps its audit rows |
+| `server:restriction` | action (supAction) | supervisors: lift only, the kind's `def.sup.permission` (missionBan: missionControls, his own ban); admins: openAdmin, then the kind's key per step (suspension: suspend; missionBan: lift antiFarmOverride, extend missionControls; the Real suspects kinds: antiFarmOverride) | `{ op = 'lift' \| 'extend', kind, citizenid, other?, hours?, reason }` | one target per 3 s; hours 1 to the kind's longest; `AdminUi.restrictionsExtend` = false refuses extend; the Real suspects kinds keep `staff.lift`, volunteerBlock lift `staffClearStrikes`; each kind keeps its audit rows |
 | `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/progression/profile; cooldown clear 1 per 60 s per officer |
 | `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
 | `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |

@@ -885,7 +885,7 @@ do
     local savedLocations = def.locations
     def.locations = { def.locations[1] }
     -- the same officers and volunteer again: the admin lifts the repeat limits in Settings (shipped 30 min, 30 min)
-    for _, c in ipairs({ { 'RealPlayers.jobHopMinutes', 0 }, { 'RealPlayers.suspectCooldownMinutes', 0 } }) do
+    for _, c in ipairs({ { 'RealPlayers.jobHopMinutes', 0 }, { 'RealPlayers.antiFarm.suspectCooldownMinutes', 0 } }) do
         local ok, err = Setting(8, c[1], c[2])
         H.eq(ok, true, ('strike: the admin sets %s to %d: %s'):format(c[1], c[2], tostring(err)))
     end

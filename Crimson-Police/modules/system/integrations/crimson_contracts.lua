@@ -27,9 +27,6 @@ local warnedAt = {}               -- [what] = os.time() of its last warning
 --                                   HELPERS
 -- ============================================================================
 
--- Read on every event, so turning it on in Admin UI → Settings needs no restart.
-local function On() return select(2, CP.RealPlayers('liveCrime')) end
-
 local function WarnOnce(what, fmt, ...)
     local now = os.time()
     if warnedAt[what] and now - warnedAt[what] < WARN_EVERY then return end
@@ -155,7 +152,7 @@ end
 -- these. Registered always and off at once while Config.RealPlayers.liveCrime.enabled is not true.
 
 local function Handle(name, payload)
-    if not On() then return end
+    if not CP.RealPlayersOn('liveCrime') then return end
     local res = GetInvokingResource()
     if not Allowed(res) then
         WarnOnce('source:' .. tostring(res),

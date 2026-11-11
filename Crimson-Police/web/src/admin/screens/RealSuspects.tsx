@@ -1,8 +1,8 @@
 // Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff. Shown
 
 // Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff. Shown
-// while Config.RealPlayers.liveCrime.enabled or Config.RealPlayers.volunteer.enabled is on (Config.RealPlayers.adminScreen), to admins with
-// the antiFarmOverride key. Cases: every open case and the last Config.RealPlayers.casesKept closed ones; a case
+// while Config.RealPlayers.liveCrime.enabled or Config.RealPlayers.volunteer.enabled is on (Config.RealPlayers.staff.screen), to admins with
+// the antiFarmOverride key. Cases: every open case and the last Config.RealPlayers.staff.casesKept closed ones; a case
 // opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
 // the admin's own characters). Pairs and blocks: pair statistics (admin:getRsPairs), a link to Restrictions (where the
 // running blocks, exclusions and suspensions are listed and lifted) and the three tools (block a pair, exclude a

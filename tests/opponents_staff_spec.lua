@@ -1,7 +1,7 @@
 -- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
 
 -- CP.Opponents staff: the server-only case data admins read (names fixed when a line is written, the
--- timeline as lines, the flag lines, the ledger), Config.RealPlayers.casesKept, the admin callbacks and the three
+-- timeline as lines, the flag lines, the ledger), Config.RealPlayers.staff.casesKept, the admin callbacks and the three
 -- tools (block a pair, exclude a player, suspend an officer), and the self rule over suspects (P.tookPart). Plain
 -- Lua with stubs: qbx_core's exports, CP.AdminKit and the pair writers are mocked; nothing reads the database.
 
@@ -100,7 +100,7 @@ Load(5, 'OUT00001', 'Cy')
 
 local R1 = NewRun('run-0001', { { src = 1, cid = 'OFF00001', name = 'Ada Test', callsign = '1-A-1' } })
 do
-    H.eq(RS.casesKept, 16, 'casesKept ships 16 (the closed cases kept before V17)')
+    H.eq(RS.staff.casesKept, 16, 'casesKept ships 16 (the closed cases kept before V17)')
     local case = Opp.open(R1, { kind = 'live', members = { 'CRIM0001' } })
     H.ok(case ~= nil, 'a live case opened')
     local label = case.suspects.CRIM0001.label
@@ -179,13 +179,13 @@ do
     local view = Opp.staffCase('run-0001')
     H.ok(view ~= nil and view.open == false and view.closedAt ~= nil, 'a closed case is still there for staff')
     H.eq(Opp.wasSuspect('CRIM0001', 'run-0001'), true, 'and its suspect still counts as one')
-    RS.casesKept = 1
+    RS.staff.casesKept = 1
     local R2 = NewRun('run-0002', { { src = 1, cid = 'OFF00001', name = 'Ada Test' } })
     Opp.open(R2, { kind = 'live', members = { 'CRIM0001' } })
     Opp.close(R2)
     H.eq(Opp.staffCase('run-0001'), nil, 'casesKept = 1: the older closed case is gone')
     H.ok(Opp.staffCase('run-0002') ~= nil, 'the newest is kept')
-    RS.casesKept = 16
+    RS.staff.casesKept = 16
 end
 
 -- ============================================================================
@@ -347,13 +347,13 @@ do
     ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.no_permission', 'without antiFarmOverride: refused')
     canPerm = true
-    H.eq(Config.RealPlayers.staffLift, true, 'staffLift ships true')
-    Config.RealPlayers.staffLift = false
+    H.eq(Config.RealPlayers.staff.lift, true, 'staffLift ships true')
+    Config.RealPlayers.staff.lift = false
     ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.rs_lift_off', 'staffLift = false: lifting is refused')
     H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).admin, nil,
         'FIN4: Pairs and blocks lists no running rows of its own (they are on the Restrictions screen)')
-    Config.RealPlayers.staffLift = true
+    Config.RealPlayers.staff.lift = true
 
     -- the list: the running rows of each kind with their setter and reason from the audit; extend through the
     -- tool that set it
@@ -492,11 +492,11 @@ do
     H.eq(players, 1, '30 pair lines: one players-table statement')
     H.eq(officers, 1, 'and one cp_officers statement')
     H.eq(data.lift, nil, 'FIN4: no Lift switch of its own on Pairs and blocks (the Restrictions screen lifts)')
-    H.eq(Config.RealPlayers.staffNames, true, 'staffNames ships true')
-    Config.RealPlayers.staffNames = false
+    H.eq(Config.RealPlayers.staff.names, true, 'staffNames ships true')
+    Config.RealPlayers.staff.names = false
     data = cbs['admin:getRsPairs'].fn({ src = 9, args = {} })
     H.eq(next(data.names), nil, 'staffNames = false: citizen IDs only')
-    Config.RealPlayers.staffNames = true
+    Config.RealPlayers.staff.names = true
     Opp.pairStats = nil
     H.sql('DROP TABLE IF EXISTS players')
     H.sql('DELETE FROM cp_officers WHERE citizenid = \'OFFC0001\'')
@@ -548,10 +548,10 @@ do
     local view = Opp.staffCase('run-0005')
     H.eq(view.ledger[1].weaponName, 'Combat Pistol', 'the damage ledger names the weapon')
     H.ok(view.ledger[2].weaponName == nil and view.ledger[2].weapon == 777, 'an unknown weapon keeps its hash')
-    H.eq(Config.RealPlayers.weaponNames, true, 'weaponNames ships true')
-    Config.RealPlayers.weaponNames = false
+    H.eq(Config.RealPlayers.staff.weaponNames, true, 'weaponNames ships true')
+    Config.RealPlayers.staff.weaponNames = false
     H.eq(Opp.staffCase('run-0005').ledger[1].weaponName, nil, 'weaponNames = false: the raw hash only')
-    Config.RealPlayers.weaponNames = true
+    Config.RealPlayers.staff.weaponNames = true
     Opp.close(R5)
 end
 

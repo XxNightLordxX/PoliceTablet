@@ -14,8 +14,6 @@
 local BLOCK = 'live_response'
 local U = CP.U
 
-local function Cfg() return (CP.RealPlayers('liveCrime')) end
-
 local function Num(v, default)
     local n = tonumber(v)
     if n == nil or n ~= n then return default end
@@ -57,7 +55,7 @@ local function Scene(ctx)
     return Vec(type(start) == 'table' and start.coords or start)
 end
 
-local function SceneRadius() return math.max(1.0, Num(Cfg().sceneRadius, 75.0)) end
+local function SceneRadius() return math.max(1.0, Num(CP.RealPlayers('liveCrime').sceneRadius, 75.0)) end
 
 -- Metres from the nearest active participant to coords (math.huge without one).
 local function NearestOfficer(ctx, coords)
@@ -101,7 +99,7 @@ end
 local function Hud(ctx, st)
     local patch = { detail = CP.Lt('block.live_response.hud_' .. st.phase) }
     if st.phase == 'secure' then
-        local need = math.max(0, math.floor(Num(Cfg().secureSeconds, 60)))
+        local need = math.max(0, math.floor(Num(CP.RealPlayers('liveCrime').secureSeconds, 60)))
         patch.value, patch.max = math.min(need, math.floor(st.secureS)), need
     else
         -- false removes the secure bar (ObjectiveHud merges patches): the detain phase shows no stale 59/60
@@ -112,7 +110,7 @@ end
 
 local function Checklist(ctx)
     local st = StateOf(ctx)
-    local need = math.max(0, math.floor(Num(Cfg().secureSeconds, 60)))
+    local need = math.max(0, math.floor(Num(CP.RealPlayers('liveCrime').secureSeconds, 60)))
     return {
         { label = CP.L('block.live_response.check_respond'), done = st.phase ~= 'respond' },
         {
@@ -140,7 +138,7 @@ end
 local function Responded(ctx, st)
     st.phase = 'secure'
     if CP.Opponents and CP.Opponents.timeline then CP.Opponents.timeline(ctx.run, { what = 'responded' }) end
-    if Num(Cfg().secureSeconds, 60) <= 0 then return Secured(ctx, st) end
+    if Num(CP.RealPlayers('liveCrime').secureSeconds, 60) <= 0 then return Secured(ctx, st) end
     Hud(ctx, st)
 end
 
@@ -160,7 +158,7 @@ end
 
 local function Tick(ctx, dt)
     local st = StateOf(ctx)
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers('liveCrime')
     local scene = Scene(ctx)
     local onScene = NearestOfficer(ctx, scene) <= SceneRadius()
     if st.phase == 'respond' and (onScene or AnyContact(ctx)) then Responded(ctx, st) end
@@ -369,10 +367,10 @@ end
 -- taken, with their labels only. Never a suspect's state or a position: it reads the same as the HUD and the map.
 local function CaseView(ctx)
     local st = StateOf(ctx)
-    local need = math.max(0, math.floor(Num(Cfg().secureSeconds, 60)))
+    local need = math.max(0, math.floor(Num(CP.RealPlayers('liveCrime').secureSeconds, 60)))
     local labels = {}
     for _, r in ipairs(st.reported) do labels[#labels + 1] = r.label end
-    local every = math.floor(Num(Cfg().lastReportedEvery, 60))
+    local every = math.floor(Num(CP.RealPlayers('liveCrime').lastReportedEvery, 60))
     local nextS = nil
     if every > 0 and st.phase ~= 'respond' and st.reportAt then
         nextS = math.max(0, math.ceil((st.reportAt - GetGameTimer()) / 1000))

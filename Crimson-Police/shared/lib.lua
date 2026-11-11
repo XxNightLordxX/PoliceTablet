@@ -630,16 +630,20 @@ end
 --                                 REAL PLAYERS
 -- ============================================================================
 
--- The modes of Config.RealPlayers, and the run.realSuspect value of a case of that mode.
-local REAL_PLAYER_MODES = { liveCrime = 'live', volunteer = 'volunteer', criminalTablet = false }
+-- The parts of Config.RealPlayers: 'mode' = live crimes or volunteers (on = its enabled switch, and off while the
+-- police script sends no cuff and jail facts), 'switch' = the criminal tablet (on = its enabled switch), 'rules' = a
+-- block of the rules both modes share (on = live crimes or volunteers on).
+local REAL_PLAYER_PARTS = {
+    liveCrime = 'mode',
+    volunteer = 'mode',
+    criminalTablet = 'switch',
+    surrender = 'rules',
+    staff = 'rules',
+    antiFarm = 'rules',
+}
 -- What a real-player case can take part in: the switch of that name in its mode (each shipped false).
 local TAKE_PART = { typeOfTheDay = true, goals = true, challenge = true, cash = true, items = true }
 
--- One mode of Config.RealPlayers as it is now (a setting changed in game included), never nil, and whether it is on
--- (enabled == true: every mode ships off). With no mode: the whole section (the rules both modes share) and whether
--- live crimes or volunteers are on.
----@param mode? string 'liveCrime' | 'volunteer' | 'criminalTablet'
----@return table cfg, boolean on
 -- On the server, live crimes and volunteers are also off while the city's police script sends no cuff and jail facts
 -- (CP.Integrations.realSuspectsBlocked; Admin UI -> Settings -> Features says why).
 local function SuspectsBlocked()
@@ -647,17 +651,33 @@ local function SuspectsBlocked()
     return I ~= nil and I.realSuspectsBlocked ~= nil and I.realSuspectsBlocked()
 end
 
-function CP.RealPlayers(mode)
+-- The one reader of Config.RealPlayers: one part as it is now (a setting changed in game included), never nil, and
+-- whether it is on (see REAL_PLAYER_PARTS; every mode ships off). With no part: the whole section (the rules both
+-- modes share) and whether live crimes or volunteers are on. An unknown part: {} and false.
+---@param part? string 'liveCrime' | 'volunteer' | 'criminalTablet' | 'surrender' | 'staff' | 'antiFarm'
+---@return table cfg, boolean on
+function CP.RealPlayers(part)
     local all = type(Config) == 'table' and type(Config.RealPlayers) == 'table' and Config.RealPlayers or {}
-    if mode == nil then
+    local kind = part ~= nil and REAL_PLAYER_PARTS[part] or nil
+    if part == nil or kind == 'rules' then
         local lc, vo = all.liveCrime, all.volunteer
         local on = (type(lc) == 'table' and lc.enabled == true) or (type(vo) == 'table' and vo.enabled == true)
-        return all, on and not SuspectsBlocked()
+        on = on == true and not SuspectsBlocked()
+        if part == nil then return all, on end
+        return type(all[part]) == 'table' and all[part] or {}, on
     end
-    local cfg = REAL_PLAYER_MODES[mode] ~= nil and type(all[mode]) == 'table' and all[mode] or {}
-    local on = REAL_PLAYER_MODES[mode] ~= nil and cfg.enabled == true
-    if on and REAL_PLAYER_MODES[mode] then on = not SuspectsBlocked() end
+    local cfg = kind ~= nil and type(all[part]) == 'table' and all[part] or {}
+    local on = kind ~= nil and cfg.enabled == true
+    if on and kind == 'mode' then on = not SuspectsBlocked() end
     return cfg, on
+end
+
+-- Only whether a part of Config.RealPlayers is on (the second value of CP.RealPlayers).
+---@param part? string
+---@return boolean
+function CP.RealPlayersOn(part)
+    local _, on = CP.RealPlayers(part)
+    return on == true
 end
 
 -- The mode of a run's real-player case: 'liveCrime' (run.live or realSuspect 'live'), 'volunteer' or nil.

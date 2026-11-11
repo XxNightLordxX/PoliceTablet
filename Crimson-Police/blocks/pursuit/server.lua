@@ -1809,8 +1809,6 @@ end
 
 local Vol = {}
 do
-    local function VCfg() return (CP.RealPlayers('volunteer')) end
-
     -- volunteerSlot(obj, mission, location): { role = 'driver', meet = the first car's point } or nil.
     function Vol.slot(obj, mission, location)
         if type(obj) ~= 'table' or type(location) ~= 'table' then return nil end
@@ -1853,7 +1851,7 @@ do
         if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end
         local view = CP.Opponents.view(ctx.run)
         if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
-        local afkVoids = VCfg().afkCatchVoids ~= false
+        local afkVoids = CP.RealPlayers('volunteer').afkCatchVoids ~= false
         for _, cid in ipairs(view.order or {}) do
             local r = view.suspects[cid]
             if r and (r.state == 'detained' or r.state == 'booked') then
@@ -1875,7 +1873,7 @@ do
     -- saw him free and online, taken once he is in position or engaged and never in between, so he is never followed
     -- live.
     local function Report(ctx, st, phase)
-        local every = tonumber(VCfg().driverReportEvery) or 0
+        local every = tonumber(CP.RealPlayers('volunteer').driverReportEvery) or 0
         if st.vol ~= 'real' or st.volDone or every <= 0 or phase == 'travel' then
             if st.volReport then st.dirty = true end
             st.volReport, st.volReportAt = nil, nil

@@ -42,11 +42,9 @@ local lessCache = { list = false, set = {} }   -- Config.RealPlayers.lessLethal 
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers()) end
-
 local Num = CP.Num
 
-local function Ms(key, default) return math.max(0, Num(Cfg()[key], default)) * 1000 end
+local function Ms(key, default) return math.max(0, Num(CP.RealPlayers()[key], default)) * 1000 end
 
 local function ToInt(v, lo, hi)
     if type(v) ~= 'number' or v ~= v then return nil end
@@ -120,7 +118,7 @@ end
 
 -- Config.RealPlayers.lessLethal as a set of weapon hashes: hashed once, again when the list or a setting changes.
 local function LessLethal()
-    local list = Cfg().lessLethal
+    local list = CP.RealPlayers().lessLethal
     if list ~= lessCache.list then
         local set = {}
         for _, name in ipairs(type(list) == 'table' and list or {}) do
@@ -194,7 +192,7 @@ local function Ledger(case, entry, now)
     end
     entry.t, entry.at, entry.lastAt, entry.n = os.time(), now, now, 1
     list[#list + 1] = entry
-    local max = math.max(1, math.floor(Num(Cfg().damageLogMax, 200)))
+    local max = math.max(1, math.floor(Num(CP.RealPlayers().damageLogMax, 200)))
     while #list > max do table.remove(list, 1) end
     return entry
 end

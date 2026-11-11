@@ -19,8 +19,6 @@ local warnedAt = {}
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers('liveCrime')) end
-
 local Num = CP.Num
 
 local function WarnOnce(what, fmt, ...)
@@ -53,7 +51,7 @@ end
 
 -- The mission type a crime uses (Config.RealPlayers.liveCrime.types, read now), or nil while that crime is off.
 local function MissionTypeOf(key)
-    local types = Cfg().types
+    local types = CP.RealPlayers('liveCrime').types
     local v = type(types) == 'table' and types[key] or nil
     if type(v) ~= 'string' then return nil end
     if type(Config.MissionTypes) ~= 'table' or type(Config.MissionTypes[v]) ~= 'table' then
@@ -157,7 +155,7 @@ local function Find(res, data) return crimes[res .. ':' .. data.uid] end
 -- one is found by his citizenid (an event path, so the qbx export is allowed here), must pass
 -- CP.Opponents.eligible with intake = true and stand within Config.RealPlayers.liveCrime.suspectRadius of the crime.
 local function Suspects(crime)
-    local radius = Num(Cfg().suspectRadius, 300.0)
+    local radius = Num(CP.RealPlayers('liveCrime').suspectRadius, 300.0)
     local suspects, why = {}, {}
     for _, cid in ipairs(Sorted(crime.members)) do
         local Q = CP.Qbx
@@ -365,7 +363,7 @@ end
 -- Whether a citizenid is in the crew of a crime that has not ended (and that crime); false while live crimes are off
 -- (nothing is heard then) and for admin test contracts.
 function LC.inCrew(cid)
-    if Cfg().enabled ~= true or type(cid) ~= 'string' then return false end
+    if CP.RealPlayers('liveCrime').enabled ~= true or type(cid) ~= 'string' then return false end
     local now = os.time()
     for _, crime in pairs(crimes) do
         if not crime.ended and not crime.test and crime.members[cid] and now - crime.receivedAt <= KEEP_OPEN then
@@ -392,7 +390,7 @@ end
 
 -- true = only the live lines score (no base points, no end-of-run lines); Config.RealPlayers.liveCrime.linesOnly,
 -- shipped true.
-function LC.linesOnly(run) return LC.isLive(run) and Cfg().linesOnly ~= false end
+function LC.linesOnly(run) return LC.isLive(run) and CP.RealPlayers('liveCrime').linesOnly ~= false end
 
 -- The suspects of a live run: the crime's, else the case's, else run.live.suspects (a count); at least 1.
 function LC.crewSize(run)
@@ -414,7 +412,7 @@ end
 -- The Config.Scaling row of a live run whose tier comes from its crew (Config.RealPlayers.liveCrime.tier = 'crew',
 -- shipped), or nil (not live, 'officers', or no scaling rows): the caller then uses the run's own pay tier.
 function LC.tierRow(run)
-    if not LC.isLive(run) or Cfg().tier == 'officers' then return nil end
+    if not LC.isLive(run) or CP.RealPlayers('liveCrime').tier == 'officers' then return nil end
     if not (CP.Scaling and CP.Scaling.tierFor) then return nil end
     local ok, row = pcall(CP.Scaling.tierFor, LC.crewSize(run))
     if ok and type(row) == 'table' then return row end
@@ -428,13 +426,11 @@ end
 -- LC.missionFor(crime) (the engine-only live_crime mission at the crime's reported place) and CP.Runs.create opts.live;
 -- the run:created hook below opens the CP.Opponents case for the crime's suspects, and run:ended writes the pair rows.
 
-local function RS() return (CP.RealPlayers()) end
-
-local function SceneRadius() return math.max(1.0, Num(Cfg().sceneRadius, 75.0)) end
+local function SceneRadius() return math.max(1.0, Num(CP.RealPlayers('liveCrime').sceneRadius, 75.0)) end
 
 -- Seconds a live case lasts at most (Config.RealPlayers.liveCrime.caseTime, 60-3600; the mission loader's time limit
 -- range).
-local function CaseTime() return math.floor(CP.U.clamp(Num(Cfg().caseTime, 1800), 60, 3600)) end
+local function CaseTime() return math.floor(CP.U.clamp(Num(CP.RealPlayers('liveCrime').caseTime, 1800), 60, 3600)) end
 
 -- The mission type the engine mission is registered with (each case uses its crime's own type).
 local function AnyType()
@@ -507,7 +503,9 @@ local function OfficerOk(crime, o)
     if crime.members[cid] then return false, 'err.live_case_own_suspect' end
     if Opp('suspended', cid) == true then return false, 'err.live_case_suspended' end
     local was = tonumber(Opp('lastSuspectAt', cid))
-    if was and os.time() - was < Num(RS().jobHopMinutes, 30) * 60 then return false, 'err.live_case_recent_suspect' end
+    if was and os.time() - was < Num(CP.RealPlayers().jobHopMinutes, 30) * 60 then
+        return false, 'err.live_case_recent_suspect'
+    end
     if Opp('selfBlock', o.src, crime.suspects) == true then return false, 'err.live_case_own_suspect' end
     for _, sCid in ipairs(Sorted(crime.suspects)) do
         local ok, why = Opp('pairOk', cid, sCid)
@@ -519,16 +517,16 @@ local function OfficerOk(crime, o)
     return true
 end
 
--- Whether this suspect already scored Config.RealPlayers.maxCatchesPerSuspectDay cases today (worth no points).
+-- Whether this suspect already scored RealPlayers.antiFarm.maxCatchesPerSuspectDay cases today (worth no points).
 function LC.suspectCapped(cid)
-    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2))
+    local perDay = math.floor(Num(CP.RealPlayers('antiFarm').maxCatchesPerSuspectDay, 2))
     return Num(Opp('suspectDayCount', cid), 0) >= perDay
 end
 
 -- Whether these officers may take this crime's case -> true | false, err (checked at the claim and again at the
 -- accept; memory only: CP.Opponents' caps never query the database). officers = { { src, citizenid } }.
 function LC.claimCheck(crime, officers)
-    if Cfg().enabled ~= true then return false, 'err.live_case_off' end
+    if CP.RealPlayers('liveCrime').enabled ~= true then return false, 'err.live_case_off' end
     if type(crime) ~= 'table' or crime.ended or crime.test or type(crime.suspects) ~= 'table' then
         return false, 'err.live_case_gone'
     end
@@ -578,7 +576,7 @@ end
 -- The LIVE line of a unit's ready check (CP.Draw, a live accept with Config.RealPlayers.liveCrime.readyCheck): the
 -- alert title, the street and the suspect count, or nil (caseCard off, or the crime is gone).
 function LC.readyLine(live)
-    if Cfg().caseCard == false or type(live) ~= 'table' then return nil end
+    if CP.RealPlayers('liveCrime').caseCard == false or type(live) ~= 'table' then return nil end
     local crime = LC.get(live.crimeKey)
     if not crime then return nil end
     return { title = Text(crime.title, 64), street = Text(crime.street, 100), suspects = CP.U.count(crime.suspects) }
@@ -587,7 +585,7 @@ end
 -- The Active Mission case card of a live run for one officer, or nil (not live, caseCard off). The steps come from
 -- the live_response block's own caseView (the same phase as the HUD); host = this officer can end the case.
 function LC.caseView(run, src)
-    if not LC.isLive(run) or Cfg().caseCard == false then return nil end
+    if not LC.isLive(run) or CP.RealPlayers('liveCrime').caseCard == false then return nil end
     local live = type(run.live) == 'table' and run.live or {}
     local out = {
         title = Text(live.title, 64),
@@ -620,7 +618,7 @@ function LC.resultView(run)
     if not LC.isLive(run) then return nil end
     local live = type(run.live) == 'table' and run.live or {}
     local out = { title = Text(live.title, 64), street = Text(live.street, 100) }
-    if Cfg().resultOutcomes == false then return out end
+    if CP.RealPlayers('liveCrime').resultOutcomes == false then return out end
     if run.state ~= 'ended' then
         out.open = true
         return out
@@ -764,7 +762,7 @@ end
 
 -- Sends the end event of a live case once (run.liveEndSent). -> true when it was sent.
 function LC.sendEnded(run, state, reason, outcomes, case)
-    if Cfg().endEvent == false or type(run) ~= 'table' or run.liveEndSent then return false end
+    if CP.RealPlayers('liveCrime').endEvent == false or type(run) ~= 'table' or run.liveEndSent then return false end
     local crime = LC.crimeOf(run)
     if crime and crime.test then return false end
     local payload = LC.endPayload(run, state, reason, outcomes, case)
@@ -778,7 +776,7 @@ end
 -- The export GetAvailablePolice: on-duty officers in a turned-on department job ('idle': and on no Crimson-Police
 -- mission), from cached player data only (never yields). -> count, { [department] = count } | nil while off.
 function LC.availablePolice()
-    local c = Cfg()
+    local c = CP.RealPlayers('liveCrime')
     if c.enabled ~= true then return nil end
     local idleOnly = c.availablePolice ~= 'duty'
     local total, byDept = 0, {}
@@ -820,9 +818,14 @@ local RESPOND_WAIT_MS = 3000      -- a responding officer still on a mission: th
 local offers = {}                 -- [runId] = { [src] = { token, untilMs, why, answered } }
 local scanAt = {}                 -- [runId] = GetGameTimer() of the next scene scan
 
-local function BackupOn() return Cfg().enabled == true and Cfg().backup ~= false end
-local function MaxOfficers() return math.floor(CP.U.clamp(Num(Cfg().maxOfficers, 6), 1, 16)) end
-local function OfferMs() return math.floor(CP.U.clamp(Num(Cfg().joinOfferSeconds, 30), 10, 120)) * 1000 end
+local function BackupOn()
+    local cfg, on = CP.RealPlayers('liveCrime')
+    return on and cfg.backup ~= false
+end
+local function MaxOfficers() return math.floor(CP.U.clamp(Num(CP.RealPlayers('liveCrime').maxOfficers, 6), 1, 16)) end
+local function OfferMs()
+    return math.floor(CP.U.clamp(Num(CP.RealPlayers('liveCrime').joinOfferSeconds, 30), 10, 120)) * 1000
+end
 
 local function ActiveCount(run)
     local n = 0

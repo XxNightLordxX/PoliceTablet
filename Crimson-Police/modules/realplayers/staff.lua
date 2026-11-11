@@ -3,7 +3,7 @@
 -- CP.Opponents staff (server): what admins read about real-suspect cases and the three admin tools. The
 -- case data here (names, citizenids, the timeline, the damage ledger, the flags and notes) is server-only: it goes
 -- to an admin's Admin UI through these callbacks and never to an officer's tablet (Opp.view has no names). Reads
--- read memory (open cases and the last Config.RealPlayers.casesKept closed ones, which modules/realplayers/saved
+-- read memory (open cases and the last Config.RealPlayers.staff.casesKept closed ones, which modules/realplayers/saved
 -- keeps over a restart; the pair ledger's window).
 -- Nothing here runs while nobody asks; the actions are refused while both features are off.
 
@@ -108,10 +108,6 @@ end
 local function ValidRunId(v)
     return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
 end
-
-local function Cfg() return (CP.RealPlayers()) end
-
-local function FeatureOn() return select(2, CP.RealPlayers()) end
 
 -- "Name (CITIZENID)", the citizenid alone, or nil.
 local function WhoText(who)
@@ -221,13 +217,13 @@ end
 
 local NAMES_CHUNK = 100   -- citizenids per cp_officers statement
 
--- Character names for the citizenids a staff screen shows (Config.RealPlayers.staffNames): one batched lookup
+-- Character names for the citizenids a staff screen shows (Config.RealPlayers.staff.names): one batched lookup
 -- per screen load, never a query per row. Online characters from the player cache, the rest from Qbox's players
 -- table (CP.Qbx.characterNames), then the officer names Crimson-Police keeps (cp_officers: the database or the saves
 -- folder). -> { [citizenid] = name }.
 local function NamesOf(cids)
     local out = {}
-    if Cfg().staffNames == false then return out end
+    if CP.RealPlayers('staff').names == false then return out end
     local want, list = {}, {}
     for _, cid in ipairs(cids) do
         if ValidCid(cid) and not want[cid] then
@@ -361,7 +357,8 @@ function Opp.staffCase(runId)
             officer = Officer(case, officerSrc),
             label = e.label,
             weapon = e.weapon,
-            weaponName = Cfg().weaponNames ~= false and CP.Weapons and CP.Weapons.label(e.weapon) or nil,
+            weaponName = CP.RealPlayers('staff').weaponNames ~= false and CP.Weapons and CP.Weapons.label(e.weapon)
+                or nil,
             n = e.n,
             willKill = e.willKill == true,
             state = e.state,
@@ -456,7 +453,7 @@ if CP.AdminKit and CP.AdminKit.action then
         end
         for _, v in ipairs(listed) do v.name = v.name or names[v.citizenid] end
         return {
-            enabled = FeatureOn(),
+            enabled = CP.RealPlayersOn(),
             liveCrime = select(2, CP.RealPlayers('liveCrime')),
             volunteers = volunteersOn,
             cases = list,
@@ -465,8 +462,8 @@ if CP.AdminKit and CP.AdminKit.action then
             listed = listed,
             -- the Volunteers tab offers Clear strikes (Config.RealPlayers.volunteer.staffClearStrikes)
             clearStrikes = volunteersOn and (CP.RealPlayers('volunteer')).staffClearStrikes ~= false,
-            -- blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staffLift)
-            lift = Cfg().staffLift ~= false,
+            -- blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staff.lift)
+            lift = CP.RealPlayers('staff').lift ~= false,
             serverTime = os.time(),
         }
     end)
@@ -494,7 +491,7 @@ if CP.AdminKit and CP.AdminKit.action then
             cids[#cids + 1] = l.suspect
         end
         local out = {
-            enabled = FeatureOn(),
+            enabled = CP.RealPlayersOn(),
             pairs = lines,
             from = from,
             names = NamesOf(cids),
@@ -514,7 +511,7 @@ if CP.AdminKit and CP.AdminKit.action then
 
     Kit.action('server:admin:rsBlockPair', 'antiFarmOverride', function(ctx)
         local p = ctx.payload
-        if not FeatureOn() then return false, 'err.rs_off' end
+        if not CP.RealPlayersOn() then return false, 'err.rs_off' end
         if not ValidCid(p.officer) or not ValidCid(p.suspect) or p.officer == p.suspect then
             return false, 'err.invalid_citizenid'
         end
@@ -534,7 +531,7 @@ if CP.AdminKit and CP.AdminKit.action then
 
     Kit.action('server:admin:rsExclude', 'antiFarmOverride', function(ctx)
         local p = ctx.payload
-        if not FeatureOn() then return false, 'err.rs_off' end
+        if not CP.RealPlayersOn() then return false, 'err.rs_off' end
         if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
         local days = Days(p.days)
         if not days then return false, 'err.rs_invalid_days' end
@@ -550,7 +547,7 @@ if CP.AdminKit and CP.AdminKit.action then
 
     Kit.action('server:admin:rsSuspend', 'antiFarmOverride', function(ctx)
         local p = ctx.payload
-        if not FeatureOn() then return false, 'err.rs_off' end
+        if not CP.RealPlayersOn() then return false, 'err.rs_off' end
         if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
         local days = Days(p.days)
         if not days then return false, 'err.rs_invalid_days' end
@@ -572,7 +569,7 @@ end
 -- ('exclusion'), an officer's real-suspect suspension ('rsSuspension') and a volunteer's strikes block
 -- ('volunteerBlock') are rows of the one restrictions list (modules/supervisor/restrictions.lua), each lifted or
 -- extended there with antiFarmOverride, never on one of the admin's own characters. Lifting early follows
--- Config.RealPlayers.staffLift, clearing a volunteer's strikes Config.RealPlayers.volunteer.staffClearStrikes.
+-- Config.RealPlayers.staff.lift, clearing a volunteer's strikes Config.RealPlayers.volunteer.staffClearStrikes.
 
 local RS_KINDS = { { 'pairBlock', 'block' }, { 'exclusion', 'exclude' }, { 'rsSuspension', 'suspend' } }
 local RS_AUDIT = { block = 'rsBlockPair', exclude = 'rsExclude', suspend = 'rsSuspend' }
@@ -600,8 +597,8 @@ end
 
 local function RsLift(kind)
     return function(ctx, p)
-        if Cfg().staffLift == false then return false, 'err.rs_lift_off' end
-        if not FeatureOn() then return false, 'err.rs_off' end
+        if CP.RealPlayers('staff').lift == false then return false, 'err.rs_lift_off' end
+        if not CP.RealPlayersOn() then return false, 'err.rs_off' end
         local officer, suspect = RowCids(kind, p)
         if not (officer or suspect) then return false, 'err.invalid_citizenid' end
         local ok, res = Opp.lift(kind, officer, suspect)
@@ -616,7 +613,7 @@ end
 -- Extend: the running row's end moves on by hours (at most 3650 days from now), audited as the tool that set it.
 local function RsExtend(kind)
     return function(ctx, p, hours)
-        if not FeatureOn() then return false, 'err.rs_off' end
+        if not CP.RealPlayersOn() then return false, 'err.rs_off' end
         local officer, suspect = RowCids(kind, p)
         if not (officer or suspect) then return false, 'err.invalid_citizenid' end
         local untilAt = RunningUntil(kind, officer, suspect)
@@ -641,8 +638,8 @@ for _, pair in ipairs(RS_KINDS) do
         perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
         maxHours = 3650 * 24,
         self = true,
-        on = FeatureOn,
-        liftOn = function() return Cfg().staffLift ~= false end,
+        on = function() return CP.RealPlayersOn() end,
+        liftOn = function() return CP.RealPlayers('staff').lift ~= false end,
         list = function()
             local out = {}
             for _, r in ipairs(Opp.adminRows and Opp.adminRows() or {}) do
@@ -667,15 +664,13 @@ for _, pair in ipairs(RS_KINDS) do
     })
 end
 
-local function VolunteersOn() return select(2, CP.RealPlayers('volunteer')) end
-
 -- A volunteer's strikes block. Lift clears his strikes and his block (also strikes with no block yet: the
 -- Volunteers tab's Clear strikes); nothing to clear is err.rs_no_strikes.
 CP.Restriction('volunteerBlock', {
     perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
     maxHours = 8760,
     self = true,
-    on = VolunteersOn,
+    on = function() return CP.RealPlayersOn('volunteer') end,
     liftOn = function() return (CP.RealPlayers('volunteer')).staffClearStrikes ~= false end,
     list = function()
         local V = CP.Volunteers
@@ -699,7 +694,7 @@ CP.Restriction('volunteerBlock', {
         return true, { citizenid = p.citizenid, strikes = res.strikes, blockedUntil = res.blockedUntil }
     end,
     extend = function(ctx, p, hours)
-        if not VolunteersOn() then return false, 'err.rs_off' end
+        if not CP.RealPlayersOn('volunteer') then return false, 'err.rs_off' end
         if not ValidCid(p.citizenid) then return false, 'err.invalid_citizenid' end
         local V = CP.Volunteers
         local ok, res = false, nil

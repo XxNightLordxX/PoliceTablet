@@ -116,7 +116,7 @@ async function steps(): Promise<void> {
             const powers = [...list.matchAll(/^\s*'(\w+)'/gm)].map(m => m[1]);
             ok(powers.length > 20, `admin: the admin powers read from permissions.lua (${powers.length})`);
             for (const p of powers) ok(session.actions.includes(p), `admin: the mock admin has ${p}`);
-            // Real suspects shows while live crimes or volunteers are on (Config.RealPlayers.adminScreen)
+            // Real suspects shows while live crimes or volunteers are on (Config.RealPlayers.staff.screen)
             const config = session.config as unknown as Record<string, Record<string, unknown> | undefined>;
             session = {
                 ...session,

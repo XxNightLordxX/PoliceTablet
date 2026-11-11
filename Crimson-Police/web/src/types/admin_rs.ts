@@ -71,7 +71,7 @@ export interface RsCasesData {
     listed?: RsListedVolunteer[];
     // the Volunteers tab offers Clear strikes (Config.RealPlayers.volunteer.staffClearStrikes)
     clearStrikes?: boolean;
-    // blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staffLift)
+    // blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staff.lift)
     lift?: boolean;
     serverTime: number;
 }
@@ -117,7 +117,7 @@ export interface RsLedgerLine {
     officer?: RsOfficer | null;
     label?: string | null;
     weapon?: number | null;
-    // the weapon's name (Config.RealPlayers.weaponNames), absent for a weapon not in shared/weapons.lua
+    // the weapon's name (Config.RealPlayers.staff.weaponNames), absent for a weapon not in shared/weapons.lua
     weaponName?: string | null;
     n: number;
     willKill: boolean;
@@ -152,7 +152,7 @@ export interface RsPairsData {
     pairs: RsPairLine[];
     // os.time() of the oldest ledger row read at start (nil = none)
     from?: number | null;
-    // character names by citizen ID for the pairs (Config.RealPlayers.staffNames; an empty list when there are
+    // character names by citizen ID for the pairs (Config.RealPlayers.staff.names; an empty list when there are
     // none). The running blocks, exclusions and suspensions are rows of admin:getRestrictions.
     names?: Record<string, string> | unknown[] | null;
     serverTime: number;

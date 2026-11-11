@@ -28,16 +28,11 @@ local slotCache = setmetatable({}, { __mode = 'k' }) -- [mission definition] = {
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers('volunteer')) end
-
--- (off as well while the police script sends no cuff and jail facts: CP.RealPlayers)
-local function On() return (select(2, CP.RealPlayers('volunteer'))) end
-
 local Num = CP.Num
 
-local function WindowSeconds() return math.floor(Num(Cfg().windowMinutes, 60, 1, 1440) * 60) end
+local function WindowSeconds() return math.floor(Num(CP.RealPlayers('volunteer').windowMinutes, 60, 1, 1440) * 60) end
 
-local function MaxStrikes() return math.floor(Num(Cfg().strikes, 3, 1, 100)) end
+local function MaxStrikes() return math.floor(Num(CP.RealPlayers('volunteer').strikes, 3, 1, 100)) end
 
 local function Note(src, kind, key, vars)
     if src then TriggerClientEvent(CP.e('client:volunteerNote'), src, kind, key, vars) end
@@ -70,7 +65,7 @@ end
 local function StrikeCount(who, now)
     local list = strikesOf[who]
     if not list then return 0 end
-    local since = now - math.floor(Num(Cfg().strikeHours, 24, 1, 8760) * 3600)
+    local since = now - math.floor(Num(CP.RealPlayers('volunteer').strikeHours, 24, 1, 8760) * 3600)
     local kept = {}
     for _, at in ipairs(list) do
         if at > since then kept[#kept + 1] = at end
@@ -95,7 +90,7 @@ end
 
 local saved = { loaded = false, loading = false }
 
-local function SaveOn() return On() and Cfg().saveStrikes ~= false end
+local function SaveOn() return CP.RealPlayersOn('volunteer') and CP.RealPlayers('volunteer').saveStrikes ~= false end
 
 local function DbReady()
     if not (CP.Migrations and CP.Migrations.ready) then return true end
@@ -103,7 +98,7 @@ local function DbReady()
     return ok
 end
 
-local function StrikeSeconds() return math.floor(Num(Cfg().strikeHours, 24, 1, 8760) * 3600) end
+local function StrikeSeconds() return math.floor(Num(CP.RealPlayers('volunteer').strikeHours, 24, 1, 8760) * 3600) end
 
 local SAVE_ROW = [[INSERT INTO cp_pvp_pairs (kind, officer_citizenid, suspect_citizenid, suspect_license, until_at,
     created_at) VALUES (?, '', ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?))]]
@@ -214,7 +209,7 @@ end
 local function Sweep()
     local now = os.time()
     for cid, v in pairs(listed) do
-        if not On() then
+        if not CP.RealPlayersOn('volunteer') then
             End(cid, 'disabled')
         elseif now >= v.untilAt and not (V.matchOf and V.matchOf(cid)) then
             End(cid, 'expired')  -- never while he plays a suspect: the window ends after the case
@@ -252,7 +247,7 @@ end
 -- reasons (in_case, instance, arena_flag, on_duty, job_hop, afk, admin, excluded), excluded (an admin's Exclude),
 -- blocked (strikes; untilAt = when the block ends).
 function V.check(src)
-    if not On() then return false, 'off' end
+    if not CP.RealPlayersOn('volunteer') then return false, 'off' end
     local n = CP.U.toSrc(src)
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) ~= 'table' or type(info.citizenid) ~= 'string' or info.citizenid == '' then
@@ -347,7 +342,7 @@ function V.strike(cid, why)
     CP.log(TAG, 'strike %d for %s (%s)', count, cid, tostring(why))
     if count >= MaxStrikes() then
         strikesOf[who] = nil
-        local untilAt = now + math.floor(Num(Cfg().blockHours, 24, 1, 8760) * 3600)
+        local untilAt = now + math.floor(Num(CP.RealPlayers('volunteer').blockHours, 24, 1, 8760) * 3600)
         blockedUntil[who] = untilAt
         blockCid[who] = cid
         SaveStrike(cid, who, now, untilAt)
@@ -467,7 +462,7 @@ end
 -- His strikes and block for the criminal tablet's History: { strikes = { expiresAt (os.time), ... } oldest first,
 -- blockedUntil = os.time() or nil, strikeHours }. Every key of his player (license and citizenid), like clearStrikes.
 function V.strikeInfo(cid)
-    local out = { strikes = {}, strikeHours = math.floor(Num(Cfg().strikeHours, 24, 1, 8760)) }
+    local out = { strikes = {}, strikeHours = math.floor(Num(CP.RealPlayers('volunteer').strikeHours, 24, 1, 8760)) }
     if type(cid) ~= 'string' or cid == '' then return out end
     local now, seen = os.time(), {}
     for _, who in ipairs({ whoOf[cid], 'cid:' .. cid }) do
@@ -517,8 +512,8 @@ local function ModeValue(v) return type(v) == 'string' and MODES[v] and v or nil
 -- The mode of a mission definition: 'npc' while enabled is off and for the Weekly Boss; a value that is no mode
 -- counts as 'npc' (the start-up check names it).
 function V.modeOf(def)
-    if not On() or type(def) ~= 'table' or def.isBoss then return 'npc' end
-    local c = Cfg()
+    if not CP.RealPlayersOn('volunteer') or type(def) ~= 'table' or def.isBoss then return 'npc' end
+    local c = CP.RealPlayers('volunteer')
     local byMission = type(c.missionModes) == 'table' and c.missionModes or {}
     if byMission[def.id] ~= nil then return ModeValue(byMission[def.id]) or 'npc' end
     local byType = type(c.modes) == 'table' and c.modes or {}
@@ -586,7 +581,7 @@ function V.canTake(def) return next((V.slotRoles(def))) ~= nil end
 -- { citizenid, ... }. Empty while enabled is off.
 function V.available(roles)
     local out = {}
-    if not On() then return out end
+    if not CP.RealPlayersOn('volunteer') then return out end
     local held = {}
     for _, cid in pairs(reserved) do held[cid] = true end
     local now = os.time()
@@ -634,7 +629,7 @@ end
 -- Holds a volunteer who fits location #index's slot for holder (a 'players_only' accept), so another unit cannot
 -- count on him too -> citizenid | nil. He must still pass check (on duty, AFK, in a case ...).
 function V.reserve(holder, def, index)
-    if holder == nil or not On() then return nil end
+    if holder == nil or not CP.RealPlayersOn('volunteer') then return nil end
     local slot = SlotAt(def, math.tointeger(tonumber(index) or 0) or 0)
     if not slot then return nil end
     for _, cid in ipairs(V.available({ [slot.role] = true })) do
@@ -684,11 +679,11 @@ local function ModesHealth()
     local function Line(level, key, vars, fix)
         out[#out + 1] = { level = level, text = CP.L(key, vars), fix = fix }
     end
-    if not On() then
+    if not CP.RealPlayersOn('volunteer') then
         Line('ok', 'health.volunteers.off')
         return out
     end
-    local c = Cfg()
+    local c = CP.RealPlayers('volunteer')
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
     local all = CP.Missions and CP.Missions.list and CP.Missions.list() or {}
     local function Check(map, fix, known, missionsOf)
@@ -796,7 +791,7 @@ function V.refusalKey(why) return REFUSAL[why] and ('volunteer.refused.' .. why)
 
 local ACTIONS = {
     open = function(src)
-        if not On() then return Refused(src, 'off') end
+        if not CP.RealPlayersOn('volunteer') then return Refused(src, 'off') end
         -- Config.RealPlayers.criminalTablet.replaceCommand: the criminal tablet instead of this menu, for a player who
         -- may use it
         if CP.CrimTab and CP.CrimTab.replacesCommand and CP.CrimTab.replacesCommand(src) then
@@ -857,7 +852,7 @@ end
 AddEventHandler('playerDropped', function() Gone(source) end)
 
 CP.Hooks.on('settings:changed', function()
-    if On() then return StartStrikes() end
+    if CP.RealPlayersOn('volunteer') then return StartStrikes() end
     for cid in pairs(listed) do End(cid, 'disabled') end
 end)
 

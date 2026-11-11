@@ -33,8 +33,6 @@ local blocks, excludes, suspends = {}, {}, {}  -- [officer|suspect] / [citizenid
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers()) end
-
 local Num = CP.Num
 
 local function ValidCid(cid)
@@ -45,9 +43,6 @@ local function Lic(v)
     if type(v) ~= 'string' or v == '' or #v > 64 then return nil end
     return v
 end
-
--- Either feature on: only then is a duty change written to the ledger (the memory maps are always kept).
-local function FeatureOn() return select(2, CP.RealPlayers()) end
 
 local function DbReady()
     if not (CP.Migrations and CP.Migrations.ready) then return true end
@@ -86,10 +81,10 @@ end
 -- The seconds of history every cap and the pair flag read: max(pairCooldownHours, 24 h, pairFlag.days,
 -- jobHopMinutes, suspectCooldownMinutes).
 local function Window()
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers('antiFarm')
     local flag = type(cfg.pairFlag) == 'table' and cfg.pairFlag or {}
     return math.floor(math.max(DAY_S, Num(cfg.pairCooldownHours, 24) * 3600, Num(flag.days, 7) * DAY_S,
-        Num(cfg.jobHopMinutes, 30) * 60, Num(cfg.suspectCooldownMinutes, 30) * 60))
+        Num(CP.RealPlayers().jobHopMinutes, 30) * 60, Num(cfg.suspectCooldownMinutes, 30) * 60))
 end
 
 -- The case of a run, open or just closed (Opp.close answers a closed case again; never called for an open one).
@@ -265,7 +260,7 @@ end
 -- and admin rows whose until_at has passed. Once at start and once a day, in a thread.
 local function Prune(now)
     if not DbReady() then return end
-    local cutoff = now - math.floor(math.max(1, Num(Cfg().pairLedgerDays, 30)) * DAY_S)
+    local cutoff = now - math.floor(math.max(1, Num(CP.RealPlayers('antiFarm').pairLedgerDays, 30)) * DAY_S)
     local removed = 0
     for _, kind in ipairs({ 'live', 'volunteer', 'duty_off' }) do
         local ok, n = pcall(MySQL.update.await,
@@ -430,7 +425,8 @@ function Opp.selfBlock(officerSrc, suspects)
     local info = src and Info(src) or nil
     local mine = src and SelfOf(src, info) or { own = {}, lics = {} }
     local license = info and Lic(info.license) or nil
-    local cfg = type(Cfg().identityMatch) == 'table' and Cfg().identityMatch or {}
+    local match = CP.RealPlayers('antiFarm').identityMatch
+    local cfg = type(match) == 'table' and match or {}
     local blockKinds, flagKinds = KindList(cfg.block), KindList(cfg.flag)
     local officerIds = nil
     local flagged = nil
@@ -477,7 +473,9 @@ local function LeftPolice(src, cid)
     dutySince[cid] = nil
     local now = os.time()
     lastPolice[cid] = now
-    if FeatureOn() then Insert({ { kind = 'duty_off', officer = cid, suspect = '', scored = false, at = now } }) end
+    if CP.RealPlayersOn() then
+        Insert({ { kind = 'duty_off', officer = cid, suspect = '', scored = false, at = now } })
+    end
 end
 
 -- The maps for one player from his getInfo: on duty in a department job (dutySince from now, or START when he was
@@ -607,7 +605,7 @@ function Opp.pairOk(officerCid, suspectCid)
     local now = os.time()
     local blocked = blocks[officerCid .. '|' .. suspectCid]
     if blocked and blocked > now then return false, 'blocked', blocked end
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers('antiFarm')
     local pairS = math.floor(Num(cfg.pairCooldownHours, 24) * 3600)
     local caseS = math.floor(Num(cfg.suspectCooldownMinutes, 30) * 60)
     local pairUntil, caseUntil = nil, nil
@@ -862,7 +860,7 @@ end
 -- The second warning sign of a pair repeat, or nil: a detain within fastCatchSeconds of the case start, a
 -- suspect never armed who moved less than 30 m after contact, or a case shorter than 3 minutes.
 local function SecondSign(case, rec)
-    local fast = math.max(0, Num(Cfg().fastCatchSeconds, 60))
+    local fast = math.max(0, Num(CP.RealPlayers('antiFarm').fastCatchSeconds, 60))
     if rec.detainedAt and case.openedMs and rec.detainedAt - case.openedMs <= fast * 1000 then
         return CP.L('opp.sign.fast_catch', { seconds = math.floor((rec.detainedAt - case.openedMs) / 1000) })
     end
@@ -880,7 +878,8 @@ end
 function Opp.checkPairFlags(run)
     local case = CaseOf(run)
     if not case then return {} end
-    local flag = type(Cfg().pairFlag) == 'table' and Cfg().pairFlag or {}
+    local pairFlag = CP.RealPlayers('antiFarm').pairFlag
+    local flag = type(pairFlag) == 'table' and pairFlag or {}
     local need = math.max(1, math.floor(Num(flag.count, 2)))
     local days = math.max(1, Num(flag.days, 7))
     local since = os.time() - math.floor(days * DAY_S)
@@ -992,7 +991,7 @@ CreateThread(function()
         CP.Schedule.job('pvp_pairs', {
             when = 'daily',
             manual = true,
-            settings = { 'RealPlayers.pairLedgerDays' },
+            settings = { 'RealPlayers.antiFarm.pairLedgerDays' },
             run = function(ctx) return Prune(ctx.at) end,
         })
     end

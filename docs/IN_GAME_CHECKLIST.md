@@ -392,10 +392,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Volunteers on: many quick runs while volunteers are asked; end one run right as it asks; the same volunteer is still asked by the next run (no restart needed). (Z1)
 - [ ] `Config.RealPlayers.volunteer.endEvent = false`: a volunteer plays a case to the end: his criminal tablet History still shows the case. (Z1)
 - [ ] Feature rewards on (suspect): a volunteer is reached by officers, then the officer quits (or takes a real call, or an admin cancels the run): the volunteer gets no suspect pay and Payments made shows no row for him. (Z2)
-- [ ] Feature rewards on (suspect and surrender): an officer and a volunteer on the same PC or connection (identityMatch.flag): the officer's row is flagged rs_linked_accounts, and neither the volunteer's suspect pay nor a talk-down pay is made for that run. (Z2)
+- [ ] Feature rewards on (suspect and surrender): an officer and a volunteer on the same PC or connection (antiFarm.identityMatch.flag): the officer's row is flagged rs_linked_accounts, and neither the volunteer's suspect pay nor a talk-down pay is made for that run. (Z2)
 - [ ] Config.RealPlayers.volunteer.voidRun = 'keep_earned': an engaged volunteer gives up right after contact: the officers' result shows only the lines earned (no base points, no Fast finish, no mission cash). (Z2)
 - [ ] Volunteers on: an engaged volunteer is downed and respawns at a hospital before the death timer: he gets a strike and "You respawned at a hospital before the death timer ran out", the staff timeline shows the early-respawn line, and his criminal tablet History shows "Respawned before the death timer (strike)". (Z2)
-- [ ] Live crime with one officer: detain the suspect, then get downed (RealSuspects.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
+- [ ] Live crime with one officer: detain the suspect, then get downed (RealPlayers.downed = 'keep_earned'): the run ends Completed, and a second live case on the same suspect inside pairCooldownHours does not score again for that pair. (Z2)
 - [ ] Criminal tablet open: an admin opens the Admin UI (`client:openAdmin`), then closes it: the criminal tablet is
   closed, not left on screen without a cursor. Open it, then log out to character select: it closes. Open it, get
   downed: it closes; using the item while down says "You can't use the tablet while you are down." (Z4)

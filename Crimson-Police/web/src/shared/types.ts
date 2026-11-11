@@ -101,7 +101,7 @@ export interface Session {
         adminUi?: {
             reasonChips?: string[];
         };
-        // Config.RealPlayers.adminScreen: screen = the Admin UI shows Real suspects (true only while
+        // Config.RealPlayers.staff.screen: screen = the Admin UI shows Real suspects (true only while
         // Config.RealPlayers.liveCrime.enabled or Config.RealPlayers.volunteer.enabled is on)
         realSuspects?: { screen: boolean };
         // Config.Tablet.sidebarOrder / activeFirst / compactSidebar: the Officer UI sidebar (layouts/officerNav)

@@ -10,7 +10,7 @@ local TICK_MS = 1000              -- the watch's pass (seconds deadlines: lost r
 local STILL_METRES = 1.0          -- an AFK sample that moved less than this...
 local STILL_DEGREES = 2.0         -- ...and turned the camera less than this is "still"
 local TELEPORT_GAP_MS = 30000     -- at most one rs_teleport note per suspect this often
-local CLOSED_KEPT = 16            -- closed cases kept by default (Config.RealPlayers.casesKept: staff and close())
+local CLOSED_KEPT = 16            -- closed cases kept by default (RealPlayers.staff.casesKept: staff and close())
 local CLOSED_MAX = 200            -- casesKept is clamped to this
 local ARENA_BAG = 'crimsonArena'
 local LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -51,12 +51,12 @@ local watch = { on = false, token = 0 }
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers()) end
-
 local Num = CP.Num
 
--- How many closed cases are kept (Config.RealPlayers.casesKept, 1-200).
-local function Kept() return math.min(CLOSED_MAX, math.max(1, math.floor(Num(Cfg().casesKept, CLOSED_KEPT)))) end
+-- How many closed cases are kept (Config.RealPlayers.staff.casesKept, 1-200).
+local function Kept()
+    return math.min(CLOSED_MAX, math.max(1, math.floor(Num(CP.RealPlayers('staff').casesKept, CLOSED_KEPT))))
+end
 
 local function ValidCid(cid)
     return type(cid) == 'string' and cid ~= '' and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
@@ -231,7 +231,7 @@ local function Timeline(case, entry)
     if entry.by ~= nil and entry.byWho == nil then entry.byWho = WhoOf(case, entry.by) end
     local list = case.timeline
     list[#list + 1] = entry
-    local max = math.max(1, math.floor(Num(Cfg().timelineMax, 300)))
+    local max = math.max(1, math.floor(Num(CP.RealPlayers().timelineMax, 300)))
     while #list > max do table.remove(list, 1) end
 end
 
@@ -239,7 +239,7 @@ end
 local function ContactDetail(rec, now, leaving)
     if not rec.lastContactAt then return CP.L('opp.detail.no_contact', { label = rec.label }) end
     local seconds = math.max(0, math.floor((now - rec.lastContactAt) / 1000))
-    local window = math.floor(Num(Cfg().evadeWindow, 120))
+    local window = math.floor(Num(CP.RealPlayers().evadeWindow, 120))
     if leaving and seconds <= window then
         return CP.L('opp.detail.evade', { label = rec.label, seconds = seconds, window = window })
     end
@@ -306,7 +306,7 @@ end
 -- A free suspect who left (logged off past the grace, switched character, entered an instance): Config.RealPlayers.
 -- onLeave. 'caught' counts as a detain (by leave; an AFK suspect's share is 0, as for a cuff while AFK).
 local function ApplyOnLeave(case, rec, why)
-    local mode = Cfg().onLeave
+    local mode = CP.RealPlayers().onLeave
     rec.leaveRule = mode == 'caught' and 'caught' or mode == 'escaped' and 'escaped' or 'left'  -- CP.Volunteers
     if mode == 'caught' then
         rec.byLeave = true
@@ -397,7 +397,7 @@ end
 -- One sample every afkSampleEvery s (coords + camera): still = moved under 1 m and turned under 2 degrees since the
 -- stillness began; AFK after afkSeconds of it. Between samples the last answer is returned and nothing is read.
 local function Sample(cid, src, coords, now)
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers()
     local s = afkOf[cid]
     if s and now < s.nextAt then return s.afk end
     local every = math.max(1, Num(cfg.afkSampleEvery, 15)) * 1000
@@ -420,7 +420,7 @@ end
 -- ============================================================================
 
 local function Trail(case, rec, coords)
-    local trail = Cfg().trail or {}
+    local trail = CP.RealPlayers().trail or {}
     local max = math.max(1, math.floor(Num(trail.max, 360)))
     local ring = case.trail[rec.cid]
     if not ring then
@@ -517,7 +517,7 @@ end
 local function TickCase(case, now)
     local run = case.run
     if type(run) ~= 'table' or run.state == 'ended' then return end
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers()
     local parts = {}
     for _, src in ipairs(ActiveSrcs(run)) do
         local c = ServerCoords(src)
@@ -784,7 +784,7 @@ function Opp.restoreClosed(list)
 end
 
 -- Every case staff can read: the open ones (newest first), then the kept closed ones (newest first).
--- -> { { case, open = bool } }. The closed ones are saved (Config.RealPlayers.saveCases): a restart keeps them.
+-- -> { { case, open = bool } }. The closed ones are saved (Config.RealPlayers.staff.saveCases): a restart keeps them.
 function Opp.cases()
     local out = {}
     for _, case in pairs(cases) do out[#out + 1] = { case = case, open = true } end
@@ -876,7 +876,7 @@ end
 function Opp.nearAny(run, coords, range)
     local case = Opp.caseOf(run)
     if not case or coords == nil then return false end
-    range = Num(range, Num(Cfg().contactRange, 100.0))
+    range = Num(range, Num(CP.RealPlayers().contactRange, 100.0))
     for _, cid in ipairs(case.order) do
         local r = case.suspects[cid]
         if r.src and r.lastCoords and not r.inInstance and (r.state == 'free' or r.state == 'cuffed') then
@@ -997,7 +997,7 @@ function Opp.eligible(src, opts)
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if not info or not ValidCid(info.citizenid) then return false, 'not_loaded' end
     local cid = info.citizenid
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers()
     if recOf[cid] then return false, 'in_case' end
     if Bucket(n) ~= 0 then return false, 'instance' end
     if CP.Alerts and CP.Alerts.foreignFlag and CP.Alerts.foreignFlag(n) then return false, 'arena_flag' end
@@ -1060,7 +1060,7 @@ local function OnLoaded(src)
     local away = rec.leftAt and math.floor((now - rec.leftAt) / 1000) or nil
     rec.dropAt, rec.offlineAtOpen = nil, nil
     Timeline(case, { what = 'rejoined', label = rec.label, src = src, seconds = away })
-    local notice = Num(Cfg().reconnectNoticeMinutes, 30) * 60000
+    local notice = Num(CP.RealPlayers().reconnectNoticeMinutes, 30) * 60000
     if rec.leftInCustody and rec.leftAt and now - rec.leftAt <= notice and CP.Tablet and CP.Tablet.notifyMany then
         CP.Tablet.notifyMany(ActiveSrcs(case.run), 'info', 'opp.back_in_city')
     end

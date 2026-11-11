@@ -198,12 +198,12 @@ do
         reconnectNoticeMinutes = 30,
         evadeWindow = 120,
         timelineMax = 300,
-        casesKept = 16,
-        saveCases = true,
-        adminScreen = true,
-        staffLift = true,     -- F2
-        staffNames = true,    -- F2
-        weaponNames = true,   -- F2
+        ['staff.casesKept'] = 16,
+        ['staff.saveCases'] = true,
+        ['staff.screen'] = true,
+        ['staff.lift'] = true,         -- F2
+        ['staff.names'] = true,        -- F2
+        ['staff.weaponNames'] = true,  -- F2
     }) do
         local e = S.entry('RealPlayers.' .. path) or {}
         H.eq(e.default, value, 'RealPlayers.' .. path .. ' ships ' .. tostring(value))
@@ -230,17 +230,19 @@ do
         ['trail.every'] = 'seconds between points',
         ['trail.max'] = 'points kept per suspect',
         timelineMax = 'timeline entries kept per case',
-        casesKept = 'Closed cases staff can still open in the Admin UI (their timeline, damage ledger and flags), the '
-            .. 'newest ones; open cases are always there',
-        saveCases = 'true = the kept closed cases are saved (the database or the saves folder), so a restart keeps '
-            .. 'them (none older than pairLedgerDays); false = memory only, a restart starts the list again',
-        -- F2: the staff tools
-        staffLift = 'true = admins can lift a pair block, an exclusion or a suspension early from that screen (with '
-            .. 'a reason, in the audit log); false = each one runs to its end date',
-        staffNames = 'true = pair statistics, the running blocks and the case lists on that screen show character '
-            .. 'names next to citizen IDs (one name lookup per screen load); false = citizen IDs only',
-        weaponNames = 'true = the damage ledger on that screen names the weapon (Combat Pistol); false = the raw '
-            .. 'weapon hash',
+        ['staff.casesKept'] = 'Closed cases staff can still open on that screen (their timeline, damage ledger and '
+            .. 'flags), the newest ones; open cases are always there',
+        ['staff.saveCases'] = 'true = the kept closed cases are saved (the database or the saves folder), so a '
+            .. 'restart keeps them (none older than antiFarm.pairLedgerDays); false = memory only, a restart starts '
+            .. 'the list again',
+        -- F2: the staff tools (FIN5: the staff block)
+        ['staff.screen'] = 'true = admins get that screen; false = no screen (the cases are still kept)',
+        ['staff.lift'] = 'true = admins can lift a pair block, an exclusion or a suspension early from that screen '
+            .. '(with a reason, in the audit log); false = each one runs to its end date',
+        ['staff.names'] = 'true = pair statistics, the running blocks and the case lists on that screen show '
+            .. 'character names next to citizen IDs (one name lookup per screen load); false = citizen IDs only',
+        ['staff.weaponNames'] = 'true = the damage ledger on that screen names the weapon (Combat Pistol); false = '
+            .. 'the raw weapon hash',
         -- V5: the proof
         cuffPairWindow = 'Proof the server checks before anything scores: seconds between the officer\'s sc-police '
             .. 'cuff and the suspect\'s cuffed state',
@@ -267,17 +269,18 @@ do
         armedMemory = 'seconds a suspect counts as armed after the server saw a gun in his hands',
         downGrace = 'seconds after he goes down before a hit counts as hitting a downed person',
         damageLogMax = 'weapon hits between officers and suspects kept per case',
-        -- V7: anti-farm
-        ['identityMatch.block'] = 'same account = refused',
-        ['identityMatch.flag'] = 'same connection or PC = allowed but flagged (families share them)',
-        pairCooldownHours = 'One scored case of the same suspect per officer in this many hours (live crimes and '
-            .. 'volunteers together)',
-        maxCatchesPerSuspectDay = 'a suspect is worth points this many times a day, server-wide',
-        suspectCooldownMinutes = 'After a case, the same officers score nothing on that suspect for this many minutes',
-        ['pairFlag.count'] = 'cases of the same pair (matched by license)',
-        ['pairFlag.days'] = 'within this many days',
-        fastCatchSeconds = 'seconds: a detain this soon after the case started is a warning sign',
-        pairLedgerDays = 'days the pair ledger keeps case rows (admin blocks stay until they expire)',
+        -- V7: anti-farm (FIN5: the antiFarm block)
+        ['antiFarm.identityMatch.block'] = 'same account = refused',
+        ['antiFarm.identityMatch.flag'] = 'same connection or PC = allowed but flagged (families share them)',
+        ['antiFarm.pairCooldownHours'] = 'One scored case of the same suspect per officer in this many hours (live '
+            .. 'crimes and volunteers together)',
+        ['antiFarm.maxCatchesPerSuspectDay'] = 'a suspect is worth points this many times a day, server-wide',
+        ['antiFarm.suspectCooldownMinutes'] = 'After a case, the same officers score nothing on that suspect for this '
+            .. 'many minutes',
+        ['antiFarm.pairFlag.count'] = 'cases of the same pair (matched by license)',
+        ['antiFarm.pairFlag.days'] = 'within this many days',
+        ['antiFarm.fastCatchSeconds'] = 'seconds: a detain this soon after the case started is a warning sign',
+        ['antiFarm.pairLedgerDays'] = 'days the pair ledger keeps case rows (admin blocks stay until they expire)',
     }) do
         H.eq((S.entry('RealPlayers.' .. path) or {}).desc, desc, 'RealPlayers.' .. path .. ': its own comment')
     end
@@ -294,39 +297,49 @@ do
         for _, g in ipairs(sec.key == 'real_players' and sec.groups or {}) do groups[g.path] = g end
     end
     H.eq(
-        (groups['RealPlayers.identityMatch'] or {}).desc,
-        'Anti-farm (admins only): nobody can take a case against one of his own characters or licenses, and the '
-            .. 'identifiers of both players are compared live, never stored or shown',
+        (groups['RealPlayers.antiFarm.identityMatch'] or {}).desc,
+        'Nobody can take a case against one of his own characters or licenses, and the identifiers of both players '
+            .. 'are compared live, never stored or shown',
         'the identityMatch group: its own comment'
     )
-    H.ok(Has((groups['RealPlayers.pairFlag'] or {}).desc, 'with a second warning sign'),
+    -- FIN5: the staff and antiFarm blocks are groups of their own, each with its comment
+    H.ok(Has((groups['RealPlayers.staff'] or {}).desc, 'The Real suspects screen in the Admin UI'),
+        'the staff group: the Real suspects screen')
+    H.ok(Has((groups['RealPlayers.antiFarm'] or {}).desc, 'Anti-farm (admins only)'),
+        'the antiFarm group: the caps and the pair ledger')
+    H.ok(Has((groups['RealPlayers.antiFarm.pairFlag'] or {}).desc, 'with a second warning sign'),
         'the pairFlag group names the second warning sign')
     for path, value in pairs({
-        pairCooldownHours = 24,
-        maxCatchesPerSuspectDay = 2,
-        suspectCooldownMinutes = 30,
-        ['pairFlag.count'] = 2,
-        ['pairFlag.days'] = 7,
-        fastCatchSeconds = 60,
-        pairLedgerDays = 30,
+        ['antiFarm.pairCooldownHours'] = 24,
+        ['antiFarm.maxCatchesPerSuspectDay'] = 2,
+        ['antiFarm.suspectCooldownMinutes'] = 30,
+        ['antiFarm.pairFlag.count'] = 2,
+        ['antiFarm.pairFlag.days'] = 7,
+        ['antiFarm.fastCatchSeconds'] = 60,
+        ['antiFarm.pairLedgerDays'] = 30,
     }) do
         H.eq((S.entry('RealPlayers.' .. path) or {}).default, value, 'RealPlayers.' .. path .. ' ships ' .. value)
     end
-    local block = S.entry('RealPlayers.identityMatch.block') or {}
+    local block = S.entry('RealPlayers.antiFarm.identityMatch.block') or {}
     H.eq(block.kind, 'list', 'identityMatch.block is a list')
     H.eq(table.concat(block.default or {}, ','), 'license,license2,discord,fivem,steam,xbl,live',
         'identityMatch.block ships the account kinds')
-    H.eq(table.concat((S.entry('RealPlayers.identityMatch.flag') or {}).default or {}, ','), 'ip,token',
+    H.eq(table.concat((S.entry('RealPlayers.antiFarm.identityMatch.flag') or {}).default or {}, ','), 'ip,token',
         'identityMatch.flag ships ip and token')
-    H.ok((S.check('RealPlayers.identityMatch.block', { 'license', 'ip' })), 'any identifier kind may block')
-    H.ok((S.check('RealPlayers.identityMatch.flag', {})), 'an empty flag list is allowed (nothing flags)')
-    H.eq((S.check('RealPlayers.identityMatch.block', { 'email' })), false, 'an unknown kind is refused')
-    H.eq((S.check('RealPlayers.identityMatch.flag', { 'ip', 'ip' })), false, 'a kind twice is refused')
-    H.eq((S.check('RealPlayers.pairFlag.days', 0)), false, 'pairFlag.days 0 is refused')
-    H.eq((S.check('RealPlayers.pairLedgerDays', 400)), false, 'pairLedgerDays above a year is refused')
-    H.eq((S.check('RealPlayers.maxCatchesPerSuspectDay', 0)), false, 'maxCatchesPerSuspectDay 0 is refused')
-    H.ok((S.check('RealPlayers.pairCooldownHours', 0)), 'pairCooldownHours 0 (no pair cooldown) is allowed')
-    for _, path in ipairs({ 'pairCooldownHours', 'pairFlag.days', 'pairLedgerDays', 'identityMatch.block' }) do
+    H.ok((S.check('RealPlayers.antiFarm.identityMatch.block', { 'license', 'ip' })), 'any identifier kind may block')
+    H.ok((S.check('RealPlayers.antiFarm.identityMatch.flag', {})), 'an empty flag list is allowed (nothing flags)')
+    H.eq((S.check('RealPlayers.antiFarm.identityMatch.block', { 'email' })), false, 'an unknown kind is refused')
+    H.eq((S.check('RealPlayers.antiFarm.identityMatch.flag', { 'ip', 'ip' })), false, 'a kind twice is refused')
+    H.eq((S.check('RealPlayers.antiFarm.pairFlag.days', 0)), false, 'pairFlag.days 0 is refused')
+    H.eq((S.check('RealPlayers.antiFarm.pairLedgerDays', 400)), false, 'pairLedgerDays above a year is refused')
+    H.eq((S.check('RealPlayers.antiFarm.maxCatchesPerSuspectDay', 0)), false, 'maxCatchesPerSuspectDay 0 is refused')
+    H.ok((S.check('RealPlayers.antiFarm.pairCooldownHours', 0)), 'pairCooldownHours 0 (no pair cooldown) is allowed')
+    for _, path in ipairs({
+        'antiFarm.pairCooldownHours',
+        'antiFarm.pairFlag.days',
+        'antiFarm.pairLedgerDays',
+        'antiFarm.identityMatch.block',
+    }) do
         local e = S.entry('RealPlayers.' .. path) or {}
         H.ok(not e.restart and not e.money, 'RealPlayers.' .. path .. ' needs no restart and is not a money switch')
     end

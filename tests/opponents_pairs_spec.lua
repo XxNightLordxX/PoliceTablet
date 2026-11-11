@@ -182,9 +182,9 @@ local RS = Config.RealPlayers
 
 do
     H.eq(Config.RealPlayers.liveCrime.enabled, false, 'live crimes ship off')
-    H.eq(table.concat(RS.identityMatch.block, ','), 'license,license2,discord,fivem,steam,xbl,live',
+    H.eq(table.concat(RS.antiFarm.identityMatch.block, ','), 'license,license2,discord,fivem,steam,xbl,live',
         'identityMatch.block ships the account kinds')
-    H.eq(table.concat(RS.identityMatch.flag, ','), 'ip,token', 'identityMatch.flag ships ip and token')
+    H.eq(table.concat(RS.antiFarm.identityMatch.flag, ','), 'ip,token', 'identityMatch.flag ships ip and token')
 
     stmts = {}
     local blocked, kind, fl = Opp.selfBlock(1, { A })
@@ -213,9 +213,9 @@ do
     blocked, kind, fl, match = Opp.selfBlock(1, { B })
     H.ok(blocked == true and kind == 'linked_account', 'the same discord identifier -> linked_account')
     H.ok(match and match.cid == B and match.kinds[1] == 'discord', 'the match names the suspect and the kind only')
-    RS.identityMatch.block = { 'license', 'license2', 'fivem', 'steam', 'xbl', 'live' }
+    RS.antiFarm.identityMatch.block = { 'license', 'license2', 'fivem', 'steam', 'xbl', 'live' }
     H.eq((Opp.selfBlock(1, { B })), false, 'with discord left out of identityMatch.block it is allowed')
-    RS.identityMatch.block = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live' }
+    RS.antiFarm.identityMatch.block = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live' }
 
     -- whole strings grouped by kind: license:<x> never matches license2:<x>
     H.players[1].identifiers = { 'license2:abcdef0123456789', LIC, 'discord:900', 'fivem:900', 'ip:10.0.0.1' }
@@ -370,7 +370,7 @@ do
         play = function() Pass(60) end,
     })
     H.eq(Opp.suspectDayCount(B), 2, 'two cases: 2 (maxCatchesPerSuspectDay ships 2)')
-    H.eq(RS.maxCatchesPerSuspectDay, 2, 'maxCatchesPerSuspectDay ships 2')
+    H.eq(RS.antiFarm.maxCatchesPerSuspectDay, 2, 'maxCatchesPerSuspectDay ships 2')
     Case({ 4 }, { B }, {
         scored = false,
         play = function() Pass(60) end,
@@ -617,7 +617,7 @@ do
             now - 60,
             now - 3 * DAY,
         })
-    H.eq(Config.RealPlayers.pairLedgerDays, 30, 'pairLedgerDays ships 30')
+    H.eq(Config.RealPlayers.antiFarm.pairLedgerDays, 30, 'pairLedgerDays ships 30')
     H.advance(61000, 1000)
     local left = {}
     for _, r in ipairs(H.sql('SELECT kind, run_uuid FROM cp_pvp_pairs ORDER BY id')) do

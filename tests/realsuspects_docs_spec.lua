@@ -77,14 +77,14 @@ H.eq(Config.RealPlayers.volunteer.enabled, false, 'volunteers ship off, as guide
 H.eq(Config.RealPlayers.neutralisedShare, 0.5, '6.3: a downed catch is half a detain')
 H.eq(Config.RealPlayers.liveCrime.lastReportedEvery, 60, '6.3: last reported every 60 s')
 H.eq(Config.RealPlayers.volunteer.driverReportEvery, 30, '6.3: a driver every 30 s')
-H.eq(Config.RealPlayers.maxCatchesPerSuspectDay, 2, '6.3: twice a day')
-H.eq(Config.RealPlayers.pairCooldownHours, 24, '6.3: 24 h between pairs')
+H.eq(Config.RealPlayers.antiFarm.maxCatchesPerSuspectDay, 2, '6.3: twice a day')
+H.eq(Config.RealPlayers.antiFarm.pairCooldownHours, 24, '6.3: 24 h between pairs')
 H.eq(Config.RealPlayers.volunteer.cancelGraceSeconds, 60, '6.2: a free cancel within 60 s')
 H.eq(Config.RealPlayers.volunteer.strikes, 3, '6.2: 3 strikes')
 H.eq(Config.RealPlayers.custodyHoldSeconds, 30, '6.4: the cuffs hold 30 s')
 H.eq(Config.RealPlayers.cuffRange, 3.5, '6.4: within 3.5 m')
 H.eq(Config.RealPlayers.liveCrime.suspectRadius, 300.0, '6.4: suspects within 300 m')
-H.eq(Config.RealPlayers.casesKept, 16, '6.3: 16 closed cases kept')
+H.eq(Config.RealPlayers.staff.casesKept, 16, '6.3: 16 closed cases kept')
 H.ok(Has(section, '`' .. Config.RealPlayers.excludeAce .. '`') or Has(section, Config.RealPlayers.excludeAce),
     '6.1 names the exclude ace as shipped')
 

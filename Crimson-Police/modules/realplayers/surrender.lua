@@ -22,16 +22,11 @@ local registered = nil            -- the command name once registered (RegisterC
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg()
-    local rs = CP.RealPlayers()
-    return type(rs.surrender) == 'table' and rs.surrender or {}
-end
-
 local Num = CP.Num
 
 -- On while live crimes are on and the surrender block is not switched off (it ships on).
 local function Enabled()
-    return select(2, CP.RealPlayers('liveCrime')) and Cfg().enabled ~= false
+    return CP.RealPlayersOn('liveCrime') and CP.RealPlayers('surrender').enabled ~= false
 end
 
 local function Bucket(src)
@@ -95,7 +90,7 @@ end
 
 -- The yes/no pop-up on the suspect's game: by = the officer who talks him down, nil for his own command.
 local function Ask(case, rec, by)
-    local seconds = math.floor(math.max(5, math.min(60, Num(Cfg().askSeconds, 20))))
+    local seconds = math.floor(math.max(5, math.min(60, Num(CP.RealPlayers('surrender').askSeconds, 20))))
     local token = CP.U.uuid()
     asks[rec.cid] = { token = token, untilMs = GetGameTimer() + seconds * 1000, by = by, runId = case.runId }
     TriggerClientEvent(CP.e('client:liveSurrenderAsk'), rec.src, {
@@ -152,7 +147,7 @@ function Opp.talkDown(src)
     if not case then return false, 'livecrime.talk.no_case' end
     local me = Bucket(src) == 0 and ServerCoords(src) or nil
     if not me then return false, 'livecrime.talk.none' end
-    local range = Num(Cfg().talkRange, 15.0)
+    local range = Num(CP.RealPlayers('surrender').talkRange, 15.0)
     local best, bestD = nil, math.huge
     for _, cid in ipairs(case.order) do
         local rec = case.suspects[cid]
@@ -167,7 +162,7 @@ function Opp.talkDown(src)
     local now = GetGameTimer()
     local mine = talkAt[src] or {}
     talkAt[src] = mine
-    local wait = math.max(0, Num(Cfg().talkCooldown, 30)) * 1000
+    local wait = math.max(0, Num(CP.RealPlayers('surrender').talkCooldown, 30)) * 1000
     if mine[best.cid] and now - mine[best.cid] < wait then
         return false, 'livecrime.talk.cooldown'
     end
@@ -199,7 +194,7 @@ function Opp.surrenderAnswer(src, token, yes)
     end
     local coords = ServerCoords(src)
     if not coords then return false, 'livecrime.surrender.cannot' end
-    if NearestOfficer(case, coords) > Num(Cfg().surrenderRange, 50.0) then
+    if NearestOfficer(case, coords) > Num(CP.RealPlayers('surrender').surrenderRange, 50.0) then
         return false, 'livecrime.surrender.no_officer'
     end
     Apply(case, rec, coords, a.by)
@@ -238,7 +233,7 @@ local function Check(case, rec, now)
         return
     end
     if rec.state ~= 'free' then return end
-    local cfg = Cfg()
+    local cfg = CP.RealPlayers('surrender')
     local rs = CP.RealPlayers()
     local armedMs = math.max(0, Num(rs.armedMemory, 15)) * 1000
     if rec.cuffedAt and rec.cuffedAt >= s.at then
@@ -255,7 +250,7 @@ end
 -- The officers' prompt: an officer of the case within talkRange of a free suspect who has not surrendered is told,
 -- once per officer and suspect, that he can talk him down (never a position: the suspect is in sight there).
 local function Hints(case, officers)
-    local range = Num(Cfg().talkRange, 15.0)
+    local range = Num(CP.RealPlayers('surrender').talkRange, 15.0)
     for _, cid in ipairs(case.order) do
         local rec = case.suspects[cid]
         if CanSurrender(rec) and rec.lastCoords then
@@ -286,7 +281,7 @@ end
 
 local function Register()
     if registered or not Enabled() then return end
-    local cmd = Cfg().command
+    local cmd = CP.RealPlayers('surrender').command
     cmd = type(cmd) == 'string' and cmd:match('^%a[%w_%-]*$') or 'surrender'
     registered = cmd
     RegisterCommand(cmd, function(source)

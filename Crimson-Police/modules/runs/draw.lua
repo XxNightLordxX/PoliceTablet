@@ -152,8 +152,6 @@ end
 -- ============================================================================
 -- (ARCHITECTURE 5.46): live = { crimeKey } from CP.MissionCalls.
 
-local function LiveCfg() return (CP.RealPlayers('liveCrime')) end
-
 -- The crime of a live accept, or nil.
 local function LiveCrimeOf(live)
     if type(live) ~= 'table' or not (CP.LiveCrime and CP.LiveCrime.get) then return nil end
@@ -182,7 +180,7 @@ end
 -- Whether the Cross-Department lock stops this accept: always for a mission; for a live case only while
 -- Config.RealPlayers.liveCrime.duringOperation is false.
 local function LockStops(live)
-    if live and LiveCfg().duringOperation ~= false then return false end
+    if live and CP.RealPlayers('liveCrime').duringOperation ~= false then return false end
     return OperationLocked()
 end
 
@@ -521,7 +519,7 @@ function Draw.joinCaps(o, missionType, live)
     if caps.day > 0 and CompletionsToday(o.citizenid) >= caps.day then return false, 'err.daily_cap' end
     local typeDay = TypeDailyLimit(missionType)
     if typeDay and CompletionsToday(o.citizenid, missionType) >= typeDay then return false, 'err.type_daily_cap' end
-    if missionType ~= BOSS_KEY and not (live and LiveCfg().typeCooldown ~= true) then
+    if missionType ~= BOSS_KEY and not (live and CP.RealPlayers('liveCrime').typeCooldown ~= true) then
         local u = tonumber(CooldownsOf(o.citizenid, { o }).types[missionType])
         if u and u > os.time() then return false, 'err.type_cooldown' end
     end
@@ -1614,7 +1612,7 @@ local function CheckAccept(src, typeKey, counts, live)
         if typeDay and today(o.citizenid, missionType) >= typeDay then
             return false, own and 'err.type_daily_cap' or 'err.member_type_daily_cap'
         end
-        if not isBoss and not (live and LiveCfg().typeCooldown ~= true) then
+        if not isBoss and not (live and CP.RealPlayers('liveCrime').typeCooldown ~= true) then
             local u = tonumber(CooldownsOf(o.citizenid, officers).types[missionType])
             if u and u > now then return false, own and 'err.type_cooldown' or 'err.member_type_cooldown' end
         end
@@ -1882,7 +1880,7 @@ local function AcceptStart(src, typeKey, opts, note)
     local wantCheck = readySecs ~= 0
     -- a live case waits for the ready check only with Config.RealPlayers.liveCrime.readyCheck (shipped false: a real
     -- crime)
-    if ctx.live and LiveCfg().readyCheck ~= true then wantCheck = false end
+    if ctx.live and CP.RealPlayers('liveCrime').readyCheck ~= true then wantCheck = false end
     if unit and #srcs >= 2 and wantCheck and type(readyCheck) == 'function' and not opts.noReadyCheck then
         local answered = false
         local function done(ok, data, who)

@@ -480,8 +480,6 @@ local function Message(ctx, key, vars, kind)
     ctx.hud({ message = { text = CP.L(key, vars), kind = kind or 'info' } })
 end
 
-local function VCfg() return (CP.RealPlayers('volunteer')) end
-
 -- The NPC fugitives to make. A volunteer fugitive (§7.3): none while volunteers are asked or the run ends for want
 -- of one; while he plays, the others only with Config.RealPlayers.volunteer.fugitiveNpcs (he takes one fugitive's
 -- place).
@@ -489,7 +487,7 @@ local function FugTarget(ctx)
     local n = Int(ctx.obj.fugitives)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
     if vol == nil then return n end
-    if vol == 'real' and VCfg().fugitiveNpcs == true then return math.max(0, n - 1) end
+    if vol == 'real' and CP.RealPlayers('volunteer').fugitiveNpcs == true then return math.max(0, n - 1) end
     return 0
 end
 
@@ -812,7 +810,7 @@ do
         if st.vol ~= 'real' or st.volDone or not (CP.Opponents and CP.Opponents.view) then return end
         local view = CP.Opponents.view(ctx.run)
         if type(view) ~= 'table' or (view.index and ctx.index and view.index ~= ctx.index) then return end
-        local afkVoids = VCfg().afkCatchVoids ~= false
+        local afkVoids = CP.RealPlayers('volunteer').afkCatchVoids ~= false
         for _, cid in ipairs(view.order or {}) do
             local r = view.suspects[cid]
             if r and (r.state == 'detained' or r.state == 'booked') then
@@ -843,7 +841,7 @@ do
     -- The circle rule, from in_position on (once he was seen inside the circle): outside it (flat distance, the
     -- server's coordinates) a warning, then after fugitiveOutSeconds his part is void. 0 = no rule.
     local function Bounds(ctx, st, phase, dt)
-        local limit = tonumber(VCfg().fugitiveOutSeconds) or 0
+        local limit = tonumber(CP.RealPlayers('volunteer').fugitiveOutSeconds) or 0
         local c = st.circle
         if st.volOutDone or not c.center or (phase ~= 'in_position' and phase ~= 'engaged') then
             st.volOut = nil

@@ -53,10 +53,6 @@ local counter = 0
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers('volunteer')) end
-
-local function On() return Cfg().enabled == true end
-
 local Num = CP.Num
 
 local function Note(src, kind, key, vars)
@@ -129,7 +125,8 @@ end
 -- cancelled, so no Completed row, goal, cooldown or item comes of it. In a thread: never from inside a run hook.
 local function EndRun(m)
     local run = m.run
-    local how = (Cfg().voidRun == 'keep_earned' and m.yesAt and run.state == 'in_progress') and 'keep_earned'
+    local how = (CP.RealPlayers('volunteer').voidRun == 'keep_earned' and m.yesAt and run.state == 'in_progress')
+            and 'keep_earned'
         or 'cancelled'
     TellOfficers(run, 'warning', 'volunteer.officer.void_end')
     CP.log(TAG, 'run %s: no volunteer plays the suspect (%s): the run ends (%s)', m.runId, tostring(m.why), how)
@@ -149,7 +146,7 @@ end
 -- catch counts as engaged).
 local function NoVolunteer(m, afterYes)
     local npc = m.mode ~= 'players_only'
-    if afterYes and (Cfg().onVoid == 'end' or m.engagedAt) then npc = false end
+    if afterYes and (CP.RealPlayers('volunteer').onVoid == 'end' or m.engagedAt) then npc = false end
     Forget(m)
     if npc then
         m.phase = 'npc'
@@ -260,8 +257,8 @@ end
 local function AskNext(m)
     m.phase, m.cid, m.src, m.token, m.deadline = 'asking', nil, nil, nil, nil
     if V.release then V.release(m.runId) end
-    local tries = math.floor(Num(Cfg().askTries, 3, 1, 10))
-    if not On() or m.run.state == 'ended' then
+    local tries = math.floor(Num(CP.RealPlayers('volunteer').askTries, 3, 1, 10))
+    if not CP.RealPlayersOn('volunteer') or m.run.state == 'ended' then
         m.why = 'off'
         return NoVolunteer(m, false)
     end
@@ -276,7 +273,7 @@ local function AskNext(m)
                 m.asked[cid] = true
                 m.tries = m.tries + 1
                 counter = counter + 1
-                local seconds = math.floor(Num(Cfg().askSeconds, 30, 10, 120))
+                local seconds = math.floor(Num(CP.RealPlayers('volunteer').askSeconds, 30, 10, 120))
                 m.cid, m.src = cid, src
                 m.token = ('va%d_%06d'):format(counter, math.random(0, 999999))
                 m.deadline = GetGameTimer() + seconds * 1000
@@ -288,7 +285,7 @@ local function AskNext(m)
                     role = m.role,
                     seconds = seconds,
                     km = km,
-                    travelMinutes = math.ceil(Num(Cfg().travelSeconds, 300, 60, 1800) / 60),
+                    travelMinutes = math.ceil(Num(CP.RealPlayers('volunteer').travelSeconds, 300, 60, 1800) / 60),
                 })
                 CP.log(TAG, 'run %s: %s is asked to play the %s (%d)', m.runId, cid, m.role, m.tries)
                 return
@@ -325,7 +322,7 @@ local function Accept(m)
     m.case = case
     case.volunteer = { role = m.role, mode = m.mode }  -- what staff read once the match is gone
     m.phase, m.token, m.yesAt = 'travel', nil, now
-    m.travelUntil = now + math.floor(Num(Cfg().travelSeconds, 300, 60, 1800)) * 1000
+    m.travelUntil = now + math.floor(Num(CP.RealPlayers('volunteer').travelSeconds, 300, 60, 1800)) * 1000
     m.run.realSuspect = 'volunteer'
     if CP.Alerts and CP.Alerts.releaseRun then pcall(CP.Alerts.releaseRun, m.run) end
     Line(m, 'volunteer_yes', { count = m.tries })
@@ -400,7 +397,7 @@ local function Watch(m, now)
     -- an AFK catch (share 0) is a void (Config.RealPlayers.volunteer.afkCatchVoids, shipped true): never a catch that
     -- counts
     local caught = rec.state == 'detained' or rec.state == 'booked'
-    if caught and tonumber(rec.share) == 0 and Cfg().afkCatchVoids ~= false then
+    if caught and tonumber(rec.share) == 0 and CP.RealPlayers('volunteer').afkCatchVoids ~= false then
         m.engagedAt = m.engagedAt or GetGameTimer()  -- officers had him in cuffs: the NPC never takes over now
         return Voided(m, 'afk', true)
     end
@@ -461,8 +458,6 @@ end
 -- Whether a run is a volunteer case (a volunteer said yes).
 function V.isCase(run) return type(run) == 'table' and run.realSuspect == 'volunteer' end
 
-local function RS() return (CP.RealPlayers()) end
-
 -- The caps of Config.RealPlayers (live crimes and volunteers together) between this volunteer and the run's active
 -- officers -> true | false, reason: the volunteer already scored maxCatchesPerSuspectDay times today
 -- ('suspect_used'); an officer suspended from these cases ('officer_suspended'), a suspect within jobHopMinutes
@@ -470,9 +465,9 @@ local function RS() return (CP.RealPlayers()) end
 -- Memory only: CP.Opponents' caps never query the database.
 function V.capsOk(run, cid)
     if type(run) ~= 'table' or type(cid) ~= 'string' then return false, 'gone' end
-    local perDay = math.floor(Num(RS().maxCatchesPerSuspectDay, 2, 0))
+    local perDay = math.floor(Num(CP.RealPlayers('antiFarm').maxCatchesPerSuspectDay, 2, 0))
     if Num(Opp('suspectDayCount', cid), 0) >= perDay then return false, 'suspect_used' end
-    local hop = Num(RS().jobHopMinutes, 30, 0) * 60
+    local hop = Num(CP.RealPlayers().jobHopMinutes, 30, 0) * 60
     for _, src in ipairs(ActiveSrcs(run)) do
         local p = type(run.participants) == 'table' and run.participants[src] or nil
         local oCid = type(p) == 'table' and p.citizenid or nil
@@ -526,7 +521,7 @@ function V.match(run)
     if type(run) ~= 'table' or type(run.volunteer) ~= 'table' or run.state == 'ended' or matches[run.id] then
         return false
     end
-    if not On() or run.test or run.live then return false end
+    if not CP.RealPlayersOn('volunteer') or run.test or run.live then return false end
     local slot = V.slotOf and V.slotOf(run.mission, run.locationIndex) or nil
     if not slot then return false end
     local m = {
@@ -536,7 +531,7 @@ function V.match(run)
         role = slot.role,
         obj = run.volunteer.obj or slot.obj,
         meet = MeetOf(run, slot),
-        radius = Num(Cfg().meetRadius, 25.0, 5.0, 200.0),
+        radius = Num(CP.RealPlayers('volunteer').meetRadius, 25.0, 5.0, 200.0),
         asked = {},
         tries = 0,
     }
@@ -591,7 +586,7 @@ function V.askOf(cid)
         area = type(loc.label) == 'string' and CP.U.clip(loc.label, 64) or nil,
         km = (here and m.meet) and math.floor(CP.U.dist(here, m.meet) / 100 + 0.5) / 10 or nil,
         seconds = math.max(0, math.ceil((m.deadline - GetGameTimer()) / 1000)),
-        travelMinutes = math.ceil(Num(Cfg().travelSeconds, 300, 60, 1800) / 60),
+        travelMinutes = math.ceil(Num(CP.RealPlayers('volunteer').travelSeconds, 300, 60, 1800) / 60),
     }
 end
 
@@ -602,7 +597,7 @@ function V.caseOf(cid)
     local m = cid and byCid[cid] and matches[byCid[cid]] or nil
     if not m or m.cid ~= cid or not CANCEL_PHASES[m.phase] or m.leftByRule then return nil end
     local now = GetGameTimer()
-    local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600))
+    local grace = math.floor(Num(CP.RealPlayers('volunteer').cancelGraceSeconds, 60, 0, 600))
     local free = not m.engagedAt and now - (m.yesAt or 0) <= grace * 1000
     return {
         phase = m.phase,
@@ -661,7 +656,7 @@ function V.cancelCase(src)
         Opp('setState', m.run, m.cid, 'detained', { why = 'left_in_cuffs' })
         return false, 'no_case'
     end
-    local grace = math.floor(Num(Cfg().cancelGraceSeconds, 60, 0, 600)) * 1000
+    local grace = math.floor(Num(CP.RealPlayers('volunteer').cancelGraceSeconds, 60, 0, 600)) * 1000
     -- officers within contactRange count at once (CP.Opponents' contactAt), not only on the next match tick
     local reached = m.engagedAt or (type(rec) == 'table' and rec.contactAt)
     local free = not reached and GetGameTimer() - (m.yesAt or 0) <= grace
@@ -778,7 +773,9 @@ end
 
 -- Sends the end event once for a run a volunteer said yes to (never for a test run). -> true when it was sent.
 function V.sendEnded(m, run, state, reason)
-    if Cfg().endEvent == false or type(m) ~= 'table' or not m.yesAt or m.endSent then return false end
+    if CP.RealPlayers('volunteer').endEvent == false or type(m) ~= 'table' or not m.yesAt or m.endSent then
+        return false
+    end
     if type(run) ~= 'table' or run.test then return false end
     local payload = V.endPayload(m, run, state, reason)
     if not payload then return false end

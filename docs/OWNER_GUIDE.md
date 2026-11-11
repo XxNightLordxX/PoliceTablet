@@ -1485,7 +1485,7 @@ the kind, who it names, until when, who set it and why; a filter shows one kind.
 kind's longest: a suspension 3650 days, a mission ban a week from now, the Real suspects tools 3650 days, a strikes
 block a year) and **Lift** ends it early; both ask for a reason and are audited as before. Each kind keeps its own
 rules: lifting or extending a suspension needs `suspend`, a mission ban `antiFarmOverride` to lift and
-`missionControls` to extend, the Real suspects kinds `antiFarmOverride` (Lift follows `Config.RealPlayers.staffLift`,
+`missionControls` to extend, the Real suspects kinds `antiFarmOverride` (Lift follows `Config.RealPlayers.staff.lift`,
 clearing strikes `Config.RealPlayers.volunteer.staffClearStrikes`), and never on one of your own characters.
 `Config.AdminUi.restrictionsExtend = false` keeps only Lift. Setting a restriction stays where it was (Officers →
 Suspend, the supervisor's officer dialog for a mission ban, Real suspects → Pairs and blocks). Real suspects → Pairs
@@ -2218,8 +2218,8 @@ here changes anything:
   instead of the NPC.
 
 Everything for real players is one config section, `Config.RealPlayers`: the rules both modes share sit at its top
-(who can be a suspect, contact range, cuffs, bookings, officer conduct, the anti-farm caps and pair ledger,
-surrender and the staff tools), then one block per mode, `liveCrime` and `volunteer`, each with its own `enabled`
+(who can be a suspect, contact range, cuffs, bookings and officer conduct, then three blocks: `staff` for the Real
+suspects screen and its tools, `antiFarm` for the caps and the pair ledger, and `surrender`), then one block per mode, `liveCrime` and `volunteer`, each with its own `enabled`
 switch and its own options, and `criminalTablet`. Both modes use the same names for what a case takes part in:
 `typeOfTheDay`, `goals`, `challenge`, `cash` and `items` (all shipped `false`). Every key is in Admin UI →
 **Settings** with its description, in the one **Real players** section (also under the gear of the Real suspects
@@ -2255,7 +2255,7 @@ Volunteers:
   ticks **Real suspect OK**, a volunteer who fits is asked, else the NPC plays. `'players_only'` offers the
   type only while a volunteer is free. While every mode is `'npc'`, nothing changes.
 - ☐ Admin UI → **Permissions** → **Config health** shows no warning about a mode.
-- ☐ Points only: `Config.RealPlayers.volunteer.cash` and `payRewards` stay `false` unless you decide otherwise. Volunteers
+- ☐ Points only: `Config.RealPlayers.volunteer.cash` and `items` stay `false` unless you decide otherwise. Volunteers
   are paid only with `Config.FeatureRewards.suspect` on (3.12, fair cases only); another script can reward them too
   from the `volunteerEnded` event ([9](#9-exports-for-other-scripts)).
 
@@ -2266,9 +2266,9 @@ Both:
 - ☐ Tell your staff where the case timeline is (Admin UI → **Real suspects**) and what the three tools do: **Block
   pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log). **Lift**
   ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
-  reason in the audit log (`Config.RealPlayers.staffLift`, `Config.RealPlayers.volunteer.staffClearStrikes`). The screen shows
-  character names next to citizen IDs (`Config.RealPlayers.staffNames`) and weapon names in the damage ledger
-  (`Config.RealPlayers.weaponNames`); both ship on.
+  reason in the audit log (`Config.RealPlayers.staff.lift`, `Config.RealPlayers.volunteer.staffClearStrikes`). The screen shows
+  character names next to citizen IDs (`Config.RealPlayers.staff.names`) and weapon names in the damage ledger
+  (`Config.RealPlayers.staff.weaponNames`); both ship on.
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
 
@@ -2339,12 +2339,12 @@ For staff:
 - **Consent and opt-out.** A crew member is a suspect only of the crime he chose to commit; a volunteer is asked
   first, every time, and can stop or cancel from his `/crimsonheat` menu. Players in a hospital, the arena or
   another instance, on police duty or AFK are never picked.
-- **Caps against farming.** A suspect is worth points `Config.RealPlayers.maxCatchesPerSuspectDay` (2) times a day
+- **Caps against farming.** A suspect is worth points `Config.RealPlayers.antiFarm.maxCatchesPerSuspectDay` (2) times a day
   (in a crew, one already at the cap when the case opens gives no line; the others still do), the same officer and
   suspect meet again for points only after `pairCooldownHours` (24), and accounts that share a connection or PC are
   flagged.
 - **Staff see everything.** Every case keeps a timeline, the damage ledger and the flags on the Real suspects
-  screen (the last `Config.RealPlayers.casesKept`, 16, closed ones; saved, so a restart keeps them).
+  screen (the last `Config.RealPlayers.staff.casesKept`, 16, closed ones; saved, so a restart keeps them).
 
 ### 6.4 When something does not happen
 
@@ -2357,7 +2357,7 @@ For staff:
 | A cuff did not count | The officer must be on the case and within `Config.RealPlayers.cuffRange` (3.5 m), and the cuffs must hold `custodyHoldSeconds` (30 s). The timeline shows each cuff and why it did not count |
 | `/surrender` or **Talk them down** does nothing | `Config.RealPlayers.liveCrime.enabled` or `Config.RealPlayers.surrender.enabled` is `false`, the player is not a free suspect of a live case (volunteer cases have no surrender), no officer of the case is within `surrenderRange` (50 m), or the officer is not within `talkRange` (15 m) of a free suspect. A new command name needs a restart |
 | A live case vanished after `restart Crimson-Police` | A restart ends every open case and its run: no row, no points, no pay, no cooldown, and the LIVE calls are gone too (a surrender in progress ends with it). The unit has to be formed again. Closed cases, their timelines, payments, blocks, strikes and your Settings changes are kept. The crime script's next crime makes a new LIVE call |
-| The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealPlayers.adminScreen = false` |
+| The Real suspects screen is missing | Both features are off, the admin has no `antiFarmOverride` key, or `Config.RealPlayers.staff.screen = false` |
 
 ### 6.5 The criminal tablet
 

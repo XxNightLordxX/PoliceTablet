@@ -16,15 +16,9 @@ local history = {} -- [citizenid] = { { endedAt, missionType, role, outcome, dro
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers('criminalTablet')) end
-
-local function On() return Cfg().enabled == true end
-
-local function VolCfg() return (CP.RealPlayers('volunteer')) end
-
 local Num = CP.Num
 
-local function HistorySize() return math.floor(Num(Cfg().historySize, 20, 1, 100)) end
+local function HistorySize() return math.floor(Num(CP.RealPlayers('criminalTablet').historySize, 20, 1, 100)) end
 
 -- A police job of Config.Departments (on or off duty).
 local function PoliceJob(job)
@@ -68,7 +62,7 @@ end
 -- Whether src may use the criminal tablet now -> ok, errKey, info. Never on police duty; access 'everyone' (shipped)
 -- = any job but a police job, 'granted' = the criminalTablet extra grant (Admin UI -> Permissions -> Extra grants).
 function C.canUse(src)
-    if not On() then return false, 'err.crimtab_off' end
+    if not CP.RealPlayersOn('criminalTablet') then return false, 'err.crimtab_off' end
     local n = CP.U.toSrc(src)
     local info = n and CP.Qbx and CP.Qbx.getInfo and CP.Qbx.getInfo(n) or nil
     if type(info) ~= 'table' or type(info.citizenid) ~= 'string' or info.citizenid == '' then
@@ -76,7 +70,7 @@ function C.canUse(src)
     end
     local police = PoliceJob(info.job)
     if police and info.job.onduty == true then return false, 'err.crimtab_on_duty' end
-    if Cfg().access == 'granted' then
+    if CP.RealPlayers('criminalTablet').access == 'granted' then
         local P = CP.Permissions
         if not (P and P.granted and P.granted(n, 'criminalTablet')) then return false, 'err.crimtab_no_access' end
     elseif police then
@@ -88,7 +82,7 @@ end
 -- Config.RealPlayers.criminalTablet.replaceCommand: the volunteer command opens this tablet for src instead of its
 -- menu.
 function C.replacesCommand(src)
-    if Cfg().replaceCommand ~= true then return false end
+    if CP.RealPlayers('criminalTablet').replaceCommand ~= true then return false end
     return (C.canUse(src)) == true
 end
 
@@ -122,7 +116,7 @@ function C.view(src)
     if not ok then return nil, err end
     local V = CP.Volunteers or {}
     local cid = info.citizenid
-    local vc = VolCfg()
+    local vc = CP.RealPlayers('volunteer')
     local volOn = vc.enabled == true
     local listing = V.listingOf and V.listingOf(src) or { listed = false, roles = {} }
     local canJoin, why, _, blockedAt = false, 'off', nil, nil
@@ -258,7 +252,7 @@ end
 -- On police duty, or a police job without access: the open tablet closes (the client only acts while it is open).
 local function Recheck(src)
     src = CP.U.toSrc(src)
-    if not src or not On() then return end
+    if not src or not CP.RealPlayersOn('criminalTablet') then return end
     if not C.canUse(src) then TriggerClientEvent(CP.e('client:crimtabClose'), src) end
 end
 C._recheck = Recheck
@@ -267,8 +261,8 @@ C._recheck = Recheck
 -- criminal tablet (Config.RealPlayers.criminalTablet.item) is a real ox_inventory item. Nothing is listed while the
 -- tablet is off or has no item.
 local function ItemHealth()
-    local item = Cfg().item
-    if not On() or type(item) ~= 'string' or item == '' then return {} end
+    local item = CP.RealPlayers('criminalTablet').item
+    if not CP.RealPlayersOn('criminalTablet') or type(item) ~= 'string' or item == '' then return {} end
     if not CP.Ext.started('ox_inventory') then
         return { { level = 'warn', text = CP.L('health.crimtab.no_inventory', { item = item }) } }
     end

@@ -29,14 +29,12 @@ local pass = { at = -1, coords = {} }  -- the online players' server coords, rea
 --                                   HELPERS
 -- ============================================================================
 
-local function Cfg() return (CP.RealPlayers()) end
-
 local Num = CP.Num
 
 -- A Config.RealPlayers number of seconds in milliseconds (never below 0).
-local function Ms(key, default) return math.max(0, Num(Cfg()[key], default)) * 1000 end
+local function Ms(key, default) return math.max(0, Num(CP.RealPlayers()[key], default)) * 1000 end
 
-local function Share() return math.max(0, math.min(1, Num(Cfg().neutralisedShare, 0.5))) end
+local function Share() return math.max(0, math.min(1, Num(CP.RealPlayers().neutralisedShare, 0.5))) end
 
 local function Bucket(src)
     if type(GetPlayerRoutingBucket) ~= 'function' then return 0 end
@@ -92,7 +90,7 @@ end
 local function ParticipantNear(case, rec)
     local coords = ServerCoords(rec.src)
     if not coords then return false end
-    local range = Num(Cfg().contactRange, 100.0)
+    local range = Num(CP.RealPlayers().contactRange, 100.0)
     for _, src in ipairs(ActiveSrcs(case.run)) do
         local c = ServerCoords(src)
         if c and CP.U.dist(c, coords) <= range then return true end
@@ -102,7 +100,7 @@ end
 
 -- The booking zone at coords: a zone, or true when Config.RealPlayers.bookingZones is {} (anywhere), else nil.
 local function ZoneAt(coords)
-    local zones = Cfg().bookingZones
+    local zones = CP.RealPlayers().bookingZones
     if type(zones) ~= 'table' or #zones == 0 then return true end
     if not coords then return nil end
     for _, z in ipairs(zones) do
@@ -221,7 +219,7 @@ local function OutsideCuffed(case, rec, o, now)
     o.pairedAt = now
     rec.outsideCuffed = true
     Line(case, rec, 'cuffed_by_outsider', { by = o.src })
-    if Cfg().outsideCuff ~= 'stopped' and ParticipantNear(case, rec) then
+    if CP.RealPlayers().outsideCuff ~= 'stopped' and ParticipantNear(case, rec) then
         Cuffed(case, rec, o.src, 'outside_assist')
     else
         rec.outsideCuff = nil
@@ -283,7 +281,7 @@ end
 -- The jail event and the last injail 0 -> above 0 change within BOOK_PAIR_MS, whichever came second
 -- (sc-police writes injail inside its own JailPlayer handler and qbx fires onSetMetaData at once).
 local function TryBook(case, rec, now)
-    local run, cfg = case.run, Cfg()
+    local run, cfg = case.run, CP.RealPlayers()
     local o = rec.outsideJail
     local open = rec.state == 'free' or rec.state == 'cuffed'
     if open and o and not o.paired and rec.injailAt and math.abs(rec.injailAt - o.at) <= BOOK_PAIR_MS then
@@ -359,7 +357,7 @@ local function CuffSuspect(officerSrc, targetSrc)
         if inCase then Line(case, rec, 'cuff_refused', { by = officerSrc, why = 'not_on_duty' }) end
         return
     end
-    local ok, why = Plausible(officerSrc, targetSrc, Num(Cfg().cuffRange, 3.5))
+    local ok, why = Plausible(officerSrc, targetSrc, Num(CP.RealPlayers().cuffRange, 3.5))
     if not ok then
         Line(case, rec, 'cuff_refused', { by = officerSrc, why = why, inCase = inCase })
         return
@@ -398,7 +396,7 @@ local function OnUncuff(officerSrc, targetSrc)
         if rec.freedAt then Explain(case, rec, now, false) end
         return
     end
-    local ok, why = Plausible(officerSrc, targetSrc, Num(Cfg().cuffRange, 3.5))
+    local ok, why = Plausible(officerSrc, targetSrc, Num(CP.RealPlayers().cuffRange, 3.5))
     if not ok then
         Line(case, rec, 'uncuff_refused', { by = officerSrc, why = why, inCase = false })
         return
@@ -450,7 +448,7 @@ local function OnEscort(officerSrc, targetSrc)
     local case, rec = Opp.bySrc(targetSrc)
     if not rec or rec.state ~= 'free' or not rec.down then return end
     if not IsParticipant(case.run, officerSrc) or not OnDuty(officerSrc) then return end
-    if not Plausible(officerSrc, targetSrc, Num(Cfg().cuffRange, 3.5)) then return end
+    if not Plausible(officerSrc, targetSrc, Num(CP.RealPlayers().cuffRange, 3.5)) then return end
     local now = GetGameTimer()
     local run, cid, label, afk = case.run, rec.cid, rec.label, rec.afk
     rec.caughtBy = { officerSrc }
@@ -465,7 +463,7 @@ end
 local function JailRefused(rec, officerSrc, targetSrc)
     if rec.state ~= 'detained' then return 'not_detained' end
     if not OnDuty(officerSrc) then return 'not_on_duty' end
-    local ok, why = Plausible(officerSrc, targetSrc, Num(Cfg().jailRange, 6.0))
+    local ok, why = Plausible(officerSrc, targetSrc, Num(CP.RealPlayers().jailRange, 6.0))
     if not ok then return why end
     return nil
 end
@@ -557,7 +555,7 @@ end
 -- participant of the case (reset when out of range).
 local function CountNear(case, rec, now)
     if not rec.src or not rec.lastCoords then return end
-    local range = Num(Cfg().rescueRange, 4.0)
+    local range = Num(CP.RealPlayers().rescueRange, 4.0)
     local near = {}
     for src, c in pairs(OnlineCoords(now)) do
         if src ~= rec.src and CP.U.dist(c, rec.lastCoords) <= range and not IsParticipant(case.run, src) then

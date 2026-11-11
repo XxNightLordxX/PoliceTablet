@@ -213,7 +213,7 @@ export const ADMIN_SCREENS: ScreenDef<AdminScreenKey>[] = [
         component: AdminTesting,
     },
     {
-        // Real suspects: while live crimes or volunteers are on (Config.RealPlayers.adminScreen)
+        // Real suspects: while live crimes or volunteers are on (Config.RealPlayers.staff.screen)
         key: 'admin_rs',
         titleKey: 'ui.screen.admin_rs',
         icon: 'shield',

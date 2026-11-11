@@ -7,7 +7,7 @@
 -- (Config.MissionControls.restrictionsTab), where a supervisor sees the kinds of his department (def.sup) and lifts
 -- what that kind lets him (his own mission bans). Each kind registers itself with CP.Restriction (shared/lib.lua)
 -- from the module that owns it and keeps its own rules there: the permission of each step, the longest it may run,
--- the self rule, its own switches (Config.RealPlayers.staffLift, .volunteer.staffClearStrikes) and its audit rows.
+-- the self rule, its own switches (Config.RealPlayers.staff.lift, .volunteer.staffClearStrikes) and its audit rows.
 --   admin:getRestrictions               -> { kinds = { { key, maxHours, canLift, canExtend } }, rows, serverTime }
 --   sup:getRestrictions                 -> { kinds, rows (each with canLift), dept, serverTime }   his department
 --   server:restriction                  { op = 'lift' | 'extend', kind, citizenid, other?, hours?, reason }

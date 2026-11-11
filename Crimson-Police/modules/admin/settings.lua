@@ -339,12 +339,12 @@ Play.features = {
     {
         key = 'rs_screen',
         play = 'pvp',
-        path = 'RealPlayers.adminScreen',
+        path = 'RealPlayers.staff.screen',
         limits = {
-            'RealPlayers.maxCatchesPerSuspectDay',
-            'RealPlayers.pairCooldownHours',
-            'RealPlayers.suspectCooldownMinutes',
-            'RealPlayers.pairFlag.count',
+            'RealPlayers.antiFarm.maxCatchesPerSuspectDay',
+            'RealPlayers.antiFarm.pairCooldownHours',
+            'RealPlayers.antiFarm.suspectCooldownMinutes',
+            'RealPlayers.antiFarm.pairFlag.count',
         },
     },
     { key = 'live_cash', play = 'pvp', path = 'RealPlayers.liveCrime.cash', limits = { 'Cash.dailyCap' } },
@@ -648,7 +648,7 @@ local OPEN = {
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
--- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): Config.RealPlayers.identityMatch
+-- FXServer's identifier kinds (the text before ':') and 'token' (GetPlayerToken): RealPlayers.antiFarm.identityMatch
 local IDENTITY_KINDS = { 'license', 'license2', 'discord', 'fivem', 'steam', 'xbl', 'live', 'ip', 'token' }
 local METRICS = {
     'points',
@@ -771,7 +771,7 @@ local RANGES = {
     ['RealPlayers.trail.every'] = { 1, 60 },
     ['RealPlayers.trail.max'] = { 1, 5000 },
     ['RealPlayers.timelineMax'] = { 10, 5000 },
-    ['RealPlayers.casesKept'] = { 1, 200 },
+    ['RealPlayers.staff.casesKept'] = { 1, 200 },
     ['RealPlayers.cuffPairWindow'] = { 1, 60 },
     ['RealPlayers.cuffRange'] = { 1, 20 },
     ['RealPlayers.custodyHoldSeconds'] = { 5, 600 },
@@ -786,13 +786,13 @@ local RANGES = {
     ['RealPlayers.armedMemory'] = { 0, 600 },
     ['RealPlayers.downGrace'] = { 0, 60 },
     ['RealPlayers.damageLogMax'] = { 10, 5000 },
-    ['RealPlayers.pairCooldownHours'] = { 0, 720 },
-    ['RealPlayers.maxCatchesPerSuspectDay'] = { 1, 100 },
-    ['RealPlayers.suspectCooldownMinutes'] = { 0, 1440 },
-    ['RealPlayers.pairFlag.count'] = { 1, 100 },
-    ['RealPlayers.pairFlag.days'] = { 1, 90 },
-    ['RealPlayers.fastCatchSeconds'] = { 0, 600 },
-    ['RealPlayers.pairLedgerDays'] = { 1, 365 },
+    ['RealPlayers.antiFarm.pairCooldownHours'] = { 0, 720 },
+    ['RealPlayers.antiFarm.maxCatchesPerSuspectDay'] = { 1, 100 },
+    ['RealPlayers.antiFarm.suspectCooldownMinutes'] = { 0, 1440 },
+    ['RealPlayers.antiFarm.pairFlag.count'] = { 1, 100 },
+    ['RealPlayers.antiFarm.pairFlag.days'] = { 1, 90 },
+    ['RealPlayers.antiFarm.fastCatchSeconds'] = { 0, 600 },
+    ['RealPlayers.antiFarm.pairLedgerDays'] = { 1, 365 },
     ['RealPlayers.surrender.talkRange'] = { 2, 50 },
     ['RealPlayers.surrender.surrenderRange'] = { 5, 200 },
     ['RealPlayers.surrender.askSeconds'] = { 5, 60 },
@@ -1804,12 +1804,12 @@ local KNOWN = {
     ['Spawning.hostagesAt'] = { tpl = Enum({ 'objective', 'runStart' }), kind = 'enum' },
     ['NpcCombat.weapons'] = { tpl = ListOf(WEAPON_NAME, { min = 1, unique = true }), kind = 'list', item = 'string' },
     ['RealPlayers.lessLethal'] = { tpl = ListOf(WEAPON_NAME, { unique = true }), kind = 'list', item = 'string' },
-    ['RealPlayers.identityMatch.block'] = {
+    ['RealPlayers.antiFarm.identityMatch.block'] = {
         tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
         kind = 'list',
         options = IDENTITY_KINDS,
     },
-    ['RealPlayers.identityMatch.flag'] = {
+    ['RealPlayers.antiFarm.identityMatch.flag'] = {
         tpl = ListOf(Enum(IDENTITY_KINDS), { unique = true }),
         kind = 'list',
         options = IDENTITY_KINDS,

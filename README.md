@@ -590,7 +590,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Decision debrief on the result screen | NPC missions | `Config.Decisions.debrief` |
 | Mission Builder for supervisors | NPC missions | `Config.Builder.enabled` |
 | Surrender and talk-down | Player vs police | `Config.RealPlayers.surrender.enabled` |
-| Real suspects admin screen | Player vs police | `Config.RealPlayers.adminScreen` |
+| Real suspects admin screen | Player vs police | `Config.RealPlayers.staff.screen` |
 | Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
 | Ready check | Police teamwork | `Config.Units.readyCheck`, `Config.CrossDept.readyCheck` |
 | Commendations | Police teamwork | `Config.Recognition.commendations.enabled` |

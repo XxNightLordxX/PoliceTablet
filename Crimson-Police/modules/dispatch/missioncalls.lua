@@ -511,8 +511,6 @@ local function CallRule(call, unit, dist, now)
     return nil
 end
 
-local function LiveOn() return select(2, CP.RealPlayers('liveCrime')) end
-
 -- ok, info | false, errKey: can src's unit claim the call right now (every accept check, then the call's rules).
 local function ClaimCheck(src, call, now)
     local officer, e = GetOfficer(src)
@@ -1419,7 +1417,7 @@ function MC.claim(src, callId, twists)
     if not call or not VISIBLE[call.status] or call.status == 'lapsed' then return false, 'err.mc_gone' end
     -- a LIVE call: only while live crimes are on; it has no twists
     if call.live then
-        if LiveOn() ~= true then return false, 'err.live_case_off' end
+        if CP.RealPlayersOn('liveCrime') ~= true then return false, 'err.live_case_off' end
         twists = nil
     end
     if call.status == 'claiming' then return false, 'err.mc_claiming' end
@@ -2221,8 +2219,6 @@ end
 -- claim opens the crime's live case: CP.Draw's live path, no draw; a claimed LIVE call closes with its case, never
 -- re-dispatched.
 
-local function LiveCfg() return (CP.RealPlayers('liveCrime')) end
-
 -- The LIVE calls open, being claimed or claimed (a claimed one stays until its case ends): the count
 -- Config.RealPlayers.liveCrime.maxLiveRuns caps.
 function MC.liveCount()
@@ -2265,7 +2261,7 @@ function MC.postLive(crime)
     if type(crime) ~= 'table' or type(crime.crimeKey) ~= 'string' or type(crime.missionType) ~= 'string' then
         return nil, 'invalid'
     end
-    local lc = LiveCfg()
+    local lc = CP.RealPlayers('liveCrime')
     if lc.enabled ~= true then return nil, 'off' end
     if Cfg().enabled == false then return nil, 'calls_off' end
     if LiveOf(crime.crimeKey) then return nil, 'posted' end

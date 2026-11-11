@@ -2,7 +2,7 @@
 
 -- Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
 -- (each with its own switch and every option it had), the rules both share at its top (who can be a suspect, proof,
--- conduct, caps, the pair ledger, surrender, the staff tools) and the criminal tablet. One block per old feature,
+-- conduct, then the staff, antiFarm and surrender blocks) and the criminal tablet. One block per old feature,
 -- driven through the new section and the shared helpers (CP.RealPlayers, CP.RealPlayersTakePart,
 -- CP.RealPlayersRowFilter); the module files live in modules/realplayers. Plain stubs, no database.
 
@@ -48,17 +48,61 @@ H.eq(select(2, CP.RealPlayers('nosuch')), false, 'and off')
 H.eq(RP.officerAlerts, 'normal', 'officer alerts go out like any officer\'s')
 H.eq(RP.routeEnds, 'first_contact', 'the route ends at the first contact')
 H.eq(RP.onLeave, 'void', 'a suspect who leaves counts for nobody')
-H.eq(RP.pairCooldownHours, 24, 'one scored case of a pair a day (both modes together)')
-H.eq(RP.maxCatchesPerSuspectDay, 2, 'a suspect is worth points twice a day')
-H.eq(RP.pairLedgerDays, 30, 'the pair ledger keeps 30 days')
-H.eq(RP.pairFlag.count, 2, 'the pair flag: 2 cases')
+H.eq(RP.antiFarm.pairCooldownHours, 24, 'one scored case of a pair a day (both modes together)')
+H.eq(RP.antiFarm.maxCatchesPerSuspectDay, 2, 'a suspect is worth points twice a day')
+H.eq(RP.antiFarm.pairLedgerDays, 30, 'the pair ledger keeps 30 days')
+H.eq(RP.antiFarm.pairFlag.count, 2, 'the pair flag: 2 cases')
 H.eq(RP.surrender.enabled, true, 'surrender ships on (behind live crimes)')
 H.eq(RP.surrender.command, 'surrender', 'the surrender command')
-H.eq(RP.adminScreen, true, 'the Real suspects screen')
-H.eq(RP.staffLift, true, 'staff can lift a block early')
+H.eq(RP.staff.screen, true, 'the Real suspects screen')
+H.eq(RP.staff.lift, true, 'staff can lift a block early')
 for _, mode in ipairs({ 'liveCrime', 'volunteer', 'criminalTablet' }) do
-    H.eq(RP[mode].pairCooldownHours, nil, mode .. ' keeps no copy of the shared caps')
+    H.eq(RP[mode].antiFarm, nil, mode .. ' keeps no copy of the shared caps')
 end
+
+-- FIN5: the shared rules are three blocks, staff (the Real suspects screen), antiFarm (the caps and the pair ledger)
+-- and surrender, each read through CP.RealPlayers; the flat keys they replace are gone (no alias)
+local FLAT = {
+    adminScreen = 'staff.screen',
+    staffLift = 'staff.lift',
+    staffNames = 'staff.names',
+    weaponNames = 'staff.weaponNames',
+    casesKept = 'staff.casesKept',
+    saveCases = 'staff.saveCases',
+    identityMatch = 'antiFarm.identityMatch',
+    pairCooldownHours = 'antiFarm.pairCooldownHours',
+    maxCatchesPerSuspectDay = 'antiFarm.maxCatchesPerSuspectDay',
+    suspectCooldownMinutes = 'antiFarm.suspectCooldownMinutes',
+    pairFlag = 'antiFarm.pairFlag',
+    fastCatchSeconds = 'antiFarm.fastCatchSeconds',
+    pairLedgerDays = 'antiFarm.pairLedgerDays',
+}
+for old, new in pairs(FLAT) do
+    H.eq(RP[old], nil, 'no flat RealPlayers.' .. old .. ': it is RealPlayers.' .. new)
+    local block, key = new:match('^(%w+)%.(%w+)$')
+    H.ok(RP[block][key] ~= nil, 'RealPlayers.' .. new .. ' ships a value')
+end
+H.eq(RP.staff.casesKept, 16, 'staff.casesKept ships 16, as before')
+H.eq(RP.staff.saveCases, true, 'staff.saveCases ships true, as before')
+H.eq(RP.staff.names, true, 'staff.names ships true, as before')
+H.eq(RP.staff.weaponNames, true, 'staff.weaponNames ships true, as before')
+H.eq(RP.antiFarm.suspectCooldownMinutes, 30, 'antiFarm.suspectCooldownMinutes ships 30, as before')
+H.eq(RP.antiFarm.fastCatchSeconds, 60, 'antiFarm.fastCatchSeconds ships 60, as before')
+H.eq(table.concat(RP.antiFarm.identityMatch.flag, ','), 'ip,token', 'antiFarm.identityMatch.flag as before')
+for _, part in ipairs({ 'staff', 'antiFarm', 'surrender' }) do
+    local cfg, on = CP.RealPlayers(part)
+    H.eq(cfg, RP[part], part .. ': CP.RealPlayers answers its block')
+    H.eq(on, false, part .. ': on only while live crimes or volunteers are on')
+end
+RP.volunteer.enabled = true
+H.eq(select(2, CP.RealPlayers('antiFarm')), true, 'a volunteer mode on: the shared blocks are on')
+H.eq(CP.RealPlayersOn('staff'), true, 'CP.RealPlayersOn: the same answer')
+H.eq(CP.RealPlayersOn('volunteer'), true, 'CP.RealPlayersOn(mode): its switch')
+H.eq(CP.RealPlayersOn('liveCrime'), false, 'and the other mode stays off')
+H.eq(CP.RealPlayersOn(), true, 'CP.RealPlayersOn(): either mode on')
+RP.volunteer.enabled = false
+H.eq(CP.RealPlayersOn('staff'), false, 'both modes off: off')
+H.eq(CP.RealPlayersOn('nosuch'), false, 'an unknown part: off')
 
 -- ============================================================================
 --              LIVE CRIMES (OLD CONFIG.LIVECRIME), SHIPPED VALUES
@@ -198,5 +242,19 @@ local p = io.popen(
 local stale = p and p:read('a') or ''
 if p then p:close() end
 H.eq(stale, '', 'no Lua file reads an old section name')
+
+-- FIN5: no module keeps its own thin reader of Config.RealPlayers (a Cfg() / On() / FeatureOn() one-liner over
+-- CP.RealPlayers): every reader calls CP.RealPlayers or CP.RealPlayersOn directly
+p = io.popen(
+    'grep -rnE "local function [A-Za-z]+\\(\\) return \\(?(select\\(2, )?CP\\.RealPlayers\\([^)]*\\)\\)?\\)? end$" '
+        .. ROOT .. 'modules ' .. ROOT .. 'blocks 2>/dev/null'
+)
+local thin = p and p:read('a') or ''
+if p then p:close() end
+H.eq(thin, '', 'no thin CP.RealPlayers reader copies')
+for _, part in ipairs(parts) do
+    H.ok(not (code[part] or ''):find('local function Cfg()', 1, true), 'modules/realplayers/' .. part .. ': no Cfg()')
+    H.ok(not (code[part] or ''):find('local function FeatureOn()', 1, true), part .. ': no FeatureOn()')
+end
 
 return H

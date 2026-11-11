@@ -500,9 +500,8 @@ local function HealthLines()
             }
         end
     end
-    local rp = type(Config.RealPlayers) == 'table' and Config.RealPlayers or {}
-    local wanted = (type(rp.liveCrime) == 'table' and rp.liveCrime.enabled == true)
-        or (type(rp.volunteer) == 'table' and rp.volunteer.enabled == true)
+    -- switched on in config, whatever the block says (CP.RealPlayersOn would read false here)
+    local wanted = CP.RealPlayers('liveCrime').enabled == true or CP.RealPlayers('volunteer').enabled == true
     if wanted and I.realSuspectsBlocked() then
         out[#out + 1] = { level = 'warn', text = I.featureOff('live_crimes'), fix = 'Integrations.police' }
     end

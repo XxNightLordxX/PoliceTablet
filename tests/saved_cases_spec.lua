@@ -2,7 +2,7 @@
 
 -- real-suspect data survives a restart. A closed case (its suspects, officers, timeline and damage ledger)
 -- is saved in cp_pvp_cases and read back for the Admin UI after a restart; volunteer strikes and strike blocks are
--- cp_pvp_pairs rows read back too. Config.RealPlayers.saveCases / Config.RealPlayers.volunteer.saveStrikes = false keep
+-- cp_pvp_pairs rows read back too. Config.RealPlayers.staff.saveCases / .volunteer.saveStrikes = false keep
 -- them in memory only.
 
 local H = dofile('tests/harness.lua')
@@ -62,7 +62,7 @@ H.restart()
 
 local Opp = Boot()
 do
-    H.eq(Config.RealPlayers.saveCases, true, 'saveCases ships true')
+    H.eq(Config.RealPlayers.staff.saveCases, true, 'saveCases ships true')
     local run = NewRun(RUN1)
     local case = Opp.open(run, { kind = 'live', members = { 'CRIM0001' } })
     local rec = case.suspects.CRIM0001
@@ -109,15 +109,15 @@ end
 -- ============================================================================
 
 do
-    Config.RealPlayers.casesKept = 1
+    Config.RealPlayers.staff.casesKept = 1
     local run = NewRun(RUN2)
     Opp.open(run, { kind = 'live', members = { 'CRIM0002' } })
     Opp.close(run)
     H.advance(100)
     local rows = Saved()
     H.ok(#rows == 1 and rows[1].run_uuid == RUN2, 'casesKept = 1: only the newest saved case is kept')
-    Config.RealPlayers.casesKept = 16
-    Config.RealPlayers.saveCases = false
+    Config.RealPlayers.staff.casesKept = 16
+    Config.RealPlayers.staff.saveCases = false
     run = NewRun(RUN3)
     Opp.open(run, { kind = 'live', members = { 'CRIM0003' } })
     Opp.close(run)

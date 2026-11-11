@@ -336,11 +336,11 @@ local function ReasonChips(list)
     return out
 end
 
--- Config.RealPlayers.adminScreen: the Admin UI shows the Real suspects screen only while live crimes or
+-- Config.RealPlayers.staff.screen: the Admin UI shows the Real suspects screen only while live crimes or
 -- volunteers are on (the screen still checks the antiFarmOverride key; the server answers its data to admins only).
 local function RealSuspectsScreen()
-    local rs, on = CP.RealPlayers()
-    return on and rs.adminScreen ~= false
+    local staff, on = CP.RealPlayers('staff')
+    return on and staff.screen ~= false
 end
 
 -- The parity-plus parts of Session.config (web/src/shared/types.ts). English is the only language shipped.
