@@ -1239,6 +1239,22 @@ end
 -- key and the comment after it on its line are its description, and the banner above a Config.X line names its
 -- section. Nothing is copied by hand, so a new key or a changed comment shows up by itself.
 
+-- Reading the two config files and building the schema takes most of a second on a real FXServer (measured: about
+-- 750 ms at start). The start-up check builds it with `allow` set: then it gives the server a tick every
+-- _breath.every steps, so the start no longer hitches the server thread. Every other caller (the settings load
+-- above all) builds it in one go as before, so nothing else runs before the saved settings are applied.
+-- Kept on the Settings table, not in new locals: this file's main chunk is at Lua's 200-local limit.
+Settings._breath = { every = 60, n = 0, building = false, allow = false }
+function Settings._breath.take()
+    local b = Settings._breath
+    if not b.allow then return end
+    b.n = b.n + 1
+    if b.n >= b.every then
+        b.n = 0
+        if coroutine.isyieldable() then Wait(0) end
+    end
+end
+
 local function Tokenize(src)
     local toks, comments, codeLines = {}, {}, {}
     local i, n, line, lineStart = 1, #src, 1, 1
@@ -1257,6 +1273,7 @@ local function Tokenize(src)
             line = line + 1
             i = i + 1
             lineStart = i
+            Settings._breath.take()
         elseif c == ' ' or c == '\t' or c == '\r' then
             i = i + 1
         elseif c == '-' and src:sub(i + 1, i + 1) == '-' then
@@ -2962,6 +2979,7 @@ local function BuildSchema()
     local list, byPath = {}, {}
     local function add(path, default)
         if byPath[path] then return end
+        Settings._breath.take()
         local e = Describe(path, default)
         local m = meta[path]
         local parts = Segments(path)
@@ -3064,7 +3082,18 @@ local function BuildSchema()
 end
 
 local function Schema()
-    if not schema then schema = BuildSchema() end
+    if schema then return schema end
+    if Settings._breath.building then
+        -- another thread is building it and gave the server a tick: wait for it, or build here when this caller
+        -- cannot wait (not in a thread)
+        while Settings._breath.building and not schema and coroutine.isyieldable() do Wait(0) end
+        if schema then return schema end
+    end
+    Settings._breath.building = true
+    local ok, built = pcall(BuildSchema)
+    Settings._breath.building = false
+    if not ok then error(built, 0) end
+    schema = built
     return schema
 end
 Settings._schema = Schema
@@ -4252,7 +4281,11 @@ local function HealthCheck()
         end
     end
     local pending = 0
-    for _, e in ipairs(Schema().list) do if Pending(e) then pending = pending + 1 end end
+    Settings._breath.allow = true
+    local okS, built = pcall(Schema)
+    Settings._breath.allow = false
+    if not okS then error(built, 0) end
+    for _, e in ipairs(built.list) do if Pending(e) then pending = pending + 1 end end
     if pending > 0 then
         out[#out + 1] = {
             level = 'warn',
