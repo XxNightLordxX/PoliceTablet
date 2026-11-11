@@ -26,41 +26,17 @@ local Num = CP.Num
 
 local Int = CP.IntIn
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
+local Now = CP.now
 
 local ValidCid = CP.ValidCid
 
 local function ValidKey(v) return type(v) == 'string' and #v >= 1 and #v <= 40 and v:match('^[%w_%-]+$') ~= nil end
 
-local function Query(sql, params)
-    local ok, rows = pcall(MySQL.query.await, sql, params or {})
-    if not ok then
-        CP.err(TAG, 'query failed: %s', tostring(rows))
-        return nil
-    end
-    return rows or {}
-end
+local function Query(sql, params) return CP.query(TAG, sql, params) end
 
-local function Scalar(sql, params)
-    local ok, v = pcall(MySQL.scalar.await, sql, params or {})
-    if not ok then
-        CP.err(TAG, 'query failed: %s', tostring(v))
-        return nil
-    end
-    return v
-end
+local function Scalar(sql, params) return CP.scalar(TAG, sql, params) end
 
-local function Update(sql, params)
-    local ok, n = pcall(MySQL.update.await, sql, params or {})
-    if not ok then
-        CP.err(TAG, 'update failed: %s', tostring(n))
-        return nil
-    end
-    return tonumber(n) or 0
-end
+local function Update(sql, params) return CP.update(TAG, sql, params) end
 
 local function CashCfg() return type(Config.Cash) == 'table' and Config.Cash or {} end
 
@@ -78,10 +54,7 @@ local function Money(n) return CP.Cash and CP.Cash._fmtMoney and CP.Cash._fmtMon
 
 local function Target(rowId, cid) return U.clip(('#%d %s'):format(rowId, tostring(cid)), 64) end
 
-local function DeptOf(key)
-    if CP.Cash and CP.Cash.department then return CP.Cash.department(key) end
-    return CP.Access and CP.Access.department and CP.Access.department(key) or nil
-end
+local DeptOf = CP.Money.department
 
 local function DepartmentKeys()
     local out = {}
@@ -90,14 +63,6 @@ local function DepartmentKeys()
     end
     table.sort(out)
     return out
-end
-
-local function SeasonId()
-    if CP.Challenge and CP.Challenge.currentSeason then
-        local ok, s = pcall(CP.Challenge.currentSeason)
-        if ok and type(s) == 'table' and tonumber(s.id) then return math.floor(tonumber(s.id)) end
-    end
-    return nil
 end
 
 local function DayStart()
@@ -435,7 +400,7 @@ function Payments.departmentFunds(key)
             WHERE department = ? AND cash_status IN ('paid', 'capped')
               AND JSON_VALUE(breakdown, '$.cash.source') = 'society']] .. extra, params)))
     end
-    local season = SeasonId()
+    local season = CP.Money.seasonId()
     local spent = {
         today = spentSince(' AND created_at >= FROM_UNIXTIME(?)', { DayStart() }),
         week = spentSince(' AND created_at >= FROM_UNIXTIME(?)', { WeekStart() }),

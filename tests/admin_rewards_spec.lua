@@ -114,6 +114,7 @@ for _, m in ipairs({
     'modules/admin/confighealth.lua',
     'modules/admin/settings.lua',
     'modules/access/tablet.lua',
+    'modules/system/schedule.lua',
     'modules/money/engine.lua',
     'modules/money/rewards.lua',
 }) do

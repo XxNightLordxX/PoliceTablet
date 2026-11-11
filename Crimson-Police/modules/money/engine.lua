@@ -22,6 +22,9 @@
 --       spec = { runUuid, missionId, citizenid, department, amount, label, kind, by, reason, seasonId,
 --                cash = { extra RunResult.cash fields: account, moneyItem, source }, extra = { breakdown fields } }
 --   CP.Money.settle(rowId) -> status                               'pending' first, then CP.Cash.pay
+--   CP.Money.seasonId() -> id | nil                                the running Department Challenge season
+--   CP.Money.department(key) -> { key, label, societyAccount } | nil   a turned-off department included
+-- The money files share the library's clock and statement helpers (CP.now, CP.query, CP.scalar, CP.update).
 -- writeRow, rowOf and settle query the database: call them from a thread.
 
 CP.Money = CP.Money or {}
@@ -30,6 +33,32 @@ local U = CP.U
 local TAG = 'money'
 
 local Num = CP.Num
+
+-- ============================================================================
+--                                SHARED LOOKUPS
+-- ============================================================================
+
+-- The id of the current Department Challenge season, or nil (none running, or no challenge module).
+---@return integer|nil
+function Money.seasonId()
+    local ok, s = CP.Call(TAG, 'Challenge', 'currentSeason')
+    if ok and type(s) == 'table' and tonumber(s.id) then return math.floor(tonumber(s.id)) end
+    return nil
+end
+
+-- A department for a payment, a turned-off one included (its unfinished pay still pays from its account):
+-- { key, label, societyAccount } | nil.
+---@param key string
+---@return table|nil
+function Money.department(key)
+    local d = CP.Access and CP.Access.department and CP.Access.department(key) or nil
+    if d then return d end
+    local cfg = type(key) == 'string' and type(Config.Departments) == 'table' and Config.Departments[key] or nil
+    if type(cfg) ~= 'table' then return nil end
+    local account = type(cfg.societyAccount) == 'string' and cfg.societyAccount ~= '' and cfg.societyAccount
+        or (type(cfg.jobs) == 'table' and cfg.jobs[1]) or key
+    return { key = key, label = type(cfg.label) == 'string' and cfg.label or key, societyAccount = account }
+end
 
 -- ============================================================================
 --                                WHERE IT GOES
@@ -90,14 +119,6 @@ function Money.rowOf(runUuid, cid)
     return tonumber(id)
 end
 
-local function SeasonId()
-    if CP.Challenge and CP.Challenge.currentSeason then
-        local ok, s = pcall(CP.Challenge.currentSeason)
-        if ok and type(s) == 'table' and tonumber(s.id) then return math.floor(tonumber(s.id)) end
-    end
-    return 0
-end
-
 -- One manual award ledger row (out of the run counts, goals, streaks and the draw by the existing filters), written
 -- as 'none', which no login payment and no Pay now picks up: settle hands it to CP.Cash once it is audited.
 function Money.writeRow(spec)
@@ -135,10 +156,10 @@ function Money.writeRow(spec)
         U.clip(spec.missionId, 40),
         spec.citizenid,
         U.clip(spec.department or 'unknown', 32),
-        spec.seasonId or SeasonId(),
+        spec.seasonId or Money.seasonId() or 0,
         amount,
         okJ and js or '{}',
-        CP.Schedule and CP.Schedule.now and CP.Schedule.now() or os.time(),
+        CP.now(),
     })
     if not ok or not tonumber(id) then
         CP.err(TAG, 'inserting the %s row for %s failed: %s', tostring(spec.missionId), tostring(spec.citizenid),

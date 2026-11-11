@@ -30,6 +30,7 @@ CP.DeptControls = {
 
 H.load('modules/supervisor/happyhour.lua')
 H.load('modules/progression/events.lua')
+H.load('modules/system/schedule.lua')
 H.load('modules/money/engine.lua')
 H.load('modules/money/cash.lua')
 local HH, E, Cash = CP.HappyHour, CP.Events, CP.Cash

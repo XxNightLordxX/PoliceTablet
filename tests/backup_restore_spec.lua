@@ -101,6 +101,8 @@ local function Boot(before)
         return realErr(tag, fmt, ...)
     end
     if before then before() end
+    -- the manifest loads the jobs engine before the money module (its forfeiture job registers there)
+    if not (CP.Schedule and CP.Schedule.job) then H.load('modules/system/schedule.lua') end
     for _, m in ipairs({
         'modules/access/permissions.lua',
         'modules/access/access.lua',

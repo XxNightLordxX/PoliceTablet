@@ -74,10 +74,7 @@ local function ToId(v)
     return n
 end
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
+local Now = CP.now
 
 local function FmtMoney(n)
     local s = tostring(math.floor(math.abs(Num(n, 0)) + 0.5))
@@ -129,16 +126,8 @@ local function PaymentsHeld()
     return ok and kind or nil
 end
 
--- A department for a payment, a turned-off one included (its unfinished pay still pays from its account).
-local function DeptOf(key)
-    local d = CP.Access and CP.Access.department and CP.Access.department(key) or nil
-    if d then return d end
-    local cfg = type(key) == 'string' and type(Config.Departments) == 'table' and Config.Departments[key] or nil
-    if type(cfg) ~= 'table' then return nil end
-    local account = type(cfg.societyAccount) == 'string' and cfg.societyAccount ~= '' and cfg.societyAccount
-        or (type(cfg.jobs) == 'table' and cfg.jobs[1]) or key
-    return { key = key, label = type(cfg.label) == 'string' and cfg.label or key, societyAccount = account }
-end
+-- A department for a payment, a turned-off one included (CP.Money.department).
+local DeptOf = CP.Money.department
 
 -- Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the
 -- shared busy lock and holds it while it works. nil, 'busy' when the lock stayed taken.
@@ -688,14 +677,8 @@ local function CashOf(bd) return type(bd.cash) == 'table' and bd.cash or {} end
 
 local function TxnOf(row) return ('CP-%s-%s'):format(tostring(row.run_uuid), tostring(row.citizenid)) end
 
-local function Update(sql, params)
-    local ok, n = pcall(MySQL.update.await, sql, params)
-    if not ok then
-        CP.err(TAG, 'payment update failed: %s', tostring(n))
-        return 0
-    end
-    return tonumber(n) or 0
-end
+-- The rows a statement changed; 0 when it raised (CP.update logged it).
+local function Update(sql, params) return CP.update(TAG, sql, params) or 0 end
 
 -- Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying'.
 local function Release(rowId, key)
@@ -753,8 +736,6 @@ function Cash.amountOf(row)
 end
 
 function Cash.txnOf(row) return TxnOf(row) end
-
-function Cash.department(key) return DeptOf(key) end
 
 -- true while pay() works on the row or the officer's payment lock is held (an admin waits for it).
 function Cash.rowBusy(rowId, citizenid)
@@ -1271,16 +1252,13 @@ end)
 local nextForfeitAt = nil   -- os.time() of the next forfeiture check (Admin UI -> Payments shows it)
 
 -- Admin UI -> System -> Jobs lists it (its last result, Run now); the loop below runs it through the jobs engine.
-local RunForfeiture = CP.Schedule
-        and CP.Schedule.job
-        and CP.Schedule.job('cash_forfeiture', {
-            when = 'every',
-            every = FORFEIT_EVERY_MS // 1000,
-            manual = true,
-            settings = { 'Disputes.windowHours' },
-            run = ForfeitureJob,
-        })
-    or ForfeitureJob
+local RunForfeiture = CP.Schedule.job('cash_forfeiture', {
+    when = 'every',
+    every = FORFEIT_EVERY_MS // 1000,
+    manual = true,
+    settings = { 'Disputes.windowHours' },
+    run = ForfeitureJob,
+})
 
 CreateThread(function()
     -- a start that failed: the loop never starts (quietly; the console has the lines that say what failed)

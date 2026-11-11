@@ -45,10 +45,7 @@ local function ToId(v)
     return n
 end
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
+local Now = CP.now
 
 local function DayStart(ts)
     ts = ts or Now()
@@ -68,23 +65,9 @@ end
 
 local ValidCitizenId = CP.ValidCid
 
-local function Query(sql, params)
-    local ok, rows = pcall(MySQL.query.await, sql, params or {})
-    if not ok then
-        CP.err(TAG, 'query failed: %s', tostring(rows))
-        return nil
-    end
-    return rows or {}
-end
+local function Query(sql, params) return CP.query(TAG, sql, params) end
 
-local function Update(sql, params)
-    local ok, n = pcall(MySQL.update.await, sql, params or {})
-    if not ok then
-        CP.err(TAG, 'update failed: %s', tostring(n))
-        return nil
-    end
-    return tonumber(n) or 0
-end
+local function Update(sql, params) return CP.update(TAG, sql, params) end
 
 local function CitizenOf(src)
     if not (CP.Qbx and CP.Qbx.getInfo) then return nil end
@@ -1548,16 +1531,13 @@ CreateThread(function()
 end)
 
 -- Admin UI -> System -> Jobs lists it (its last result, Run now); the loop below runs it through the jobs engine.
-local RunForfeiture = CP.Schedule
-        and CP.Schedule.job
-        and CP.Schedule.job('reward_forfeiture', {
-            when = 'every',
-            every = FORFEIT_EVERY_MS // 1000,
-            manual = true,
-            settings = { 'Disputes.windowHours' },
-            run = ForfeitureJob,
-        })
-    or ForfeitureJob
+local RunForfeiture = CP.Schedule.job('reward_forfeiture', {
+    when = 'every',
+    every = FORFEIT_EVERY_MS // 1000,
+    manual = true,
+    settings = { 'Disputes.windowHours' },
+    run = ForfeitureJob,
+})
 
 CreateThread(function()
     Wait(START_CHECK_MS)

@@ -60,10 +60,7 @@ local busy = CP.Lock.new()      -- 'type:<key>' / 'mission:<id>' while a write i
 
 local Num = CP.Num
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
+local Now = CP.now
 
 local function TypeCfg(key)
     local t = Config.MissionTypes and Config.MissionTypes[key]

@@ -23,6 +23,7 @@
 --   CP.Num       a finite number or the default, kept between lo and hi; CP.Num0 (default 0), CP.Int (whole)
 --   CP.Cfg       Config[section][key] or a default; CP.NonEmpty a trimmed string or nil; CP.cidOf a payload's
 --                citizenid; CP.now seconds now; CP.SqlTs a DATETIME text; CP.warnOnce a warning once per tag and key
+--   CP.query     a SELECT in pcall (rows or nil); CP.scalar its first value; CP.update the rows changed (server)
 --   CP.Has       whether CP.<Mod>.<fn> is there (a module that may be missing or not loaded yet)
 --   CP.can       whether a player may use a power (CP.Permissions.can, safe, always an error key on false)
 --   CP.Call      a safe call into another module of this resource (CP.<Mod>.<fn> in pcall, failures through
@@ -217,6 +218,48 @@ if CP.isServer then
     -- 'YYYY-MM-DD HH:MM:SS' in server local time, for DATETIME columns.
     ---@return string
     function CP.SqlTs(ts) return os and os.date('%Y-%m-%d %H:%M:%S', math.floor(CP.Num(ts, 0))) end
+
+    -- The rows of a SELECT ({} when none), or nil when it raised (an error line under the module's tag).
+    ---@param tag string
+    ---@param sql string
+    ---@param params? table
+    ---@return table|nil
+    function CP.query(tag, sql, params)
+        local ok, rows = pcall(MySQL.query.await, sql, params or {})
+        if not ok then
+            CP.err(tag, 'query failed: %s', tostring(rows))
+            return nil
+        end
+        return type(rows) == 'table' and rows or {}
+    end
+
+    -- The first column of the first row, or nil (no row, or it raised: an error line under the module's tag).
+    ---@param tag string
+    ---@param sql string
+    ---@param params? table
+    ---@return any
+    function CP.scalar(tag, sql, params)
+        local ok, v = pcall(MySQL.scalar.await, sql, params or {})
+        if not ok then
+            CP.err(tag, 'query failed: %s', tostring(v))
+            return nil
+        end
+        return v
+    end
+
+    -- The rows an UPDATE or DELETE changed, or nil when it raised (an error line under the module's tag).
+    ---@param tag string
+    ---@param sql string
+    ---@param params? table
+    ---@return integer|nil
+    function CP.update(tag, sql, params)
+        local ok, n = pcall(MySQL.update.await, sql, params or {})
+        if not ok then
+            CP.err(tag, 'update failed: %s', tostring(n))
+            return nil
+        end
+        return tonumber(n) or 0
+    end
 
     -- A tablet toast to one player: kind ('success' | 'error' | 'info' | 'warning'), a locale key and its vars;
     -- opts as CP.Tablet.notify takes them ({ channel = 'social' } ...). Nothing for a bad source or the console.

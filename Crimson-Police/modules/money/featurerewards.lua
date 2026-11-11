@@ -132,12 +132,6 @@ function FR.rollItems(feature, key, cid)
     return out
 end
 
-local function DeptOf(cid)
-    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1', { cid })
-    if ok and type(d) == 'string' and d ~= '' then return d end
-    return nil
-end
-
 -- The ledger row of one payment (CP.Money.writeRow): its feature, case and account.
 local function InsertRow(feature, cid, runUuid, amount, opts)
     local account, moneyItem = FR.account(feature)
@@ -145,7 +139,7 @@ local function InsertRow(feature, cid, runUuid, amount, opts)
         runUuid = runUuid,
         missionId = 'reward_' .. feature,
         citizenid = cid,
-        department = feature == 'suspect' and 'none' or (DeptOf(cid) or 'unknown'),
+        department = feature == 'suspect' and 'none' or (CP.deptOfCitizen(cid) or 'unknown'),
         amount = amount,
         label = CP.L('admin.mission.reward_' .. feature),
         kind = 'feature_reward',
@@ -336,14 +330,7 @@ end)
 -- correction (no strike), so its cash is never paid at login and the forfeiture jobs forfeit its cash and items after
 -- the dispute window; restoring the row (a dispute, a batch restore) brings the reward back.
 
-local function Rows(sql, params)
-    local ok, rows = pcall(MySQL.query.await, sql, params)
-    if not ok then
-        CP.err(TAG, 'a linked reward lookup failed: %s', tostring(rows))
-        return nil
-    end
-    return type(rows) == 'table' and rows or {}
-end
+local function Rows(sql, params) return CP.query(TAG, sql, params) end
 
 local function Breakdown(r)
     local t = U.jsonField(r.breakdown)

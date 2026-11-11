@@ -241,7 +241,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.Daily.new(dayFn?) -> daily`; `daily:reserve(key, cap, n) -> token \| nil`, `:commit(token)`, `:cancel(token)`, `:used(key)`, `:left(key, cap)`, `:add(key, n)`, `:clear(key?)` | shared/lib.lua | In-memory per-day caps (the server day). `reserve` checks the cap with running reservations and takes n in one step, so two requests at once cannot both pass; commit after the save, cancel on failure. Profile picture links use it |
 | `CP.Objective(kind) -> cfg, on` | shared/lib.lua | One kind of `Config.Objectives` (`dailyGoal`, `weeklyGoal`, `challenge`, `bounty`, `typeOfTheDay`) as it is now, never nil, and its switch (`enabled ~= false`; the bounty also needs the challenge). Every objective reads its settings only through it |
 | `CP.ObjectiveResetHour(kind)`, `CP.Progress.*` | shared/lib.lua | A kind's reset hour for `CP.Schedule.dayKey(ts, hour)` etc. (nil = Config.Time); the one progress engine (counted runs, goal and bounty conditions as `?` SQL) |
-| `CP.Num0`, `CP.Int`, `CP.Cfg`, `CP.NonEmpty`, `CP.cidOf`, `CP.now`, `CP.SqlTs`, `CP.warnOnce`, `CP.deptOfCitizen` | shared/lib.lua | Shared small reads |
+| `CP.Num0`, `CP.Int`, `CP.Cfg`, `CP.NonEmpty`, `CP.cidOf`, `CP.now`, `CP.SqlTs`, `CP.warnOnce`, `CP.deptOfCitizen`, `CP.query`/`scalar`/`update` | shared/lib.lua | Shared small reads |
 | `CP.Recognition(part) -> cfg, on` | shared/lib.lua | One part of `Config.Recognition` (`levels`, `levelCurve`, `badges`, `weeklyBadges`, `commendations`, `fieldTraining`) as it is now, never nil, and its switch (commendations `enabled ~= false`, field training `enabled == true`, the others always on). Scoring (levels, auto badges), the boards (weekly badges), profiles (commendations), the tablet and field training read their settings only through it |
 | `CP.RealPlayers(part?) -> cfg, on`, `CP.RealPlayersOn(part?)` | shared/lib.lua | The one reader of `Config.RealPlayers`: a part, never nil, and whether it is on (a mode: its switch, off while the police script sends no cuff and jail facts; `criminalTablet`: its switch; `staff`, `antiFarm`, `surrender`: either mode on); no part: the section, either mode on. Modules keep no Cfg()/On() copy |
 | `CP.RealPlayersTakePart(run, what)`, `CP.RealPlayersRowFilter(what, alias)` | shared/lib.lua | Whether a live or volunteer case takes part in `typeOfTheDay`, `goals`, `challenge`, `cash` or `items` (that switch of its mode; any other run: true), and the SQL that leaves such rows out of goal and challenge sums while the switch is off. Cash, item rewards, scoring, goals and the challenge use them; the modes keep no copy |
@@ -1401,7 +1401,7 @@ Points, streaks, XP and badges.
 - `pay(rowId)` — an offline officer's row goes to `pending` (no money moves).
 - Daily cap (`Config.Cash.dailyCap`): paid/capped cash of rows on the row's own reset day; one officer's payments are
   serialised in-process.
-- Society source: the player is re-fetched before `withdrawSociety`.
+- Society source: the player is re-read before `withdrawSociety`.
 - Renewed-Banking: `recordDeposit(citizenid, amount, 'Mission payout: <label>', <department>, <name>,
   'CP-<run_uuid>-<citizenid>')` only with `Config.Cash.account == 'bank'`.
 - `payPending(src)` *(hook: player loaded + 5 s, and a sweep 15 s after start for players already online)* — pays
@@ -1411,14 +1411,14 @@ Points, streaks, XP and badges.
 - Maintenance: `pay` and `payPending` do nothing while `CP.Maintenance.active()`.
 - `range(missionType, members) -> min, max` (pool from `CP.Draw.pool`; max includes `modifierCash` when
   `modifierChance > 0`, never for the boss; empty pool → the type payout), `earnedThisWeek(citizenid)`,
-  `stuckPayments()`, `amountOf(row)`, `txnOf(row)`, `department(key)`, `rowBusy(rowId, citizenid)`, `paymentsHeld()`,
+  `stuckPayments()`, `amountOf(row)`, `txnOf(row)`, `rowBusy(rowId, citizenid)`, `paymentsHeld()`,
   `nextForfeitureAt()`.
 - Admin money tools (§5.40), each `-> ok, data | false, errKey`; claim first, then `audit(info)` (false: the claim is
   undone, `err.audit_failed`), then the money under the officer's payment lock, then the final state.
 
-### 5.20a CP.Money — modules/money/engine.lua (S; the one money engine)
+### 5.20a CP.Money — modules/money/engine.lua (S; one money engine)
 Every payment (mission cash, §5.52, §5.40) is written (`writeRow`), handed to CP.Cash (`settle`) and deposited
-(`deposit`) here.
+(`deposit`) here; `seasonId()`, `department(key)`.
 
 ### 5.21 CP.Payouts — modules/money/payouts.lua (S)
 - `typePayout(type) -> amount, adminLocked`, `missionPayout(missionId)`, `baseFor(mission) -> B`, `sourceFor(mission)

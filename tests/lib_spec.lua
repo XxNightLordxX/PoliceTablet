@@ -332,4 +332,35 @@ do
     CP.Qbx, CP.Access = savedQ, savedA
 end
 
+-- FIN8: the statement helpers every money file shares (CP.query, CP.scalar, CP.update): the answer, or nil and one
+-- error line under the caller's tag when the statement raised (a stubbed MySQL, no database)
+do
+    local savedM, realErr, lines = MySQL, CP.err, {}
+    CP.err = function(tag, fmt, ...) lines[#lines + 1] = tag .. ': ' .. tostring(fmt):format(...) end
+    local fail = false
+    local function Await(answer)
+        return function(sql)
+            if fail then error('boom: ' .. sql) end
+            return answer
+        end
+    end
+    MySQL = {
+        query = { await = Await({ { id = 1 } }) },
+        scalar = { await = Await(7) },
+        update = { await = Await(3) },
+    }
+    H.eq(CP.query('fin8', 'SELECT 1')[1].id, 1, 'query: the rows')
+    H.eq(CP.scalar('fin8', 'SELECT 1'), 7, 'scalar: the first value')
+    H.eq(CP.update('fin8', 'UPDATE t'), 3, 'update: the rows changed')
+    MySQL.query.await = Await(nil)
+    H.eq(#CP.query('fin8', 'SELECT 1'), 0, 'query: no answer is no rows')
+    fail = true
+    H.eq(CP.query('fin8', 'SELECT 1'), nil, 'query: nil when it raised')
+    H.eq(CP.scalar('fin8', 'SELECT 1'), nil, 'scalar: nil when it raised')
+    H.eq(CP.update('fin8', 'UPDATE t'), nil, 'update: nil when it raised')
+    H.eq(#lines, 3, 'one error line each')
+    H.ok(lines[3]:find('^fin8: update failed: ') ~= nil, 'under the caller\'s tag')
+    MySQL, CP.err = savedM, realErr
+end
+
 return H

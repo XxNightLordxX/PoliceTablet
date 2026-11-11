@@ -137,6 +137,7 @@ CP.Payouts = {
     baseFor = function() return 500 end,
     sourceFor = function() return 'type' end,
 }
+Quiet('modules/system/schedule.lua')
 Quiet('modules/money/engine.lua')
 Quiet('modules/money/cash.lua')
 CP.Qbx = {

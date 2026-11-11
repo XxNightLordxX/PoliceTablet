@@ -48,6 +48,18 @@ for _, f in ipairs({ 'featurerewards', 'payments' }) do
     H.ok(not src:find('INSERT INTO cp_mission_runs', 1, true), f .. ': its ledger row is written by the engine')
     H.ok(src:find('CP.Money.writeRow', 1, true) and src:find('CP.Money.settle', 1, true), f .. ': writes and settles')
 end
+-- FIN8: one clock, one set of statement helpers, one season and department lookup for the whole module, and the
+-- forfeiture jobs always run through the jobs engine (no fallback for a missing schedule)
+for _, f in ipairs(PARTS) do
+    local src = Read('modules/money/' .. f .. '.lua')
+    H.ok(not src:find('local function Now()', 1, true), f .. ': no private clock (CP.now)')
+    H.ok(not src:find('pcall(MySQL.query.await, sql', 1, true), f .. ': its queries go through CP.query')
+    H.ok(not src:find('pcall(MySQL.scalar.await, sql', 1, true), f .. ': its scalars go through CP.scalar')
+    H.ok(not src:find('pcall(MySQL.update.await, sql', 1, true), f .. ': its updates go through CP.update')
+    H.ok(not src:find('local function SeasonId', 1, true), f .. ': the season is CP.Money.seasonId')
+    H.ok(not src:find('local function DeptOf', 1, true), f .. ': the department is CP.Money.department')
+    H.ok(not src:find('or ForfeitureJob', 1, true), f .. ': the forfeiture job runs through CP.Schedule.job only')
+end
 local cashSrc = Read('modules/money/cash.lua')
 H.ok(not cashSrc:find('CP.Qbx.addMoney(', 1, true), 'cash: every deposit goes through CP.Money.deposit')
 local _, deposits = cashSrc:gsub('CP%.Money%.deposit%(', '')
@@ -90,6 +102,33 @@ H.load('modules/money/cash.lua')
 H.load('modules/money/featurerewards.lua')
 H.advance(5000)
 local M = CP.Money
+
+-- ============================================================================
+--                                SHARED LOOKUPS
+-- ============================================================================
+
+do
+    local savedC = CP.Challenge
+    CP.Challenge = {
+        currentSeason = function() return { id = 4.0 } end,
+    }
+    H.eq(M.seasonId(), 4, 'seasonId: the running season')
+    CP.Challenge = {
+        currentSeason = function() return nil end,
+    }
+    H.eq(M.seasonId(), nil, 'seasonId: none running')
+    CP.Challenge = savedC
+    local savedD, savedA = Config.Departments, CP.Access
+    CP.Access = {
+        department = function() return nil end,
+    }
+    Config.Departments = { gone = { label = 'Gone', jobs = { 'gonejob' } } }
+    local d = M.department('gone')
+    H.ok(d and d.label == 'Gone' and d.societyAccount == 'gonejob', 'department: a turned-off one, its first job')
+    H.eq(M.department('nope'), nil, 'department: an unknown key is none')
+    Config.Departments, CP.Access = savedD, savedA
+    H.eq(CP.Cash.department, nil, 'one department lookup: CP.Cash keeps no copy')
+end
 
 -- ============================================================================
 --                                WHERE IT GOES
