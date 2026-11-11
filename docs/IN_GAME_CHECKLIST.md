@@ -867,3 +867,9 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   department or a mission type that does not exist): it is refused with a message naming what to fix. Set Patrol pay
   to $400 and play one. With Pay by hand on (ENABLE), type a citizen ID nobody has: the message says no officer has
   that ID. Make a backup, restore it (RESTORE): every change waits until you restart the resource. (WF5C)
+- [ ] Real players (WF5D): turn on live crimes, volunteers and the criminal tablet in Settings. Report a crime with
+  Crimson-Contracts: a unit claims the LIVE card, a third officer gets the join pop-up at the scene, one suspect is
+  booked and one talked down; End case pays each officer. Volunteer on the criminal tablet, get a strike (Give up after
+  the free minute) and restart the resource: History still shows the strike. Set the police script to none in Settings
+  -> Integrations: the criminal tablet says volunteer suspects are off, Get on the list is refused, and
+  `exports['Crimson-Police']:GetAvailablePolice()` answers nil; set it back to sc-police. (WF5D)

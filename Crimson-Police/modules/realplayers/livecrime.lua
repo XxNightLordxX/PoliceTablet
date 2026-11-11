@@ -774,10 +774,11 @@ function LC.sendEnded(run, state, reason, outcomes, case)
 end
 
 -- The export GetAvailablePolice: on-duty officers in a turned-on department job ('idle': and on no Crimson-Police
--- mission), from cached player data only (never yields). -> count, { [department] = count } | nil while off.
+-- mission), from cached player data only (never yields). -> count, { [department] = count } | nil while off (the
+-- switch off, or held off by a police script with no cuff and jail facts).
 function LC.availablePolice()
-    local c = CP.RealPlayers('liveCrime')
-    if c.enabled ~= true then return nil end
+    local c, on = CP.RealPlayers('liveCrime')
+    if not on then return nil end
     local idleOnly = c.availablePolice ~= 'duty'
     local total, byDept = 0, {}
     local Q, A, R = CP.Qbx, CP.Access, CP.Runs

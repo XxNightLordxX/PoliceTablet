@@ -116,8 +116,8 @@ function C.view(src)
     if not ok then return nil, err end
     local V = CP.Volunteers or {}
     local cid = info.citizenid
-    local vc = CP.RealPlayers('volunteer')
-    local volOn = vc.enabled == true
+    -- off while the switch is off, and while the city's police script sends no cuff and jail facts
+    local vc, volOn = CP.RealPlayers('volunteer')
     local listing = V.listingOf and V.listingOf(src) or { listed = false, roles = {} }
     local canJoin, why, _, blockedAt = false, 'off', nil, nil
     if volOn and V.check then canJoin, why, _, blockedAt = V.check(src) end
@@ -227,7 +227,7 @@ local function Act(src, payload)
     local ok, err = C.canUse(src)
     if not ok then return false, err end
     if not CP.Volunteers or not CP.Volunteers.join then return false, 'err.crimtab_off' end
-    if payload.what ~= 'stop' and payload.what ~= 'cancel' and (CP.RealPlayers('volunteer')).enabled ~= true then
+    if payload.what ~= 'stop' and payload.what ~= 'cancel' and not CP.RealPlayersOn('volunteer') then
         return false, 'volunteer.refused.off'
     end
     local done, why = fn(src, payload)

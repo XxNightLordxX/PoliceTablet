@@ -50,6 +50,15 @@ problems, the first-start setup, backups and restore) and the maintenance lock a
 shipped config first, then with the switches on, with a restart and a drop and reconnect in the middle and every
 refusal an admin screen meets. Its sections are named "admin (n)" below.
 
+**Every real-player action.** `tests/workflows_realplayers_spec.lua` (WF5D) drives every workflow of live crimes and
+volunteer suspects on the same world (the owner's sc-police sends the cuffs and the jail), with two crew members and
+two volunteers added: the shipped config first (a reported crime, `/crimsonheat`, the criminal tablet and the staff
+screen change nothing), then the switches on through Settings, a live crime from the LIVE call to the pay, the caps,
+`/surrender`, the criminal tablet from opting in to every outcome, strikes and their block, the volunteer's pay with
+`Config.FeatureRewards.suspect.voidWithRun` off and on, the staff tools on the Restrictions list, and police `none`.
+Each part has a restart and a drop and reconnect in the middle and every refusal a player meets. Its sections are
+named "realplayers (n)" below.
+
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
@@ -71,8 +80,9 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Accept refusals (permission, department, caps, feature off, maintenance) | officer (4) | - | - | owner stack only | Pass |
 | Me screen and My options | officer (8) | yes | the officer after saving them | owner stack only | Pass |
 | Abandon, off duty, logout, job change, downed mid-run | officer (10), e2e (10) | - | each block the full walk leaves out | owner stack only | Pass |
-| Live crime, backup, talk-down, booking | live_fto_e2e (2, 3, 5), realsuspects_e2e (2, 4) | yes | a suspect and the partner | off (needs a police script) | Pass |
-| Surrender | live_fto_e2e (2, 3) | yes | live_fto_e2e (5) | off (needs a police script) | Pass |
+| Live crime, backup, talk-down, booking | live_fto_e2e (2, 3, 5), realsuspects_e2e (2, 4), realplayers (3, 5) | yes | a suspect and the partner | off (needs a police script), realplayers (11) | Pass |
+| Live crime caps, pair cooldown, maintenance lock | realplayers (3, 4) | - | - | off, realplayers (11) | Pass |
+| Surrender | live_fto_e2e (2, 3), realplayers (5) | yes | live_fto_e2e (5) | off (needs a police script) | Pass |
 | Cross-department mission | full (5), teams, officer (7) | yes | a joiner | yes | Pass |
 | Supervisor UI: Today, Officers, the officer panel | supervisor (1-3) | yes | the officer, the supervisor | owner stack only | Pass |
 | Commend and revoke | supervisor (2, 9) | yes | the commended officer | owner stack only | Pass |
@@ -87,7 +97,10 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Review, void, dispute | workflows_e2e (6), supervisor (5), admin (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after fix WF5B-2) |
 | Mission Builder | full (11), admin_control_e2e (2), admin (3) | yes | the supervisor or the admin in his test run | yes | Pass |
 | Field training | live_fto_e2e (4, 5), officer (9), supervisor (7) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass (after fix WF5B-3) |
-| Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7) | yes | the volunteer and the partner | off (needs a police script) | Pass |
+| Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7), realplayers (6, 7, 10) | yes | the volunteer and the partner | off (needs a police script), realplayers (11) | Pass (after fix WF5D-2) |
+| Volunteer strikes, block, Clear strikes | realplayers (9) | yes (the strike and the block kept) | - | off, realplayers (11) | Pass (after fix WF5D-1) |
+| Volunteer pay, voidWithRun off and on | realplayers (7-9), feature_rewards | yes | - | off, realplayers (11) | Pass |
+| Real suspects staff screen, exclude, suspend, pair block | realplayers (3, 10B) | yes | - | off, realplayers (11) | Pass (after fix WF5D-3) |
 | Settings, Features, Rewards, grant | full (1), admin (6) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
 | Corrections | full (9), admin_control_e2e (1), admin (5) | yes | the officer offline for the void and restore | yes | Pass |
 | Backups and restore, the maintenance lock | full (10), admin_control_e2e (4), admin (7) | yes | the admin before the restart (the lock holds) | yes | Pass |
@@ -107,7 +120,7 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Presets, storage panel, jobs, problems, first-start setup | admin (6) | yes | the admin with the setup open | owner stack only | Pass |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
 
-"admin" = tests/workflows_admin_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
+"admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
 = tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
 with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's
 stack only.
@@ -530,6 +543,64 @@ case goes on), the volunteer is detained and History shows it. Result: **Pass**.
 Steps: Every criminal tablet action (save roles, renew, stop, the pop-up answer) already
 answers with the fresh view in one request, and the free Give up runs out on its own on the page (no polling). Stop
 keeps its second click (it ends the volunteer time); the other buttons are one click.
+
+### Every real-player action (WF5D)
+
+How it works: with live crimes on, Crimson-Contracts' reported crime is a LIVE card on Dispatch; a unit claims it,
+holds the scene, backup joins by its pop-up, suspects are detained, booked or talked down, and End case writes each
+officer's row. With volunteers on, a player opts in on the criminal tablet (`/crimtab`) or `/crimsonheat`; when a
+mission needs a suspect he is asked first (Jobs), travels to the meet point after his yes, and officers engage him.
+Both modes need a police script that reports cuffs and jail (sc-police); without one they stay off with a clear line.
+
+Spec: tests/workflows_realplayers_spec.lua. Covers: (1) as shipped: a reported crime posts no LIVE call,
+GetAvailablePolice answers nil, `/crimsonheat` and its menu are refused, the criminal tablet does not open, no Real
+suspect badge, the staff screen off and Exclude refused. (2) A supervisor and a civilian cannot change a setting; the
+admin turns on live crimes with cash, volunteers for Investigation, the criminal tablet and both feature rewards; the
+Real suspects screen for the admin only. (3) The LIVE call (no live position to officers), claims refused to a
+civilian, an unknown call and during the maintenance lock, the unit's claim, a second claim refused; backup: the scene
+pop-up with no position, No, no second pop-up while one runs, a forged token, the dispatch-response pop-up, Yes, a
+second join refused; detain, booking at Mission Row, the talk-down hint, Talk them down and its Yes, Peaceful arrest;
+the staff screen and case (refused to a supervisor and for a bad id); End case refused to an officer not on the case,
+liveCrimeEnded with no position, the rows with cash, the talk-down paid once, the timeline. (4) The same unit and
+crew inside pairCooldownHours cannot claim, another officer can; a downed suspect counts neutralisedShare; the second
+LIVE call fits maxLiveRuns, a third does not; maxOfficers full and backup off refuse the join; another department may
+join, the officer who caught that crew an hour ago may not. (5) `/surrender` before a case (not wanted), with a case
+(his confirm, a forged answer refused, his Yes), Peaceful arrest; a suspect **drops** and is back within the grace,
+the partner **drops** (her row at once, no cash, may not join again), the case ends; a **restart** mid-case (no row,
+pay, LIVE call; the closed case kept; `/surrender` not wanted; the old crime's end ignored), the next case paid.
+(6) The criminal tablet: a civilian opens it, an officer on duty and a police job off duty refused, access granted
+with no grant refused, an unknown action and a bad payload refused; Get on the list (no role refused, twice refused),
+roles, Renew, Stop (twice refused), Renew and Give up and an answer with nothing to act on refused, the window runs
+out, a **drop** and a **restart** empty the list, the maintenance lock refuses the actions while the tablet reads.
+(7) Two volunteers: the Real suspect badge, one asked first (no position on the job, the reward line), his No (never
+a strike), the next one asked, his Yes, in position, engaged (Give up no longer free), no live position to officers,
+detained and booked, nothing left to give up, the time limit, volunteerEnded with no position, $500 paid once, nothing
+to the one who said No, History, the staff timeline. (8) voidWithRun off: voiding both officer rows leaves his pay;
+on: one void leaves it, both void it, a **restart** keeps it voided, one restore brings it back. (9) Give up within
+the free seconds (no strike, History "Called off", nothing paid), got away ($1,500 paid), Give up past the free
+seconds (a strike, nothing paid), a **restart** (History still shows the strike), a second strike with two strikes to
+a block (off the list, Home shows the block, Get on the list refused, on Restrictions), a **restart** keeps the block,
+a supervisor cannot lift it, the admin extends and lifts it (Clear strikes), nothing left to clear. (10) The volunteer
+**drops** mid-case and is back within the grace (no strike), then gone past the grace (a strike, History says he
+left, nothing paid); a **restart** mid-case (no case, row, pay or strike, he may join again). (10B) Exclude, Suspend
+and Block a pair (a supervisor, a bad citizenid and zero days refused), each refusing what it should, all three on
+Restrictions, kept by a **restart**, a supervisor cannot lift, the admin lifts each. (11) Police `none`: the switches
+stay on but both modes are off, Settings -> Features says why for each, no LIVE call, GetAvailablePolice nil, the
+volunteer list empties, `/crimsonheat` refused, the criminal tablet still opens and says volunteers are off, its Get
+on the list refused, no Real suspect badge, the staff screen off; sc-police again and everything is back. Result:
+**Pass (after fixes WF5D-1, WF5D-2 and WF5D-3)**.
+
+Fix WF5D-1: after a restart, a volunteer's criminal tablet History showed none of his saved strikes until he got on
+the list again (the strikes were read back under his licence, but the History looked them up only by the key he had
+volunteered under in memory). It now finds them by the online player's licence.
+
+Fix WF5D-2: with the police script set to `none` (or one that sends no cuff and jail facts) the criminal tablet still
+said volunteers were on, and Get on the list answered "not available". It now says "Volunteer suspects are off on this
+server right now", the same as when the switch is off.
+
+Fix WF5D-3: with the police script set to `none`, the GetAvailablePolice export still counted officers although live
+crimes were held off; it now answers nil, as documented for live crimes off, so a crime script counts police its own
+way.
 
 ## Admin
 

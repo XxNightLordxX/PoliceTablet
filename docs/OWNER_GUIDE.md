@@ -2588,7 +2588,7 @@ extra lines help whoever looks at it.
 | `exports['Crimson-Police']:OpenTablet()` | client | Opens the tablet, with the same officer checks as `/CrimsonPolice` (on duty, department job, not suspended; the item when `requireItem = true`). It works even when `access.command = false` |
 | `exports['Crimson-Police']:GetDepartment(src)` | server | The department key of the player's active job (`'sast'`, `'fib'` ...) or `nil` |
 | `exports['Crimson-Police']:IsOnMission(src)` | server | `true` while the player is on a Crimson-Police mission |
-| `exports['Crimson-Police']:GetAvailablePolice()` | server | Read-only, for crime scripts: the number of on-duty officers who could answer a crime now (on no Crimson-Police mission with `Config.RealPlayers.liveCrime.availablePolice = 'idle'`, every on-duty officer with `'duty'`) and a table `{ [department] = count }`; `nil` while `Config.RealPlayers.liveCrime.enabled = false` (count police your own way then) |
+| `exports['Crimson-Police']:GetAvailablePolice()` | server | Read-only, for crime scripts: the number of on-duty officers who could answer a crime now (on no Crimson-Police mission with `Config.RealPlayers.liveCrime.availablePolice = 'idle'`, every on-duty officer with `'duty'`) and a table `{ [department] = count }`; `nil` while `Config.RealPlayers.liveCrime.enabled = false` or while live crimes are held off because the police script sends no cuff and jail facts (count police your own way then) |
 
 Server-only event for other scripts: `crimson-police:server:liveCrimeEnded` (`Config.RealPlayers.liveCrime.endEvent = true`)
 when a live case ends, with `{ resource, uid, id, key, result, reason, suspects = { [citizenid] = outcome }, caught,

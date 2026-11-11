@@ -382,8 +382,19 @@ function V.list()
 end
 
 -- Strikes within strikeHours of this citizenid's player.
+-- The player key of a citizenid: the one he volunteered under, else (after a restart, before he joins again) the
+-- online player's license, as V.check finds his block. Memory only: never a database lookup.
+local function KnownWho(cid)
+    if whoOf[cid] then return whoOf[cid] end
+    local Q = CP.Qbx
+    local src = Q and Q.getByCitizenId and Q.getByCitizenId(cid)
+    local info = src and Q.getInfo and Q.getInfo(src)
+    if type(info) == 'table' and info.citizenid == cid then return WhoOf(info) end
+    return nil
+end
+
 function V.strikes(cid)
-    return StrikeCount(whoOf[cid] or ('cid:' .. tostring(cid)), os.time())
+    return StrikeCount(KnownWho(cid) or ('cid:' .. tostring(cid)), os.time())
 end
 
 -- An admin clears this citizenid's player's strikes and strike block: memory at once, the saved rows in a
@@ -465,7 +476,7 @@ function V.strikeInfo(cid)
     local out = { strikes = {}, strikeHours = math.floor(Num(CP.RealPlayers('volunteer').strikeHours, 24, 1, 8760)) }
     if type(cid) ~= 'string' or cid == '' then return out end
     local now, seen = os.time(), {}
-    for _, who in ipairs({ whoOf[cid], 'cid:' .. cid }) do
+    for _, who in ipairs({ KnownWho(cid) or ('cid:' .. cid), 'cid:' .. cid }) do
         if not seen[who] then
             seen[who] = true
             StrikeCount(who, now)

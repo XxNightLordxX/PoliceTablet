@@ -613,6 +613,7 @@ if WORLD then
         Act = Act,
         Cb = Cb,
         ClientEvents = ClientEvents,
+        LocalEvents = LocalEvents,
         Toasts = Toasts,
         Rows = Rows,
         Paid = Paid,
@@ -633,6 +634,8 @@ if WORLD then
         SecureScene = SecureScene,
         RunEnded = RunEnded,
         SetAutoReady = function(v) autoReady = v end,
+        -- WF5D: an event or export call sent from another resource (Crimson-Contracts' lifecycle events)
+        SetInvoking = function(res) invoking = res end,
         BankEntries = function() return bankEntries end,
     }
 end
