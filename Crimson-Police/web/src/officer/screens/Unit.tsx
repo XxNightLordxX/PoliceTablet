@@ -4,11 +4,13 @@
 // waiting for them (Accept / Decline), an invite picker of on-duty officers from any department, and
 // Leave unit (confirm; mid-run it abandons the unit's run). Data: callback getUnit (UnitView + slice
 // fields, src/types/teams.ts), live via push topic 'unit'. Actions: server:unitInvite (targetSrc),
-// server:unitRespond ({ accepted, unitId }), server:teamLeave ({ team: 'unit' | 'operation' }). Test
+// server:unitRespond ({ accepted, unitId }), server:teamLeave ({ team: 'unit' | 'operation' }). The Cross-Department
+// Mission card lists who joined (Config.CrossDept.memberList) and lets a joiner invite others (Config.CrossDept.invites:
+// the same three actions with { team: 'operation' }); an invite into it is answered on its own card. Test
 // invitations (callback test:pendingInvites, push 'invites') are answered here too with server:testRespond. Invites close (locked) once the leader
 // accepts a mission type and stay closed while the unit's run is active.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
     Avatar as ProfileAvatar,
     Badge,
@@ -36,7 +38,9 @@ import type {
     UnitInviteView,
     UnitLeaveResult,
     UnitMemberView,
+    OperationMember,
     UnitOperationCard,
+    UnitOperationInvite,
     UnitPendingInvite,
     UnitScreenView,
 } from '../../types/teams';
@@ -90,7 +94,16 @@ function normalizeView(v: UnitScreenView): UnitScreenView {
             : null,
         pendingSent: asArray(v.pendingSent),
         sizeFit: v.sizeFit && !Array.isArray(v.sizeFit) ? v.sizeFit : {},
-        operation: v.operation ?? null,
+        operation: v.operation
+            ? {
+                  ...v.operation,
+                  members: asArray(v.operation.members),
+                  waitlist: asArray(v.operation.waitlist),
+                  invitable: asArray(v.operation.invitable),
+                  sent: asArray(v.operation.sent),
+              }
+            : null,
+        operationInvite: v.operationInvite ?? null,
         invites: asArray(v.invites).map(i => ({ ...i, fromCallsign: i.fromCallsign ?? null })),
         invitable: asArray(v.invitable).map(o => ({ ...o, callsign: o.callsign ?? null })),
         onRun: !!v.onRun,
@@ -672,18 +685,115 @@ function SizeFitCard({ view }: { view: UnitScreenView }) {
 }
 
 // The Cross-Department Mission the viewer joined or waits for; Leave before the start (no penalty).
+// One officer on the operation card: name, rank and callsign, department; a trailing slot for a timer or a button.
+function OperationRow({ m, tail }: { m: OperationMember; tail?: ReactNode }) {
+    return (
+        <li className="teams-row">
+            <Avatar name={m.name} />
+            <div className="teams-row__main">
+                <div className="teams-row__name">
+                    <span className="teams-row__text">{m.name}</span>
+                    {m.me ? (
+                        <Badge size="sm" tone="primary">
+                            {t('unit.ui.you')}
+                        </Badge>
+                    ) : null}
+                </div>
+                <div className="teams-row__sub">{subline(m.rank, m.callsign)}</div>
+            </div>
+            <div className="teams-row__tags">
+                <Badge size="sm" variant="outline">
+                    {m.departmentShort || '?'}
+                </Badge>
+            </div>
+            {tail ? <div className="teams-row__actions">{tail}</div> : null}
+        </li>
+    );
+}
+
+// The invite into a Cross-Department Mission waiting for the viewer: Accept joins it (every join rule applies).
+function OperationInviteCard({
+    inv,
+    stamp,
+    busyKey,
+    onRespond,
+}: {
+    inv: UnitOperationInvite;
+    stamp: unknown;
+    busyKey: string | null;
+    onRespond: (accepted: boolean) => void;
+}) {
+    return (
+        <Card icon="globe" title={t('unit.ui.op_invite_for_you')} subtitle={inv.missionLabel} padding="sm">
+            <div className="teams-invite">
+                <div className="teams-invite__head">
+                    <Avatar name={inv.from} />
+                    <div className="teams-row__main">
+                        <div className="teams-row__name">
+                            <span className="teams-row__text">{inv.from}</span>
+                            <Badge size="sm" variant="outline">
+                                {inv.departmentShort || '?'}
+                            </Badge>
+                        </div>
+                        <div className="teams-row__sub">
+                            {t('unit.ui.op_invite_from', {
+                                name: inv.fromCallsign || inv.from,
+                                joined: inv.joined,
+                                max: inv.max,
+                            })}
+                        </div>
+                    </div>
+                    <span className="teams-row__expires" title={t('unit.ui.expires_in')}>
+                        <Icon name="clock" size={13} />
+                        <Countdown seconds={inv.expiresIn} resetKey={stamp} warnBelow={30} dangerBelow={10} />
+                    </span>
+                </div>
+                <div className="teams-invite__actions">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="x"
+                        loading={busyKey === 'opr:no'}
+                        disabled={!!busyKey}
+                        onClick={() => onRespond(false)}
+                    >
+                        {t('unit.ui.decline')}
+                    </Button>
+                    <Button
+                        size="sm"
+                        icon="check"
+                        loading={busyKey === 'opr:yes'}
+                        disabled={!!busyKey}
+                        onClick={() => onRespond(true)}
+                    >
+                        {t('unit.ui.accept')}
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
 function OperationCard({
     op,
     stamp,
     busyKey,
     onLeave,
+    onInvite,
+    onWithdraw,
 }: {
     op: UnitOperationCard;
     stamp: unknown;
     busyKey: string | null;
     onLeave: () => void;
+    onInvite: (m: OperationMember) => void;
+    onWithdraw: (src: number, name: string) => void;
 }) {
     const waiting = op.waitlistPosition ?? null;
+    const members = op.members ?? [];
+    const waitlist = op.waitlist ?? [];
+    const sent = op.sent ?? [];
+    const invitable = op.invitable ?? [];
     return (
         <Card
             icon="globe"
@@ -726,6 +836,80 @@ function OperationCard({
                     </Button>
                 ) : null}
             </div>
+            {members.length ? (
+                <>
+                    <div className="teams-row__sub">{t('unit.ui.op_members')}</div>
+                    <ul className="teams-list">
+                        {members.map(m => (
+                            <OperationRow key={`m${m.src}`} m={m} />
+                        ))}
+                    </ul>
+                </>
+            ) : null}
+            {waitlist.length ? (
+                <>
+                    <div className="teams-row__sub">{t('unit.ui.op_waitlist_members')}</div>
+                    <ul className="teams-list">
+                        {waitlist.map(m => (
+                            <OperationRow key={`w${m.src}`} m={m} />
+                        ))}
+                    </ul>
+                </>
+            ) : null}
+            {op.canInvite ? (
+                <>
+                    <div className="teams-row__sub">
+                        {t('unit.ui.op_invite_title')} ·{' '}
+                        {t('unit.ui.op_invite_subtitle', {
+                            minutes: Math.max(1, Math.round((op.inviteTtl ?? 120) / 60)),
+                        })}
+                    </div>
+                    <ul className="teams-list">
+                        {sent.map(p => (
+                            <OperationRow
+                                key={`s${p.src}`}
+                                m={{ src: p.src, name: p.name, callsign: null, departmentShort: '' }}
+                                tail={
+                                    <>
+                                        <Countdown seconds={p.expiresIn} resetKey={stamp} warnBelow={30} />
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            icon="x"
+                                            loading={busyKey === `ow${p.src}`}
+                                            disabled={!!busyKey}
+                                            onClick={() => onWithdraw(p.src, p.name)}
+                                        >
+                                            {t('unit.ui.withdraw')}
+                                        </Button>
+                                    </>
+                                }
+                            />
+                        ))}
+                        {invitable.map(m => (
+                            <OperationRow
+                                key={`i${m.src}`}
+                                m={m}
+                                tail={
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        icon="plus"
+                                        loading={busyKey === `oi${m.src}`}
+                                        disabled={!!busyKey}
+                                        onClick={() => onInvite(m)}
+                                    >
+                                        {t('unit.ui.invite')}
+                                    </Button>
+                                }
+                            />
+                        ))}
+                    </ul>
+                    {invitable.length === 0 && sent.length === 0 ? (
+                        <div className="teams-row__sub">{t('unit.ui.op_invite_none')}</div>
+                    ) : null}
+                </>
+            ) : null}
         </Card>
     );
 }
@@ -783,6 +967,24 @@ export default function Unit() {
                 },
             ),
         );
+    const opInvite = (m: OperationMember) =>
+        act(`oi${m.src}`, () =>
+            run(
+                'server:unitInvite',
+                { targetSrc: m.src, team: 'operation' },
+                { success: 'unit.ui.invite_sent_toast', successVars: { name: m.name } },
+            ),
+        );
+    const opWithdraw = (src: number, name: string) =>
+        act(`ow${src}`, () =>
+            run(
+                'server:unitCancelInvite',
+                { targetSrc: src, team: 'operation' },
+                { success: 'unit.ui.withdrawn_toast', successVars: { name } },
+            ),
+        );
+    const opRespond = (accepted: boolean) =>
+        act(`opr:${accepted ? 'yes' : 'no'}`, () => run('server:unitRespond', { accepted, team: 'operation' }));
     const leaveOperation = () =>
         act('op', () => run('server:teamLeave', { team: 'operation' }, { success: 'unit.ui.op_left_toast' }));
     const confirmManage = async () => {
@@ -867,6 +1069,16 @@ export default function Unit() {
                                     stamp={data}
                                     busyKey={busyKey}
                                     onLeave={() => setConfirmOpLeave(true)}
+                                    onInvite={m => void opInvite(m)}
+                                    onWithdraw={(src, name) => void opWithdraw(src, name)}
+                                />
+                            ) : null}
+                            {data.operationInvite ? (
+                                <OperationInviteCard
+                                    inv={data.operationInvite}
+                                    stamp={data}
+                                    busyKey={busyKey}
+                                    onRespond={accepted => void opRespond(accepted)}
                                 />
                             ) : null}
                             <TestInvitesCard />

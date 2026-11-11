@@ -1724,6 +1724,8 @@ Config.CrossDept = {
     cooldown = 1800,         -- seconds between launches, server-wide
     waitlist = true,         -- officers can queue when every place is taken; a freed place goes to the first
     readyCheck = false,      -- true = the joined officers confirm Ready (unit ready check) before the run starts
+    invites = false,         -- true = an officer who joined invites others from the Unit screen, as a unit invites
+    memberList = false,      -- true = the Unit screen's operation card lists who joined and who waits
 }
 
 -- ============================================================================

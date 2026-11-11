@@ -1287,11 +1287,10 @@ The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (ru
 
 ### 5.16 CP.Units — modules/teams (one team system)
 Files for §5.16–§5.17: `modules/teams/{common,units,operations}.lua` (CP.Teams: shared helpers),
-`modules/teams/client/*.lua`, `locales/parts/teams.json`, web
+`modules/teams/client/teams.lua`, `locales/parts/teams.json`, web
 `officer/screens/Unit.tsx`, `supervisor/screens/CrossDept.tsx`, `supervisor/components/OperationPanel.tsx` (props `{
 scope: 'sup' | 'admin' }`, never wrapped in `<Screen>`), `officer/components/ReadyCheckBanner.tsx`, `types/teams.ts`
-(every view shape), `mocks/teams.mock.ts` (`?teams=leader|member|solo|invites|locked|lockedoff|long|full`,
-`?op=joining|running|waiting|none|cooldown|empty|fresh`, `&lua=1`).
+(every view shape), `mocks/teams.mock.ts` (`?teams=<variant>`, `?op=<state>`, `&lua=1`; the file lists them).
 
 Units live in memory only (a restart drops them, as it drops runs).
 - `unitOf(src) -> { id, leader, members = { src }, invites = { [src] = expiresAt }, locked } | nil`, `members(src)`
@@ -1299,8 +1298,7 @@ Units live in memory only (a restart drops them, as it drops runs).
   `CP.Access.onLost`; cancels invites to that player).
 - Forming unit = the first inviter plus pending invites; it dissolves when its last invite expires or is declined, and
   at `lock`.
-- Leader succession: `members` is in join order; when the leader leaves `members[1]` leads; one member left dissolves
-  the unit.
+- Leader succession: `members` is in join order; when the leader leaves `members[1]` leads; one left dissolves it.
 - `lock(unit)` (withdraws pending invites), `unlock(unit|id)` *(hook: at run end)* — ignored while a member is still
   on a normal run (no operation, no test) or a ready check is pending.
 - `server:teamLeave` (unit) while locked and on a normal run → `removeParticipant(run, src, 'quit')` first;
@@ -1308,8 +1306,7 @@ Units live in memory only (a restart drops them, as it drops runs).
 - Leader controls (refused with `err.unit_locked` once a type is accepted).
 - `readyCheck(unit, typeKey, onReady, onCancel, extra?) -> started` — from `CP.Draw.accept` after the lock for units
   of 2+ (false = no check needed). `teamReadyCheck` / `dropTeam` / `checkFor`: an operation's.
-- `lastPartners(src)` (the online officers of his last ended non-test run, 900 s), distance bands
-  (`Config.Units.nearbyBands`, server coords).
+- `lastPartners(src)` (online officers of his last ended non-test run, 900 s), distance bands (`Config.Units.nearbyBands`).
 - UnitView extras: `me`, `maxSize`, `inviteTtl`, `canInvite`, `inviteBlocked`, `onRun`, `unit.canManage`,
   `unit.readyCheck`, `unit.pending`, members' `avatar` and `level`, `invitable[].distanceBand` / `lastPartner`,
   `pendingSent`, `sizeFit = { [type] = { now, plusOne } }` (pool counts only), `operation` (`officerCard`).
@@ -1319,13 +1316,13 @@ Units live in memory only (a restart drops them, as it drops runs).
 
 | Kind | Name | Payload → reply |
 |---|---|---|
-| action | `server:unitInvite` | `targetSrc` or `{ targetSrc }` → `{ unitId, expiresIn }` |
-| action | `server:unitRespond` | `{ accepted, unitId }` or a boolean (newest invite) → `{ unitId, accepted }` |
+| action | `server:unitInvite` | `targetSrc` or `{ targetSrc, team? }` → `{ unitId, expiresIn }` |
+| action | `server:unitRespond` | `{ accepted, unitId, team? }` or a boolean (newest invite) → `{ unitId, accepted }` |
 | action | `server:teamLeave` | `{ team = 'unit' \| 'operation' }` → `{ left, abandoned? }` |
 | callback | `getUnit` | → UnitView |
 | action | `server:unitKick` / `server:unitPromote` | `{ targetSrc }` → `{ kicked }` / `{ leader }` |
 | action | `server:unitDisband` | → `{ disbanded }` |
-| action | `server:unitCancelInvite` | `{ targetSrc }` → `{ cancelled }` |
+| action | `server:unitCancelInvite` | `{ targetSrc, team? }` → `{ cancelled }` |
 | action | `server:unitReady` | `{ accepted }` or a boolean → `{ accepted }` (the key mapping sends it without a reply id) |
 | client event | `client:readyCheck` | `{ typeKey, typeLabel, expiresIn, leaderName, twists }` or nil to clear |
 | key mapping | `crimsonpolice_ready` | `Config.Tablet.readyKey`: answers Ready |
@@ -1339,17 +1336,16 @@ Units live in memory only (a restart drops them, as it drops runs).
   `opLaunchSkipCooldown`), an eligible mission, not during maintenance.
 - Joining: `join(src, opId)` re-checks the state after the checks that may yield, so two joins never pass the cap
   together.
+- `invite` / `respondInvite` / `cancelInvite` (`Config.CrossDept.invites`): the unit actions with `{ team =
+  'operation' }`; joiners only, while joining is open, 120 s; an accept is `join`. `inviteFor` → `operationInvite`.
 - `startNow(src)` — whoever opened the current window, any admin, or anyone with the permission when that person is
   offline. `Config.CrossDept.readyCheck`: the unit ready check first (`{ readyCheck = true }`); who is not Ready
   leaves the join list.
 - `onRunEnded(run, state)` *(hook)*: completed → `completed` (final, the lock lifts); anything else → `waiting`
   (`failed`, or `abandoned` when everyone left).
-- Idle auto-cancel (`Config.CrossDept.idleCancel`): the clock starts at launch and when the run ends, is cleared while
-  a run exists, is not reset by a relaunch, and never cuts an open window short.
-- `cancel(src, reason)` — 1–200 characters (control characters become spaces, invalid UTF-8 `err.invalid_payload`),
-  shown to participants.
-- Notifications: `client:operation (state, missionLabel, { id, relaunched })` (launched, started, ended, cancelled) to
-  every on-duty officer; pushes `operation` and `board` on every change.
+- Idle auto-cancel (`Config.CrossDept.idleCancel`): from launch and each run end, off while a run exists, not reset by
+  a relaunch, never cutting an open window short.
+- `cancel(src, reason)` — a 1–200 character reason (cleaned as every reason), shown to participants.
 - Audit (category operations, target `#<id> <missionId>`): `opLaunch`, `opStart`, `opRelaunch`, `opCancel`,
   `opAutoCancel` (console), `opRemoveJoiner`.
 - Net (every `server:sup:op*` / `server:admin:op*` needs `can(src, 'launchCrossDept')`, the admin ones also an admin;
@@ -1364,7 +1360,7 @@ Units live in memory only (a restart drops them, as it drops runs).
 | action | `server:sup\|admin:opCancel` | `{ reason }` → `{ id }` |
 | action | `server:sup\|admin:opRemoveJoiner` | `{ src, reason }` → `{ removed }` |
 | callback | `sup:getOperation` | → OperationView (`types/teams.ts`) |
-| client event | `client:operation` | `(state, missionLabel, extra = { id, relaunched })` |
+| client event | `client:operation` | `(state, missionLabel, extra = { id, relaunched })` to every on-duty officer; state launched / started / ended / cancelled |
 | push | `operation`, `board` | `{ id|false, status|false }` to every online department member (`operation` also to admins) |
 
 BoardData.operation adds `missionType`, `description`, `min`, `runState`, `waitlist`, `waitlistPosition`,
@@ -3083,8 +3079,8 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | Event | Payload | Owner |
 |---|---|---|
 | `server:acceptType` | missionType (`'weekly_boss'` for the boss card), or `{ missionType, twists = { key, ... } }` → `{ runId, twists }` | draw |
-| `server:unitInvite` | targetSrc | units |
-| `server:unitRespond` | `{ accepted, unitId }` (a bare boolean = latest invite) | units |
+| `server:unitInvite` | targetSrc or `{ targetSrc, team }` | units |
+| `server:unitRespond` | `{ accepted, unitId, team }` (a bare boolean = latest invite) | units |
 | `server:teamLeave` | `{ team }` | units |
 | `server:joinOperation` | operationId | operations |
 | `server:routeStatus` | runId, metres, coords (three args, no reqId) | route |

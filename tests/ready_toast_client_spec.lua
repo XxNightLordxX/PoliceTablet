@@ -1,4 +1,4 @@
--- The unit ready check on a member's game (modules/teams/client/units.lua): the toast names the twists the leader chose
+-- The unit ready check on a member's game (modules/teams/client/teams.lua): the toast names the twists the leader chose
 -- , and stays the plain one without twists.
 
 local H = dofile('tests/harness.lua')
@@ -10,7 +10,7 @@ local toasts = {}
 CP.Tablet = {
     notify = function(kind, text, opts) toasts[#toasts + 1] = { kind = kind, text = text, opts = opts } end,
 }
-H.load('modules/teams/client/units.lua')
+H.load('modules/teams/client/teams.lua')
 
 H.fire('crimson-police:client:readyCheck', nil, {
     typeKey = 'tactical',

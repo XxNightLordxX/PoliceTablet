@@ -31,9 +31,8 @@ do
     local files = {
         'modules/teams/common.lua',
         'modules/teams/units.lua',
-        'modules/teams/client/units.lua',
+        'modules/teams/client/teams.lua',
         'modules/teams/operations.lua',
-        'modules/teams/client/operations.lua',
     }
     local missing = {}
     for _, f in ipairs(files) do
@@ -2299,10 +2298,17 @@ do
         if fh then fh:close() end
         return fh ~= nil
     end
-    for _, f in ipairs({ 'common.lua', 'units.lua', 'operations.lua', 'client/units.lua', 'client/operations.lua' }) do
+    for _, f in ipairs({ 'common.lua', 'units.lua', 'operations.lua', 'client/teams.lua' }) do
         H.ok(Exists('modules/teams/' .. f), 'modules/teams/' .. f .. ' exists')
     end
-    for _, f in ipairs({ 'units/server.lua', 'units/client.lua', 'operations/server.lua', 'operations/client.lua' }) do
+    for _, f in ipairs({
+        'units/server.lua',
+        'units/client.lua',
+        'operations/server.lua',
+        'operations/client.lua',
+        'teams/client/units.lua',
+        'teams/client/operations.lua',
+    }) do
         H.ok(not Exists('modules/' .. f), 'the old modules/' .. f .. ' is gone')
     end
     local mf = assert(io.open(H.root .. 'fxmanifest.lua', 'r'))
@@ -2443,6 +2449,97 @@ do
     H.eq(O.active(), nil, 'no operation')
     Config.CrossDept.readyCheck = false
     U._reset()
+end
+
+-- ============================================================================
+--           FIN7: operation invites and member list, one client file
+-- ============================================================================
+-- Config.CrossDept.invites: a joined officer invites others into the operation the way a unit invites; an accept is
+-- a join. Config.CrossDept.memberList: the Unit screen's operation card lists who joined. Both ship off.
+do
+    H.eq(Config.CrossDept.invites, false, 'shipped: no operation invites (as before)')
+    H.eq(Config.CrossDept.memberList, false, 'shipped: no member list on the operation card (as before)')
+    local function Inv(from, to) return Act('server:unitInvite', from, { targetSrc = to, team = 'operation' }) end
+    local function Answer(src, yes) return Act('server:unitRespond', src, { accepted = yes, team = 'operation' }) end
+    local function Card(src) return Cb('getUnit', src).data end
+
+    Clear()
+    U._reset()
+    for k in pairs(arena) do arena[k] = nil end
+    for k in pairs(onCall) do onCall[k] = nil end
+    for _, s2 in ipairs({ 2, 3, 5, 6 }) do runBySrc[s2] = nil end
+    if O.active() then O.cancel(0, 'Clean slate for the invite checks') end
+    O._setLastLaunch(H.time - 100000)
+    local okA, dA = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    H.eq(okA, true, 'launch for the invite checks')
+    Act('server:joinOperation', 2, dA.id)
+
+    -- shipped: off, and the card looks as before
+    H.eq(select(2, Inv(2, 3)), 'err.op_invites_off', 'invites off: refused')
+    local c0 = Card(2).operation
+    H.eq(c0.members, nil, 'memberList off: no member list')
+    H.eq(c0.canInvite, nil, 'invites off: no invite picker')
+    H.eq(Card(3).operationInvite, nil, 'no invite for anyone')
+    H.eq(select(2, Act('server:unitInvite', 2, { targetSrc = 3, team = 'nope' })), 'err.invalid_payload',
+        'an unknown team is refused')
+
+    Config.CrossDept.invites = true
+    Config.CrossDept.memberList = true
+    local c1 = Card(2).operation
+    H.eq(#c1.members, 1, 'memberList on: the card lists the joiner')
+    H.eq(c1.members[1].me, true, 'the viewer is marked')
+    H.eq(c1.canInvite, true, 'a joiner may invite')
+    local names = {}
+    for _, o in ipairs(c1.invitable) do names[o.src] = true end
+    H.ok(names[3] and names[5] and not names[2] and not names[7] and not names[8],
+        'the picker lists on-duty officers of every department who could join, never the viewer or a civilian')
+
+    -- invite, refusals, accept = a join
+    H.eq(select(2, Inv(2, 2)), 'err.invalid_payload', 'no invite to yourself')
+    H.eq(select(2, Inv(5, 6)), 'err.op_not_joined', 'only a joiner invites')
+    Clear()
+    local okI, dI = Inv(2, 5)
+    H.eq(okI, true, 'a SAST joiner invites an FIB officer')
+    H.eq(dI.expiresIn, O._INVITE_TTL, 'the invite stays open as long as a unit invite')
+    H.ok(LastNote(5, 'officer.op.invite_received') ~= nil, 'the invitee gets a toast')
+    H.ok(PushedTo(5, 'unit'), 'and the unit push that plays the invite cue')
+    H.eq(select(2, Inv(2, 5)), 'err.op_already_invited', 'one open invite per officer')
+    local iv = Card(5).operationInvite
+    H.eq(iv and iv.from, 'Maria Lopez', 'the invitee sees who invited him')
+    H.eq(#Card(2).operation.sent, 1, 'the inviter sees the invite he sent')
+    local okR, dR = Answer(5, true)
+    H.eq(okR, true, 'accepted')
+    H.eq(dR.joined, 2, 'an accept is a join')
+    H.eq(#O.active().participants, 2, 'two on the join list')
+    H.eq(Card(5).operationInvite, nil, 'the invite is gone')
+    H.eq(select(2, Answer(5, true)), 'err.op_no_invite', 'nothing left to answer')
+    H.eq(select(2, Inv(2, 5)), 'err.op_invite_unavailable', 'a joiner can not be invited')
+
+    -- decline and withdraw
+    Clear()
+    Inv(5, 6)
+    H.eq(select(1, Answer(6, false)), true, 'declined')
+    H.ok(LastNote(5, 'officer.op.invite_declined') ~= nil, 'the inviter is told')
+    H.eq(#O.active().participants, 2, 'a decline joins nobody')
+    Inv(2, 6)
+    H.eq(select(2, Act('server:unitCancelInvite', 5, { targetSrc = 6, team = 'operation' })), 'err.op_not_inviter',
+        'only the officer who sent it withdraws it')
+    H.eq(select(1, Act('server:unitCancelInvite', 2, { targetSrc = 6, team = 'operation' })), true, 'withdrawn')
+    H.ok(LastNote(6, 'officer.op.invite_withdrawn') ~= nil, 'the invitee is told')
+    H.eq(select(2, Answer(6, true)), 'err.op_no_invite', 'a withdrawn invite can not be accepted')
+
+    -- expiry and the start close invites
+    Inv(2, 3)
+    H.time = H.time + O._INVITE_TTL + 1
+    H.eq(select(2, Answer(3, true)), 'err.op_no_invite', 'an expired invite can not be accepted')
+    Inv(2, 3)
+    Act('server:sup:opStart', 1)
+    H.eq(O.active().status, 'running', 'started')
+    H.eq(select(2, Answer(3, true)), 'err.op_no_invite', 'the start closes open invites')
+    H.eq(select(2, Inv(2, 6)), 'err.op_join_closed', 'no invites once joining closed')
+    O.cancel(0, 'End of the invite checks')
+    Config.CrossDept.invites = false
+    Config.CrossDept.memberList = false
 end
 
 os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))

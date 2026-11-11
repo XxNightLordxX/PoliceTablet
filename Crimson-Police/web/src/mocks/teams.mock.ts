@@ -2,6 +2,7 @@
 
 // URL variants for screenshots and checks:
 //   ?teams=leader (default) | member | solo | invites | locked | lockedoff | long | full   the Unit screen
+//     | op | opteam | opinvite   the Cross-Department Mission card, its members and invite picker, an invite into it
 //   ?op=joining (default) | running | waiting | none | cooldown | empty | fresh   the Cross-Department panel
 //   &lua=1   answer like Lua does: empty lists arrive as {} objects and nil fields are missing keys
 
@@ -14,6 +15,7 @@ import type {
     OperationWaitlistEntry,
     ReadyCheckView,
     UnitOperationCard,
+    UnitOperationInvite,
     UnitScreenView,
 } from '../types/teams';
 import { devState } from './devState';
@@ -108,6 +110,7 @@ const units: {
     readyCheck: MockReadyCheck | null;
     partners: Set<number>;
     operation: UnitOperationCard | null;
+    operationInvite: UnitOperationInvite | null;
 } = {
     unit: null,
     invites: [],
@@ -117,7 +120,11 @@ const units: {
     readyCheck: null,
     partners: new Set([P.ana.src, P.rosa.src]),
     operation: null,
+    operationInvite: null,
 };
+
+// The team mocks of a Cross-Department Mission (?teams=opteam / opinvite; Config.CrossDept.memberList and invites).
+const OP_ME = { src: ME_SRC, name: 'John Doe', callsign: '2L-10', rank: 'Sergeant', departmentShort: 'SAST', me: true };
 
 // Level numbers and distance bands for the mock people (the server works them out).
 const LEVELS: Record<number, number> = { 21: 14, 14: 7, 31: 3, 27: 22, 28: 9, 17: 5, 19: 31, 33: 11, 36: 1, 38: 2 };
@@ -210,6 +217,34 @@ function sizeFit(size: number) {
             joinEndsIn: 184,
             canLeave: true,
         };
+    } else if (v === 'opteam') {
+        units.operation = {
+            id: 7,
+            missionLabel: 'Gang Shootout',
+            status: 'joining',
+            joined: 3,
+            max: 8,
+            waitlistPosition: null,
+            joinEndsIn: 184,
+            canLeave: true,
+            members: [OP_ME, P.dana, P.grace],
+            waitlist: [],
+            canInvite: true,
+            invitable: [P.maria, P.leo, P.ana],
+            sent: [{ src: P.tom.src, name: P.tom.name, expiresIn: 96 }],
+            inviteTtl: 120,
+        };
+    } else if (v === 'opinvite') {
+        units.operationInvite = {
+            id: 7,
+            missionLabel: 'Gang Shootout',
+            from: P.grace.name,
+            fromCallsign: P.grace.callsign,
+            departmentShort: P.grace.departmentShort,
+            joined: 3,
+            max: 8,
+            expiresIn: 88,
+        };
     } else if (v === 'invites') {
         units.invites = [
             { unitId: 5, from: P.grace, expiresAt: t + 103, size: 2 },
@@ -287,6 +322,7 @@ function unitView(): UnitScreenView {
                 : (u?.pending ?? []).map(x => ({ src: x.p.src, name: x.p.name, expiresIn: x.expiresAt - t })),
         sizeFit: sizeFit(size),
         operation: units.operation,
+        operationInvite: units.operationInvite,
         invites: units.invites
             .map(i => ({
                 unitId: i.unitId,
@@ -379,6 +415,14 @@ registerMock('action', 'server:unitDisband', () => {
 });
 
 registerMock('action', 'server:unitCancelInvite', (payload: unknown) => {
+    if (opTeam(payload)) {
+        const op = units.operation;
+        const src = targetOf(payload);
+        if (!op || !(op.sent ?? []).some(x => x.src === src)) throw new Error('err.op_no_invite');
+        op.sent = (op.sent ?? []).filter(x => x.src !== src);
+        pushUnit();
+        return { withdrawn: src };
+    }
     const u = units.unit;
     if (!u) throw new Error('err.unit_none');
     const src = targetOf(payload);
@@ -416,7 +460,23 @@ registerMock('action', 'server:unitReady', (payload: unknown) => {
 
 registerMock('request', 'getUnit', () => reply(unitView()));
 
+// { team: 'operation' }: the Cross-Department Mission's invites (Config.CrossDept.invites).
+function opTeam(payload: unknown): boolean {
+    return typeof payload === 'object' && payload !== null && (payload as { team?: string }).team === 'operation';
+}
+
 registerMock('action', 'server:unitInvite', (target: unknown) => {
+    if (opTeam(target)) {
+        const op = units.operation;
+        if (!op?.canInvite) throw new Error('err.op_invites_off');
+        const src = Number((target as { targetSrc?: number }).targetSrc);
+        const m = (op.invitable ?? []).find(x => x.src === src);
+        if (!m) throw new Error('err.op_invite_unavailable');
+        op.invitable = (op.invitable ?? []).filter(x => x !== m);
+        op.sent = [...(op.sent ?? []), { src, name: m.name, expiresIn: 120 }];
+        pushUnit();
+        return { id: op.id, expiresIn: 120 };
+    }
     const src = Number(typeof target === 'object' && target ? (target as { targetSrc?: number }).targetSrc : target);
     const p = units.pool.find(x => x.src === src);
     if (!p) throw new Error('err.unit_target_unavailable');
@@ -432,6 +492,26 @@ registerMock('action', 'server:unitInvite', (target: unknown) => {
 });
 
 registerMock('action', 'server:unitRespond', (payload: unknown) => {
+    if (opTeam(payload)) {
+        const inv = units.operationInvite;
+        if (!inv) throw new Error('err.op_no_invite');
+        units.operationInvite = null;
+        if ((payload as { accepted?: boolean }).accepted) {
+            units.operation = {
+                id: inv.id,
+                missionLabel: inv.missionLabel,
+                status: 'joining',
+                joined: inv.joined + 1,
+                max: inv.max,
+                joinEndsIn: 150,
+                canLeave: true,
+            };
+        }
+        pushUnit();
+        return (payload as { accepted?: boolean }).accepted
+            ? { id: inv.id, joined: inv.joined + 1 }
+            : { declined: true };
+    }
     const accepted = typeof payload === 'boolean' ? payload : !!(payload as { accepted?: boolean })?.accepted;
     const unitId = typeof payload === 'object' && payload ? (payload as { unitId?: number }).unitId : undefined;
     const inv = unitId !== undefined ? units.invites.find(i => i.unitId === unitId) : units.invites[0];

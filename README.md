@@ -209,7 +209,7 @@ Crimson-Police ships with two departments: **SAST** (Qbox job `sast`) and **FIB*
 
 - Do the same for `fib` (for example with `'bcso'` or `'sasp'`). If you only have one police job, delete the whole
   `fib = { ... },` block. A job name may only be in one department.
-- You may also rename a department to match its job: `label` (the full name) and `short` (the tag), and give it
+- You may rename a department to match its job: `label` (the full name) and `short` (the tag), and give it
   your own logo. See [guide 2.1](docs/OWNER_GUIDE.md#21-departments-and-jobs).
 
 Then set the grade where supervisors start (`supervisorGrade`, default `3`). Section [guide
@@ -261,7 +261,7 @@ For example, on a stock Qbox server (no `sast` and no `fib` job) you get this li
 ```
 
 Fix what the lines say, then restart Crimson-Police (`ensure Crimson-Police` or `restart Crimson-Police` in the
-console, or restart the server). Most of these fixes can also be made in game in Admin UI → **Settings**, where the
+console, or restart the server). Most of these fixes can be made in game in Admin UI → **Settings**, where the
 check runs again after every change ([guide
 2.6](docs/OWNER_GUIDE.md#26-change-any-setting-in-game-the-settings-screen)). To see every check again at any time,
 type this in the server console:
@@ -288,7 +288,7 @@ Quick test as a Qbox admin (these are Qbox commands, not Crimson-Police ones):
    changed it in [3.3](#33-check-your-police-jobs)).
 4. Go on duty the way you normally do (for example at an sc-police duty point), then type `/CrimsonPolice`.
 
-Players can also bind keys for the tablet. See [6.2](#62-keys).
+Players can bind keys for the tablet. See [6.2](#62-keys).
 
 ---
 
@@ -478,9 +478,9 @@ These are always admin only. Setting one of them to `true` in `Config.Permission
 - Don't add `add_ace group.admin command.CrimsonPoliceAdmin allow`. It is not needed: the command checks
   `crimsonpolice.admin` itself.
 - **Never** add `add_ace builtin.everyone crimsonpolice.admin allow`. It makes every player an admin.
-- Only add `add_ace group.mod crimsonpolice.admin allow` if you really want moderators to change payouts, suspend
+- Only add `add_ace group.mod crimsonpolice.admin allow` if you want moderators to change payouts, suspend
   officers and void runs.
-- Don't put someone in `group.admin` just for the tablet. Use the tablet-only line in [4.2](#42-admins) instead:
+- Don't put someone in `group.admin` only for the tablet. Use the tablet-only line in [4.2](#42-admins) instead:
   `group.admin` can run every server command.
 - `supervisorGrade` is a grade **number**, not a grade name.
 
@@ -591,7 +591,7 @@ The two switches at the top ([5.1](#51-the-two-switches-at-the-top-debug-and-sto
 | Mission Builder for supervisors | NPC missions | `Config.Builder.enabled` |
 | Surrender and talk-down | Player vs police | `Config.RealPlayers.surrender.enabled` |
 | Real suspects admin screen | Player vs police | `Config.RealPlayers.staff.screen` |
-| Cross-department operations | Police teamwork | `Config.CrossDept.enabled` |
+| Cross-department operations | Police teamwork | `Config.CrossDept.enabled`, `.invites`, `.memberList` |
 | Ready check | Police teamwork | `Config.Units.readyCheck`, `Config.CrossDept.readyCheck` |
 | Commendations | Police teamwork | `Config.Recognition.commendations.enabled` |
 | Daily goal | Police teamwork | `Config.Objectives.dailyGoal.enabled` |

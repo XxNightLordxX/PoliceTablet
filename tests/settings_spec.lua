@@ -198,6 +198,11 @@ do
     H.eq(titles.run_limits, 'Run limits', 'titled from its banner')
     H.eq(E('Rescale.enabled').section, 'scaling_by_participants', 'the rest of the scaling section stays')
     H.eq(E('Limits.maxUnitSize').desc, 'officers in one unit at most', 'each run limit has its own comment')
+    H.eq(E('CrossDept.invites').desc,
+        'true = an officer who joined invites others from the Unit screen, as a unit invites',
+        'FIN7: the operation invites switch')
+    H.eq(E('CrossDept.memberList').section, E('CrossDept.enabled').section,
+        'and the member list sit with the operation')
     H.eq(E('Disputes.windowHours').desc, 'hours after a run that its officers may dispute it', 'the dispute window')
     H.eq(E('Format.currencyAfter').desc, 'true = the symbol goes after the amount (250 $)',
         'a comment that reads like code no longer hides the description')
@@ -211,6 +216,8 @@ do
         'MissionCalls.enabled',
         'Builder.enabled',
         'CrossDept.maxParticipants',
+        'CrossDept.invites',
+        'CrossDept.memberList',
         'Objectives.bounty.bonus',
         'Recognition.commendations.perSupervisorPerDay',
         'Testing.enabled',

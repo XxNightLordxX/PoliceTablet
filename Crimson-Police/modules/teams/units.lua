@@ -30,10 +30,13 @@
 --                                              never touches runs. opts = { reason = 'left'|'disconnected'|'lost'|'moved', silent }
 --   CP.Units.view(src) -> UnitView (§9.4) plus the slice fields documented below
 -- Net (CP.Net)
---   action   server:unitInvite (targetSrc | { targetSrc })          -> { unitId, expiresIn }
+--   action   server:unitInvite (targetSrc | { targetSrc, team? })   -> { unitId, expiresIn }
 --            an in-arena inviter gets err.in_arena, an in-arena target err.unit_target_unavailable
---   action   server:unitRespond ({ accepted, unitId } | boolean)    -> { unitId|nil, accepted }
+--   action   server:unitRespond ({ accepted, unitId, team? } | boolean) -> { unitId|nil, accepted }
 --            a bare boolean answers the newest invite; accepting refuses in-arena players (err.in_arena)
+--   action   server:unitCancelInvite ({ targetSrc, team? })          -> withdraws an open invite
+--            team = 'operation' (Config.CrossDept.invites): the same three for the Cross-Department Mission's join
+--            list (CP.Operations.invite / respondInvite / cancelInvite; an accept is a join)
 --   action   server:teamLeave ({ team = 'unit' | 'operation' } | nil) -> unit: { left = true, abandoned = bool };
 --            operation: CP.Operations.leave (the join list or waitlist, before the start)
 --   callback getUnit -> UnitView
@@ -48,7 +51,8 @@
 --   me (the viewer's src), maxSize, inviteTtl (seconds), canInvite, inviteBlocked (locale key|nil), onRun,
 --   unit.size, unit.pending = { { src, name, callsign, departmentShort, expiresIn } },
 --   members[].available (false when that member is no longer an on-duty officer),
---   invites[].size (members in that unit), invitable[].inUnit (already in another, non-full unit).
+--   invites[].size (members in that unit), invitable[].inUnit (already in another, non-full unit),
+--   operation (CP.Operations.officerCard) and operationInvite (CP.Operations.inviteFor).
 -- The invite list walks CP.Qbx.getOnlinePlayers() and calls getOfficer only for players CP.Access.maybeOfficer
 -- keeps (no Qbox lookup for a civilian); the operation pushes and supervisor toasts filter the same way.
 --
@@ -1418,6 +1422,8 @@ function Units.view(src)
     view.sizeFit = SizeFit(officers, view.unit and #unit.members or 1, unit and LeaderDept(unit) or me.department)
     local okOp, opCard = Call('Operations', 'officerCard', src)
     view.operation = okOp and type(opCard) == 'table' and opCard or nil
+    local okInv, opInvite = Call('Operations', 'inviteFor', src)
+    view.operationInvite = okInv and type(opInvite) == 'table' and opInvite or nil
     if view.operation then
         local team, check = Units.checkFor(src)
         if team and teams[team.id] == team then view.operation.readyCheck = CheckView(check, src, now) end
@@ -1510,10 +1516,27 @@ local function ParseTarget(payload)
     return CP.U.toSrc(payload)
 end
 
+-- The team of a payload: nil or 'unit' = the unit, 'operation' = the Cross-Department Mission; else false.
+local function TeamOf(payload)
+    local team = type(payload) == 'table' and payload.team or nil
+    if team == nil or team == 'unit' then return 'unit' end
+    if team == 'operation' then return 'operation' end
+    return false
+end
+
+-- A call into CP.Operations for { team = 'operation' } (its invites and its leave).
+local function OpCall(fnName, ...)
+    local ok, done, data = Call('Operations', fnName, ...)
+    if not ok then return false, 'err.internal' end
+    return done, data
+end
+
 CP.Net.action('server:unitInvite', function(src, payload)
+    local team = TeamOf(payload)
     local target = ParseTarget(payload)
-    if not target then return false, 'err.invalid_payload' end
+    if not team or not target then return false, 'err.invalid_payload' end
     if not CP.Net.rateOk(src, 'units:invite', 6, 10000) then return false, 'err.rate_limited' end
+    if team == 'operation' then return OpCall('invite', src, target) end
     return Invite(src, target)
 end, { rate = 3 })
 
@@ -1531,19 +1554,18 @@ CP.Net.action('server:unitRespond', function(src, payload)
     else
         return false, 'err.invalid_payload'
     end
+    local team = TeamOf(payload)
+    if not team then return false, 'err.invalid_payload' end
+    if team == 'operation' then return OpCall('respondInvite', src, accepted) end
     return Respond(src, accepted, unitId)
 end, { rate = 3 })
 
 -- One leave for every team: { team = 'operation' } leaves the Cross-Department Mission's join list or waitlist before
 -- its start (CP.Operations.leave); nil or { team = 'unit' } leaves the unit.
 CP.Net.action('server:teamLeave', function(src, payload)
-    local team = type(payload) == 'table' and payload.team or nil
-    if team ~= nil and team ~= 'unit' and team ~= 'operation' then return false, 'err.invalid_payload' end
-    if team == 'operation' then
-        local ok, done, data = Call('Operations', 'leave', src)
-        if not ok then return false, 'err.internal' end
-        return done, data
-    end
+    local team = TeamOf(payload)
+    if not team then return false, 'err.invalid_payload' end
+    if team == 'operation' then return OpCall('leave', src) end
     return Leave(src)
 end, { rate = 2 })
 
@@ -1568,8 +1590,10 @@ CP.Net.action('server:unitDisband', function(src)
 end, { rate = 2 })
 
 CP.Net.action('server:unitCancelInvite', function(src, payload)
+    local team = TeamOf(payload)
     local target = ParseTarget(payload)
-    if not target then return false, 'err.invalid_payload' end
+    if not team or not target then return false, 'err.invalid_payload' end
+    if team == 'operation' then return OpCall('cancelInvite', src, target) end
     return Units.cancelInvite(src, target)
 end, { rate = 3 })
 

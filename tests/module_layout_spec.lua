@@ -173,7 +173,7 @@ local CLIENT_ORDER = {
     'modules/missions/client/testing.lua',
     'modules/realplayers/client/crimtab.lua',
     'modules/dispatch/client/missioncalls.lua',
-    'modules/teams/client/operations.lua',
+    'modules/teams/client/teams.lua',
 }
 for _, case in ipairs({ { 'server', server, ORDER }, { 'client', client, CLIENT_ORDER } }) do
     local at = {}

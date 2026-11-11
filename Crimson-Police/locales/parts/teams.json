@@ -321,5 +321,20 @@
   "err.op_department_out": "Your department has opted out of Cross-Department Missions. Ask a supervisor to opt back in.",
   "err.op_department_full": "Every place your department may take in this Cross-Department Mission is taken. Join the waitlist instead.",
   "officer.op.removed_not_ready": "You were taken off {mission} because you did not answer Ready.",
-  "sup.crossdept.ready_toast": "The officers who joined {mission} are asked if they are ready; the run starts once all are."
+  "sup.crossdept.ready_toast": "The officers who joined {mission} are asked if they are ready; the run starts once all are.",
+  "err.op_invites_off": "Invites to Cross-Department Missions are turned off on this server. Ask the officer to join from the Mission Board.",
+  "err.op_invite_unavailable": "That officer can't join this Cross-Department Mission right now. Pick another officer.",
+  "err.op_already_invited": "That officer already has an open invite to this Cross-Department Mission. Wait for an answer.",
+  "err.op_no_invite": "That invite is no longer open. Refresh the Unit screen.",
+  "err.op_not_inviter": "Only the officer who sent this invite can withdraw it. Let it run out instead.",
+  "officer.op.invite_received": "{name} invited you to {mission}. Answer on the Unit screen.",
+  "officer.op.invite_declined": "{name} declined your invite to the Cross-Department Mission.",
+  "officer.op.invite_withdrawn": "{name} withdrew the invite to {mission}.",
+  "unit.ui.op_members": "Joined officers",
+  "unit.ui.op_waitlist_members": "Waitlist",
+  "unit.ui.op_invite_title": "Invite to the operation",
+  "unit.ui.op_invite_subtitle": "On-duty officers who could join now · invites stay open {minutes} minutes",
+  "unit.ui.op_invite_none": "No officer can join right now.",
+  "unit.ui.op_invite_for_you": "Invite to a Cross-Department Mission",
+  "unit.ui.op_invite_from": "From {name} · {joined}/{max} joined"
 }

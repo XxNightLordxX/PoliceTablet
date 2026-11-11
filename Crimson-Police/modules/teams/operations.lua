@@ -43,6 +43,12 @@
 --   CP.Operations.relaunch(src) -> ok, data|errKey
 --   CP.Operations.cancel(src, reason) -> ok, data|errKey         src 0 = the server (no permission check)
 --   CP.Operations.join(src, opId) -> ok, data|errKey             officers of any department (server:joinOperation)
+--   CP.Operations.invite(src, target) / respondInvite(src, accepted) / cancelInvite(src, target) -> ok, data|errKey
+--       Config.CrossDept.invites: a joined officer invites as a unit does (server:unitInvite { team = 'operation' },
+--       units.lua); an accept is Ops.join
+--   CP.Operations.officerCard(src) -> the Unit screen's operation card (members and waitlist with
+--       Config.CrossDept.memberList; canInvite, invitable, sent, inviteTtl with invites) | nil
+--   CP.Operations.inviteFor(src) -> { id, missionLabel, from, fromCallsign, departmentShort, joined, max, expiresIn }|nil
 --   CP.Operations.onRunEnded(run, state)                         (hook, CP.Runs) state 'completed' | other
 --   CP.Operations.view(src) -> OperationView (callback sup:getOperation, shape below)
 --   CP.Operations.cooldownLeft() -> seconds until the next launch is allowed (0 = now)
@@ -1041,17 +1047,187 @@ function Ops.removeJoiner(src, target, reason)
     return DoRemoveJoiner(src, target, text)
 end
 
+-- ============================================================================
+--                  INVITES AND THE MEMBER LIST (Unit screen)
+-- ============================================================================
+-- Config.CrossDept.invites: an officer on the join list invites others the way a unit invites (Unit screen,
+-- server:unitInvite { team = 'operation' }); the invitee answers on his own Unit screen (server:unitRespond
+-- { team = 'operation' }) and an accept is an ordinary join (every join rule, the waitlist when full). An invite
+-- stays open INVITE_TTL seconds and only while joining is open. Config.CrossDept.memberList: the operation card
+-- lists who joined (and who waits), as the unit card lists its members.
+
+local INVITE_TTL = 120           -- seconds an operation invite stays open (as a unit invite)
+local INVITABLE_MAX = 30         -- officers the invite picker lists at most
+
+local function InvitesOn() return Cfg().invites == true end
+local function MemberListOn() return Cfg().memberList == true end
+
+local function JoinOpen(cur)
+    return cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and os.time() < cur.joinEndsAt
+end
+
+local function Placed(cur, src)
+    for _, p in ipairs(cur.participants) do if p.src == src then return 'joined' end end
+    for _, w in ipairs(cur.waitlist or {}) do if w.src == src then return 'waitlist' end end
+    return nil
+end
+
+-- The open invite to src (expired ones are dropped), or nil.
+local function OpenInvite(cur, src)
+    local inv = cur.invites and cur.invites[src]
+    if not inv then return nil end
+    if inv.expiresAt <= os.time() or not JoinOpen(cur) then
+        cur.invites[src] = nil
+        return nil
+    end
+    return inv
+end
+
+-- Why target can not be invited (errKey) or nil. May yield (officer and call lookups).
+local function InviteRefused(cur, target)
+    local o = GetOfficer(target)
+    if not o then return 'err.op_invite_unavailable' end
+    if Placed(cur, target) or InArena(target) or OnRun(target) or Banned(o.citizenid) or DeptRefuses(cur, o) then
+        return 'err.op_invite_unavailable'
+    end
+    return nil, o
+end
+
+function Ops.invite(src, target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
+    if not src or not target or src == target then return false, 'err.invalid_payload' end
+    if not InvitesOn() then return false, 'err.op_invites_off' end
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if not JoinOpen(cur) then return false, 'err.op_join_closed' end
+    if Placed(cur, src) ~= 'joined' then return false, 'err.op_not_joined' end
+    if OpenInvite(cur, target) then return false, 'err.op_already_invited' end
+    local me = GetOfficer(src)
+    if not me then return false, 'err.not_police' end
+    local why, o = InviteRefused(cur, target)
+    if why then return false, why end
+    -- the checks above may yield: the state again, then the change with it
+    if op ~= cur or not JoinOpen(cur) then return false, 'err.op_join_closed' end
+    if Placed(cur, src) ~= 'joined' then return false, 'err.op_not_joined' end
+    if Placed(cur, target) then return false, 'err.op_invite_unavailable' end
+    if OpenInvite(cur, target) then return false, 'err.op_already_invited' end
+    cur.invites = cur.invites or {}
+    cur.invites[target] = {
+        expiresAt = os.time() + INVITE_TTL,
+        from = {
+            src = src,
+            name = CP.U.clip(me.name or '?', 64),
+            callsign = me.callsign and CP.U.clip(me.callsign, 32) or nil,
+            departmentShort = me.departmentShort or '',
+        },
+        targetName = CP.U.clip(o.name or ('#' .. target), 64),
+    }
+    CP.notify(target, 'info', 'officer.op.invite_received', { name = me.name or '?', mission = cur.missionLabel })
+    CP.push(target, 'unit', { unitId = false, invited = true })
+    CP.push(src, 'unit', { unitId = false })
+    CP.log(TAG, 'operation %d: %d invited %d', cur.id, src, target)
+    return true, { id = cur.id, expiresIn = INVITE_TTL }
+end
+
+-- The invitee's answer: an accept is a join (Ops.join: every rule, the waitlist when full).
+function Ops.respondInvite(src, accepted)
+    src = CP.U.toSrc(src)
+    if not src or type(accepted) ~= 'boolean' then return false, 'err.invalid_payload' end
+    local cur = op
+    local inv = cur and OpenInvite(cur, src)
+    if not inv then return false, 'err.op_no_invite' end
+    cur.invites[src] = nil
+    CP.push(inv.from.src, 'unit', { unitId = false })
+    if not accepted then
+        CP.notify(inv.from.src, 'info', 'officer.op.invite_declined', { name = inv.targetName })
+        return true, { declined = true }
+    end
+    return Ops.join(src, cur.id)
+end
+
+-- The officer who sent it withdraws an open invite.
+function Ops.cancelInvite(src, target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
+    if not src or not target then return false, 'err.invalid_payload' end
+    local cur = op
+    local inv = cur and OpenInvite(cur, target)
+    if not inv then return false, 'err.op_no_invite' end
+    if inv.from.src ~= src then return false, 'err.op_not_inviter' end
+    cur.invites[target] = nil
+    CP.notify(target, 'info', 'officer.op.invite_withdrawn', { name = inv.from.name, mission = cur.missionLabel })
+    CP.push(target, 'unit', { unitId = false })
+    return true, { withdrawn = target }
+end
+
+-- The open invite for src, as the Unit screen shows it (nil when there is none).
+function Ops.inviteFor(src)
+    src = CP.U.toSrc(src)
+    local cur = op
+    local inv = src and cur and OpenInvite(cur, src)
+    if not inv then return nil end
+    return {
+        id = cur.id,
+        missionLabel = cur.missionLabel,
+        from = inv.from.name,
+        fromCallsign = inv.from.callsign,
+        departmentShort = inv.from.departmentShort,
+        joined = #cur.participants,
+        max = MaxFor(),
+        expiresIn = math.max(0, inv.expiresAt - os.time()),
+    }
+end
+
+local function Person(e, me)
+    return {
+        src = e.src,
+        name = e.name,
+        callsign = e.callsign,
+        departmentShort = e.departmentShort or '',
+        rank = e.rank or '',
+        me = e.src == me or nil,
+    }
+end
+
+-- The invite picker: on-duty officers who could join now (not placed, not invited, not on a run). May yield.
+local function Invitable(cur, src)
+    local out = {}
+    for _, p in ipairs(OnlinePlayers()) do
+        p = CP.U.toSrc(p)
+        if #out >= INVITABLE_MAX then break end
+        if p and p ~= src and not Placed(cur, p) and not OpenInvite(cur, p) and MaybeOfficer(p) then
+            local why, o = InviteRefused(cur, p)
+            if not why then
+                out[#out + 1] = {
+                    src = p,
+                    name = o.name or ('#' .. p),
+                    callsign = o.callsign,
+                    rank = o.rank or '',
+                    departmentShort = o.departmentShort or '',
+                }
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.departmentShort ~= b.departmentShort then
+            return tostring(a.departmentShort) < tostring(b.departmentShort)
+        end
+        if a.name ~= b.name then return tostring(a.name) < tostring(b.name) end
+        return a.src < b.src
+    end)
+    return out
+end
+
 -- The Unit screen's operation card for an officer on the join list or the waitlist (nil otherwise).
 function Ops.officerCard(src)
     src = CP.U.toSrc(src)
     local cur = op
     if not src or not cur then return nil end
-    local joined, position = false, nil
-    for _, p in ipairs(cur.participants) do if p.src == src then joined = true end end
+    local placed = Placed(cur, src)
+    if not placed then return nil end
+    local position = nil
     for i, w in ipairs(cur.waitlist or {}) do if w.src == src then position = i end end
-    if not joined and not position then return nil end
     local open = cur.status == 'joining' and not cur.joinClosed
-    return {
+    local card = {
         id = cur.id,
         missionLabel = cur.missionLabel,
         status = cur.status,
@@ -1061,6 +1237,29 @@ function Ops.officerCard(src)
         joinEndsIn = open and cur.joinEndsAt and math.max(0, cur.joinEndsAt - os.time()) or nil,
         canLeave = open,
     }
+    if MemberListOn() then
+        card.members, card.waitlist = {}, {}
+        for _, p in ipairs(cur.participants) do card.members[#card.members + 1] = Person(p, src) end
+        for _, w in ipairs(cur.waitlist or {}) do card.waitlist[#card.waitlist + 1] = Person(w, src) end
+    end
+    if InvitesOn() and placed == 'joined' and JoinOpen(cur) then
+        card.sent = {}
+        local now = os.time()
+        for target, inv in pairs(cur.invites or {}) do
+            if inv.from.src == src and inv.expiresAt > now then
+                card.sent[#card.sent + 1] = { src = target, name = inv.targetName, expiresIn = inv.expiresAt - now }
+            end
+        end
+        table.sort(card.sent, function(a, b) return a.src < b.src end)
+        local list = Invitable(cur, src)
+        -- the operation changed while the list was built (officer lookups may wait on the database)
+        if op == cur and JoinOpen(cur) then
+            card.canInvite = true
+            card.invitable = list
+            card.inviteTtl = INVITE_TTL
+        end
+    end
+    return card
 end
 
 -- A joiner who drops, unloads or no longer qualifies leaves the join list (runs handle the run itself).
@@ -1579,4 +1778,5 @@ end)
 function Ops._reset()
     op, lastLaunchAt, busy = nil, nil, false
 end
+Ops._INVITE_TTL = INVITE_TTL
 function Ops._setLastLaunch(ts) lastLaunchAt = ts end

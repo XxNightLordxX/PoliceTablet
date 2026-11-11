@@ -381,21 +381,22 @@ When someone leaves mid-run (Config.Rescale)
 | Real call, force recall or went down (real_call, force_recall, downed) | Shrink to the team that's left | Stays as it was; if the leave later becomes real_call_cancelled, it drops then |
 | Quit, off duty, job change, suspended, disconnected, or removed by the idle check (quit, off_duty, job_change, suspended, disconnected, idle) | Shrink to the team that's left | Drops to the team that's left |
 
-- Nobody joins after the start. The HUD shows the new tier and the result screen the tier used for points and cash.
+- Nobody joins after the start. The HUD shows the new tier, the result screen the tier used for points and cash.
 
 Cross-Department Missions (Config.CrossDept)
 
-- A supervisor or admin launches one mission open to every department and supporting 2+ officers (Supervisor UI → Mission List, Admin UI → Missions); never the Weekly Boss. One active server-wide; a launch at most every 30 minutes (cooldown).
-- Board lock: every on-duty officer is notified and sees only its card; the server refuses every other new mission, the Weekly Boss included; runs already accepted finish normally.
-- Join: any department, up to 8; joining closes at Start now or 5 minutes after launch; 2 needed to start. When full, a waitlist; a freed place goes to its first. A participant may leave before the start at no cost; a supervisor with launchCrossDept may remove a joiner before the start (reason, audited). Leaving is the teams' one Leave (Unit screen).
-- Ready check (Config.CrossDept.readyCheck, ships off): at the start every joined officer answers the unit ready check (no Auto-Ready); all Ready starts the run, anyone who declines or does not answer leaves the join list and joining opens again.
+- A supervisor or admin launches one mission open to every department for 2+ officers (Supervisor UI → Mission List, Admin UI → Missions), never the Weekly Boss. One active server-wide; one launch per 30 minutes.
+- Board lock: every on-duty officer is notified and sees only its card; every other new mission is refused, the Weekly Boss too; accepted runs finish normally.
+- Join: any department, up to 8; joining closes at Start now or 5 minutes after launch; 2 needed to start. Full: a waitlist; a freed place goes to its first. A participant may leave before the start at no cost (the teams' one Leave, Unit screen); a supervisor with launchCrossDept may remove a joiner before then (reason, audited).
+- Config.CrossDept.invites (off): a joiner invites others as a unit does; an accept is a join. memberList (off): the Unit screen card lists joiners.
+- Config.CrossDept.readyCheck (off): at the start every joiner answers the unit ready check (no Auto-Ready); all Ready starts the run, who declines or does not answer leaves the join list and joining opens again.
 - The route rules apply; the tier is set at In progress; points, scaling and cash as any run, with the cross-department bonus when 2+ departments joined.
-- The lock lifts when the run is Completed. A failed or emptied run leaves the operation active for any supervisor to relaunch or cancel; it auto-cancels after 30 minutes with no run in progress.
+- The lock lifts when the run is Completed. A failed or emptied run leaves it active for any supervisor to relaunch or cancel; it auto-cancels after 30 minutes with no run.
 - They ignore type and mission cooldowns, the no-repeat rule, the hourly cap and the run cap, and never have a twist.
 
 ## Mission catalog
 
-v2 ships 18 missions plus the Weekly Boss, one file each in missions/builtin/. This table is the summary; each mission's full behaviour is in its file (Mission cards links them).
+v2 ships 18 missions plus the Weekly Boss, one file each in missions/builtin/. This table sums them up; each file has the full behaviour (Mission cards links them).
 
 | Mission | Id and file name | Type | Officers | Difficulty | Time limit | What scales |
 |---|---|---|---|---|---|---|

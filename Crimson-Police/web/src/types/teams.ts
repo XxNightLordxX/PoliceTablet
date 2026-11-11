@@ -1,4 +1,4 @@
-// Response shapes of units and operations (modules/units, modules/operations; docs/dev/ARCHITECTURE.md §5.16).
+// Response shapes of units and operations (modules/teams; docs/dev/ARCHITECTURE.md §5.16).
 // UnitView and BoardData.operation are contract shapes (src/shared/types.ts); the types below add the optional fields
 // the server sends on top of them.
 
@@ -69,6 +69,36 @@ export interface UnitOperationCard {
     canLeave: boolean;
     // Config.CrossDept.readyCheck: the start's ready check, while it waits (the unit engine's view).
     readyCheck?: ReadyCheckView | null;
+    // Config.CrossDept.memberList: who joined and who waits (the viewer marked `me`).
+    members?: OperationMember[];
+    waitlist?: OperationMember[];
+    // Config.CrossDept.invites, the viewer joined and joining is open: the invite picker and the invites he sent.
+    canInvite?: boolean;
+    invitable?: OperationMember[];
+    sent?: UnitSentInvite[];
+    inviteTtl?: number;
+}
+
+// An officer on the operation card (a joiner, a waitlisted officer or one the viewer may invite).
+export interface OperationMember {
+    src: number;
+    name: string;
+    callsign: string | null;
+    departmentShort: string;
+    rank?: string;
+    me?: boolean;
+}
+
+// An open invite into the Cross-Department Mission for the viewer (Config.CrossDept.invites).
+export interface UnitOperationInvite {
+    id: number;
+    missionLabel: string;
+    from: string;
+    fromCallsign: string | null;
+    departmentShort: string;
+    joined: number;
+    max: number;
+    expiresIn: number;
 }
 
 // An invite the viewer's unit sent that is still open.
@@ -123,6 +153,7 @@ export interface UnitScreenView {
     pendingSent?: UnitSentInvite[];
     sizeFit?: Record<string, SizeFitEntry>;
     operation?: UnitOperationCard | null;
+    operationInvite?: UnitOperationInvite | null;
 }
 
 // Reply of server:teamLeave { team: 'unit' }.

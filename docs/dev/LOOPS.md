@@ -424,7 +424,7 @@ strings do not count.
 | `modules/access/client/tablet.lua` | 14 | 0 | prop keeper, open watcher, Escape guard; bounded loads; one-shots |
 | `modules/access/tablet.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/missions/client/testing.lua` | 9 | 0 | debug drawing, focus watch; bounded waits; one-shots |
-| `modules/teams/client/units.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/teams/client/teams.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/teams/units.lua` | 1 | 0 | a start-up hook; the sweep is a `CP.Perf.armed` loop |
 | `modules/realplayers/client/volunteers.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/match.lua` | 5 | 0 | match tick while a run has a match; one-shots |

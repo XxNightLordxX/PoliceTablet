@@ -376,6 +376,8 @@ Play.features = {
             'CrossDept.joinWindow',
             'CrossDept.cooldown',
             'CrossDept.idleCancel',
+            'CrossDept.invites',
+            'CrossDept.memberList',
         },
     },
     {

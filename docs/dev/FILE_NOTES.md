@@ -135,8 +135,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/system/migrations.lua`: Applies sql/migrations/NNN_*.sql in order on start.
 - `Crimson-Police/modules/system/schedule.lua`: CP.Schedule: server-time calendar, reset boundaries and the timed jobs (Admin UI -> System -> Jobs).
 - `Crimson-Police/modules/system/storage.lua`: CP.Storage: where Crimson-Police keeps its data (Config.Database).
-- `Crimson-Police/modules/teams/client/operations.lua`: CP.Operations (client): the Cross-Department Mission toast.
-- `Crimson-Police/modules/teams/client/units.lua`: CP.Units (client): the invite cue, the ready check toast and the crimsonpolice_ready key mapping.
+- `Crimson-Police/modules/teams/client/teams.lua`: CP.Units and CP.Operations (client): the teams module's toasts, the invite cue, the ready check and its key.
 - `Crimson-Police/modules/teams/common.lua`: CP.Teams (server): the helpers both parts of the teams module use (units.lua and operations.lua).
 - `Crimson-Police/modules/teams/operations.lua`: CP.Operations (server): Cross-Department Missions, a team of every department: the join list, waitlist and start.
 - `Crimson-Police/modules/teams/units.lua`: CP.Units (server): units of 2-4 officers from any department, leader controls and the ready check.
@@ -460,7 +459,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/rewards.ts`: Shapes of the optional item rewards: the Rewards locker on Home and Admin UI → Leaderboards → Item rewards.
 - `Crimson-Police/web/src/types/run_ui.ts`: Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 - `Crimson-Police/web/src/types/settings.ts`: Admin UI → Settings and the mission switches: the shapes modules/admin/settings.lua sends.
-- `Crimson-Police/web/src/types/teams.ts`: Response shapes of units and operations (modules/units, modules/operations; docs/dev/ARCHITECTURE.md §5.16).
+- `Crimson-Police/web/src/types/teams.ts`: Response shapes of units and operations (modules/teams; docs/dev/ARCHITECTURE.md §5.16).
 - `Crimson-Police/web/src/types/testing.ts`: Admin test mode shapes (modules/missions/testing.lua, docs/dev/ARCHITECTURE.md §5.27).
 - `Crimson-Police/web/src/vite-env.d.ts`: / <reference types="vite/client" />
 - `tests/access_spec.lua`: Tablet access and the UI shell: the ways and their switches, mission desks, requireItem, the sidebar badge counts and their 'nav' push, Config health, and the client's desk zones, desk pose and item and distance watchers.
@@ -605,7 +604,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/pursuit_volunteer_spec.lua`: Pursuit's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact hand-off) played by a volunteer in his own car.
 - `tests/push_mission_spec.lua`: A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the random draw.
 - `tests/qbx_cache_spec.lua`: CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many times Qbox's exports are called, and that every change event makes the next answer fresh.
-- `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/teams/client/units.lua): the toast names the twists the leader chose , and stays the plain one without twists.
+- `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/teams/client/teams.lua): the toast names the twists the leader chose , and stays the plain one without twists.
 - `tests/realplayers_spec.lua`: Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.
 - `tests/realsuspects_docs_spec.lua`: The owner docs for real suspects stay in step with the code.

@@ -605,6 +605,8 @@ Everything else works as shipped. These are the ones owners change most:
 |---|---|
 | `Config.CrossDept.enabled` | Cross-Department Missions on or off |
 | `Config.CrossDept.readyCheck` | `true` = the officers who joined confirm Ready (the unit ready check, `Config.Units.readyTimeout`) before the run starts; ships `false` |
+| `Config.CrossDept.invites` | `true` = an officer who joined invites others from the Unit screen, as a unit invites (open 2 minutes, only while joining is open; accepting is a normal join, the waitlist when full); ships `false` |
+| `Config.CrossDept.memberList` | `true` = the Unit screen's operation card lists who joined and who waits; ships `false` |
 | `Config.Units.invitePolicy` | `'anyone'` in a unit may invite, or only the `'leader'` |
 | `Config.Objectives` | Everything officers and departments aim for, one block per kind, each with its own `enabled`: `dailyGoal` and `weeklyGoal` (`points` and the `goals` list), `challenge` (the department challenge: `scoring` `'average'`, `'total'` or `'top10'`, `minRunsActive`), `bounty` (the weekly bounty: `bonus` and the `objectives` list; needs the challenge) and `typeOfTheDay` (`multiplier`, points only). The daily goal, the weekly goal and the Type of the Day each take a `resetHour` (0–23) to start at their own hour; `-1` (shipped) = `Config.Time.resetHour`. Also in **Settings** → Objectives and under the gear of **Seasons & Challenge** |
 | `Config.Leaderboard.weekStartsOn` | The day the week starts (`'monday'`) |

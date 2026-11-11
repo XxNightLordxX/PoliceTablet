@@ -244,7 +244,7 @@ do
         _G[name] = _G[name] or function() end
     end
     H.load('modules/dispatch/client/missioncalls.lua')
-    H.load('modules/teams/client/units.lua')
+    H.load('modules/teams/client/teams.lua')
     local function Call()
         H.clockMs = H.clockMs + 10000
         H.fire('crimson-police:client:missionCall', nil, { code = 'MC-1', typeLabel = 'Patrol', priority = 2 })
