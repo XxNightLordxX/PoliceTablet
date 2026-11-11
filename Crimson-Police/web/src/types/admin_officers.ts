@@ -5,6 +5,7 @@
 import type { OfficerOptionValue } from '../shared/types';
 import type { DebriefPerson, DecisionEntry } from './run_ui';
 import type { ChallengeDepartment, Contributor, SeasonView } from './boards';
+import type { RunHistoryEvent } from './oversight';
 
 // ============================================================================
 //                      RUN HISTORY (admin:getOfficerRuns)
@@ -87,6 +88,8 @@ export interface RunDetail extends OfficerRunRow {
     }[];
     dispute: { id: number; status: string; reason: string; goesTo: string } | null;
     goalRewards: { rowId: number; goalId: string; label: string; points: number }[];
+    // the run's whole timeline (modules/review/history.lua): rows, flags, notes, decisions, disputes, batches
+    history?: RunHistoryEvent[];
     // the admin (any of their characters) took part: every change is refused
     own: boolean;
 }

@@ -22,8 +22,10 @@ import type {
     OfficerSearchData,
     OfficerSearchRow,
     PermissionsData,
+    ReviewBatchItem,
     ReviewItem,
     ReviewQueueData,
+    RunHistoryData,
 } from '../types/oversight';
 import { BROKEN_LOGO, FIB_LOGO, SAST_LOGO } from './logos';
 
@@ -617,13 +619,66 @@ const typed = (all: boolean): ReviewItem[] => [
             : disputes.filter(d => d.status === 'open' && d.goesTo === 'supervisor'),
     ).map(d => ({ ...d, type: 'dispute' as const })),
 ];
+// the admin's queue: the correction batches that can still be undone (Config.AdminUi.reviewBatchDays)
+const batches: ReviewBatchItem[] = [
+    {
+        type: 'batch',
+        id: '7d3c1a52-0c55-4d43-9e2b-5d8f6a0c1b11',
+        kind: 'bulkVoid',
+        state: 'done',
+        filter: { citizenid: 'ABC12345', from: '2026-10-01' },
+        done: 4,
+        total: 4,
+        actor: 'ADMIN001',
+        reason: 'Bugged event rows',
+        createdAt: now() - 3 * 3600,
+        undo: 'restoreBatch',
+    },
+];
+// the runs voided in this mock session (Undo restores them)
+const voided: FlaggedRow[] = [];
 const reviewQueue = (all = false): ReviewQueueData => ({
-    items: typed(all).sort((a, b) => b.createdAt - a.createdAt),
+    items: [...typed(all), ...(all ? emptyIf(batches) : [])].sort((a, b) => b.createdAt - a.createdAt),
     canReview: true,
     canHandle: true,
+    canUndo: all,
+    canUndoBatch: all,
     all,
 });
 registerMock('request', 'review:getQueue', (p?: { all?: boolean }) => reviewQueue(p?.all === true));
+
+// one run's timeline (modules/review/history.lua)
+const runHistory = (runUuid: string): RunHistoryData => {
+    const row = [...flagged, ...voided].find(r => r.runUuid === runUuid);
+    const at = row?.createdAt ?? now() - 7200;
+    return {
+        runUuid,
+        events: [
+            { at, kind: 'row', action: 'completed', citizenid: row?.citizenid ?? 'ABC12345', rowId: row?.rowId ?? 1 },
+            {
+                at: at + 1,
+                kind: 'flag',
+                action: 'runFlagged',
+                citizenid: row?.citizenid ?? 'ABC12345',
+                new: row?.flagReason ?? 'too_fast',
+                detail: row?.flagDetail ?? null,
+            },
+            {
+                at: at + 900,
+                kind: 'decision',
+                action: 'voidPending',
+                actor: 'SUP00002',
+                role: 'supervisor',
+                rowId: row?.rowId ?? 1,
+                reason: 'Teleported to the scene',
+            },
+        ],
+    };
+};
+registerMock('request', 'review:getRunHistory', (p?: { runUuid?: string }) => {
+    if (!p?.runUuid) throw new Error('err.invalid_run');
+    return runHistory(p.runUuid);
+});
 
 function decideFlag(p: { id?: number; runUuid?: string; decision: string; reason: string }) {
     if (!p?.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
@@ -633,10 +688,17 @@ function decideFlag(p: { id?: number; runUuid?: string; decision: string; reason
         for (let i = flagged.length - 1; i >= 0; i--) if (flagged[i].runUuid === p.runUuid) flagged.splice(i, 1);
         return { approved: n, runUuid: p.runUuid };
     }
+    if (p.decision === 'undo') {
+        const v = voided.findIndex(r => r.rowId === p.id);
+        if (v < 0) throw new Error('err.not_voided');
+        voided.splice(v, 1);
+        return { rowId: p.id };
+    }
     const i = flagged.findIndex(r => r.rowId === p.id);
     if (i < 0) throw new Error('err.not_flagged');
     if (p.decision !== 'approve' && p.decision !== 'void') throw new Error('err.invalid_decision');
-    flagged.splice(i, 1);
+    const [row] = flagged.splice(i, 1);
+    if (p.decision === 'void') voided.push(row);
     return { rowId: p.id };
 }
 
@@ -658,9 +720,18 @@ function decideDispute(p: { id: number; decision: string; reason: string; awardP
 registerMock(
     'action',
     'server:review:decide',
-    (p: { type: string; id: number; runUuid?: string; decision: string; reason: string; all?: boolean }) => {
+    (p: { type: string; id: number | string; runUuid?: string; decision: string; reason: string; all?: boolean }) => {
+        if (p?.type === 'batch') {
+            if (p.decision !== 'undo') throw new Error('err.invalid_decision');
+            if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
+            const b = batches.findIndex(x => x.id === p.id);
+            if (b < 0) throw new Error('err.batch_unknown');
+            batches.splice(b, 1);
+            return { jobId: 'mock-job', queue: reviewQueue(true) };
+        }
         if (p?.type !== 'flag' && p?.type !== 'dispute') throw new Error('err.invalid_payload');
-        const data = p.type === 'flag' ? decideFlag(p) : decideDispute(p);
+        const data =
+            p.type === 'flag' ? decideFlag({ ...p, id: Number(p.id) }) : decideDispute({ ...p, id: Number(p.id) });
         return { ...data, queue: reviewQueue(p.all === true) };
     },
 );

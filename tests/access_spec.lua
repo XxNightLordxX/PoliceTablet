@@ -343,7 +343,7 @@ do
     CP.Runs = {
         getBySrc = function(src) return src == 1 and { id = 'r1' } or nil end,
     }
-    CP.Admin = {
+    CP.Review = {
         flaggedRows = function(dept, cid, admin)
             asked.flagged = { dept, cid, admin }
             return { {}, {} }
@@ -386,7 +386,7 @@ do
 
     -- caches: badge counts 5 s, the Review Queue count 30 s
     local flaggedCalls = 0
-    CP.Admin.flaggedRows = function()
+    CP.Review.flaggedRows = function()
         flaggedCalls = flaggedCalls + 1
         return {}
     end

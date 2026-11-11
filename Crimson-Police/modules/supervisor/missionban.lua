@@ -4,7 +4,8 @@
 -- missionBan, kind 'action'). A banned officer keeps the tablet (it is not a suspension) but cannot accept from the
 -- Mission Board, claim a mission call or join a Cross-Department Mission until it ends; a run already going on is
 -- never ended. Saved in cp_officers.mission_ban (migration 012) and kept in memory for the accept checks. One kind
--- ('missionBan') of the one restrictions list (modules/supervisor/restrictions.lua): admins extend or lift it there.
+-- ('missionBan') of the one restrictions list (modules/supervisor/restrictions.lua): admins extend or lift it there,
+-- a supervisor lifts the bans he set (server:restriction).
 
 CP.MissionBan = CP.MissionBan or {}
 local MB = CP.MissionBan
@@ -275,7 +276,8 @@ end, {
     permission = function(src, payload) return CanUseFor(src, type(payload) == 'table' and Cid(payload.citizenid)) end,
 })
 
--- Lifts a ban in force early: the supervisor who set it, or an admin.
+-- Lifts a ban in force early: the supervisor who set it, or an admin (server:restriction, modules/supervisor/
+-- restrictions.lua: the officer dialog's Lift, the Department -> Restrictions tab and Admin UI -> Restrictions).
 local function Lift(ctx, adminOnly)
     local cid = Cid(ctx.payload.citizenid)
     if not cid then return false, 'err.invalid_payload' end
@@ -292,16 +294,8 @@ local function Lift(ctx, adminOnly)
     return WithActivity(ctx, { citizenid = cid })
 end
 
-Kit.supAction('server:sup:liftMissionBan', 'missionControls', function(ctx) return Lift(ctx, false) end, {
-    reason = true,
-    self = OfficerTarget,
-    targetRate = { 1, 3000 },
-    category = 'flags',
-    permission = function(src, payload) return CanUseFor(src, type(payload) == 'table' and Cid(payload.citizenid)) end,
-})
-
 -- ============================================================================
---                        THE RESTRICTIONS LIST (admins)
+--                            THE RESTRICTIONS LIST
 -- ============================================================================
 
 -- An admin extends a ban in force by some hours (never past HOURS_MAX from now): audited and told like a new ban.
@@ -348,6 +342,12 @@ CP.Restriction('missionBan', {
     list = Rows,
     lift = function(ctx) return Lift(ctx, true) end,
     extend = Extend,
+    -- the Supervisor UI (Department -> Restrictions and the officer dialog): the bans of his department, Lift on his own
+    sup = {
+        permission = function(src, payload) return CanUseFor(src, Cid(payload.citizenid)) end,
+        canLift = function(_, row, actor) return actor ~= nil and row.by == actor end,
+        lift = function(ctx) return Lift(ctx, false) end,
+    },
 })
 
 -- ============================================================================

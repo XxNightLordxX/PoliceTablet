@@ -357,14 +357,14 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] With Config.RealPlayers.liveCrime.enabled and Config.RealPlayers.volunteer.enabled off as shipped, nothing changes for officers and idle resmon is unchanged. (V1, V3, V4, V5, V6)
 - [ ] A database server creates the empty table cp_pvp_pairs on start. (V7)
 - [ ] A database server creates the empty table cp_pvp_cases on start. With live crimes or volunteers on, close a case, restart Crimson-Police: Admin UI → Real suspects → Cases still lists it with its timeline and damage ledger. Give a volunteer a strike (say yes, then cancel), restart: his /crimsonheat menu still shows the strike, and he must volunteer again. (F1)
-- [ ] With live crimes on: Admin UI → Real suspects → Pairs and blocks shows "Name (CITIZENID)" for officers and suspects, also for an offline player; Block pair someone, then Lift it with a reason: it leaves the list, the pair can take a case together again, the audit log has the lift, and a restart does not bring it back. Shoot a suspect with a Combat Pistol: the case's damage ledger reads Combat Pistol, not a number. With volunteers on, give a volunteer a strike, then Volunteers tab → Clear strikes with a reason: his /crimsonheat menu shows no strike. (F2)
+- [ ] With live crimes on: Admin UI → Real suspects → Pairs and blocks shows "Name (CITIZENID)" for officers and suspects, also for an offline player; Block pair someone, then Lift it with a reason in Restrictions (Open Restrictions): it leaves the list, the pair can take a case together again, the audit log has the lift, and a restart does not bring it back. Shoot a suspect with a Combat Pistol: the case's damage ledger reads Combat Pistol, not a number. With volunteers on, give a volunteer a strike, then Volunteers tab → Clear strikes with a reason: his /crimsonheat menu shows no strike. (F2)
 - [ ] Tase a fleeing Warrant Service suspect: he gives up as before and nothing goes to the Review Queue; tell the developers if run details often show "A stun was reported that the server did not see" for real taser hits. (V2)
 - [ ] Tase a fleeing real suspect in Flee & Arrest or Pursuit: he gives up at once and no stun_unproven note appears in the run detail. (R7)
 - [ ] Optional: with Config.NpcCombat.playerHitDropsProtection = true, an officer on an NPC mission shot by a player takes normal headshot damage until the run ends; shipped false, no change. (V8)
 - [ ] Crimson-Contracts guards keep their own damage while an officer is on a run nearby (the crimsonPoliceRun bag). (V8)
 - [ ] Config.RealPlayers (officerAlerts, routeEnds, downed, downedPickupDelay) and Config.RealPlayers.liveCrime.requireRoute show in Settings; nothing changes until a live case exists. (V9, V10)
 - [ ] Settings -> All settings has one Real players section (also under the Real suspects screen's gear): the shared rules on top, then the liveCrime, volunteer and criminalTablet groups, each with its own enabled switch and the same cash, items, goals, challenge and typeOfTheDay switches; turning volunteer on leaves live crimes off and shows the Real players group in the sidebar. (FM4)
-- [ ] As shipped, the Admin UI has no Real suspects screen. With Config.RealPlayers.liveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under Pairs and blocks and in the audit log. (V18)
+- [ ] As shipped, the Admin UI has no Real suspects screen. With Config.RealPlayers.liveCrime.enabled = true (reopen the Admin UI), More -> Real suspects lists the cases; a case opens its timeline and damage ledger; your own case is greyed; Block pair, Exclude and Suspend need days and a reason, then show under People -> Restrictions and in the audit log. (V18)
 - [ ] As shipped, /crimsonheat does nothing. With Config.RealPlayers.volunteer.enabled = true (restart, or turn it on in Settings), a civilian types /crimsonheat: the rules alert, then the suspects to play; he gets "You volunteer as a suspect for 60 minutes". /crimsonheat again shows the menu (time left, Renew, Change, Stop). An on-duty officer is refused; going on police duty, logging out or Stop ends it. (V20)
 - [ ] As shipped (every Config.RealPlayers.volunteer mode 'npc') the Mission Board has no "Real suspect" badge and accepting works as before. With enabled = true and Config.RealPlayers.volunteer.modes.investigation = 'players_only', Admin UI -> Permissions -> Config health warns that no Investigation mission has a suspect a volunteer can play (until the slot steps) and the Investigation card is locked "No volunteer suspect is free". (V21)
 - [ ] As shipped nobody is ever asked to play a suspect. Once a built-in mission offers a volunteer slot (V23-V25), with enabled = true and its type set to 'players_when_available': a listed civilian gets the "Play a suspect now?" pop-up after a unit accepts with Real suspect OK; No (or waiting 30 s) asks the next volunteer and costs no strike; Yes sets his waypoint, the officers get "A volunteer plays this mission's suspect", reaching the waypoint says "You are in position", an officer within 100 m makes the case engaged (Real suspects screen timeline), /crimsonheat shows Cancel this case, and when the mission ends he is told he is free to go. Not reaching the waypoint in 5 minutes is a strike and the NPC plays the suspect. (V22)
@@ -744,7 +744,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   officer dialog, Mission controls on): Admin UI -> People -> Restrictions lists both with who set them, until when
   and why. Extend the ban by 2 hours: Until moves on 2 h and the officer is told; Lift the suspension with a reason:
   he can open the tablet again and the Activity log has the unsuspend. With live crimes on, a pair block set under
-  Real suspects -> Pairs and blocks shows in Restrictions too and lifts from either place. (FM5)
+  Real suspects -> Pairs and blocks shows in Restrictions and lifts there. (FM5)
 - [ ] One jobs screen (FM9): Admin UI -> System -> Jobs lists the daily backup (Off), the clean-up, the mission call
   history, the real players jobs, the low balance warnings, the planned season end, the weekly bounty and recognition,
   the monthly top 3 and both forfeitures, each with its next run and settings. Clean-up -> Run now with a reason: its
@@ -788,3 +788,13 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   minute the same way). Toasts still arrive
   for commendations, level-ups, goals, mission bans and field training; the Mission Builder, custody and the testing
   panel still refresh on the tablet; desks and the cuff and contact options still work through ox_target. (FIN2)
+- [ ] Finish (FIN4): as an SAST supervisor ban an officer (Department -> Officers), open Department -> Restrictions:
+  the ban shows with you as setter and Lift; a second SAST supervisor sees it without Lift; a suspended SAST officer
+  shows read only. Lift it there with a reason (the officer can take missions again; the officer dialog lift still
+  works). With `Config.MissionControls.restrictionsTab = false` the tab is gone. Real suspects -> Pairs and blocks
+  shows Open Restrictions instead of its own running rows.
+- [ ] Finish (FIN4): Admin UI -> Review -> Queue: bulk void two runs of an officer (Officers -> Corrections), the
+  batch shows in the queue under Corrections; Undo it there with a reason (the rows come back, Corrections shows it
+  undone). Void a flagged run in the queue: the Undo line restores it (Restore run in the Activity log). History on a
+  flagged run lists its row, the flag, any decision and dispute, oldest first; the same list is in Officers -> an
+  officer -> Runs -> the run.

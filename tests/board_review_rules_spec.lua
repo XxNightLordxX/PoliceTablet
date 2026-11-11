@@ -70,6 +70,7 @@ CP.Permissions = {
 H.load('modules/progression/leaderboard.lua')
 H.load('modules/review/reviewrules.lua')
 H.load('modules/admin/admin.lua')
+H.load('modules/review/flagged.lua')
 local LB, RR, Admin = CP.Leaderboard, CP.ReviewRules, CP.Admin
 
 -- ============================================================================
@@ -166,25 +167,25 @@ _G.MySQL.update.await = function(sql, params)
 end
 
 values.sast.reviewRules = { secondVoid = true, adminOnlyKinds = { 'rs_vdm' } }
-local ok, data = Admin.voidFlagged(2, 10, 'Teleported')
+local ok, data = CP.Review.voidFlagged(2, 10, 'Teleported')
 H.ok(ok == true and data.pending == true, 'one SAST sergeant\'s Void only marks the row pending')
 H.eq(#voided, 0, 'nothing is voided yet')
 H.eq(audits[#audits], 'voidPending #10 OFF00006', 'the pending Void is audited')
 H.eq(RR.pendingOf(10).name, 'Sam Super', 'the queue shows who voided first')
-ok, data = Admin.voidFlagged(2, 10, 'Again')
+ok, data = CP.Review.voidFlagged(2, 10, 'Again')
 H.eq(data, 'err.void_second_needed', 'the same sergeant cannot confirm his own Void')
-ok, data = Admin.voidFlagged(4, 10, 'FIB')
+ok, data = CP.Review.voidFlagged(4, 10, 'FIB')
 H.eq(data, 'err.void_second_dept', 'an FIB sergeant cannot confirm a SAST Void')
-ok = Admin.voidFlagged(3, 10, 'Confirmed')
+ok = CP.Review.voidFlagged(3, 10, 'Confirmed')
 H.eq(ok, true, 'a second SAST sergeant confirms it')
 H.eq(voided[1], 10, 'and the row is voided')
 H.eq(RR.pendingOf(10), nil, 'nothing waits any more')
 
-ok, data = Admin.voidFlagged(2, 11, 'VDM')
+ok, data = CP.Review.voidFlagged(2, 11, 'VDM')
 H.eq(data, 'err.review_admin_only', 'a supervisor cannot void a flag kind SAST hands to admins')
-ok, data = Admin.approveFlagged(2, 11, 'VDM')
+ok, data = CP.Review.approveFlagged(2, 11, 'VDM')
 H.eq(data, 'err.review_admin_only', 'nor approve it')
-ok = Admin.voidFlagged(1, 11, 'Admin')
+ok = CP.Review.voidFlagged(1, 11, 'Admin')
 H.eq(ok, true, 'an admin voids it at once (never bound by the rules)')
 H.eq(voided[2], 11, 'voided')
 
@@ -204,13 +205,13 @@ local function Ids(list)
     for _, r in ipairs(list) do out[#out + 1] = tostring(r.rowId) end
     return table.concat(out, ',')
 end
-H.eq(Ids(Admin.flaggedRows('sast', 'SUP00002')), '12', 'the admin-only kind is not in the SAST queue')
-H.eq(Ids(Admin.flaggedRows('sast', 'SUP00002', true)), '12,13', 'an admin\'s queue keeps it')
-H.eq(Ids(Admin.flaggedRows(nil, 'ADM00001')), '12,13', 'and so does Admin -> Leaderboards')
+H.eq(Ids(CP.Review.flaggedRows('sast', 'SUP00002')), '12', 'the admin-only kind is not in the SAST queue')
+H.eq(Ids(CP.Review.flaggedRows('sast', 'SUP00002', true)), '12,13', 'an admin\'s queue keeps it')
+H.eq(Ids(CP.Review.flaggedRows(nil, 'ADM00001')), '12,13', 'and so does Admin -> Leaderboards')
 
 values.sast.reviewRules = nil
 RR._reset()
-ok, data = Admin.voidFlagged(2, 10, 'Off')
+ok, data = CP.Review.voidFlagged(2, 10, 'Off')
 H.ok(ok == true and (data or {}).pending == nil, 'with the config value one supervisor\'s Void voids at once')
 
 -- Z8B: approving a flagged row whose pay waits as 'pending' releases it now (as disputes do), not at the next login
@@ -234,7 +235,7 @@ do
         state = 'completed',
     }
     _G.MySQL.update.await = function() return 1 end
-    ok = Admin.approveFlagged(1, 14, 'Checked')
+    ok = CP.Review.approveFlagged(1, 14, 'Checked')
     H.eq(ok, true, 'Z8B: the pending flagged row is approved')
     H.eq(released[1], 14, 'Z8B: and its pending pay is released at once')
     CP.Cash = nil

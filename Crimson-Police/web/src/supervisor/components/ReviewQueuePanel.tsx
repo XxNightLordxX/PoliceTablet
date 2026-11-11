@@ -5,7 +5,9 @@
 // department) and the Admin UI (Review -> Queue, all: every department, with Approve all rows of a run and Open the
 // officer for a dispute about a failed run, whose approval awards points).
 // Data: callback review:getQueue { all? } · action server:review:decide { type, id, decision, reason, all? }
-// (modules/review/queue.lua). Every decision needs a reason, is final and audited.
+// (modules/review/queue.lua). Every decision needs a reason and is audited. The Admin UI's queue also lists the
+// correction batches that can still be undone, each with its Undo, and right after a Void offers Undo (Restore run;
+// Config.AdminUi.reviewUndo). History opens one run's whole timeline (review:getRunHistory, RunHistory.tsx).
 
 import { useEffect, useState } from 'react';
 import {
@@ -34,20 +36,32 @@ import { hasKey, t } from '../../shared/i18n';
 import { applyReplyView } from '../../shared/replyView';
 import { toast } from '../../shared/toast';
 import { screenStateOf } from '../../shared/screenHeads';
-import type { DisputeView, FlaggedRow, ReviewItem, ReviewQueueData } from '../../types/oversight';
+import type { DisputeView, FlaggedRow, ReviewBatchItem, ReviewItem, ReviewQueueData } from '../../types/oversight';
+import { RunHistoryDialog } from './RunHistory';
 import {
+    batchesOf,
     countsOf,
     decidePayload,
     decisionsOf,
     itemKey,
     itemsOf,
     runRowsOf,
+    undoPayload,
     type ReviewDecision,
     type ReviewShow,
 } from './reviewQueue';
 import '../screens/ReviewQueue.css';
 
 type Pending = { item: ReviewItem; decision: ReviewDecision } | { run: ReviewItem; rows: ReviewItem[] };
+// an Undo waiting for its reason: a run voided here (its row id) or a correction batch
+type Undo = { type: 'flag'; id: number; name: string; mission: string } | { type: 'batch'; batch: ReviewBatchItem };
+
+function batchWhat(b: ReviewBatchItem): string {
+    return Object.entries(b.filter ?? {})
+        .filter(([, v]) => v !== null && v !== undefined && v !== '' && typeof v !== 'object')
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(' · ');
+}
 
 const flagLabel = (reason: string | null | undefined) =>
     reason && hasKey(`flag.${reason}`) ? t(`flag.${reason}`) : t('flag.flagged');
@@ -263,10 +277,15 @@ export function ReviewQueuePanel({
     useEffect(() => setShow(shown ?? 'all'), [shown]);
     const [pending, setPending] = useState<Pending | null>(null);
     const [detail, setDetail] = useState<ReviewItem | null>(null);
+    const [history, setHistory] = useState<string | null>(null);
+    // the last run this admin voided here (Undo restores it), and an Undo waiting for its reason
+    const [lastVoid, setLastVoid] = useState<{ id: number; name: string; mission: string } | null>(null);
+    const [undo, setUndo] = useState<Undo | null>(null);
 
     const items = asArray(data?.items);
     const counts = countsOf(items);
     const rows = itemsOf(items, show);
+    const batches = batchesOf(items, show);
     // a dispute about a failed run is approved with points, on the officer's page (Admin UI)
     const opensOfficer = (i: ReviewItem) => !!onOpenOfficer && i.type === 'dispute' && i.kind === 'failed';
     const canDecide = (i: ReviewItem) => i.type === 'flag' || i.canHandle !== false;
@@ -292,11 +311,33 @@ export function ReviewQueuePanel({
                           : 'sup.review.dispute_rejected'
                     : 'ui.admin_officers.done';
             toast(waits ? 'info' : 'success', t(waits ? 'sup.review.void_pending' : key));
+            const voided = 'item' in pending && pending.item.type === 'flag' && pending.decision === 'void';
+            if (voided && !waits && 'item' in pending && data?.canUndo) {
+                setLastVoid({
+                    id: Number(pending.item.id),
+                    name: pending.item.name,
+                    mission: pending.item.missionLabel,
+                });
+            }
         }
         setPending(null);
         setDetail(null);
         // the reply carries the fresh queue (an older server: ask for it)
         if (res.ok) applyReplyView<ReviewQueueData>(res.data, 'queue', setData, () => void refetch());
+    };
+
+    const doUndo = async (reason: string) => {
+        if (!undo) return;
+        const payload =
+            undo.type === 'flag' ? undoPayload('flag', undo.id, reason) : undoPayload('batch', undo.batch.id, reason);
+        const res = await run<{ queue?: ReviewQueueData }>('server:review:decide', payload, {
+            success: 'sup.review.undo_done',
+        });
+        setUndo(null);
+        if (res.ok) {
+            if (undo.type === 'flag') setLastVoid(null);
+            applyReplyView<ReviewQueueData>(res.data, 'queue', setData, () => void refetch());
+        }
     };
 
     const actionsOf = (i: ReviewItem, size: 'sm' | 'md') =>
@@ -362,6 +403,12 @@ export function ReviewQueuePanel({
                 return (
                     <Row gap={1} justify="flex-end" wrap>
                         <IconButton icon="eye" size="sm" label={t('sup.review.details')} onClick={() => setDetail(r)} />
+                        <IconButton
+                            icon="clock"
+                            size="sm"
+                            label={t('sup.history.open')}
+                            onClick={() => setHistory(r.runUuid)}
+                        />
                         {actionsOf(r, 'sm')}
                         {runRows.length > 1 ? (
                             <Button
@@ -387,7 +434,59 @@ export function ReviewQueuePanel({
         ...(data?.canHandle !== false
             ? [{ key: 'dispute' as const, label: t('sup.review.tab.disputes'), icon: 'inbox' as const }]
             : []),
+        ...(counts.batch > 0
+            ? [{ key: 'batch' as const, label: t('sup.review.tab.batches'), icon: 'undo' as const }]
+            : []),
     ].map(f => ({ ...f, badge: counts[f.key] || undefined }));
+
+    const batchColumns: TableColumn<ReviewBatchItem>[] = [
+        {
+            key: 'kind',
+            header: t('sup.review.col.type'),
+            width: 190,
+            render: b => (
+                <Badge size="sm" tone="danger" variant="outline" icon="undo">
+                    {t(`ui.admin_officers.batch.${b.kind}`)}
+                </Badge>
+            ),
+        },
+        { key: 'what', header: t('ui.admin_officers.corrections.what'), render: batchWhat },
+        {
+            key: 'rows',
+            header: t('ui.admin_officers.corrections.rows'),
+            width: 80,
+            numeric: true,
+            render: b => b.total,
+        },
+        {
+            key: 'by',
+            header: t('ui.admin_officers.corrections.by'),
+            width: 150,
+            render: b => (
+                <span>
+                    {b.actor} <span className="oversight-rq-soft cp-num">{formatDateTime(b.createdAt)}</span>
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            header: '',
+            width: 120,
+            align: 'right',
+            render: b =>
+                data?.canUndoBatch ? (
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="undo"
+                        disabled={busy}
+                        onClick={() => setUndo({ type: 'batch', batch: b })}
+                    >
+                        {t('sup.review.undo')}
+                    </Button>
+                ) : null,
+        },
+    ];
 
     const loadState = screenStateOf(!!data, loading, error);
     let confirmTitle = '';
@@ -440,24 +539,71 @@ export function ReviewQueuePanel({
                     {loadState === 'stale' ? (
                         <ScreenStatus state="stale" error={error} onRetry={() => void refetch()} />
                     ) : null}
-                    <Table
-                        columns={columns}
-                        rows={rows}
-                        rowKey={itemKey}
-                        loading={loading}
-                        className="oversight-rq-table"
-                        empty={
-                            <EmptyState
-                                icon="shieldCheck"
-                                title={t('sup.review.empty_title')}
-                                text={t(all ? 'sup.review.empty_text_all' : 'sup.review.empty_text')}
-                            />
-                        }
-                        aria-label={t('sup.review.tab.queue')}
-                    />
+                    {show !== 'batch' ? (
+                        <Table
+                            columns={columns}
+                            rows={rows}
+                            rowKey={itemKey}
+                            loading={loading}
+                            className="oversight-rq-table"
+                            empty={
+                                <EmptyState
+                                    icon="shieldCheck"
+                                    title={t('sup.review.empty_title')}
+                                    text={t(all ? 'sup.review.empty_text_all' : 'sup.review.empty_text')}
+                                />
+                            }
+                            aria-label={t('sup.review.tab.queue')}
+                        />
+                    ) : null}
                 </>
             )}
+            {lastVoid ? (
+                <Row gap={2} className="oversight-rq-undo">
+                    <span>{t('sup.review.undo_void_text', { name: lastVoid.name, mission: lastVoid.mission })}</span>
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="undo"
+                        disabled={busy}
+                        onClick={() => setUndo({ type: 'flag', ...lastVoid })}
+                    >
+                        {t('sup.review.undo')}
+                    </Button>
+                    <IconButton icon="x" size="sm" label={t('common.close')} onClick={() => setLastVoid(null)} />
+                </Row>
+            ) : null}
+            {batches.length ? (
+                <Table
+                    columns={batchColumns}
+                    rows={batches}
+                    rowKey={itemKey}
+                    className="oversight-rq-table"
+                    aria-label={t('sup.review.tab.batches')}
+                />
+            ) : null}
             <div className="oversight-rq-note">{t('sup.review.own_rule')}</div>
+            <RunHistoryDialog runUuid={history} onClose={() => setHistory(null)} />
+            <ConfirmDialog
+                open={!!undo}
+                tone="danger"
+                title={t('sup.review.undo_title')}
+                message={
+                    undo
+                        ? undo.type === 'flag'
+                            ? t('sup.review.undo_void_message', { name: undo.name, mission: undo.mission })
+                            : t('sup.review.undo_batch_message', {
+                                  kind: t(`ui.admin_officers.batch.${undo.batch.kind}`),
+                                  n: undo.batch.total,
+                              })
+                        : null
+                }
+                confirmLabel={t('sup.review.undo')}
+                reason={{ required: true, label: t('common.reason'), maxLength: 255 }}
+                onConfirm={doUndo}
+                onCancel={() => setUndo(null)}
+                busy={busy}
+            />
 
             <Dialog
                 open={!!detail}

@@ -1,10 +1,25 @@
-// The one restrictions list (Admin UI -> Restrictions): the action every lift and extend goes through, its payloads,
-// the kind filter and the Real suspects tools' rows as restrictions. types/restrictions.ts has the data.
+// The one restrictions list (Admin UI -> Restrictions, Supervisor UI -> Department -> Restrictions): the action every
+// lift and extend goes through, its payloads, the read of each scope and the kind filter. types/restrictions.ts has
+// the data.
 
-import type { RsAdminRow } from '../../types/admin_rs';
-import type { RestrictionKind, RestrictionRow } from '../../types/restrictions';
+import type { RestrictionKind, RestrictionKindInfo, RestrictionRow } from '../../types/restrictions';
 
-export const RESTRICTION_ACTION = 'server:admin:restriction';
+export const RESTRICTION_ACTION = 'server:restriction';
+
+// The read of each scope: the Admin UI's every kind, or the supervisor's department.
+export function restrictionsRead(scope: 'admin' | 'sup'): string {
+    return scope === 'sup' ? 'sup:getRestrictions' : 'admin:getRestrictions';
+}
+
+// Whether a row offers Lift: the admin's right for the kind, or (a supervisor) the row's own canLift.
+export function rowCanLift(
+    row: Pick<RestrictionRow, 'canLift'>,
+    kind: Pick<RestrictionKindInfo, 'canLift'> | undefined,
+    scope: 'admin' | 'sup',
+): boolean {
+    if (scope === 'sup') return row.canLift === true && kind?.canLift === true;
+    return kind?.canLift === true;
+}
 
 // The kinds in the filter's order.
 export const RESTRICTION_KINDS: RestrictionKind[] = [
@@ -15,22 +30,6 @@ export const RESTRICTION_KINDS: RestrictionKind[] = [
     'rsSuspension',
     'volunteerBlock',
 ];
-
-// A Real suspects tool's kind as a restriction kind.
-const RS_KIND: Record<RsAdminRow['kind'], RestrictionKind> = {
-    block: 'pairBlock',
-    exclude: 'exclusion',
-    suspend: 'rsSuspension',
-};
-
-// The row a Real suspects admin row is in the restrictions list: the officer first (a block's suspect is other),
-// the player alone for an exclusion.
-export function rsRestriction(row: RsAdminRow): Pick<RestrictionRow, 'kind' | 'citizenid' | 'other'> {
-    const kind = RS_KIND[row.kind];
-    if (row.kind === 'exclude') return { kind, citizenid: row.suspect ?? '' };
-    if (row.kind === 'suspend') return { kind, citizenid: row.officer ?? '' };
-    return { kind, citizenid: row.officer ?? '', other: row.suspect ?? '' };
-}
 
 // The payload of one step on one row: lift (any kind) or extend by hours, with the reason.
 export function restrictionPayload(

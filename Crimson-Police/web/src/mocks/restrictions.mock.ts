@@ -1,6 +1,9 @@
-// Mock: Admin UI -> Restrictions (modules/supervisor/restrictions.lua). Each kind registers its rows and its lift and
-// extend here from its own mock file (admin_live: missionBan, admin_rs: the Real suspects kinds); suspensions live
-// here. One callback and one action, like the server.
+// Mock: Admin UI -> Restrictions and Supervisor UI -> Department -> Restrictions (modules/supervisor/restrictions.lua).
+
+// Mock: Admin UI -> Restrictions and Supervisor UI -> Department -> Restrictions (modules/supervisor/restrictions.lua).
+// Each kind registers its rows and its lift and extend here from its own mock file (admin_live: missionBan, admin_rs:
+// the Real suspects kinds); suspensions live here. A kind open to supervisors also registers his side
+// (registerRestrictionSup: boards.mock's mission bans of the supervisor). Two reads and one action, like the server.
 
 import { registerMock } from '../shared/nui';
 import type { RestrictionKind, RestrictionRow, RestrictionsData } from '../types/restrictions';
@@ -35,6 +38,17 @@ export function registerRestrictionKind(key: RestrictionKind, def: MockRestricti
     kinds.set(key, def);
 }
 
+// The supervisor's side of a kind: the rows of his department (canLift on his own) and his lift.
+export interface MockRestrictionSup {
+    rows: () => RestrictionRow[];
+    lift: (p: MockRestrictionPayload & { activityOf?: string }) => unknown;
+}
+const supKinds = new Map<RestrictionKind, MockRestrictionSup>();
+
+export function registerRestrictionSup(key: RestrictionKind, def: MockRestrictionSup): void {
+    supKinds.set(key, def);
+}
+
 const nowS = () => Math.floor(Date.now() / 1000);
 
 // a suspended officer (the Officers screen sets and lifts these with server:admin:suspend)
@@ -47,6 +61,15 @@ const suspensions: Omit<RestrictionRow, 'kind'>[] = [
         byName: 'Admin Two',
         reason: 'Repeated no-shows',
         dept: 'lspd',
+    },
+    {
+        citizenid: 'OFF00011',
+        name: 'Sam Field',
+        untilAt: nowS() + 86400,
+        by: 'ADM00002',
+        byName: 'Admin Two',
+        reason: 'Left a scene',
+        dept: 'sast',
     },
 ];
 
@@ -81,7 +104,33 @@ registerMock('request', 'admin:getRestrictions', (): RestrictionsData => {
     return { kinds: list, rows, serverTime: now };
 });
 
-registerMock('action', 'server:admin:restriction', (p: MockRestrictionPayload) => {
+registerMock('request', 'sup:getRestrictions', (): RestrictionsData => {
+    const now = nowS();
+    const rows: RestrictionRow[] = [];
+    const list = [];
+    for (const key of ORDER) {
+        const sup = supKinds.get(key);
+        if (!sup) continue;
+        list.push({ key, maxHours: kinds.get(key)?.maxHours ?? 24, canLift: true, canExtend: false });
+        for (const r of sup.rows()) if (r.untilAt > now) rows.push({ ...r, kind: key });
+    }
+    rows.push(
+        ...suspensions
+            .filter(r => r.dept === 'sast' && r.untilAt > now)
+            .map(r => ({ ...r, kind: 'suspension' as const, canLift: false })),
+    );
+    list.push({ key: 'suspension' as const, maxHours: 3650 * 24, canLift: false, canExtend: false });
+    rows.sort((a, b) => a.untilAt - b.untilAt);
+    return { kinds: list, rows, dept: 'sast', serverTime: now };
+});
+
+registerMock('action', 'server:restriction', (p: MockRestrictionPayload & { activityOf?: string }) => {
+    // a supervisor's lift of his own row (the officer dialog sends activityOf; his tab lists it with canLift)
+    const sup = supKinds.get(p.kind as RestrictionKind);
+    if (sup && p.op === 'lift' && sup.rows().some(r => r.citizenid === p.citizenid && r.canLift)) {
+        if (!p.reason || !p.reason.trim()) throw new Error('err.reason_required');
+        return sup.lift(p);
+    }
     const def = kinds.get(p.kind as RestrictionKind);
     if (!def) throw new Error('err.restriction_kind');
     if (p.op !== 'lift' && p.op !== 'extend') throw new Error('err.restriction_op');

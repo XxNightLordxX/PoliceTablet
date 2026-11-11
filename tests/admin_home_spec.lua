@@ -48,13 +48,15 @@ CP.Disputes = {
     openCount = function() return openDisputes end,
 }
 local flaggedAsked
-CP.Admin = {
-    -- the real count (Admin.flaggedCount), never the capped queue rows (Admin.flaggedRows stops at 200)
+CP.Review = {
+    -- the real count (Review.flaggedCount), never the capped queue rows (Review.flaggedRows stops at 200)
     flaggedRows = function() return { { rowId = 1, runUuid = 'run-a' } } end,
     flaggedCount = function(cid)
         flaggedAsked = { cid = cid }
         return 250
     end,
+}
+CP.Admin = {
     onDutyCounts = function() return { lspd = 3, ghost = 9 } end,
 }
 CP.Profile = {

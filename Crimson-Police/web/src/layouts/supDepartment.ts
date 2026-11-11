@@ -2,7 +2,8 @@
 
 // The Department screen of the Supervisor UI (MG3): the supervisor's department tools as tabs of one screen.
 // Officers (the Department Report and each officer's actions), Controls (Mission controls with each control's admin
-// limits and today's use inline), Review (the Review Queue), Calls & notices (the mission calls panel and the
+// limits and today's use inline), Review (the Review Queue), Restrictions (the mission bans and tablet suspensions of
+// his department, admin/components/RestrictionsPanel.tsx), Calls & notices (the mission calls panel and the
 // department notices) and Training (field training). A link to a tab is navigate('sup_department', { deptTab }).
 
 // Above the tabs (UI4): today at a glance (todayTiles): officers on duty, runs going, waiting for review and the
@@ -14,8 +15,8 @@ import type { ScreenKey, ScreenParams } from '../shared/navigation';
 import type { Session } from '../shared/types';
 import type { SupToday } from '../types/oversight';
 
-export type DeptTab = 'officers' | 'controls' | 'review' | 'calls' | 'training';
-export const DEPT_TABS: DeptTab[] = ['officers', 'controls', 'review', 'calls', 'training'];
+export type DeptTab = 'officers' | 'controls' | 'review' | 'restrictions' | 'calls' | 'training';
+export const DEPT_TABS: DeptTab[] = ['officers', 'controls', 'review', 'restrictions', 'calls', 'training'];
 
 const has = (s: Session, ...actions: string[]) => Array.isArray(s?.actions) && actions.some(a => s.actions.includes(a));
 
@@ -26,6 +27,8 @@ const TAB_VISIBLE: Record<DeptTab, (s: Session) => boolean> = {
     // Mission controls: the master switch or a control outside it
     controls: s => has(s, 'missionControls') || s.config?.missionControls === true,
     review: s => has(s, 'reviewFlagged', 'handleDisputes'),
+    // the mission bans and suspensions of his department (Config.MissionControls.restrictionsTab)
+    restrictions: s => has(s, 'viewMissionList') && s.config?.restrictionsTab === true,
     // the mission calls panel (missionCalls) or the department notices (a Mission control)
     calls: s => has(s, 'missionCalls', 'missionControls') || s.config?.missionControls === true,
     // Field training: every supervisor, or an officer an admin granted only field training

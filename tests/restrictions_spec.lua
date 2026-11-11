@@ -27,6 +27,7 @@ local selfCids, perms = {}, { lift = true, extend = true }
 CP.AdminKit = {
     callback = function(name, key, fn) cbs[name] = { key = key, fn = fn } end,
     action = function(name, key, fn, opts) acts[name] = { key = key, fn = fn, opts = opts } end,
+    supAction = function(name, key, fn, opts) acts[name] = { key = key, fn = fn, opts = opts, sup = true } end,
     isSelf = function(_, cid) return selfCids[cid] == true end,
 }
 CP.Permissions = {
@@ -65,7 +66,7 @@ CP.Restriction('hidden', {
 H.eq(table.concat(CP.RestrictionKinds.order, ','), 'first,hidden', 'kinds keep the order they register in')
 H.load('modules/supervisor/restrictions.lua')
 H.ok(cbs['admin:getRestrictions'] and cbs['admin:getRestrictions'].key == 'openAdmin', 'one list callback')
-local RA = acts['server:admin:restriction']
+local RA = acts['server:restriction']
 H.ok(RA and RA.opts.reason == true, 'one action, with a reason')
 
 local view = cbs['admin:getRestrictions'].fn({ src = 9, args = {} })
@@ -109,6 +110,84 @@ ok, e = Act({ op = 'lift', kind = 'hidden', citizenid = 'BBB00001' })
 H.eq(e, 'err.no_permission', 'a kind the admin has no permission for')
 
 -- ============================================================================
+--                                     FIN4
+-- ============================================================================
+-- THE SUPERVISOR'S DEPARTMENT (Department -> Restrictions).
+
+CP.Restriction('deptKind', {
+    perm = { lift = 'nobody' },
+    maxHours = 24,
+    self = true,
+    list = function()
+        local t = os.time() + 60
+        return {
+            { citizenid = 'CCC00001', untilAt = t, dept = 'sast', by = 'SUP00001' },
+            { citizenid = 'CCC00002', untilAt = t, dept = 'sast', by = 'SUP00002' },
+            { citizenid = 'CCC00003', untilAt = t, dept = 'lspd', by = 'SUP00001' },
+        }
+    end,
+    lift = function() return true end,
+    sup = {
+        permission = function(_, p)
+            if p.citizenid == 'CCC00009' then return false, 'err.other_department' end
+            return true
+        end,
+        canLift = function(_, row, actor) return row.by == actor end,
+        lift = function(_, p)
+            calls[#calls + 1] = { 'supLift', p.citizenid }
+            return true, { citizenid = p.citizenid }
+        end,
+    },
+})
+local realAccess, realQbx = CP.Access, CP.Qbx
+CP.Access = {
+    getOfficer = function() return { department = 'sast' } end,
+    isAdmin = function(src) return src == 9 end,
+}
+CP.Qbx = {
+    getInfo = function() return { citizenid = 'SUP00001' } end,
+}
+perms.viewMissionList = true
+local sv = CP.Restrictions.forSupervisor(5)
+H.eq(#sv.kinds, 1, 'a supervisor sees only the kinds that open to supervisors (def.sup)')
+H.eq(#sv.rows, 2, 'and only the rows of his department')
+H.ok(sv.dept == 'sast' and sv.kinds[1].canExtend == false, 'his department, never Extend')
+local mine, other = sv.rows[1], sv.rows[2]
+if mine.citizenid ~= 'CCC00001' then mine, other = other, mine end
+H.ok(mine.canLift == true and other.canLift == false, 'Lift only on the row he set himself')
+perms.viewMissionList = false
+H.eq(select(2, CP.Restrictions.forSupervisor(5)), 'err.no_permission', 'a player who is no supervisor sees nothing')
+perms.viewMissionList = true
+Config.MissionControls = Config.MissionControls or {}
+Config.MissionControls.restrictionsTab = false
+H.eq(select(2, CP.Restrictions.forSupervisor(5)), 'err.restrictions_tab_off', 'restrictionsTab = false: no tab')
+Config.MissionControls.restrictionsTab = true
+
+local function SupAct(p)
+    p.reason = p.reason or 'r'
+    return RA.fn({ src = 5, role = 'supervisor', payload = p, reason = p.reason })
+end
+ok = SupAct({ op = 'lift', kind = 'deptKind', citizenid = 'CCC00001' })
+H.ok(ok == true and calls[#calls][1] == 'supLift', 'a supervisor\'s Lift goes to the kind\'s supervisor lift')
+ok, e = SupAct({ op = 'extend', kind = 'deptKind', citizenid = 'CCC00001', hours = 1 })
+H.eq(e, 'err.no_permission', 'a supervisor never extends')
+ok, e = SupAct({ op = 'lift', kind = 'first', citizenid = 'AAA00001' })
+H.eq(e, 'err.no_permission', 'nor lifts a kind that is not open to supervisors')
+selfCids.CCC00001 = true
+ok, e = SupAct({ op = 'lift', kind = 'deptKind', citizenid = 'CCC00001' })
+H.eq(e, 'err.self_target', 'the self rule holds for supervisors too')
+selfCids.CCC00001 = nil
+H.ok(RA.sup == true, 'server:restriction takes supervisors and admins (AdminKit.supAction)')
+local okP, eP = RA.opts.permission(5, { kind = 'deptKind', citizenid = 'CCC00009' })
+H.ok(okP == false and eP == 'err.other_department', 'a supervisor passes the kind\'s own permission')
+H.eq(RA.opts.permission(5, { kind = 'first', citizenid = 'AAA00001' }), false, 'no def.sup: no supervisor')
+perms.openAdmin = true
+H.eq(RA.opts.permission(9, { kind = 'first' }), true, 'an admin needs openAdmin')
+perms.openAdmin = nil
+H.eq(RA.opts.permission(9, { kind = 'first' }), false, 'and without it is refused')
+CP.Access, CP.Qbx = realAccess, realQbx
+
+-- ============================================================================
 --                     THE MODULE LAYOUT AND THE OLD ROUTES
 -- ============================================================================
 
@@ -125,15 +204,25 @@ local kinds = {
 for _, k in ipairs(kinds) do
     H.ok((Read(k[1]) or ''):find(k[2], 1, true) ~= nil, 'the kind registers: ' .. k[2])
 end
-for _, gone in ipairs({ 'server:admin:liftMissionBan', 'server:admin:rsLift', 'server:admin:rsClearStrikes' }) do
+for _, gone in ipairs({
+    'server:admin:liftMissionBan',
+    'server:sup:liftMissionBan',
+    'server:admin:restriction',
+    'server:admin:rsLift',
+    'server:admin:rsClearStrikes',
+}) do
     local found = false
-    for _, f in ipairs({ 'modules/supervisor/missionban.lua', 'modules/realplayers/staff.lua' }) do
+    for _, f in ipairs({
+        'modules/supervisor/missionban.lua',
+        'modules/supervisor/restrictions.lua',
+        'modules/realplayers/staff.lua',
+    }) do
         if (Read('Crimson-Police/' .. f) or ''):find(gone, 1, true) then found = true end
     end
     H.ok(not found, gone .. ' is gone (one restrictions action)')
 end
 local web = Read('Crimson-Police/web/src/admin/components/restrictions.ts') or ''
-H.ok(web:find('\'server:admin:restriction\'', 1, true) ~= nil, 'the web sends the one action')
+H.ok(web:find('\'server:restriction\'', 1, true) ~= nil, 'the web sends the one action')
 H.ok((Read('Crimson-Police/web/src/layouts/screens.ts') or ''):find('key: \'admin_restrictions\'', 1, true) ~= nil,
     'the Admin UI has the Restrictions screen')
 local cfg = Read('Crimson-Police/config/config.lua') or ''

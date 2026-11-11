@@ -12,7 +12,7 @@
 --     supervisors of the run's departments, or the admins when none of them may answer it (every online
 --     supervisor of those departments took part in the run, or none is online).
 --   * answering (decision final, reason required, never by a participant of that run):
---       approve  flagged row -> CP.Admin.approveFlagged (flag cleared, held cash released, XP)
+--       approve  flagged row -> CP.Review.approveFlagged (flag cleared, held cash released, XP)
 --                voided row  -> voided = 0 (and flagged = 0), CP.Scoring.onRowApproved (XP back),
 --                               CP.Cash.release when its cash is still held, CP.Leaderboard.invalidate
 --                failed row  -> CP.Scoring.manualAward(src, citizenid, awardPoints, reason)
@@ -78,19 +78,9 @@ local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n then return default end
-    return n
-end
+local Num = CP.Num
 
-local function Int(v, lo, hi)
-    local n = tonumber(v)
-    if not n or n ~= n or n % 1 ~= 0 then return nil end
-    n = math.tointeger(n)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
+local Int = CP.IntIn
 
 local function CleanText(v, max)
     if type(v) ~= 'string' then return nil end
@@ -667,7 +657,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
     if not okR then return false, 'err.internal' end
     if not allowed then return false, eR or 'err.own_run' end
     if InLiveRun(CitizenOf(src), d.run_uuid) then return false, 'err.own_run' end
-    -- the same admin-only flag kinds Admin.approveFlagged refuses a supervisor (skipPermission skips them)
+    -- the same admin-only flag kinds Review.approveFlagged refuses a supervisor (skipPermission skips them)
     if kind == 'flagged' and AdminOnlyFlag(src, d) then return false, 'err.review_admin_only' end
 
     local points
@@ -693,7 +683,7 @@ function D.handle(src, disputeId, decision, reason, awardPoints, opts)
                 return false, (ok and e) or 'err.internal'
             end
         elseif kind == 'flagged' then
-            local ok, res, e = Call('Admin', 'approveFlagged', src, d.run_id, reason,
+            local ok, res, e = Call('Review', 'approveFlagged', src, d.run_id, reason,
                 { skipPermission = true, noAudit = true, quiet = true })
             if not ok or (res == false and e ~= 'err.not_flagged') then
                 if ok and e == 'err.already_voided' then

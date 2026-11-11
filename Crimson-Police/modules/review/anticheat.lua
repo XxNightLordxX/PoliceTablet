@@ -91,11 +91,7 @@ local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n then return default end
-    return n
-end
+local Num = CP.Num
 
 local function Cfg()
     return Config.AntiCheat or {}

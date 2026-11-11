@@ -4,23 +4,30 @@
 
 -- Owns
 --   * the queue: Review.queueFor(src, all) -> { items, canReview, canHandle, all } | nil, errKey. items = every
---     flagged row (CP.Admin.flaggedRows) and every open dispute (CP.Disputes.forSupervisor / forAdmin), each with
+--     flagged row (Review.flaggedRows, modules/review/flagged.lua) and every open dispute (CP.Disputes.forSupervisor / forAdmin), each with
 --     type = 'flag' | 'dispute' and id (the row id of a flag, the dispute id of a dispute), newest first.
 --     A supervisor (all = false) needs reviewFlagged or handleDisputes and sees his department only (the flag kinds
 --     the department's reviewRules hands to admins left out); all = true is the Admin UI's queue (openAdmin): every
 --     department. Runs the viewer took part in are never listed.
 --   * deciding: Review.decide(src, payload) -> ok, data. payload = { type, id, decision, reason, awardPoints?, all? }.
---       flag     'approve' | 'void' -> CP.Admin.approveFlagged / voidFlagged (a supervisor's first Void under the
+--       flag     'approve' | 'void' -> Review.approveFlagged / voidFlagged (a supervisor's first Void under the
 --                department's reviewRules.secondVoid answers { pending = true }); with runUuid and no id (admins):
 --                'approve' every flagged row of that run
 --       dispute  'approve' | 'reject' -> CP.Disputes.handle; a dispute about a failed run is an admin's
 --                (supervisors get err.no_permission), awardPoints 1..10000 when it is approved
---     The reply carries the viewer's fresh queue (data.queue), so the screen needs no second request.
+--       batch    'undo' (admins): the correction batch's own Undo (CP.Corrections.undoBatch)
+--       flag     'undo' (admins): a voided row restored through Restore run (server:admin:restoreRun, its rules)
+--     Undo needs Config.AdminUi.reviewUndo (err.review_undo_off). The reply carries the viewer's fresh queue
+--     (data.queue), so the screen needs no second request.
+--   * the admin's queue (all = true) also lists the correction batches of the last Config.AdminUi.reviewBatchDays
+--     days that can still be undone (type 'batch', id = the batch id; bulkVoid permission), and says canUndo
+--     (restoreRun) / canUndoBatch (bulkVoid).
 --   * live push: after a decision every other supervisor with the queue open (asked in the last 75 s) gets his own
 --     fresh queue (push 'reviewQueue'), of the row's departments only (an admin's decision: every department).
 --
 -- Net
 --   callback review:getQueue   { all? } -> ReviewQueueData (web/src/types/oversight.ts)
+--   (one run's whole history: review:getRunHistory, modules/review/history.lua)
 --   action   server:review:decide   payload above
 
 CP.Review = CP.Review or {}
@@ -29,15 +36,17 @@ local TAG = 'review'
 
 local WATCH_S = 75
 
+local function Ui() return type(Config.AdminUi) == 'table' and Config.AdminUi or {} end
+
+-- Config.AdminUi.reviewBatchDays: correction batches of the last that many days sit in the admin's queue (0 = none).
+local function BatchDays() return math.floor(CP.Num(Ui().reviewBatchDays, 7, 0, 365)) end
+
+-- Config.AdminUi.reviewUndo: the admin's queue offers Undo (a run he voided there, a correction batch).
+local function UndoOn() return Ui().reviewUndo ~= false end
+
 local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
-
-local function Int(v)
-    local n = math.tointeger(tonumber(v))
-    if not n or n < 1 or n > 2147483647 then return nil end
-    return n
-end
 
 local function IsAdmin(src)
     return CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true
@@ -89,7 +98,7 @@ function Review.queueFor(src, all)
     end
     local items = {}
     if canReview then
-        local _, flagged = Call('Admin', 'flaggedRows', (not all) and dept or nil, citizenid or '', admin)
+        local _, flagged = Call('Review', 'flaggedRows', (not all) and dept or nil, citizenid or '', admin)
         Typed(flagged, 'flag', 'rowId', items)
     end
     if canHandle then
@@ -101,13 +110,33 @@ function Review.queueFor(src, all)
         end
         Typed(disputes, 'dispute', 'id', items)
     end
+    -- the admin's queue: the correction batches of the last reviewBatchDays days that can still be undone
+    local canUndo = all and UndoOn() and Can(src, 'restoreRun') == true
+    local days = all and BatchDays() or 0
+    if days > 0 and Can(src, 'bulkVoid') then
+        local since = os.time() - days * 86400
+        local _, batches = Call('Corrections', 'batches')
+        local open = {}
+        for _, b in ipairs(type(batches) == 'table' and batches or {}) do
+            local undoable = b.state == 'done' and b.undo and not b.restored and not b.undone
+            if undoable and (tonumber(b.createdAt) or 0) >= since then open[#open + 1] = b end
+        end
+        Typed(open, 'batch', 'id', items)
+    end
     table.sort(items, function(a, b)
         local ta, tb = tonumber(a.createdAt) or 0, tonumber(b.createdAt) or 0
         if ta ~= tb then return ta > tb end
         if a.type ~= b.type then return a.type < b.type end
         return (tonumber(a.id) or 0) > (tonumber(b.id) or 0)
     end)
-    return { items = items, canReview = canReview, canHandle = canHandle, all = all == true }
+    return {
+        items = items,
+        canReview = canReview,
+        canHandle = canHandle,
+        canUndo = canUndo,
+        canUndoBatch = all and UndoOn() and Can(src, 'bulkVoid') == true,
+        all = all == true,
+    }
 end
 
 -- Who has the supervisors' queue open: src -> os.time() of his last review:getQueue (the screen asks every 30 s).
@@ -176,10 +205,26 @@ local function ApproveRun(src, runUuid, reason)
     if #rows == 0 then return false, 'err.not_flagged' end
     local n = 0
     for _, r in ipairs(rows) do
-        if CP.Admin.approveFlagged(src, r.id, reason) then n = n + 1 end
+        if Review.approveFlagged(src, r.id, reason) then n = n + 1 end
     end
     if n == 0 then return false, 'err.conflict' end
     return true, { approved = n, runUuid = runUuid }
+end
+
+-- Undo from the admin's queue: a voided run is restored (Restore run, its permission and rules), a correction batch
+-- is undone through its own Undo (CP.Corrections.undoBatch).
+local function DecideUndo(src, p)
+    if not UndoOn() then return false, 'err.review_undo_off' end
+    if p.type == 'batch' then
+        if type(p.id) ~= 'string' then return false, 'err.batch_unknown' end
+        local okC, ok, data = Call('Corrections', 'undoBatch', src, p.id, p.reason)
+        if not okC then return false, 'err.module_unavailable' end
+        return ok, data
+    end
+    local id = CP.IntIn(p.id, 1, 2147483647)
+    if not id then return false, 'err.invalid_row' end
+    if not (CP.AdminKit and CP.AdminKit.run) then return false, 'err.module_unavailable' end
+    return CP.AdminKit.run('server:admin:restoreRun', src, { rowId = id, reason = p.reason })
 end
 
 local function DecideFlag(src, p)
@@ -187,14 +232,14 @@ local function DecideFlag(src, p)
         if p.decision ~= 'approve' then return false, 'err.invalid_decision' end
         return ApproveRun(src, p.runUuid, p.reason)
     end
-    local id = Int(p.id)
+    local id = CP.IntIn(p.id, 1, 2147483647)
     if not id then return false, 'err.invalid_row' end
     local depts = not IsAdmin(src) and RowRunDepartments(id) or nil
     local ok, data
     if p.decision == 'approve' then
-        ok, data = CP.Admin.approveFlagged(src, id, p.reason)
+        ok, data = Review.approveFlagged(src, id, p.reason)
     elseif p.decision == 'void' then
-        ok, data = CP.Admin.voidFlagged(src, id, p.reason)
+        ok, data = Review.voidFlagged(src, id, p.reason)
     else
         return false, 'err.invalid_decision'
     end
@@ -202,7 +247,7 @@ local function DecideFlag(src, p)
 end
 
 local function DecideDispute(src, p)
-    local id = Int(p.id)
+    local id = CP.IntIn(p.id, 1, 2147483647)
     if not id then return false, 'err.invalid_dispute' end
     -- a dispute about a failed run is an admin's to answer
     if not IsAdmin(src) then
@@ -232,8 +277,10 @@ end
 function Review.decide(src, payload)
     if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
     local ok, data, depts
-    if payload.type == 'flag' then
-        if not CP.Admin or not CP.Admin.approveFlagged then return false, 'err.module_unavailable' end
+    if payload.decision == 'undo' and (payload.type == 'flag' or payload.type == 'batch') then
+        ok, data = DecideUndo(src, payload)
+    elseif payload.type == 'flag' then
+        if not Review.approveFlagged then return false, 'err.module_unavailable' end
         ok, data, depts = DecideFlag(src, payload)
     elseif payload.type == 'dispute' then
         ok, data = DecideDispute(src, payload)

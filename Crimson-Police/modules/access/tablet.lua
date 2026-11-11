@@ -620,6 +620,9 @@ local function BuildSession(src, ui, args)
             and CP.DeptControls.available
             and CP.DeptControls.available(src) == true
         or false
+    -- Config.MissionControls.restrictionsTab: the Supervisor UI's Department -> Restrictions tab
+    local mc = type(Config.MissionControls) == 'table' and Config.MissionControls or {}
+    config.restrictionsTab = ui ~= 'admin' and mc.restrictionsTab ~= false
     return {
         ui = ui,
         title = type(title) == 'string' and title ~= '' and title or 'Crimson-Police',
@@ -880,7 +883,7 @@ local function ReviewCount(src, officer)
     if Can(src, 'reviewFlagged') then
         -- an admin's badge counts the admin-only flag kinds his Review Queue lists too
         n = n
-            + Count(Call('Admin', 'flaggedRows', officer.department, officer.citizenid,
+            + Count(Call('Review', 'flaggedRows', officer.department, officer.citizenid,
                 CP.Access ~= nil and CP.Access.isAdmin ~= nil and CP.Access.isAdmin(src) == true))
     end
     if Can(src, 'handleDisputes') then n = n + Count(Call('Disputes', 'forSupervisor', src)) end

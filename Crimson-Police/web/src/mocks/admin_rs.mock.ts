@@ -4,7 +4,6 @@
 import { registerMock } from '../shared/nui';
 import { registerRestrictionKind, type MockRestrictionPayload } from './restrictions.mock';
 import type {
-    RsAdminRow,
     RsCaseData,
     RsCaseLine,
     RsCasesData,
@@ -260,6 +259,14 @@ const pairs: RsPairLine[] = [
     },
 ];
 
+// the running blocks, exclusions and suspensions (Opp's admin rows): rows of the one restrictions list
+interface RsAdminRow {
+    kind: 'block' | 'exclude' | 'suspend';
+    officer?: string | null;
+    suspect?: string | null;
+    untilAt: number;
+}
+
 const adminRows: RsAdminRow[] = [
     { kind: 'block', officer: 'ABC12345', suspect: 'CRIM0009', untilAt: nowS() + 6 * 86400 },
     { kind: 'exclude', suspect: 'CRIM0042', untilAt: nowS() + 29 * 86400 },
@@ -319,9 +326,7 @@ registerMock('request', 'admin:getRsPairs', (args: { citizenid?: string }): RsPa
         enabled: !rsOff(),
         pairs: cid ? pairs.filter(p => p.officer === cid || p.suspect === cid) : pairs,
         from: now - 30 * 86400,
-        admin: running,
         names: NAMES,
-        lift: true,
         serverTime: now,
     };
     if (cid) {

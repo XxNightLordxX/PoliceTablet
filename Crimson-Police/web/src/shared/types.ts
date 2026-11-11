@@ -114,6 +114,8 @@ export interface Session {
         };
         // true while this player may change at least one Mission control (CP.DeptControls.available)
         missionControls?: boolean;
+        // Config.MissionControls.restrictionsTab: the Supervisor UI's Department -> Restrictions tab
+        restrictionsTab?: boolean;
         // Config.OfficerOptions resolved for the officer's department (CP.OptionDefs.resolve)
         officerOptions?: {
             enabled: boolean;

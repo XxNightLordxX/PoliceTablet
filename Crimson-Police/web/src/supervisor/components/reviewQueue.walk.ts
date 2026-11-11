@@ -14,7 +14,20 @@ import type { ReviewQueueData } from '../../types/oversight';
 import panelSrc from './ReviewQueuePanel.tsx?raw';
 import supSrc from '../screens/ReviewQueue.tsx?raw';
 import adminSrc from '../../admin/screens/Review.tsx?raw';
-import { countsOf, decidePayload, decisionsOf, itemKey, itemsOf, runRowsOf, showOf } from './reviewQueue';
+import type { RunHistoryData } from '../../types/oversight';
+import historySrc from './RunHistory.tsx?raw';
+import {
+    batchesOf,
+    countsOf,
+    decidePayload,
+    decisionsOf,
+    historyKey,
+    itemKey,
+    itemsOf,
+    runRowsOf,
+    showOf,
+    undoPayload,
+} from './reviewQueue';
 
 const failures: string[] = [];
 let passed = 0;
@@ -66,6 +79,59 @@ async function steps() {
     const bad = await action('server:review:decide', { type: 'other', id: 1, decision: 'approve', reason: 'x' });
     ok(!bad.ok, 'an unknown type is refused');
 
+    const o = oversight as Record<string, string>;
+    // FIN4: the admin's queue lists the correction batches with their Undo, and a void made there can be undone
+    const aq = await request<ReviewQueueData>('review:getQueue', { all: true });
+    const aItems = aq.data?.items ?? [];
+    const batch = batchesOf(aItems, 'all')[0];
+    ok(batch && batch.type === 'batch' && aq.data?.canUndoBatch === true, "the admin's queue lists a batch with Undo");
+    ok(batchesOf(aItems, 'flag').length === 0 && itemsOf(aItems, 'batch').length === 0, 'the filters keep them apart');
+    ok(countsOf(aItems).batch === batchesOf(aItems, 'all').length && showOf('batch') === 'batch', 'counted, linkable');
+    ok(batchesOf(items, 'all').length === 0 && sup.data?.canUndo !== true, "a supervisor's queue: no batches, no Undo");
+    if (batch) {
+        const res = await action<{ queue?: ReviewQueueData }>(
+            'server:review:decide',
+            undoPayload('batch', batch.id, 'Wrong filter'),
+        );
+        ok(res.ok && !batchesOf(res.data?.queue?.items, 'all').some(b => b.id === batch.id), 'Undo takes the batch');
+    }
+    const toVoid = itemsOf(aItems, 'flag')[0];
+    if (toVoid && toVoid.type === 'flag') {
+        const v = await action('server:review:decide', decidePayload(toVoid, 'void', 'Teleport', true));
+        ok(v.ok && aq.data?.canUndo === true, 'an admin voids a run in the queue, Undo offered');
+        const u = await action('server:review:decide', undoPayload('flag', toVoid.id, 'My mistake'));
+        ok(u.ok, 'Undo restores it');
+        ok(!(await action('server:review:decide', undoPayload('flag', toVoid.id, 'Again'))).ok, 'once');
+        const h = await request<RunHistoryData>('review:getRunHistory', { runUuid: toVoid.runUuid });
+        const ev = h.data?.events ?? [];
+        ok(ev.length > 0 && ev.every((e, i) => i === 0 || ev[i - 1].at <= e.at), 'History: one timeline, oldest first');
+        ok(
+            ev.every(e => o[historyKey(e)] !== undefined || historyKey(e).startsWith('sup.history.action.')),
+            'keys',
+        );
+    }
+    ok(
+        panelSrc.includes('<RunHistoryDialog') && historySrc.includes("'review:getRunHistory'"),
+        'History opens one run',
+    );
+    for (const k of ['flag', 'note', 'decision', 'dispute', 'batch', 'row']) {
+        ok(o[`sup.history.kind.${k}`] !== undefined, `the ${k} kind has a label`);
+    }
+    for (const a of [
+        'approveFlagged',
+        'voidFlagged',
+        'voidPending',
+        'voidRun',
+        'restoreRun',
+        'disputeApproved',
+        'disputeRejected',
+        'voidKindSet',
+        'flagManual',
+        'other',
+    ]) {
+        ok(o[`sup.history.action.${a}`] !== undefined, `the ${a} line has a text`);
+    }
+
     for (const src of [panelSrc, supSrc, adminSrc]) {
         ok(
             !/sup:getReviewQueue|admin:getFlagged|admin:getDisputes|:handleDispute|:reviewFlagged|approveRun'/.test(
@@ -76,7 +142,6 @@ async function steps() {
     }
     ok(panelSrc.includes("'review:getQueue'") && panelSrc.includes("'server:review:decide'"), 'one read, one action');
     ok(adminSrc.includes('<ReviewQueuePanel') && supSrc.includes('<ReviewQueuePanel'), 'both UIs use the one queue');
-    const o = oversight as Record<string, string>;
     const u = uiLocale as Record<string, string>;
     for (const k of ['sup.review.tab.queue', 'sup.review.col.type', 'sup.review.show_all', 'sup.review.empty_title']) {
         ok(typeof o[k] === 'string' && o[k].length > 0, `${k} has a line`);

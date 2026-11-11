@@ -1177,7 +1177,8 @@ do
     Restart()
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.mission_banned', 'restart: the ban is kept (cp_officers.mission_ban)')
-    ok, data = Act('server:sup:liftMissionBan', 3, { citizenid = CID[1], reason = 'Talked it through' })
+    ok, data = Act('server:restriction', 3,
+        { op = 'lift', kind = 'missionBan', citizenid = CID[1], reason = 'Talked it through' })
     H.eq(ok, true, 'ban: the supervisor lifts it: ' .. tostring(data))
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(ok, true, 'ban: the officer takes Patrol again: ' .. tostring(data))

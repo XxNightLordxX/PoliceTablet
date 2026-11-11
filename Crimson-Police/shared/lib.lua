@@ -97,6 +97,16 @@ function CP.Num0(v) return CP.Num(v, 0) end
 ---@return integer
 function CP.Int(v) return math.floor(CP.Num(v, 0) + 0.0) end
 
+-- v as a whole number between lo and hi (each optional), else nil: a payload's id or count, never rounded.
+---@return integer|nil
+function CP.IntIn(v, lo, hi)
+    local n = tonumber(v)
+    if not n or n ~= n or n % 1 ~= 0 then return nil end
+    n = math.tointeger(n)
+    if not n or n < (lo or math.mininteger) or n > (hi or math.maxinteger) then return nil end
+    return n
+end
+
 -- Config[section][key] as it is now, or default when it is left out (a switch set to false reads as false).
 ---@param section string
 ---@param key string

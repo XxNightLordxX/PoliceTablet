@@ -24,11 +24,7 @@ local navCache = { at = -1, n = 0 }
 
 local Num = CP.Num
 
-local function Int(v, lo, hi)
-    local n = math.tointeger(tonumber(v))
-    if not n or (lo and n < lo) or (hi and n > hi) then return nil end
-    return n
-end
+local Int = CP.IntIn
 
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end

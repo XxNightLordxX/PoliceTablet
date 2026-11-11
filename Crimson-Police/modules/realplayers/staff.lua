@@ -486,25 +486,18 @@ if CP.AdminKit and CP.AdminKit.action then
         if cid ~= nil and not ValidCid(cid) then return nil, 'err.invalid_citizenid' end
         local lines, from = {}, nil
         if Opp.pairStats then lines, from = Opp.pairStats(cid) end
-        local admin = Opp.adminRows and Opp.adminRows() or {}
-        -- the names of everyone the pairs and the running rows name, in one lookup
+        -- the names of everyone the pairs name, in one lookup (the running blocks, exclusions and suspensions are
+        -- rows of the one restrictions list: Admin UI -> Restrictions, admin:getRestrictions)
         local cids = { cid }
         for _, l in ipairs(lines) do
             cids[#cids + 1] = l.officer
             cids[#cids + 1] = l.suspect
         end
-        for _, r in ipairs(admin) do
-            cids[#cids + 1] = r.officer
-            cids[#cids + 1] = r.suspect
-        end
         local out = {
             enabled = FeatureOn(),
             pairs = lines,
             from = from,
-            admin = admin,
             names = NamesOf(cids),
-            -- the running rows can be lifted early (Config.RealPlayers.staffLift)
-            lift = Cfg().staffLift ~= false,
             serverTime = os.time(),
         }
         if cid then

@@ -1517,9 +1517,8 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
 - `webhook(category, title, description, fields, opts)` and `webhooks() -> { { category, convar, state =
   'on'|'off'|'invalid', discord } }` (audit, flags, board, builder, operations; convars `cp_webhook_*` read at call
   time; only https).
-- Review: `approveFlagged(src, rowId, reason)` (clears `flagged`, keeps `flag_reason`, then `CP.Cash.release` when
-  held, `onRowApproved`, invalidate), `voidFlagged` (only while still flagged, else `err.conflict`; cash stays held
-  until forfeited), `voidRun(src, rowIdOrRunUuid, reason)` (every unvoided row of a run).
+- `voidRun(src, rowIdOrRunUuid, reason)` (every unvoided row of a run) through `voidRow`, the one row void that
+  `CP.Review.voidFlagged` (§5.26a) shares.
 - Force recall (optional reason, audited): runs involving the caller's department, tests included; never a run the
   caller is or was on (`err.recall_own_run`, tests excepted: a free reroll).
 - Manual award 1–10,000 points.
@@ -1547,16 +1546,18 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   active).
 
 ### 5.26a CP.Review — modules/review (S)
-One module for everything reviewed: `review/anticheat.lua` (§5.26), `review/reviewrules.lua` (the reviewRules
-Mission control), `review/disputes.lua` (§5.24), `review/corrections.lua` (§5.38) and `review/queue.lua`, the one
-Review queue:
-- `queueFor(src, all) -> { items, canReview, canHandle, all }`: every flagged row (`CP.Admin.flaggedRows`) and open
-  dispute (`CP.Disputes.forSupervisor`, with `all` `forAdmin`) in one list, each with `type = 'flag'|'dispute'` and
-  `id` (the row id of a flag, the dispute id), newest first. A supervisor: his department; `all` (`openAdmin`): every
-  department, the admin-only flag kinds and failed-run disputes too. The viewer's own runs never.
-- `decide(src, payload)` (`server:review:decide`): a flag → `CP.Admin.approveFlagged` / `voidFlagged` (or, admins,
-  every flagged row of `runUuid`); a dispute → `CP.Disputes.handle` (supervisors never a failed-run one).
-  `reply(src, ok, data, depts, all)` adds the viewer's fresh `queue` and calls `share`.
+One module for everything reviewed: `anticheat.lua` (§5.26), `reviewrules.lua`, `disputes.lua` (§5.24),
+`corrections.lua` (§5.38), `flagged.lua` (`flaggedRows`, `flaggedCount`, `approveFlagged` clears `flagged` and
+releases held cash, `voidFlagged` only while flagged), `history.lua` and `queue.lua`, the one Review queue:
+- `queueFor(src, all) -> { items, canReview, canHandle, canUndo, canUndoBatch, all }`: every flagged row and open
+  dispute in one list, `type = 'flag'|'dispute'`, newest first. A supervisor: his department; `all` (`openAdmin`):
+  every department, plus `type = 'batch'` (`CP.Corrections.batches` of the last `AdminUi.reviewBatchDays` days that
+  can still be undone). The viewer's own runs never.
+- `decide(src, payload)` (`server:review:decide`): a flag → approve / void (or, admins, every row of `runUuid`); a
+  dispute → `CP.Disputes.handle`; `decision = 'undo'` (`AdminUi.reviewUndo`): a flag → `server:admin:restoreRun`, a
+  batch → `CP.Corrections.undoBatch`. `reply` adds the viewer's fresh `queue` and calls `share`.
+- `history(runUuid)` (`review:getRunHistory`, and `admin:getRun`'s `history`): the rows, flags, notes, decisions,
+  disputes and correction batches of a run in one timeline, oldest first; four reads.
 - `share(src, dept?)`: pushes `reviewQueue` to every other supervisor who read his queue in the last 75 s, of the
   row's departments (an admin's decision: all). The Admin UI's queue polls (60 s).
 - Web: `supervisor/components/ReviewQueuePanel.tsx` (Department → Review and Admin UI → Review → Queue),
@@ -2567,7 +2568,7 @@ admin switched them on and only inside the admin's bounds.
 | `unitSize` | number 2..maxUnitSize (never relaxes) | units | `Units.maxSize(dept)` caps invites and joins; accept `err.unit_too_large` |
 | `types` | map `{ [type] = false, missions = { [id] = false } }`, between (never relaxes) | draw | off for a member's department like `def.departments` (never the boss); accept `err.type_off_department`; card "Off for <dept> by command"; every type off refused (`err.control_types_all_off`) |
 | `featuredType` | choice of every type | draw | the card's `featured` ("Recommended by command") for that department; never points |
-| `missionBan` | action 1–168 h (1–24) | supervisor/missionban | `cp_officers.mission_ban` (migration 012) `{ until, by, name, dept, reason, at }`, all kept in memory; `server:sup:missionBan { citizenid, hours, reason }` (online, own department, a lower grade, `missionBanPerDay`; audit `missionBan`), `server:sup:liftMissionBan` (only the setter); admins extend (missionControls) or lift (antiFarmOverride, also while off) in the restrictions list; accept, operations join and claims refuse `err.mission_banned` / `err.member_mission_banned`; a live run is never ended |
+| `missionBan` | action 1–168 h (1–24) | supervisor/missionban | `cp_officers.mission_ban` (migration 012) `{ until, by, name, dept, reason, at }`, all kept in memory; `server:sup:missionBan { citizenid, hours, reason }` (online, own department, a lower grade, `missionBanPerDay`; audit `missionBan`), lift through `server:restriction` (a supervisor only his own; admins extend with missionControls, lift with antiFarmOverride); accept, operations join and claims refuse `err.mission_banned` / `err.member_mission_banned`; a live run is never ended |
 | `callLane` | map `{ spawnEvery = { lo, hi }, maxOpen, areas, types = { [type] = 0–10 } }` 30–3600 s (120–600) | missioncalls | one call per due lane for idle units all of that department (`cp_mission_calls.department`, migration 013); counts against `maxOpen`; `err.mc_other_department`, `err.mc_own_call` (the setter) |
 | `staffCallWait` | number 0–3600 s (60–120) | missioncalls | `MC.staffWait`; a shorter wait relaxes |
 | `notices` | action, unbounded | supervisor/notices | the `department` kind of CP.Notices: `server:notice:post { kind = 'department', text, days }` (own department, `Config.Notices.department` limits, one per `postWait`; a `cp_staff_notices` row with `by_actor = 'sup:<cid>'` shown on that department's Home), `server:notice:end { id }`, `notices:get { kind }` |
@@ -3139,7 +3140,7 @@ not in `Config.RealPlayers.liveCrime.sources`.
 
 Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome`, `getBoard`,
 `getProfile`, `getChallenge`, `getDeptContributors`, `getMissionList`, `getMissionDefs`,
-`sup:getOperation`, `sup:getLiveRuns`, `review:getQueue`, `sup:getPayouts`, `sup:getDeptReport`,
+`sup:getOperation`, `sup:getLiveRuns`, `review:getQueue`, `review:getRunHistory`, `sup:getPayouts`, `sup:getDeptReport`,
 `sup:getOfficerActivity`, `admin:getPayouts`, `admin:getMissions`, `admin:getSeasons`,
 `admin:getBoards`, `admin:getStuckPayments`, `admin:searchOfficers`, `admin:getOfficer`,
 `admin:getDepartments`, `admin:getPermissions`, `admin:getAudit`, `admin:exportAudit`,
@@ -3170,7 +3171,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:sup:opRelaunch` / `server:admin:opRelaunch` | — | launchCrossDept | operations |
 | `server:sup:opCancel` / `server:admin:opCancel` | `{ reason }` | launchCrossDept | operations |
 | `server:sup:forceRecall` | `{ runId, src }` | forceRecall | admin |
-| `server:review:decide` | `{ type = 'flag'|'dispute', id, decision = 'approve'|'void'|'reject', reason, awardPoints?, all? }`; a flag with `runUuid` and no id: approve every flagged row of that run (admins); a supervisor's first Void under reviewRules.secondVoid → `{ rowId, pending = true }`; the reply carries `queue` | reviewFlagged / handleDisputes / handleFailedDispute (failed runs: admins) | review |
+| `server:review:decide` | `{ type = 'flag'|'dispute'|'batch', id, decision = 'approve'|'void'|'reject'|'undo', reason, awardPoints?, all? }`; a flag with `runUuid`: approve every flagged row of that run (admins); a first Void under secondVoid → `{ rowId, pending = true }`; undo: admins; the reply carries `queue` | reviewFlagged / handleDisputes / handleFailedDispute (failed runs: admins) | review |
 | `server:admin:voidRun` | `{ rowId }` or `{ runUuid }`, `reason` | voidAnyRun | admin |
 | `server:admin:awardPoints` | `{ citizenid, points, reason }` | manualAward | admin → scoring |
 | `server:admin:suspend` | `{ citizenid, days, reason }` | suspend | admin → access |
@@ -3245,8 +3246,8 @@ Every action of full admin control goes through `CP.AdminKit.action` (§5.37) an
 | `admin:previewRecordMove` / `server:admin:moveRecord` / `undoRecordMove` | callback / actions | recordMove | `{ from, to, reason, confirm, previewToken, requestId }` / `{ jobId, reason }` | `AdminControl.recordMove`; T = the new citizenid or `UNVERIFIED <cid>` |
 | `admin:getRsCases`, `admin:getRsCase`, `admin:getRsPairs` | callbacks | antiFarmOverride | `{}` / `{ runUuid }` / `{ citizenid? }` | modules/realplayers/staff; server-only case data, refused for the admin's own case |
 | `server:admin:rsBlockPair`, `rsExclude`, `rsSuspend` | actions | antiFarmOverride | `{ officer, suspect, days, reason }` / `{ citizenid, days, reason }` | 0 < days <= 3650, never his own characters, `err.rs_off` while both features are off |
-| `admin:getRestrictions` | callback | openAdmin (each kind: the admin may lift or extend it) | `{}` → `{ kinds = { key, maxHours, canLift, canExtend }, rows = { kind, citizenid, name, other?, untilAt, by, byName, reason, dept?, auto? }, serverTime }` | modules/supervisor/restrictions; who set it and why from the kind's row, else its newest audit row (500 read) |
-| `server:admin:restriction` | action | openAdmin, then the kind's own key per step (suspension: suspend; missionBan: lift antiFarmOverride, extend missionControls; pairBlock, exclusion, rsSuspension, volunteerBlock: antiFarmOverride) | `{ op = 'lift' \| 'extend', kind, citizenid, other?, hours?, reason }` | one target per 3 s; hours 1 to the kind's longest (suspension and Real suspects 3650 d, missionBan 168 h, volunteerBlock 8760 h); `Config.AdminUi.restrictionsExtend` = false refuses extend (`err.restriction_extend_off`); the Real suspects kinds keep `staffLift`, volunteerBlock lift (= Clear strikes) keeps `staffClearStrikes`; each kind keeps its audit rows (unsuspend / suspend, missionBanLift / missionBan, rsLift / rsBlockPair·rsExclude·rsSuspend, rsClearStrikes / rsExtendBlock) |
+| `admin:getRestrictions`, `sup:getRestrictions` | callbacks | openAdmin (each kind the admin may lift or extend); viewMissionList and `MissionControls.restrictionsTab` (his department, kinds with `def.sup`) | `{}` → `{ kinds = { key, maxHours, canLift, canExtend }, rows = { kind, citizenid, name, other?, untilAt, by, byName, reason, dept?, auto?, canLift? }, dept?, serverTime }` | modules/supervisor/restrictions; setter and reason from the row, else its newest audit row (500 read) |
+| `server:restriction` | action (supAction) | supervisors: lift only, the kind's `def.sup.permission` (missionBan: missionControls, his own ban); admins: openAdmin, then the kind's key per step (suspension: suspend; missionBan: lift antiFarmOverride, extend missionControls; the Real suspects kinds: antiFarmOverride) | `{ op = 'lift' \| 'extend', kind, citizenid, other?, hours?, reason }` | one target per 3 s; hours 1 to the kind's longest; `AdminUi.restrictionsExtend` = false refuses extend; the Real suspects kinds keep `staffLift`, volunteerBlock lift `staffClearStrikes`; each kind keeps its audit rows |
 | `admin:getOfficerLook`, `server:admin:resetLook`, `clearProfileCooldown` | callback / actions | officerRecords | `{ citizenid, reason }` | modules/progression/profile; cooldown clear 1 per 60 s per officer |
 | `admin:getBannedWords`, `admin:testBannedWords`, `server:admin:setBannedWords` | callbacks / action | officerRecords | `{ add, remove, reason }` | ≤ 5000 words, ≤ 64 characters; old file kept as `.bak`; live reload |
 | `server:admin:unrevokeCommendation`, `editCitation` | action | officerRecords | `{ id, reason, citation? }` | K on the old value |
@@ -3481,11 +3482,11 @@ boundary calls `close` and mounts the app again after 2 s (sending `ready` again
 without `acks` is never closed by the 6 s open check (§5.4).
 
 Replies that carry their screen's view (`shared/replyView.ts` applies `data.view` / `queue` / `activity` / `runs` /
-`officer`; the screen asks again only when it is missing): `server:sup|admin:reviewFlagged` and `handleDispute`
-(`queue`, `CP.Review.queueFor`), `server:answerMissionCall` with `decline` (`MC.list`), `server:sup|admin:mcWithdraw|
+`officer`; the screen asks again only when it is missing): `server:review:decide` (`queue`,
+`CP.Review.queueFor`), `server:answerMissionCall` with `decline` (`MC.list`), `server:sup|admin:mcWithdraw|
 mcPost` (`MC.supView`), `server:sup:forceRecall` and `addRunTime` (`CP.Admin.liveRunsFor`), `server:sup:
-clearCooldowns` (`CP.LiveCtl.supCooldownsView`), `server:sup:commend|revokeCommendation|missionBan|liftMissionBan|
-awardPoints` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `server:admin:voidRun|restoreRun|
+clearCooldowns` (`CP.LiveCtl.supCooldownsView`), `server:sup:commend|revokeCommendation|missionBan|awardPoints`,
+`server:restriction` sent with `activityOf` (`activity`, `CP.Challenge.supActivity`), `server:admin:voidRun|restoreRun|
 setVoidKind|flagRow` sent with `views = { rowId, archived, citizenid, runs, officer }` (`CP.Corrections.withViews`),
 `server:admin:backupNow|restoreBackup|deleteBackup` (`Sys.backupsView`), `storageCopy|setStorageMode|useStoreAgain`
 (`Sys.storageView`; `admin:getStorage` allows one read per 5 s), `server:admin:resetAllSettings` (`Settings.all()`).

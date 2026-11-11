@@ -327,6 +327,16 @@ do
     H.eq(E('AdminUi.homeShortcutsByUse').default, false, 'homeShortcutsByUse ships false')
     H.ok((E('AdminUi.homeShortcutsByUse').desc or ''):find('the ones he uses most first', 1, true) ~= nil,
         'homeShortcutsByUse: its config.lua comment is its description')
+    -- FIN4: the Review queue's batches and Undo, the supervisor's Restrictions tab
+    H.eq(E('AdminUi.reviewBatchDays').default, 7, 'reviewBatchDays ships 7 days')
+    H.ok(Check('AdminUi.reviewBatchDays', 0) and not Check('AdminUi.reviewBatchDays', 366), 'reviewBatchDays: 0-365')
+    H.ok((E('AdminUi.reviewBatchDays').desc or ''):find('Review -> Queue', 1, true) ~= nil,
+        'reviewBatchDays: its config.lua comment is its description')
+    H.eq(E('AdminUi.reviewUndo').default, true, 'reviewUndo ships true')
+    H.ok((E('AdminUi.reviewUndo').desc or ''):find('offers Undo', 1, true) ~= nil, 'reviewUndo: described')
+    H.eq(E('MissionControls.restrictionsTab').default, true, 'restrictionsTab ships true')
+    H.ok((E('MissionControls.restrictionsTab').desc or ''):find('Restrictions tab', 1, true) ~= nil,
+        'restrictionsTab: described')
     H.eq(E('Tablet.sidebarOrder').default, 'classic', 'the Officer UI sidebar ships in its classic order')
     H.eq(E('Tablet.sidebarOrder').kind, 'enum', 'sidebarOrder is a choice')
     H.ok((E('Tablet.sidebarOrder').desc or ''):find('Only the order changes', 1, true) ~= nil,

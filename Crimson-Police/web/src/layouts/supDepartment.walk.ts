@@ -59,7 +59,15 @@ async function steps(): Promise<void> {
     }
     ok(line('ui.screen.sup_department'), 'Department has a title');
     for (const k of DEPT_TABS) ok(line(`sup.dept.tab.${k}`), `the ${k} tab has a label`);
-    ok(deptTabsFor(session).join() === DEPT_TABS.join(), 'a full supervisor sees all five tabs, in order');
+    ok(deptTabsFor(session).join() === DEPT_TABS.join(), 'a full supervisor sees all six tabs, in order');
+    ok(
+        !deptTabsFor({ ...session, config: { ...session.config, restrictionsTab: false } }).includes('restrictions'),
+        'restrictionsTab = false: no Restrictions tab',
+    );
+    ok(
+        deptTabsFor(as(['viewMissionList'], { restrictionsTab: true })).includes('restrictions'),
+        "FIN4: every supervisor sees his department's restrictions",
+    );
 
     // each tab keeps the permission of the screen it replaces
     ok(deptTabsFor(as(['fieldTraining'])).join() === 'training', 'a field training grant alone: Training only');

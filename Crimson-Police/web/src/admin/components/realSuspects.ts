@@ -1,15 +1,7 @@
 // Admin UI · Real suspects: the screen's plain helpers (no React), walked by realSuspects.walk.ts.
 
-import type {
-    RsAdminRow,
-    RsCaseLine,
-    RsLedgerLine,
-    RsListedVolunteer,
-    RsPerson,
-    RsSuspect,
-    RsTool,
-} from '../../types/admin_rs';
-import { restrictionPayload, rsRestriction } from './restrictions';
+import type { RsCaseLine, RsLedgerLine, RsListedVolunteer, RsPerson, RsSuspect, RsTool } from '../../types/admin_rs';
+import { restrictionPayload } from './restrictions';
 
 export const RS_DAYS_MAX = 3650;
 export const RS_REASON_MAX = 255;
@@ -37,9 +29,6 @@ export function filterCases(cases: RsCaseLine[], filter: RsCaseFilter): RsCaseLi
     return cases;
 }
 
-// Lift early and Clear strikes go through the one restrictions action (admin/components/restrictions.ts).
-export { RESTRICTION_ACTION as RS_LIFT_ACTION, RESTRICTION_ACTION as RS_CLEAR_STRIKES_ACTION } from './restrictions';
-
 // "Name (CITIZENID)", the citizenid alone, or '-'.
 export function personText(p: RsPerson | null | undefined): string {
     if (!p || !p.citizenid) return '-';
@@ -56,11 +45,6 @@ export function sinceOpen(seconds: number | null | undefined): string {
 // The suspect a damage-ledger line names (by his label in the case), or undefined.
 export function ledgerSuspect(line: RsLedgerLine, suspects: RsSuspect[]): RsSuspect | undefined {
     return line.label ? suspects.find(s => s.label === line.label) : undefined;
-}
-
-// The running admin rows that name this citizenid (as officer or suspect).
-export function rowsFor(rows: RsAdminRow[], cid: string): RsAdminRow[] {
-    return rows.filter(r => r.officer === cid || r.suspect === cid);
 }
 
 export interface RsToolForm {
@@ -126,12 +110,8 @@ export function weaponText(line: RsLedgerLine): string {
     return line.weapon ? `#${line.weapon}` : '-';
 }
 
-// The payload that lifts one running row early: its restriction kind, the citizenids it names and the reason.
-export function liftPayload(row: RsAdminRow, reason: string): Record<string, unknown> {
-    return restrictionPayload('lift', rsRestriction(row), reason);
-}
-
-// The payload that clears a volunteer's strikes and his strikes block.
+// The payload that clears a volunteer's strikes and his strikes block (the one restrictions action,
+// RESTRICTION_ACTION in ./restrictions).
 export function clearStrikesPayload(citizenid: string, reason: string): Record<string, unknown> {
     return restrictionPayload('lift', { kind: 'volunteerBlock', citizenid }, reason);
 }

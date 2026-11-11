@@ -4,15 +4,15 @@
 // while Config.RealPlayers.liveCrime.enabled or Config.RealPlayers.volunteer.enabled is on (Config.RealPlayers.adminScreen), to admins with
 // the antiFarmOverride key. Cases: every open case and the last Config.RealPlayers.casesKept closed ones; a case
 // opens its suspects, flag lines, timeline and damage ledger (admin:getRsCase; never a position, and never a case of
-// the admin's own characters). Pairs and blocks: pair statistics and the running admin rows (admin:getRsPairs), and
-// the three tools (block a pair, exclude a suspect, suspend an officer), each with days and a reason, audited.
+// the admin's own characters). Pairs and blocks: pair statistics (admin:getRsPairs), a link to Restrictions (where the
+// running blocks, exclusions and suspensions are listed and lifted) and the three tools (block a pair, exclude a
+// suspect, suspend an officer), each with days and a reason, audited.
 
 import { useEffect, useState } from 'react';
 import {
     Badge,
     Button,
     Card,
-    ConfirmDialog,
     Dialog,
     EmptyState,
     ErrorState,
@@ -40,7 +40,6 @@ import { useAction, useRequest, type UseRequestResult } from '../../shared/hooks
 import { hasKey, t } from '../../shared/i18n';
 import { useNavigation } from '../../shared/navigation';
 import type {
-    RsAdminRow,
     RsCaseData,
     RsCaseLine,
     RsCasesData,
@@ -54,18 +53,15 @@ import type {
 } from '../../types/admin_rs';
 
 import { ReasonChips } from '../components/ReasonChips';
+import { RESTRICTION_ACTION } from '../components/restrictions';
 import {
-    RS_CLEAR_STRIKES_ACTION,
     RS_DAYS_MAX,
-    RS_LIFT_ACTION,
     RS_REASON_MAX,
     cidText,
     clearStrikesPayload,
     filterCases,
     ledgerSuspect,
-    liftPayload,
     personText,
-    rowsFor,
     sinceOpen,
     sortListed,
     toolRequest,
@@ -586,30 +582,14 @@ function CasesTab({
     );
 }
 
-const ADMIN_KIND_TONE: Record<RsAdminRow['kind'], BadgeTone> = {
-    block: 'danger',
-    exclude: 'warning',
-    suspend: 'primary',
-};
-
 function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => void; version: number }) {
     const [query, setQuery] = useState('');
     const cid = query.trim();
     const args = validCid(cid) ? { citizenid: cid, v: version } : { v: version };
     const { data, loading, error, refetch } = useRequest<RsPairsData>('admin:getRsPairs', args);
     const pairs = asArray(data?.pairs);
-    const admin = asArray(data?.admin);
     const names = data?.names;
-    const [lifting, setLifting] = useState<RsAdminRow | null>(null);
-    const { run, busy } = useAction();
-    const doLift = async (reason: string) => {
-        if (!lifting) return;
-        const res = await run(RS_LIFT_ACTION, liftPayload(lifting, reason), { success: 'rs.ui.lift_done' });
-        if (res.ok) {
-            setLifting(null);
-            void refetch();
-        }
-    };
+    const { navigate } = useNavigation();
     const pairCols: TableColumn<RsPairLine>[] = [
         { key: 'officer', header: t('rs.ui.col.officer'), render: p => cidText(p.officer, names) },
         { key: 'suspect', header: t('rs.ui.col.suspect'), render: p => cidText(p.suspect, names) },
@@ -634,33 +614,7 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
             ),
         },
     ];
-    const adminCols: TableColumn<RsAdminRow>[] = [
-        {
-            key: 'kind',
-            header: t('rs.ui.col.kind'),
-            render: r => (
-                <Badge size="sm" tone={ADMIN_KIND_TONE[r.kind] ?? 'neutral'}>
-                    {t(`rs.ui.tool.name.${r.kind}`)}
-                </Badge>
-            ),
-        },
-        { key: 'officer', header: t('rs.ui.col.officer'), render: r => cidText(r.officer, names) },
-        { key: 'suspect', header: t('rs.ui.col.suspect'), render: r => cidText(r.suspect, names) },
-        { key: 'until', header: t('rs.ui.col.until'), render: r => when(r.untilAt) },
-    ];
-    if (data?.lift) {
-        adminCols.push({
-            key: 'lift',
-            header: '',
-            align: 'right',
-            render: r => (
-                <Button size="sm" variant="ghost" icon="undo" onClick={() => setLifting(r)}>
-                    {t('rs.ui.lift')}
-                </Button>
-            ),
-        });
-    }
-    const mine = cid && data?.citizenid === cid ? rowsFor(admin, cid) : null;
+    const mine = !!cid && data?.citizenid === cid;
     return (
         <>
             <Card
@@ -711,42 +665,11 @@ function PairsTab({ onTool, version }: { onTool: (f: Partial<RsToolForm>) => voi
                     />
                 )}
             </Card>
-            <Card
-                title={t('rs.ui.admin_rows')}
-                subtitle={t(data?.lift ? 'rs.ui.admin_rows_sub_lift' : 'rs.ui.admin_rows_sub')}
-                icon="lock"
-                padding="none"
-            >
-                <Table
-                    dense
-                    columns={adminCols}
-                    rows={mine ?? admin}
-                    rowKey={r => `${r.kind}|${r.officer ?? ''}|${r.suspect ?? ''}`}
-                    empty={t('rs.ui.admin_rows_none')}
-                />
+            <Card title={t('rs.ui.admin_rows')} subtitle={t('rs.ui.admin_rows_link')} icon="lock" padding="md">
+                <Button size="sm" variant="secondary" icon="lock" onClick={() => navigate('admin_restrictions')}>
+                    {t('rs.ui.open_restrictions')}
+                </Button>
             </Card>
-            <ConfirmDialog
-                open={lifting !== null}
-                title={t('rs.ui.lift_title')}
-                message={
-                    lifting
-                        ? t('rs.ui.lift_message', {
-                              what: t(`rs.ui.tool.name.${lifting.kind}`),
-                              who: [lifting.officer, lifting.suspect]
-                                  .filter((c): c is string => !!c)
-                                  .map(c => cidText(c, names))
-                                  .join(' / '),
-                              until: when(lifting.untilAt),
-                          })
-                        : null
-                }
-                confirmLabel={t('rs.ui.lift')}
-                tone="danger"
-                reason={{ required: true, maxLength: RS_REASON_MAX }}
-                onConfirm={doLift}
-                onCancel={() => setLifting(null)}
-                busy={busy}
-            />
         </>
     );
 }
@@ -776,7 +699,7 @@ function ClearStrikesDialog({
             setError('rs.ui.tool.need_reason');
             return;
         }
-        const res = await run(RS_CLEAR_STRIKES_ACTION, clearStrikesPayload(c, reason), {
+        const res = await run(RESTRICTION_ACTION, clearStrikesPayload(c, reason), {
             success: 'rs.ui.clear_done',
         });
         if (res.ok) {

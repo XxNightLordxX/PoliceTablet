@@ -21,6 +21,7 @@ import {
     Pager,
 } from '../../../shared/components';
 import { DecisionsBlock, PeopleBlock } from '../../../hud/Debrief';
+import { RunHistoryList } from '../../../supervisor/components/RunHistory';
 import { fmtDateTime, formatNumber } from '../../../shared/format';
 import { useRequest } from '../../../shared/hooks';
 import { hasKey, t } from '../../../shared/i18n';
@@ -260,6 +261,8 @@ export function RunDialog({
                                 })}
                             </p>
                         ) : null}
+                        <h4 className="admin-otools__soft">{t('sup.history.title')}</h4>
+                        <RunHistoryList events={r.history} />
                     </div>
                 ) : null}
             </Dialog>

@@ -205,6 +205,14 @@ Config.AdminUi = {
     -- suspension, and volunteer strikes block running now, in one list) also offers Extend: add hours to one, up to
     -- that kind's longest; false = the list offers only Lift. Each kind keeps its own permission for both
     restrictionsExtend = true,
+    -- Days a correction batch (bulk void, retire, record move, season reopen) stays in Admin UI -> Review -> Queue
+    -- after it ran, with its Undo, next to the flagged runs and disputes (0-365); 0 = batches only on Review ->
+    -- Corrections. The queue lists only batches that can still be undone
+    reviewBatchDays = 7,
+    -- true = Admin UI -> Review -> Queue offers Undo: right after a Void the run can be restored there (the Restore
+    -- run permission and rules), and each correction batch in the queue has its Undo; false = undo a void with
+    -- Restore run and a batch on Review -> Corrections only
+    reviewUndo = true,
     -- true = Admin UI -> Home opens on the First-start setup (departments from your Qbox jobs, supervisor grades,
     -- desks, storage, the scripts found and a preset) until an admin finishes or skips it; false = Home opens on its
     -- dashboard (as before). Every answer is an ordinary setting, editable later
@@ -1846,6 +1854,10 @@ Config.MissionControls = {
     addRunTimeMax = 300,
     -- mission bans one supervisor may set a day (admins any)
     missionBanPerDay = 3,
+    -- true = the Supervisor UI's Department screen has a Restrictions tab: the mission bans and tablet suspensions
+    -- running now in his department, who set each and why, with Lift on the bans he set himself (as in the officer
+    -- dialog); false = no such tab (the officer dialog still shows and lifts his bans)
+    restrictionsTab = true,
     -- points one supervisor may give a day in all (the awardPoints control; admins any); 0 = no limit
     awardPointsPerDay = 100,
 }

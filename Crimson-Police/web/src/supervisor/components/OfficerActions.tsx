@@ -35,6 +35,7 @@ import type { FtoDept } from '../../types/fieldTraining';
 import { FtoProgress, FtoTaskList } from '../../officer/components/FieldTrainingCard';
 import { keepLastUsed, lastUsed, startNumber } from './lastUsed';
 import type { FtoRole } from './officerPanel';
+import { RESTRICTION_ACTION, restrictionPayload } from '../../admin/components/restrictions';
 
 export interface PanelOfficer {
     citizenid: string;
@@ -178,8 +179,11 @@ export function MissionBanForm({
         const activityOf = officer.citizenid;
         const res = lifting
             ? await run(
-                  'server:sup:liftMissionBan',
-                  { citizenid: officer.citizenid, reason: reason.trim(), activityOf },
+                  RESTRICTION_ACTION,
+                  {
+                      ...restrictionPayload('lift', { kind: 'missionBan', citizenid: officer.citizenid }, reason),
+                      activityOf,
+                  },
                   { success: 'sup.ban.lifted' },
               )
             : await run(

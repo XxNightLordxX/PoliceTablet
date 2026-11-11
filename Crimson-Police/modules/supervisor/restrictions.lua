@@ -3,11 +3,16 @@
 -- CP.Restrictions (server): the one restrictions list. Every kind of restriction an officer or a player can be under
 -- (a tablet suspension, a mission ban, a real-suspect pair block, exclusion or suspension, a volunteer's strikes
 -- block) is one row with its kind, who it names, until when, who set it and why, on one Admin UI screen
--- (Restrictions), where an admin extends or lifts it. Each kind registers itself with CP.Restriction (shared/lib.lua)
+-- (Restrictions), where an admin extends or lifts it, and on the Supervisor UI's Department -> Restrictions tab
+-- (Config.MissionControls.restrictionsTab), where a supervisor sees the kinds of his department (def.sup) and lifts
+-- what that kind lets him (his own mission bans). Each kind registers itself with CP.Restriction (shared/lib.lua)
 -- from the module that owns it and keeps its own rules there: the permission of each step, the longest it may run,
 -- the self rule, its own switches (Config.RealPlayers.staffLift, .volunteer.staffClearStrikes) and its audit rows.
 --   admin:getRestrictions               -> { kinds = { { key, maxHours, canLift, canExtend } }, rows, serverTime }
---   server:admin:restriction            { op = 'lift' | 'extend', kind, citizenid, other?, hours?, reason }
+--   sup:getRestrictions                 -> { kinds, rows (each with canLift), dept, serverTime }   his department
+--   server:restriction                  { op = 'lift' | 'extend', kind, citizenid, other?, hours?, reason }
+--                                       admins: openAdmin, then the kind's key per step; supervisors: lift only,
+--                                       the kind's def.sup.permission (a mission ban: missionControls, his own ban)
 
 CP.Restrictions = CP.Restrictions or {}
 local R = CP.Restrictions
@@ -204,7 +209,101 @@ function R.run(ctx)
     return def.extend(ctx, p, hours)
 end
 
+-- ============================================================================
+--                         THE SUPERVISOR'S DEPARTMENT
+-- ============================================================================
+
+local function IsAdmin(src)
+    return tonumber(src) == 0 or (CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true) == true
+end
+
+-- Config.MissionControls.restrictionsTab: the Supervisor UI shows Department -> Restrictions.
+local function TabOn()
+    local mc = type(Config.MissionControls) == 'table' and Config.MissionControls or {}
+    return mc.restrictionsTab ~= false
+end
+R.tabOn = TabOn
+
+-- The restrictions running now in the viewer's department, of the kinds a supervisor sees (def.sup): each row says
+-- whether he may lift it (def.sup.canLift(src, row, actor)). nil, errKey without a department or the switch.
+function R.forSupervisor(src)
+    if not TabOn() then return nil, 'err.restrictions_tab_off' end
+    local okV = CP.can(src, 'viewMissionList')
+    if not okV then return nil, 'err.no_permission' end
+    local _, officer = CP.Call(TAG, 'Access', 'getOfficer', src)
+    local dept = type(officer) == 'table' and officer.department or nil
+    if type(dept) ~= 'string' or dept == '' then return nil, 'err.no_permission' end
+    local _, info = CP.Call(TAG, 'Qbx', 'getInfo', src)
+    local actor = type(info) == 'table' and info.citizenid or nil
+    local kinds, rows, now = {}, {}, os.time()
+    for _, key in ipairs(Kinds().order) do
+        local def = Kinds().byKey[key]
+        local sup = type(def.sup) == 'table' and def.sup or nil
+        if sup and On(def) then
+            kinds[#kinds + 1] = {
+                key = key,
+                maxHours = def.maxHours,
+                canLift = type(sup.lift) == 'function',
+                canExtend = false,
+            }
+            local ok, list = pcall(def.list)
+            if not ok then CP.err(TAG, 'listing the %s rows failed: %s', key, tostring(list)) end
+            for _, row in ipairs(ok and type(list) == 'table' and list or {}) do
+                local t = tonumber(row.untilAt)
+                if type(row) == 'table' and Cid(row.citizenid) and t and t > now and row.dept == dept then
+                    row.kind = key
+                    row.untilAt = math.floor(t)
+                    local okL, can = false, false
+                    if type(sup.canLift) == 'function' then okL, can = pcall(sup.canLift, src, row, actor) end
+                    row.canLift = okL and can == true
+                    rows[#rows + 1] = row
+                end
+            end
+        end
+    end
+    FillFromAudit(rows)
+    FillNames(rows)
+    table.sort(rows, function(a, b)
+        if a.untilAt ~= b.untilAt then return a.untilAt < b.untilAt end
+        return (a.kind .. a.citizenid) < (b.kind .. b.citizenid)
+    end)
+    return { kinds = kinds, rows = rows, dept = dept, serverTime = now }
+end
+
+-- A supervisor's step on one row: lift only, and only a kind that lets him (def.sup.lift).
+local function RunSupervisor(ctx)
+    local p = ctx.payload
+    local def = type(p.kind) == 'string' and Kinds().byKey[p.kind] or nil
+    if not def then return false, 'err.restriction_kind' end
+    if p.op ~= 'lift' and p.op ~= 'extend' then return false, 'err.restriction_op' end
+    local sup = type(def.sup) == 'table' and def.sup or nil
+    if p.op ~= 'lift' or not sup or type(sup.lift) ~= 'function' then return false, 'err.no_permission' end
+    local okS, errS = SelfOk(ctx.src, def, p)
+    if not okS then return false, errS end
+    return sup.lift(ctx, p)
+end
+
+-- Who may send server:restriction: an admin with openAdmin (each step then needs the kind's own key), or a
+-- supervisor the kind's def.sup.permission lets lift that row.
+local function Permission(src, payload)
+    if IsAdmin(src) then return CP.can(src, 'openAdmin', nil, { admin = true }) end
+    local def = type(payload.kind) == 'string' and Kinds().byKey[payload.kind] or nil
+    local sup = def and type(def.sup) == 'table' and def.sup or nil
+    if not sup or type(sup.permission) ~= 'function' then return false, 'err.no_permission' end
+    return sup.permission(src, payload)
+end
+
+local function RunAny(ctx)
+    if ctx.role == 'supervisor' then return RunSupervisor(ctx) end
+    return R.run(ctx)
+end
+
 if Kit and Kit.callback then
     Kit.callback('admin:getRestrictions', 'openAdmin', function(ctx) return R.list(ctx.src) end)
-    Kit.action('server:admin:restriction', 'openAdmin', R.run, { reason = true, targetRate = { 1, 3000 } })
+    Kit.supAction('server:restriction', 'openAdmin', RunAny, {
+        reason = true,
+        targetRate = { 1, 3000 },
+        permission = Permission,
+    })
+    CP.Net.callback('sup:getRestrictions', function(src) return R.forSupervisor(src) end, { rate = 3 })
 end

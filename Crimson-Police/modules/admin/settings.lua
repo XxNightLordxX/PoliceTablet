@@ -592,7 +592,8 @@ Play.screens = {
     admin_testing = { 'admin_test_mode' },
     admin_rs = { 'real_players' },
     admin_money = { 'cash', 'payout_editing', 'item_rewards', 'feature_rewards' },
-    admin_review = { 'disputes', 'anti_exploit' },
+    -- Review: the disputes and anti-exploit rules, and Config.AdminUi.reviewBatchDays / reviewUndo
+    admin_review = { 'disputes', 'anti_exploit', 'tablet_and_commands' },
     admin_audit = { 'retention' },
     admin_system = { 'storage', 'other_scripts', 'performance', 'time', 'retention', 'timed_jobs', 'backups', 'other' },
 }
@@ -683,6 +684,7 @@ local END_REASONS = {
 local RANGES = {
     ['Time.resetHour'] = { 0, 23 },
     ['AdminUi.pageSize'] = { 0, 200 },
+    ['AdminUi.reviewBatchDays'] = { 0, 365 },
     ['Tablet.pauseGuardMs'] = { 0, 1000 },
     ['Departments.*.logo.opacity'] = { 0, 0.25 },
     ['Departments.*.logo.size'] = { 0.05, 1 },

@@ -159,12 +159,52 @@ export interface DisputeView {
 // One Review queue item (review:getQueue): a flagged row (id = its row id) or an open dispute (id = the dispute id).
 export type ReviewItem = (FlaggedRow & { type: 'flag'; id: number }) | (DisputeView & { type: 'dispute' });
 export type ReviewItemType = ReviewItem['type'];
+// The admin's queue also lists the correction batches of the last Config.AdminUi.reviewBatchDays days that can still
+// be undone (CP.Corrections.batches): id = the batch id, undo = what its Undo does.
+export interface ReviewBatchItem {
+    type: 'batch';
+    id: string;
+    kind: string;
+    state: string;
+    filter: Record<string, unknown>;
+    done: number;
+    total: number;
+    actor: string;
+    reason: string | null;
+    createdAt: number;
+    undo: 'restoreBatch' | 'unretire' | 'undoRecordMove' | 'undoReopen';
+}
 // review:getQueue { all? }: the supervisor's department, or (all, Admin UI) every department; newest first.
+// canUndo: Undo of a void the admin made here (restoreRun, Config.AdminUi.reviewUndo); canUndoBatch: a batch's Undo.
 export interface ReviewQueueData {
-    items: ReviewItem[];
+    items: (ReviewItem | ReviewBatchItem)[];
     canReview: boolean;
     canHandle: boolean;
+    canUndo?: boolean;
+    canUndoBatch?: boolean;
     all?: boolean;
+}
+
+// review:getRunHistory { runUuid } (modules/review/history.lua) and admin:getRun's history: one run's timeline,
+// oldest first. kind: row (a row written), flag, note, decision (a staff decision on a row; action = its audit
+// action), dispute (opened), batch (a correction batch that voided a row).
+export interface RunHistoryEvent {
+    at: number;
+    kind: 'row' | 'flag' | 'note' | 'decision' | 'dispute' | 'batch';
+    action: string;
+    actor?: string | null;
+    role?: string | null;
+    citizenid?: string | null;
+    rowId?: number | null;
+    old?: string | null;
+    new?: string | null;
+    reason?: string | null;
+    detail?: string | null;
+    batch?: string | null;
+}
+export interface RunHistoryData {
+    runUuid: string;
+    events: RunHistoryEvent[];
 }
 
 // ============================================================================

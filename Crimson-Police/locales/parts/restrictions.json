@@ -32,5 +32,8 @@
   "err.restriction_extend_off": "Extending restrictions is switched off. Turn on Config.AdminUi.restrictionsExtend in Settings, or lift and set it again.",
   "err.restriction_hours": "Pick a whole number of hours inside the range shown for this kind.",
   "sup.notice.mission_ban_extended": "Your mission ban was extended by {hours} hours.",
-  "admin.action.rsExtendBlock": "Real suspects: volunteer strikes block extended"
+  "admin.action.rsExtendBlock": "Real suspects: volunteer strikes block extended",
+  "restrict.ui.sup_title": "Restrictions in your department",
+  "restrict.ui.sup_hint": "Mission bans and tablet suspensions running now. You can lift the mission bans you set; an admin handles the rest.",
+  "err.restrictions_tab_off": "The Restrictions tab is switched off. Turn on Config.MissionControls.restrictionsTab in Settings, or lift a ban from the officer's dialog."
 }

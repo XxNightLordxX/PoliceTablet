@@ -147,24 +147,14 @@ export interface RsPairLine {
     kinds: string[];
 }
 
-export interface RsAdminRow {
-    kind: 'block' | 'exclude' | 'suspend';
-    officer?: string | null;
-    suspect?: string | null;
-    untilAt: number;
-}
-
 export interface RsPairsData {
     enabled: boolean;
     pairs: RsPairLine[];
     // os.time() of the oldest ledger row read at start (nil = none)
     from?: number | null;
-    admin: RsAdminRow[];
-    // character names by citizen ID for the pairs and the running rows (Config.RealPlayers.staffNames; an empty
-    // list when there are none)
+    // character names by citizen ID for the pairs (Config.RealPlayers.staffNames; an empty list when there are
+    // none). The running blocks, exclusions and suspensions are rows of admin:getRestrictions.
     names?: Record<string, string> | unknown[] | null;
-    // the running rows can be lifted early (Config.RealPlayers.staffLift)
-    lift?: boolean;
     serverTime: number;
     citizenid?: string;
     excludedUntil?: number | null;

@@ -687,7 +687,7 @@ old layout switches and where each one lives now.
 | Group | Screen | What it is for |
 |---|---|---|
 | | **Home** | A dashboard: **Live now** (officers on duty, runs going, the queues waiting), **Alerts** (problems, refused starts, Config health) and your **Shortcuts** (`Config.AdminUi.homeShortcuts`: new mission, missions on or off, change pay, give or take points, quick settings) |
-| People | **Officers**, **Restrictions** | Search officers (history, disputes, commendations, tools); every suspension, ban and block now (extend, lift) |
+| People | **Officers**, **Restrictions** | Search officers (history, disputes, commendations, tools); every suspension, ban and block now (extend, lift; supervisors: Department) |
 | | **Departments** | Each department's jobs, colours, logo, desks, members and (with society payouts) account balance |
 | | **Permissions** | What supervisors may do, the extra grants, the Mission controls and the config health check |
 | | **Leaderboards**, **Seasons** (under More) | Every board, cash paid, voids, awards, item rewards; start, plan or end a season, the bounty |
@@ -696,7 +696,7 @@ old layout switches and where each one lives now.
 | | **Map markers**, **Test tools** | How each part of a mission shows on the map; optional test results, test runs and testers |
 | Real players | **Player suspects** | Live crimes, volunteers, surrender and talk-down, the pair ledger, blocks and exclusions; its gear holds all of `Config.RealPlayers` (shown while live crimes or volunteers are on) |
 | Money | **Money** | Pay rates, feature rewards, every payment made or owed (with the payment tools) and the department funds |
-| Review | **Review** | One queue of flagged runs and disputes with a Type column and a filter (approve, void or reject), profiles waiting (pictures, bios, reports, banned words) and corrections (with Undo) |
+| Review | **Review** | One queue: flagged runs, disputes, correction batches (approve, void, reject, Undo, a run's History), waiting profiles (pictures, bios, reports, banned words), corrections |
 | | **Activity log** | Every supervisor and admin action, with filters and a CSV export |
 | System | **Settings** | Every setting with its description; Presets (Casual, Serious RP, Go-live: a preview, then one click), Features, History. The gear over each screen opens only its settings |
 | | **Server health** | Storage, backups, webhook states, recent problems, the other resources and the timed jobs |

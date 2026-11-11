@@ -34,11 +34,7 @@ local function KindCfg(kind)
 end
 local function Whole(v, default, lo, hi) return math.floor(CP.Num(v, default, lo, hi)) end
 
-local function Int(v, lo, hi)
-    local n = math.tointeger(tonumber(v) or 0.5)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
+local Int = CP.IntIn
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 

@@ -96,6 +96,8 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/review/anticheat.lua`: CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the voids -> suspension rule.
 - `Crimson-Police/modules/review/corrections.lua`: CP.Corrections (server): an admin's corrections to officers' records (adjustments, bulk void and restore, retire, reset progression, record move, XP check, restore run, void kinds, flag by hand, badges, streaks, goals) and the run history an admin reads (staff notices: CP.Notices, modules/supervisor/notices.lua).
 - `Crimson-Police/modules/review/disputes.lua`: CP.Disputes (server): officers' disputes about their flagged, voided or failed runs (cp_disputes) and how supervisors and admins answer them.
+- `Crimson-Police/modules/review/flagged.lua`: CP.Review (server): the flagged rows of the Review queue.
+- `Crimson-Police/modules/review/history.lua`: CP.Review (server): one history per run.
 - `Crimson-Police/modules/review/queue.lua`: CP.Review (server): the one Review queue.
 - `Crimson-Police/modules/review/reviewrules.lua`: CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
 - `Crimson-Police/modules/runs/client/downed.lua`: CP.Downed (client): the NPC pick-up of a downed participant and the EMS request from their own client (docs/dev/ARCHITECTURE.md §5.15, Crimson-Arena rules 3 and 13).
@@ -173,6 +175,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/OfficerRunControls.tsx`: Slot: Officers → officer detail → Today & cooldowns: cooldowns (with Clear), today's counts against every cap (with Allow more today), cash today, the Weekly Boss attempt (with Another boss attempt), free abandons (with Treat as a normal abandon) and the Mission Board as the officer sees it (modules/supervisor/livectl.lua).
 - `Crimson-Police/web/src/admin/components/OfficerSupport.tsx`: Slot: Officers → officer detail → Support: check why the tablet won't open, give the tablet item, release a stuck screen and show what holds it.
 - `Crimson-Police/web/src/admin/components/ReasonChips.tsx`: Admin UI · ReasonChips (Config.AdminUi.reasonChips): ready-made reasons as buttons under a reason box.
+- `Crimson-Police/web/src/admin/components/RestrictionsPanel.tsx`: The one restrictions list as a panel (FM5, FIN4): every restriction running now, each with its kind, who it names,
 - `Crimson-Police/web/src/admin/components/RewardPoolEditor.tsx`: Slot: Settings → Item rewards: a structured editor for the reward pools (item picker without forbidden items, chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected items and value per run at each tier.
 - `Crimson-Police/web/src/admin/components/ScreenSettings.tsx`: The gear of each Admin UI screen: a drawer with only that screen's settings (modules/admin/settings Play.screens), the same rows, checks, saves and audit as Settings -> All settings, which still lists every setting.
 - `Crimson-Police/web/src/admin/components/SettingsPresets.tsx`: Admin UI -> Settings -> Presets: a group of settings (Config.AdminUi.presets) set in one click.
@@ -205,7 +208,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/officers/OfficerTools.tsx`: Officers → officer detail: the admin cards for points (adjust), XP (check, fix), streak, goals, look, badges and the record (refresh, boards, void runs, reset, retire, move record).
 - `Crimson-Police/web/src/admin/components/realSuspects.ts`: Admin UI · Real suspects: the screen's plain helpers (no React), walked by realSuspects.walk.ts.
 - `Crimson-Police/web/src/admin/components/realSuspects.walk.ts`: Admin UI · Real suspects walked against the browser mocks (node walk.mjs, a gate step): the screen shows only for admins while live crimes or volunteers are on, a case opens its timeline and damage ledger (never the admin's own case), and the tool form sends what modules/realplayers/staff expects (or says what is wrong first).
-- `Crimson-Police/web/src/admin/components/restrictions.ts`: The one restrictions list (Admin UI -> Restrictions): the action every lift and extend goes through, its payloads, the kind filter and the Real suspects tools' rows as restrictions. types/restrictions.ts has the data.
+- `Crimson-Police/web/src/admin/components/restrictions.ts`: The one restrictions list (Admin UI -> Restrictions, Supervisor UI -> Department -> Restrictions): the action every lift and extend goes through, its payloads, the read of each scope and the kind filter. types/restrictions.ts has the data.
 - `Crimson-Police/web/src/admin/components/restrictions.walk.ts`: Admin UI · Restrictions walked against the browser mocks (node walk.mjs, a gate step): one list of every kind running now (a suspension, a mission ban, the Real suspects rows), each extended or lifted through the one action with a reason, and the screen sits in the People group.
 - `Crimson-Police/web/src/admin/components/rewardsScreen.ts`: Admin UI -> Money -> Rewards: every feature that pays, as rows built from the settings data (admin:getSettings), each with its switch, money, how the money is paid and its items.
 - `Crimson-Police/web/src/admin/components/rewardsScreen.walk.ts`: Admin UI -> Money -> Rewards walked against the browser mocks (node walk.mjs, a gate step): the Rewards tab of Money lists every feature that pays with its money, account and items, saves through server:admin:setSetting, and the item editors build the values the server checks.
@@ -227,7 +230,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/screens/Payouts.tsx`: Admin UI · Money → Pay rates (a tab of admin_money; title 'ui.screen.admin_payouts').
 - `Crimson-Police/web/src/admin/screens/Permissions.tsx`: Admin UI · Permissions (screen key 'admin_permissions'): supervisor powers, extra grants to people who are not supervisors, admin-only actions and Config health.
 - `Crimson-Police/web/src/admin/screens/RealSuspects.tsx`: Admin UI · Real suspects (screen key 'admin_rs'): the live-crime and volunteer cases for staff.
-- `Crimson-Police/web/src/admin/screens/Restrictions.tsx`: Admin UI · Restrictions (screen key 'admin_restrictions'): every restriction running now in one list (tablet
+- `Crimson-Police/web/src/admin/screens/Restrictions.tsx`: Admin UI · Restrictions (screen key 'admin_restrictions'): every restriction running now in one list (tablet suspensions, mission bans, the Real suspects pair blocks, exclusions and suspensions, volunteers' strikes blocks) with Extend and Lift (admin/components/RestrictionsPanel.tsx, scope 'admin').
 - `Crimson-Police/web/src/admin/screens/Review.tsx`: Admin UI · Review (screen key 'admin_review'): everything an admin checks and decides, as three tabs.
 - `Crimson-Police/web/src/admin/screens/Rewards.tsx`: Admin UI · Money → Rewards (a tab of admin_money): every feature that pays.
 - `Crimson-Police/web/src/admin/screens/Seasons.tsx`: Admin UI · Seasons & Challenge (screen key 'admin_seasons', callback admin:getSeasons, actions server:admin:startSeason { name }, server:admin:endSeason, server:admin:overrideBounty { objective }).
@@ -328,7 +331,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/options.mock.ts`: Browser mocks of My options: getOptions, server:options:set, the options of this PC (getLocalOptions, setLocalOption, the localOptions message) and My keys (getKeyLabels). ?options=locked: officer options off.
 - `Crimson-Police/web/src/mocks/oversight.mock.ts`: Browser mocks for the oversight slice: Supervisor Mission List, Live Missions, Review Queue and Admin Officers, Departments, Permissions and Audit Log.
 - `Crimson-Police/web/src/mocks/profile.mock.ts`: Browser mocks of the profile slice: Edit profile, reports, commendations, the Profiles review queue and the Admin officer profile. ?profile=empty shows an empty queue.
-- `Crimson-Police/web/src/mocks/restrictions.mock.ts`: Mock: Admin UI -> Restrictions (modules/supervisor/restrictions.lua).
+- `Crimson-Police/web/src/mocks/restrictions.mock.ts`: Mock: Admin UI -> Restrictions and Supervisor UI -> Department -> Restrictions (modules/supervisor/restrictions.lua).
 - `Crimson-Police/web/src/mocks/rewards.mock.ts`: Browser mocks of the item rewards: the Rewards locker on Home and Admin UI → Leaderboards → Item rewards. ?rewards=off shows the shipped default (off, no rows); ?rewards=arena a locker that cannot be claimed.
 - `Crimson-Police/web/src/mocks/run_ui.mock.ts`: Browser mocks of the run_ui slice (Mission Board + Active Mission): getMissionTypes, getRun (overrides
 - `Crimson-Police/web/src/mocks/samples.ts`: Sample data for browser mode.
@@ -415,6 +418,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/supervisor/components/OperationPanel.tsx`: Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
 - `Crimson-Police/web/src/supervisor/components/ProfilesReview.tsx`: Review Queue → Profiles: pending pictures and bios of the department and the profile reports.
 - `Crimson-Police/web/src/supervisor/components/ReviewQueuePanel.tsx`: The one Review queue: flagged runs and disputes in one table with a Type column, a filter (All / Flagged runs /
+- `Crimson-Police/web/src/supervisor/components/RunHistory.tsx`: One run's history as one timeline (FIN4): the rows written, the flags and staff notes, every staff decision, the
 - `Crimson-Police/web/src/supervisor/components/lastUsed.ts`: Supervisor action forms open with the values last used: the values of the last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
 - `Crimson-Police/web/src/supervisor/components/myControls.ts`: Department → Controls, inline use (MG3; the 'Your controls today' card before): one row per Mission control the supervisor may use now, with its current value, the admin's limits and today's use.
 - `Crimson-Police/web/src/supervisor/components/officerPanel.ts`: Supervisor UI · Department → Officers: which actions the officer's side panel offers (UI4).
@@ -452,7 +456,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/options.ts`: Shapes of My options: the officer options (callback getOptions, action server:options:set) and My keys (client action getKeyLabels).
 - `Crimson-Police/web/src/types/oversight.ts`: Shapes of the oversight slice's callbacks (modules/admin, modules/review/disputes).
 - `Crimson-Police/web/src/types/profile.ts`: Shapes of the officer profile: commendations, the Edit profile dialog and the supervisors' Profiles queue.
-- `Crimson-Police/web/src/types/restrictions.ts`: Admin UI · Restrictions (screen key 'admin_restrictions'): what modules/supervisor/restrictions.lua answers.
+- `Crimson-Police/web/src/types/restrictions.ts`: Admin UI · Restrictions (screen key 'admin_restrictions') and Supervisor UI · Department -> Restrictions: what
 - `Crimson-Police/web/src/types/rewards.ts`: Shapes of the optional item rewards: the Rewards locker on Home and Admin UI → Leaderboards → Item rewards.
 - `Crimson-Police/web/src/types/run_ui.ts`: Response shapes of the run_ui slice (Mission Board and Active Mission screens,
 - `Crimson-Police/web/src/types/settings.ts`: Admin UI → Settings and the mission switches: the shapes modules/admin/settings.lua sends.
@@ -616,6 +620,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/rewards_spec.lua`: CP.Rewards (modules/rewards): optional item rewards.
 - `tests/run.lua`: Runs every tests/*_spec.lua in a fresh Lua state and prints a summary.
 - `tests/run_controls_spec.lua`: In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
+- `tests/run_history_spec.lua`: One history per run (FIN4, modules/review/history.lua): the rows of the run (live and archived), its flags and
 - `tests/run_ui_spec.lua`: run_ui slice (Officer Mission Board + Active Mission screens, UI only).
 - `tests/runs_maintenance_spec.lua`: The run engine's once-a-minute maintenance (Runs._maintenance): who is online comes from the map that the Qbox load, unload and drop events keep, so no GetPlayerByCitizenId export runs per cached citizen.
 - `tests/safety_spec.lua`: Modules/route, calls, alerts, downed (slice safety: Hard rules 15-18).

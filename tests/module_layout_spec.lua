@@ -285,6 +285,17 @@ end
 H.ok(not (Read('modules/progression/goals.lua') or ''):find('NOT IN (\'manual_award\', \'goal\')', 1, true),
     'goals: no counted-run SQL of its own')
 
+-- FIN4: the review module keeps no copy of a library helper (numbers, whole numbers in a range), nor do the files
+-- that had the same range check (admin, payments, notices)
+for _, f in ipairs(Lines('find modules/review -name "*.lua" | sort')) do
+    local src = Read(f) or ''
+    H.ok(not src:find('local function Num%(v'), f .. ': numbers are CP.Num')
+    H.ok(not src:find('local function Int%(v'), f .. ': whole numbers in a range are CP.IntIn')
+end
+for _, f in ipairs({ 'modules/admin/admin.lua', 'modules/money/payments.lua', 'modules/supervisor/notices.lua' }) do
+    H.ok((Read(f) or ''):find('local Int = CP.IntIn', 1, true) ~= nil, f .. ': Int is CP.IntIn')
+end
+
 -- the shared ones answer as the private copies did
 H.boot({ side = 'server' })
 CP.Probe = {
@@ -302,5 +313,9 @@ CP.Probe = nil
 H.eq(CP.Num('12', 0), 12, 'CP.Num: a numeric string')
 H.eq(CP.Num('x', 5), 5, 'CP.Num: the default for text')
 H.eq(CP.Num(0 / 0, 5), 5, 'CP.Num: the default for NaN')
+H.eq(CP.IntIn('12', 1, 20), 12, 'CP.IntIn: a whole number in the range')
+H.eq(CP.IntIn(1.5, 1, 20), nil, 'CP.IntIn: never rounded')
+H.eq(CP.IntIn(21, 1, 20), nil, 'CP.IntIn: nil past the range')
+H.eq(CP.IntIn(-3), -3, 'CP.IntIn: no range given')
 
 return H

@@ -143,6 +143,8 @@ const MC_MODE =
 
 const CONFIG: Session['config'] = {
     missionControls: MC_MODE !== 'off',
+    // Config.MissionControls.restrictionsTab (Department -> Restrictions)
+    restrictionsTab: true,
     missionTypes: [
         { key: 'patrol', label: 'Patrol', points: 60 },
         { key: 'training', label: 'Training', points: 100 },

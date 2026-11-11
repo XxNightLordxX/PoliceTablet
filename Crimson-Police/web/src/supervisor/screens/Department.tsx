@@ -2,7 +2,7 @@
 
 // Supervisor UI · Department (screen key 'sup_department'): Officers (supervisor/screens/DeptReport), Controls
 // (supervisor/screens/MissionControls, each control's admin limits and today's use inline), Review
-// (supervisor/screens/ReviewQueue), Calls & notices (supervisor/components/MissionCallsPanel and shared/NoticesCard) and
+// (supervisor/screens/ReviewQueue), Restrictions (admin/components/RestrictionsPanel, his department), Calls & notices (supervisor/components/MissionCallsPanel and shared/NoticesCard) and
 // Training (supervisor/components/FieldTrainingPanel), each the old screen or panel itself. params.deptTab picks the
 // tab; layouts/supDepartment.ts keeps each tab's permission. Above the tabs, today at a glance (UI4, sup:getToday and
 // the sidebar's Review Queue count): officers on duty, runs going, waiting for review and the supervisor's controls
@@ -26,6 +26,7 @@ import { useTodayChanged } from '../components/todayRefresh';
 import DeptReport from './DeptReport';
 import MissionControls from './MissionControls';
 import ReviewQueue from './ReviewQueue';
+import { RestrictionsPanel } from '../../admin/components/RestrictionsPanel';
 
 function CallsAndNotices() {
     const session = useSession();
@@ -99,6 +100,8 @@ function TabBody({ tab }: { tab: DeptTab }) {
             return <MissionControls key="controls" />;
         case 'review':
             return <ReviewQueue key="review" />;
+        case 'restrictions':
+            return <RestrictionsPanel key="restrictions" scope="sup" />;
         case 'calls':
             return <CallsAndNotices key="calls" />;
         case 'training':

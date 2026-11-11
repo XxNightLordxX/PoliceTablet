@@ -173,6 +173,7 @@ return function(H)
         'modules/progression/scoring.lua',
         'modules/progression/leaderboard.lua',
         'modules/progression/challenge.lua',
+        'modules/review/flagged.lua',
         'modules/review/disputes.lua',
         'modules/review/queue.lua',
         'modules/review/anticheat.lua',

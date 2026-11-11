@@ -400,6 +400,7 @@ H.load('modules/admin/adminkit.lua')
 H.load('modules/access/access.lua')
 H.load('modules/access/permissions.lua')
 H.load('modules/admin/admin.lua')
+H.load('modules/review/flagged.lua')
 H.load('modules/review/disputes.lua')
 H.load('modules/review/queue.lua')
 H.load('modules/review/anticheat.lua')
@@ -792,7 +793,7 @@ local rowOwn = AddRow(
 Co(CP.Admin.audit, 'console', 'console', 'flags', 'runFlagged', R1, nil, 'outside_help',
     'Killed by: Otto Outsider [OUT00005]')
 -- Home's flagged runs count: one per run (R1's two rows once), the viewer's own run (R3) left out, no row cap
-H.eq(Co(CP.Admin.flaggedCount, 'SUP00002'), 2, 'flaggedCount: R1 once and R2; the own run R3 left out')
+H.eq(Co(CP.Review.flaggedCount, 'SUP00002'), 2, 'flaggedCount: R1 once and R2; the own run R3 left out')
 
 -- K9: one player's 'security' lines in System → Problems (CP.Permissions.probe); the supervisor's review flow below
 -- never asks an admin-only key, so it leaves none
@@ -2023,7 +2024,7 @@ H.ok(okC == false and eC == 'err.own_run', 'canReviewRun refuses it')
 H.eq(Co(CP.Permissions.canReviewRun, 7, O1), true, 'and allows the other sergeant')
 
 local released = CountCalls('cashRelease')
-ok, res = Co(CP.Admin.approveFlagged, 2, altRow, 'Backup was called')
+ok, res = Co(CP.Review.approveFlagged, 2, altRow, 'Backup was called')
 H.ok(ok == false and res == 'err.own_run', 'the sergeant cannot approve the flagged run of their own second character')
 local held = H.sql('SELECT flagged, voided, cash_status FROM cp_mission_runs WHERE id = ?', { altRow })[1]
 H.eq(H.bit(held.flagged), 1, 'the row stays flagged')
@@ -2032,7 +2033,7 @@ H.eq(CountCalls('cashRelease'), released, 'no cash released')
 ok, res = Act('server:review:decide', 2,
     { type = 'flag', id = altRow, decision = 'approve', reason = 'Backup was called' })
 H.eq(res, 'err.own_run', 'nor from the Review Queue')
-ok, res = Co(CP.Admin.voidFlagged, 2, altRow, 'Farming')
+ok, res = Co(CP.Review.voidFlagged, 2, altRow, 'Farming')
 H.ok(ok == false and res == 'err.own_run', 'nor void it')
 ok, res = Act('server:review:decide', 2, { type = 'flag', id = altRow, decision = 'void', reason = 'Farming' })
 H.eq(res, 'err.own_run', 'nor void it from the Review Queue')
@@ -2077,7 +2078,7 @@ ok, res = Act('server:review:decide', 7,
 H.eq(ok, true, 'a sergeant on another license answers the dispute')
 H.eq(H.bit(H.sql('SELECT flagged FROM cp_mission_runs WHERE id = ?', { altRow })[1].flagged), 0, 'the row is approved')
 H.eq((LastCall('cashRelease') or {})[1], altRow, 'and its held cash is released')
-ok, res = Co(CP.Admin.approveFlagged, 0, altRow2, 'Checked from the console')
+ok, res = Co(CP.Review.approveFlagged, 0, altRow2, 'Checked from the console')
 H.eq(ok, true, 'the console approves a run of any character')
 H.eq((LastCall('cashRelease') or {})[1], altRow2, 'its held cash is released')
 infos[2].license, infos[7].license = nil, nil
@@ -2100,7 +2101,12 @@ for _, name in ipairs({ 'admin_kit.json', 'admin_officers.json' }) do
     local pf = io.open(H.root .. 'locales/parts/' .. name, 'r')
     if pf then for k, v in pairs(cjson.decode(pf:read('a'))) do adminParts[k] = v end pf:close() end
 end
-for _, file in ipairs({ 'modules/admin/admin.lua', 'modules/review/disputes.lua', 'modules/review/anticheat.lua' }) do
+for _, file in ipairs({
+    'modules/admin/admin.lua',
+    'modules/review/flagged.lua',
+    'modules/review/disputes.lua',
+    'modules/review/anticheat.lua',
+}) do
     local src = assert(io.open(H.root .. file, 'r')):read('a')
     for key in src:gmatch('\'([%a_]+%.[%w_%.]+)\'') do
         local ns = key:match('^([%a_]+)%.')

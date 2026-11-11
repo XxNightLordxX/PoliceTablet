@@ -1488,7 +1488,22 @@ rules: lifting or extending a suspension needs `suspend`, a mission ban `antiFar
 `missionControls` to extend, the Real suspects kinds `antiFarmOverride` (Lift follows `Config.RealPlayers.staffLift`,
 clearing strikes `Config.RealPlayers.volunteer.staffClearStrikes`), and never on one of your own characters.
 `Config.AdminUi.restrictionsExtend = false` keeps only Lift. Setting a restriction stays where it was (Officers →
-Suspend, the supervisor's officer dialog for a mission ban, Real suspects → Pairs and blocks).
+Suspend, the supervisor's officer dialog for a mission ban, Real suspects → Pairs and blocks). Real suspects → Pairs
+and blocks no longer keeps its own list of running blocks: its **Open Restrictions** button leads here.
+
+Supervisors see their own department's part of this list on **Supervisor UI → Department → Restrictions**: the
+mission bans and tablet suspensions running now, who set each and why. A supervisor lifts the mission bans he set
+himself there (with a reason, as in the officer dialog); suspensions and other supervisors' bans are shown only.
+`Config.MissionControls.restrictionsTab = false` hides the tab (the officer dialog still shows and lifts his bans).
+
+**The Review queue: batches, Undo and History.** Admin UI → Review → Queue also lists the correction batches of the
+last `Config.AdminUi.reviewBatchDays` days (shipped 7; 0 = only on Review → Corrections) that can still be undone, as
+rows of type Corrections, each with **Undo** (the same Undo as on Corrections). Right after you void a run in the
+queue, an **Undo** line offers to restore it (the same rules as Restore run). `Config.AdminUi.reviewUndo = false`
+removes both Undo buttons from the queue. Every flagged run and dispute has a **History** button: one timeline of
+that run, oldest first (the rows written, flags and staff notes, every approve, void, restore and dispute answer,
+the dispute itself and the correction batch that voided it). The same timeline sits in an officer's run detail
+(Officers → an officer → Runs → a run).
 
 The rarely used tools fold under **More**; while it is folded its badge adds up theirs, so nothing waiting is hidden,
 a link or notification that opens one of them unfolds it, and the panel remembers whether you left it open.

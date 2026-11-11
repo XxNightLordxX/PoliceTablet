@@ -165,3 +165,37 @@
     font-size: var(--cp-fs-xs);
     color: var(--cp-subtle);
 }
+
+/* FIN4: the Undo line after a Void, and one run's history (RunHistory.tsx) */
+.oversight-rq-undo {
+    margin-top: var(--cp-space-2);
+    padding: var(--cp-space-2) var(--cp-space-3);
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+    align-items: center;
+}
+
+.oversight-rq-history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+}
+
+.oversight-rq-history__item {
+    display: grid;
+    grid-template-columns: 130px 110px 1fr;
+    gap: var(--cp-space-2);
+    align-items: baseline;
+}
+
+.oversight-rq-history__when {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.oversight-rq-history__text {
+    overflow-wrap: anywhere;
+}

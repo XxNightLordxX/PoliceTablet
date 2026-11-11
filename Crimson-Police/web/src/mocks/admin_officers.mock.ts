@@ -86,6 +86,23 @@ registerMock('request', 'admin:getRun', (a: { rowId?: number }): RunDetail => {
         ],
         dispute: null,
         goalRewards: r.voided ? [] : [{ rowId: 9001, goalId: 'daily_points', label: 'Daily points', points: 25 }],
+        // the run's one timeline (modules/review/history.lua)
+        history: [
+            { at: r.createdAt, kind: 'row', action: r.state, citizenid: 'ABC12345', rowId: r.id },
+            ...(r.voided
+                ? [
+                      {
+                          at: r.createdAt + 600,
+                          kind: 'decision' as const,
+                          action: 'voidRun',
+                          actor: 'ADMIN001',
+                          role: 'admin',
+                          rowId: r.id,
+                          reason: 'Farming',
+                      },
+                  ]
+                : []),
+        ],
         own: false,
     };
 });

@@ -64,6 +64,15 @@ CP.Admin = {
         local p = people[tonumber(src)]
         return p and p.dept, p and p.cid
     end,
+    runDepartments = function(uuid)
+        for _, f in ipairs(flags) do if f.runUuid == uuid then return { f.department } end end
+        return {}
+    end,
+    ownRunCheck = function() return true end,
+}
+
+-- the flagged rows of the queue: modules/review/flagged.lua (stubbed: its rules have their own specs)
+CP.Review = {
     -- dept nil = every department; admin = keep the kinds a department hands to admins
     flaggedRows = function(dept, cid, admin)
         calls[#calls + 1] = { 'flaggedRows', dept, cid, admin }
@@ -75,11 +84,6 @@ CP.Admin = {
         end
         return out
     end,
-    runDepartments = function(uuid)
-        for _, f in ipairs(flags) do if f.runUuid == uuid then return { f.department } end end
-        return {}
-    end,
-    ownRunCheck = function() return true end,
     approveFlagged = function(src, rowId, reason)
         calls[#calls + 1] = { 'approveFlagged', src, rowId, reason }
         if not reason or reason == '' then return false, 'err.reason_required' end
@@ -333,6 +337,84 @@ H.time = (H.time or os.time()) + 120
 H.eq(R.share(1), 0, 'a queue not asked for in 75 s counts as closed')
 
 -- ============================================================================
+--            FIN4: CORRECTION BATCHES AND UNDO IN THE ADMIN'S QUEUE
+-- ============================================================================
+
+local undone, restored = {}, {}
+local now = os.time()
+CP.Corrections = {
+    batches = function()
+        return {
+            {
+                id = 'b-new',
+                kind = 'bulkVoid',
+                state = 'done',
+                undo = 'restoreBatch',
+                createdAt = now - 3600,
+                total = 4,
+            },
+            { id = 'b-old', kind = 'bulkVoid', state = 'done', undo = 'restoreBatch', createdAt = now - 30 * 86400 },
+            {
+                id = 'b-gone',
+                kind = 'retire',
+                state = 'done',
+                undo = 'unretire',
+                createdAt = now - 60,
+                restored = true,
+            },
+            { id = 'b-run', kind = 'bulkVoid', state = 'running', undo = 'restoreBatch', createdAt = now - 60 },
+            { id = 'b-badge', kind = 'recheckBadges', state = 'done', createdAt = now - 60 },
+        }
+    end,
+    undoBatch = function(src, id, reason)
+        undone[#undone + 1] = { src, id, reason }
+        return true, { jobId = 'job-1' }
+    end,
+}
+local realKit = CP.AdminKit
+CP.AdminKit = {
+    -- the real Restore run is an admin's (AdminKit's guard); the stub keeps that rule
+    run = function(name, src, p)
+        if not CP.Access.isAdmin(src) then return false, 'err.no_permission' end
+        restored[#restored + 1] = { name, src, p }
+        return true, { rowId = p.rowId }
+    end,
+}
+Config.AdminUi = Config.AdminUi or {}
+Config.AdminUi.reviewBatchDays, Config.AdminUi.reviewUndo = 7, true
+Reset()
+local aq = Cb(1, { all = true }).data
+H.eq(Ids(aq, 'batch'), 'b-new', 'the admin\'s queue lists the batches of the last 7 days that can still be undone')
+H.ok(aq.canUndo == true and aq.canUndoBatch == true, 'and offers Undo')
+local sq = Cb(2).data
+H.ok(Ids(sq, 'batch') == '' and sq.canUndo ~= true, 'a supervisor\'s queue has no batches and no Undo')
+Config.AdminUi.reviewBatchDays = 0
+H.eq(Ids(Cb(1, { all = true }).data, 'batch'), '', 'reviewBatchDays = 0: batches stay on Corrections only')
+Config.AdminUi.reviewBatchDays = 7
+ok, res = Act('server:review:decide', 1,
+    { type = 'batch', id = 'b-new', decision = 'undo', reason = 'Wrong filter', all = true })
+H.ok(ok == true and undone[1][2] == 'b-new' and undone[1][3] == 'Wrong filter', 'a batch\'s Undo is its own Undo')
+H.ok(res.queue and res.queue.all == true, 'and the reply carries the admin\'s queue')
+ok, res = Act('server:review:decide', 1, { type = 'flag', id = 13, decision = 'undo', reason = 'Mistake', all = true })
+H.ok(ok == true and restored[1][1] == 'server:admin:restoreRun' and restored[1][3].rowId == 13,
+    'Undo of a void restores the run through Restore run')
+ok, res = Act('server:review:decide', 2, { type = 'flag', id = 11, decision = 'undo', reason = 'x' })
+H.eq(res, 'err.no_permission', 'a supervisor cannot undo (Restore run is an admin\'s)')
+ok, res = Act('server:review:decide', 1, { type = 'flag', id = 'x', decision = 'undo', reason = 'x', all = true })
+H.eq(res, 'err.invalid_row', 'the row id is checked')
+Config.AdminUi.reviewUndo = false
+ok, res = Act('server:review:decide', 1, { type = 'flag', id = 13, decision = 'undo', reason = 'x', all = true })
+H.eq(res, 'err.review_undo_off', 'reviewUndo = false: no Undo in the queue')
+H.eq(Cb(1, { all = true }).data.canUndo, false, 'and none offered')
+Config.AdminUi.reviewUndo = true
+local cfgFile = io.open('Crimson-Police/config/config.lua', 'r')
+local cfgText = cfgFile and cfgFile:read('a') or ''
+if cfgFile then cfgFile:close() end
+H.ok(cfgText:find('reviewBatchDays = 7', 1, true) and cfgText:find('reviewUndo = true', 1, true),
+    'shipped: batches of 7 days and Undo in the queue')
+CP.Corrections, CP.AdminKit = nil, realKit
+
+-- ============================================================================
 --                  ONE MODULE: modules/review (its sub-files)
 -- ============================================================================
 
@@ -341,7 +423,7 @@ local function Exists(rel)
     if f then f:close() end
     return f ~= nil
 end
-for _, part in ipairs({ 'anticheat', 'reviewrules', 'disputes', 'corrections', 'queue' }) do
+for _, part in ipairs({ 'anticheat', 'reviewrules', 'disputes', 'corrections', 'queue' }) do -- FIN4: flagged, history below
     H.ok(Exists('modules/review/' .. part .. '.lua'), 'modules/review/' .. part .. '.lua')
     H.ok(not Exists('modules/' .. part .. '/server.lua'), 'no modules/' .. part .. '/server.lua any more')
 end
@@ -349,5 +431,17 @@ local mf = io.open('Crimson-Police/fxmanifest.lua', 'r')
 local manifest = mf and mf:read('a') or ''
 if mf then mf:close() end
 H.ok(manifest:find('\'modules/review/*.lua\'', 1, true) ~= nil, 'the manifest loads the review module\'s sub-files')
+H.ok(Exists('modules/review/flagged.lua') and Exists('modules/review/history.lua'), 'FIN4: flagged rows and history')
+local adminSrc = io.open('Crimson-Police/modules/admin/admin.lua', 'r')
+local adminText = adminSrc and adminSrc:read('a') or ''
+if adminSrc then adminSrc:close() end
+for _, gone in ipairs({
+    'function Admin.flaggedRows',
+    'function Admin.approveFlagged',
+    'function Admin.voidFlagged',
+    'function Admin.flaggedCount',
+}) do
+    H.ok(not adminText:find(gone, 1, true), 'FIN4: ' .. gone .. ' moved to modules/review/flagged.lua')
+end
 
 return H

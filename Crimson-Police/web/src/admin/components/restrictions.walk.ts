@@ -9,7 +9,18 @@ import { ADMIN_GROUP_OF } from '../../layouts/adminNav';
 import { ADMIN_SCREENS } from '../../layouts/screens';
 import { action, request } from '../../shared/nui';
 import type { RestrictionsData } from '../../types/restrictions';
-import { RESTRICTION_ACTION, extendHours, restrictionPayload, rowsOfKind, rsRestriction } from './restrictions';
+import '../../mocks/boards.mock';
+import {
+    RESTRICTION_ACTION,
+    extendHours,
+    restrictionPayload,
+    restrictionsRead,
+    rowCanLift,
+    rowsOfKind,
+} from './restrictions';
+import panelSrc from './RestrictionsPanel.tsx?raw';
+import officerActionsSrc from '../../supervisor/components/OfficerActions.tsx?raw';
+import rsSrc from '../screens/RealSuspects.tsx?raw';
 
 const failures: string[] = [];
 let passed = 0;
@@ -75,8 +86,41 @@ async function steps(): Promise<void> {
             'err.restriction_kind',
         'an unknown kind is refused',
     );
-    const rs = rsRestriction({ kind: 'suspend', officer: 'OFF00001', untilAt: 0 });
-    ok(rs.kind === 'rsSuspension' && rs.citizenid === 'OFF00001' && rs.other === undefined, 'a Real suspects row maps');
+
+    // FIN4: the supervisor's department (Department -> Restrictions), Lift on his own ban, through the one action
+    ok(RESTRICTION_ACTION === 'server:restriction', 'one action for admins and supervisors');
+    ok(
+        restrictionsRead('sup') === 'sup:getRestrictions' && restrictionsRead('admin') === 'admin:getRestrictions',
+        'each scope has its read',
+    );
+    ok(panelSrc.includes('restrictionsRead(scope)'), 'the one panel reads by its scope');
+    const setBan = await action('server:sup:missionBan', { citizenid: 'SAS20981', hours: 2, reason: 'Late twice' });
+    ok(setBan.ok, 'a supervisor sets a mission ban');
+    const sup = await request<RestrictionsData>('sup:getRestrictions', {});
+    const mineBan = (sup.data?.rows ?? []).find(r => r.kind === 'missionBan' && r.citizenid === 'SAS20981');
+    const susp = (sup.data?.rows ?? []).find(r => r.kind === 'suspension');
+    const supKind = (k: string) => sup.data?.kinds.find(x => x.key === k);
+    ok(sup.data?.dept === 'sast' && mineBan && susp, "his tab lists his department's bans and suspensions");
+    ok(mineBan && rowCanLift(mineBan, supKind('missionBan'), 'sup'), 'Lift on the ban he set');
+    ok(susp && !rowCanLift(susp, supKind('suspension'), 'sup'), 'a suspension is read only for him');
+    ok(!(sup.data?.kinds ?? []).some(k => k.canExtend), 'a supervisor never extends');
+    if (mineBan) {
+        const lifted = await action(RESTRICTION_ACTION, restrictionPayload('lift', mineBan, 'Talked'));
+        ok(lifted.ok, 'he lifts it through the one action');
+        const again = await request<RestrictionsData>('sup:getRestrictions', {});
+        ok(
+            !(again.data?.rows ?? []).some(r => r.kind === 'missionBan' && r.citizenid === 'SAS20981'),
+            'and it is gone',
+        );
+    }
+    ok(
+        officerActionsSrc.includes('RESTRICTION_ACTION') && !officerActionsSrc.includes('liftMissionBan'),
+        "the officer dialog's Lift sends the one action",
+    );
+    ok(
+        !rsSrc.includes("'rs.ui.lift'") && rsSrc.includes("navigate('admin_restrictions')"),
+        'Real suspects -> Pairs and blocks links to Restrictions instead of its own running rows',
+    );
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

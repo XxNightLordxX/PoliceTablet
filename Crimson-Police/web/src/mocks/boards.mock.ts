@@ -37,6 +37,7 @@ import type {
     StuckPayment,
 } from '../types/boards';
 import { devState } from './devState';
+import { registerRestrictionSup } from './restrictions.mock';
 import { MOCK_DEPARTMENTS, sampleResult } from './samples';
 
 const DAY = 86400;
@@ -1429,11 +1430,25 @@ reg(
     },
 );
 
-reg('action', 'server:sup:liftMissionBan', (p: { citizenid?: string; reason?: string; activityOf?: string }) => {
-    if (!p?.citizenid || !mockBans[p.citizenid]) throw new Error('err.mission_ban_none');
-    if (!p.reason || !String(p.reason).trim()) throw new Error('err.reason_required');
-    delete mockBans[p.citizenid];
-    return withActivity(p, { citizenid: p.citizenid });
+// his bans in Department -> Restrictions and Lift from there or the officer dialog (the one restrictions action,
+// restrictions.mock.ts)
+registerRestrictionSup('missionBan', {
+    rows: () =>
+        Object.entries(mockBans).map(([citizenid, b]) => ({
+            kind: 'missionBan' as const,
+            citizenid,
+            name: byCid(citizenid)?.name ?? null,
+            untilAt: b.until,
+            byName: b.by,
+            reason: b.reason,
+            dept: 'sast',
+            canLift: true,
+        })),
+    lift: p => {
+        if (!p?.citizenid || !mockBans[p.citizenid]) throw new Error('err.mission_ban_none');
+        delete mockBans[p.citizenid];
+        return withActivity(p, { citizenid: p.citizenid });
+    },
 });
 const cleared = (cid: string, scope: string, key: string) =>
     supClears.some(c => c.citizenid === cid && c.scope === scope && c.key === key);

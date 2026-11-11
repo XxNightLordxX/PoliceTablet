@@ -192,8 +192,6 @@
   "rs.ui.suspended_until": "Suspended from these cases until {until}",
   "rs.ui.not_suspended": "Not suspended",
   "rs.ui.admin_rows": "Blocks, exclusions and suspensions",
-  "rs.ui.admin_rows_sub": "Running now, the latest end first. Each one runs to its end date.",
-  "rs.ui.admin_rows_none": "None running",
   "rs.ui.officer_cid": "Officer citizen ID",
   "rs.ui.suspect_cid": "Suspect citizen ID",
   "rs.ui.tool.new": "Block, exclude or suspend",
@@ -273,15 +271,12 @@
   "err.rs_clear_off": "Clearing strikes is switched off. An admin can turn it on with Config.RealPlayers.volunteer.staffClearStrikes.",
   "admin.action.rsLift": "Real suspects: block, exclusion or suspension lifted early",
   "admin.action.rsClearStrikes": "Real suspects: volunteer strikes cleared",
-  "rs.ui.admin_rows_sub_lift": "Running now, the latest end first. Lift ends one now (with a reason, in the audit log).",
-  "rs.ui.lift": "Lift",
-  "rs.ui.lift_title": "Lift early",
-  "rs.ui.lift_message": "End this {what} now: {who}. It was set to run until {until}.",
-  "rs.ui.lift_done": "Lifted",
   "rs.ui.tool.lift_note": "A longer block, exclusion or suspension replaces a shorter one; staff can lift one early under Blocks, exclusions and suspensions. Every one is in the audit log.",
   "rs.ui.clear_strikes": "Clear strikes",
   "rs.ui.clear_title": "Clear strikes",
   "rs.ui.clear_message": "Clear the strikes and any strike block of {who}. He can volunteer again at once.",
   "rs.ui.clear_cid": "Clear strikes by citizen ID",
-  "rs.ui.clear_done": "Strikes cleared"
+  "rs.ui.clear_done": "Strikes cleared",
+  "rs.ui.admin_rows_link": "The blocks, exclusions and suspensions running now are on Restrictions, with every other restriction: Extend or Lift them there.",
+  "rs.ui.open_restrictions": "Open Restrictions"
 }

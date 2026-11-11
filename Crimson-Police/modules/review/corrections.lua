@@ -31,20 +31,9 @@ local Kit = CP.AdminKit
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n then return default end
-    return n
-end
+local Num = CP.Num
 
--- A whole number in [lo, hi], or nil.
-local function Int(v, lo, hi)
-    local n = tonumber(v)
-    if not n or n ~= n or n % 1 ~= 0 then return nil end
-    n = math.tointeger(n)
-    if not n or n < (lo or math.mininteger) or n > (hi or math.maxinteger) then return nil end
-    return n
-end
+local Int = CP.IntIn
 
 local Has = CP.Has
 
@@ -1013,6 +1002,9 @@ function Corr.runDetail(src, rowId, archived)
         end
     end
     view.goalRewards = goals
+    -- one timeline of the run: rows, flags, notes, decisions, disputes and correction batches (modules/review/history)
+    local okH, hist = Call('Review', 'history', r.run_uuid)
+    view.history = okH and type(hist) == 'table' and hist.events or {}
     view.own = Kit ~= nil and src ~= 0 and Kit.selfRun(src, r.run_uuid) == true
     return view
 end
@@ -1169,6 +1161,80 @@ function Corr.withViews(src, payload, ok, data)
     return true, out
 end
 
+-- The Undo of each kind of batch, and the action it goes through (the same guards wherever it is pressed).
+local UNDO_OF = {
+    bulkVoid = 'restoreBatch',
+    retire = 'unretire',
+    recordMove = 'undoRecordMove',
+    seasonReopen = 'undoReopen',
+}
+local UNDO_ACTIONS = {
+    restoreBatch = 'server:admin:restoreBatch',
+    unretire = 'server:admin:unretireOfficer',
+    undoRecordMove = 'server:admin:undoRecordMove',
+    undoReopen = 'server:admin:undoReopen',
+}
+
+-- The newest 100 correction batches (bulk void, retire, restore, record move, season reopen, badge recheck), of one
+-- officer when citizenid is given: { id, kind, state, filter, done, total, actor, reason, createdAt, restored, undone,
+-- undo = the Undo of that kind of batch ('restoreBatch' | 'unretire' | 'undoRecordMove' | 'undoReopen') }. Admin UI
+-- -> Review -> Corrections and the admin's Review queue (modules/review/queue.lua) read it.
+function Corr.batches(cid)
+    local rows = Query(
+        ([[SELECT id, kind, state, filter, done, total, actor, reason,
+        UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_admin_jobs WHERE kind IN (%s)
+        ORDER BY created_at DESC, id DESC LIMIT 100]]):format(Marks(#JOB_KINDS)),
+        JOB_KINDS
+    ) or {}
+    local restored, undone = {}, {}
+    local out = {}
+    for _, r in ipairs(rows) do
+        local f = U.jsonField(r.filter)
+        f = type(f) == 'table' and f or {}
+        if r.kind == 'restoreBatch' and f.batchId then restored[f.batchId] = true end
+        if (r.kind == 'recordMoveUndo' or r.kind == 'reopenUndo') and f.jobId then undone[f.jobId] = true end
+        r.filterT = f
+    end
+    for _, r in ipairs(rows) do
+        local f = r.filterT
+        if not cid or cid == '' or f.citizenid == cid or f.from == cid or f.to == cid then
+            out[#out + 1] = {
+                id = r.id,
+                kind = r.kind,
+                state = r.state,
+                filter = f,
+                done = math.floor(Num(r.done, 0)),
+                total = math.floor(Num(r.total, 0)),
+                actor = r.actor,
+                reason = r.reason,
+                createdAt = math.floor(Num(r.created_ts, 0)),
+                restored = restored[r.id] == true,
+                undone = undone[r.id] == true,
+                -- what the Undo button does for this kind of batch
+                undo = UNDO_OF[r.kind],
+            }
+        end
+    end
+    return out
+end
+
+-- Undo one batch by its id, through its kind's own action (Corrections -> Undo and the Review queue's Undo):
+-- ok, data | false, errKey. That action's permission, reason and request rules apply as they are.
+function Corr.undoBatch(src, jobId, reason)
+    local job = Kit and Kit.job(jobId) or nil
+    local undo = job and UNDO_OF[job.kind] or nil
+    if not undo then return false, 'err.batch_unknown' end
+    local p = { reason = reason, requestId = Kit.uuid() }
+    if undo == 'restoreBatch' then
+        p.batchId = job.id
+    elseif undo == 'unretire' then
+        p.citizenid = job.filter.citizenid
+    else
+        p.jobId = job.id
+    end
+    return Kit.run(UNDO_ACTIONS[undo], src, p)
+end
+
 if Kit and Kit.action then
     -- ---- READS -------------------------------------------------------------
 
@@ -1205,45 +1271,7 @@ if Kit and Kit.action then
     end)
 
     Kit.callback('admin:getCorrections', 'bulkVoid', function(ctx)
-        local cid = ctx.args.citizenid
-        local rows = Query(
-            ([[SELECT id, kind, state, filter, done, total, actor, reason,
-            UNIX_TIMESTAMP(created_at) AS created_ts FROM cp_admin_jobs WHERE kind IN (%s)
-            ORDER BY created_at DESC, id DESC LIMIT 100]]):format(Marks(#JOB_KINDS)),
-            JOB_KINDS
-        ) or {}
-        local restored, undone = {}, {}
-        local out = {}
-        for _, r in ipairs(rows) do
-            local f = U.jsonField(r.filter)
-            f = type(f) == 'table' and f or {}
-            if r.kind == 'restoreBatch' and f.batchId then restored[f.batchId] = true end
-            if (r.kind == 'recordMoveUndo' or r.kind == 'reopenUndo') and f.jobId then undone[f.jobId] = true end
-            r.filterT = f
-        end
-        for _, r in ipairs(rows) do
-            local f = r.filterT
-            if not cid or cid == '' or f.citizenid == cid or f.from == cid or f.to == cid then
-                out[#out + 1] = {
-                    id = r.id,
-                    kind = r.kind,
-                    state = r.state,
-                    filter = f,
-                    done = math.floor(Num(r.done, 0)),
-                    total = math.floor(Num(r.total, 0)),
-                    actor = r.actor,
-                    reason = r.reason,
-                    createdAt = math.floor(Num(r.created_ts, 0)),
-                    restored = restored[r.id] == true,
-                    undone = undone[r.id] == true,
-                    -- what the Undo button does for this kind of batch
-                    undo = (r.kind == 'bulkVoid' and 'restoreBatch') or (r.kind == 'retire' and 'unretire')
-                        or (r.kind == 'recordMove' and 'undoRecordMove') or (r.kind == 'seasonReopen' and 'undoReopen')
-                        or nil,
-                }
-            end
-        end
-        return { batches = out }
+        return { batches = Corr.batches(ctx.args.citizenid) }
     end)
 
     -- ---- POINTS ------------------------------------------------------------

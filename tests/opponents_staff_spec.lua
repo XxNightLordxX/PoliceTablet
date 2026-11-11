@@ -50,6 +50,7 @@ local selfRuns, selfCids = {}, {}
 CP.AdminKit = {
     callback = function(name, key, fn, opts) cbs[name] = { key = key, fn = fn, opts = opts } end,
     action = function(name, key, fn, opts) acts[name] = { key = key, fn = fn, opts = opts } end,
+    supAction = function(name, key, fn, opts) acts[name] = { key = key, fn = fn, opts = opts, sup = true } end,
     selfRun = function(_, runId) return selfRuns[runId] == true end,
     isSelf = function(_, cid) return selfCids[cid] == true end,
 }
@@ -314,7 +315,7 @@ do
     CP.Permissions = {
         can = function(_, key) return canPerm and key == 'antiFarmOverride' end,
     }
-    local RA = 'server:admin:restriction'
+    local RA = 'server:restriction'
     local function Lift(kind, cid, other)
         return Act(RA, { op = 'lift', kind = kind, citizenid = cid, other = other })
     end
@@ -350,7 +351,8 @@ do
     Config.RealPlayers.staffLift = false
     ok, e = Lift('exclusion', 'CRIM0001')
     H.ok(ok == false and e == 'err.rs_lift_off', 'staffLift = false: lifting is refused')
-    H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).lift, false, 'and the screen offers no Lift')
+    H.eq(cbs['admin:getRsPairs'].fn({ src = 9, args = {} }).admin, nil,
+        'FIN4: Pairs and blocks lists no running rows of its own (they are on the Restrictions screen)')
     Config.RealPlayers.staffLift = true
 
     -- the list: the running rows of each kind with their setter and reason from the audit; extend through the
@@ -463,7 +465,6 @@ do
         end
         return out, nil
     end
-    Opp.adminRows = function() return { { kind = 'exclude', suspect = 'NONAME01', untilAt = os.time() + 60 } } end
     local counted = {}
     local function Wrap(db)
         if type(db) ~= 'table' or type(db.query) ~= 'table' then return nil end
@@ -488,16 +489,15 @@ do
     H.eq(data.names.OFFL0001, 'Lee Long', 'an offline character: his name from Qbox\'s players table')
     H.eq(data.names.OFFL0002, 'Mo Moss', 'every offline one')
     H.eq(data.names.OFFC0001, 'Cee Kay', 'else the officer name Crimson-Police keeps')
-    H.eq(data.names.NONAME01, nil, 'a citizenid with no name stays a citizenid')
     H.eq(players, 1, '30 pair lines: one players-table statement')
     H.eq(officers, 1, 'and one cp_officers statement')
-    H.eq(data.lift, true, 'the running rows can be lifted (staffLift ships true)')
+    H.eq(data.lift, nil, 'FIN4: no Lift switch of its own on Pairs and blocks (the Restrictions screen lifts)')
     H.eq(Config.RealPlayers.staffNames, true, 'staffNames ships true')
     Config.RealPlayers.staffNames = false
     data = cbs['admin:getRsPairs'].fn({ src = 9, args = {} })
     H.eq(next(data.names), nil, 'staffNames = false: citizen IDs only')
     Config.RealPlayers.staffNames = true
-    Opp.pairStats, Opp.adminRows = nil, nil
+    Opp.pairStats = nil
     H.sql('DROP TABLE IF EXISTS players')
     H.sql('DELETE FROM cp_officers WHERE citizenid = \'OFFC0001\'')
 
