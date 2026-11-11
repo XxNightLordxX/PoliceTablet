@@ -69,6 +69,7 @@ import '../criminal/criminal.css';
 import '../hud/BuilderOverlay.css';
 import '../hud/DebugOverlay.css';
 import '../hud/TestControls.css';
+import '../shared/tour/tour.css';
 import './base.css';
 import './components.css';
 import './layouts.css';

@@ -59,6 +59,9 @@ local MONEY_SWITCHES = {
 }
 local MONEY_WORD = 'ENABLE'
 
+-- The money switches (Config paths), a copy: Admin UI -> Home's Setup checklist counts the ones that are on.
+function Settings.moneySwitches() return U.copy(MONEY_SWITCHES) end
+
 -- Point values: a change applies to runs that end after it, and posts a notice to the flags webhook.
 local POINTS = {
     'MissionTypes.*.points',
@@ -84,6 +87,7 @@ local POINTS = {
 local RESTART = {
     'Tablet.command',
     'Tablet.adminCommand',
+    'Training.command',
     'RealPlayers.volunteer.command',
     'RealPlayers.criminalTablet.command',
     'RealPlayers.surrender.command',
@@ -1663,6 +1667,7 @@ local KNOWN = {
         kind = 'optionalText',
     },
     ['Tablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
+    ['Training.command'] = { tpl = Text('^[%w_%-]*$', 32) },
     ['RealPlayers.volunteer.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['RealPlayers.criminalTablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['RealPlayers.criminalTablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },

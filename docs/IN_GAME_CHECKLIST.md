@@ -61,7 +61,7 @@ names the change it came with.
   case: it is a strike. Cancel within the first minute with no officer near: no strike, as before. (Z4)
 - [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.
 - [ ] Restart once: the server log shows "applied migration 017_lookup_indexes.sql" (database or saves folder), then
-  Crimson-Police at version 17.
+  Crimson-Police at version 18.
 - [ ] Officer tablet -> Department Challenge: the same header (title, one line of help, a refresh button) and the same
   loading and error lines as the other officer screens. (R1)
 - [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
@@ -473,7 +473,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 
 ## Restarts and logout
 
-- [ ] Start the server: the console shows the database or saves folder at version 17 (the newest migration, 017_lookup_indexes.sql). (O1, P1, OP3)
+- [ ] Start the server: the console shows the database or saves folder at version 18 (the newest migration, 018_tours.sql). (O1, P1, OP3, TR1)
 - [ ] After a restart, mission cooldowns, the abandon cooldown, board locks, the hourly and daily caps and mission calls behave exactly as before. (P2, P3)
 - [ ] Nothing to test in game for run ids: runs started before and after a restart simply never share an id. (K11)
 - [ ] Mark responding to a real sc-dispatch call, switch character: the new character is not "On a call" and can accept missions. (K12)
@@ -490,6 +490,31 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Settings -> Objectives: set the daily goal reset hour to the next full hour; at that hour Home shows a new daily goal while the Type of the Day and the weekly goal stay; set it back to -1. Same for the Type of the Day reset hour (the Mission Board's x2 tag moves at that hour). (FIN3)
 - [ ] Settings -> Recognition -> Kind rules `{ "valor": { "sameKindCooldownDays": 0, "crossDepartment": true } }`: a supervisor may commend valor twice in a row and to another department; teamwork still waits 7 days and stays in his department. An unknown kind is refused. (FIN3)
 - [ ] The Challenge tab standings, the weekly bounty counts and Home's goal progress show the same numbers as before (one progress engine). (FIN3)
+
+## Guided tours and the setup checklist (TR1)
+
+- [ ] A new character opens the Officer UI: the Officer tour starts by itself. Each step rings its part of the screen
+  and the card stays inside the screen at a small and a large tablet size (My options -> Tablet size). Next opens the
+  Mission Board; clicking the ringed Mission Board button also moves on. The ringed buttons still work under the ring.
+  The arrow keys move between steps; Escape ends the tour without closing the tablet. (TR1)
+- [ ] Close and reopen: the tour starts again (Skip and Escape do not save). Finish it (Done) and reopen: it does not
+  start; relog and open on another PC: still finished. The **?** in the header replays it; My options -> Tours lists
+  it as Finished and starts it. (TR1)
+- [ ] A supervisor: the Supervisor tour opens Department on Today, Officers, Controls, Review, Calls and Training; a
+  tab he may not see is left out. From My options -> Tours, the Supervisor tour switches to the Supervisor UI. (TR1)
+- [ ] An admin: the Admin tour (Home, Setup checklist, search, groups, gear, Presets, Money, Features). With
+  `Config.AdminUi.setupScreen = true` and the setup not done, no tour starts; finish the setup with "Show me around"
+  ticked: the Admin tour starts. (TR1)
+- [ ] Admin UI -> Home -> Setup checklist on the shipped config: Storage, Presets and Debug off are open, the rest
+  ticked. Apply the Go-live preset: Presets and Debug off tick on the next refresh (a minute, or reopen Home). Each
+  line opens its screen. `Config.Training.setupChecklist = false`: no card. (TR1)
+- [ ] The criminal tablet (`/crimtab`): its tour shows opting in, Jobs, saying yes first, Rules and History. (TR1)
+- [ ] `/crimsonhelp` as an officer, a supervisor, an admin with no police job and a civilian with the criminal tablet:
+  each gets his own tablet and tour; `/crimsonhelp admin` as an officer is refused with a message. (TR1)
+- [ ] Admin UI -> Officers -> an officer -> Reset tours (with a reason): his next open starts the Officer tour again.
+  `Config.Training.enabled = false` in Settings: no tour, no **?** button, no Tours lists. (TR1)
+- [ ] resmon while a tour shows and while none does: no change while none runs (the tour looks for its element only
+  while a step shows). (TR1)
 
 ## Every workflow end to end
 

@@ -128,6 +128,13 @@ local function Setup()
     return ok and pending == true
 end
 
+-- Config.Training.setupChecklist: the Setup checklist lines (CP.Setup.checklist), nil while it is off.
+local function Checklist()
+    if type(Config.Training) == 'table' and Config.Training.setupChecklist == false then return nil end
+    local ok, list = Call('Setup', 'checklist')
+    return ok and type(list) == 'table' and list or nil
+end
+
 -- Config.AdminUi.homeShortcuts: the known keys in their order, each once (nil = the shipped five, {} = none).
 AH.SHORTCUTS = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings', 'live', 'review', 'activity' }
 local SHIPPED = { 'newMission', 'missionSwitch', 'pay', 'points', 'settings' }
@@ -171,6 +178,7 @@ function AH.home(src)
         shortcutsByUse = type(Config.AdminUi) == 'table' and Config.AdminUi.homeShortcutsByUse == true,
         -- true while the First-start setup shows on Home (CP.Setup: Config.AdminUi.setupScreen, not done yet)
         setup = Setup(),
+        checklist = Checklist(),
         serverTime = os.time(),
     }
 end

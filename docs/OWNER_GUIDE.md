@@ -60,6 +60,7 @@ console lines and the exports for other scripts. Each setting's own comment in `
       - [5.15.3 Live runs, units and anti-farm](#5153-live-runs-units-and-anti-farm)
       - [5.15.4 Payments, item rewards and department money](#5154-payments-item-rewards-and-department-money)
       - [5.15.5 System, departments and settings](#5155-system-departments-and-settings)
+   - [5.16 Guided tours and the setup checklist](#516-guided-tours-and-the-setup-checklist)
 6. [Real suspects: live crimes and volunteers](#6-real-suspects-live-crimes-and-volunteers)
    - [6.1 Owner checklist](#61-owner-checklist)
    - [6.2 Rules for cases with real suspects](#62-rules-for-cases-with-real-suspects)
@@ -2218,6 +2219,60 @@ checks the tablet makes), **Give tablet item** (one, when they carry none), **Sh
   start.
 - `set cp_settings_safe 1` in server.cfg starts Crimson-Police once without the settings changed in game (nothing is
   deleted; remove the line and restart to use them again).
+
+### 5.16 Guided tours and the setup checklist
+
+Every tablet shows a new player around the first time his character opens it: the **Officer UI**, the
+**Supervisor UI**, the **Admin UI** and the **criminal tablet** each have a short **guided tour**. Each step rings one
+part of the screen and shows a card with **Next**, **Back**, **Skip** and **Don't show again**; the tour opens the
+screen it talks about by itself. The ring never blocks a click, the arrow keys move between steps and **Escape**
+always ends the tour.
+
+- **Officer tour**: the status card (on duty and ready), the Mission Board, Accept, Active Mission, Unit, Dispatch,
+  Me and My options.
+- **Supervisor tour**: Department's Today tiles, the Officers tab and its side panel, Controls (with each control's
+  limits), Review, Calls and notices and Field training. A tab the supervisor may not see is left out.
+- **Admin tour**: Home, the Setup checklist, the search box (Ctrl+K), the groups of the sidebar, the gear, Settings ->
+  Presets, Money, and Settings -> Features where the money tools wait behind the typed word ENABLE.
+- **Criminal tablet tour**: opting in, the jobs, saying yes first, the rules and strikes.
+
+A finished tour (or **Don't show again**) is saved for that character on the server (table `cp_tours`), so it shows
+once, on every PC. **Skip** or Escape only ends it for now: it starts again on the next open. When an update adds
+steps to a tour, a player who finished it sees only the new steps.
+
+**Replay a tour** any time: the **?** button in the header of every tablet, **My options -> Tours** (the Officer
+tour, and the Supervisor tour for a supervisor), **Admin UI -> Settings -> Tours**, or the command **/crimsonhelp**
+(it opens the tablet of your role and starts its tour; `/crimsonhelp officer`, `supervisor`, `admin` or `criminal`
+names one of yours). An admin can make every tour show again for one character: Admin UI -> **Officers** -> the
+officer -> **Reset tours** (with a reason, in the audit log).
+
+The **First-start setup** (`Config.AdminUi.setupScreen`) ends with **Show me around the Admin UI when I finish**
+(ticked): the Admin tour starts once the setup is saved. While the setup still waits on Home, the Admin tour does not
+start by itself.
+
+**Setup checklist**: Admin UI -> Home shows what a new city still has to do, each line ticked by the server from the
+real state, and a click on a line opens the screen that fixes it:
+
+| Line | Ticked when |
+|---|---|
+| Departments | At least one department whose jobs all exist in Qbox |
+| Supervisor grades | Every department's supervisor grade is a real grade above that job's lowest one |
+| Mission desks | At least one desk, or desks are off as a way to open the tablet |
+| Storage | `Config.Database.enabled = true` and oxmysql runs (the shipped saves folder leaves it open) |
+| Other scripts | Every script you named in `Config.Integrations` is running (`auto` and `none` are fine) |
+| Money tools | A money tool is on, or an admin turned one on or off once (they ship off) |
+| Presets | A preset was applied once (Settings -> Presets, or the First-start setup) |
+| Debug off | `Config.Debug = false` (it ships on) |
+
+Settings (`Config.Training`, in the Tablet and commands section of Settings):
+
+| Setting | Shipped | What it does |
+|---|---|---|
+| `Config.Training.enabled` | `true` | `false` = no tours at all: none starts, no **?** button, no Tours lists |
+| `Config.Training.autoStart.officer` / `.supervisor` / `.admin` / `.criminal` | `true` | `false` = that tour never starts by itself (the **?** still plays it) |
+| `Config.Training.allowSkip` | `true` | `false` = the card offers only Back and Next (Escape still ends it; it starts again next time) |
+| `Config.Training.command` | `'crimsonhelp'` | The command name; `''` = none. Restart to change it |
+| `Config.Training.setupChecklist` | `true` | `false` = no Setup checklist on Admin UI -> Home |
 
 ---
 

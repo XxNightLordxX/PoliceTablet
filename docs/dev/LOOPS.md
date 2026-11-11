@@ -257,6 +257,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | web Builder autosave | no | yes, draft open | `autosaveSeconds` | yes | one per draft | owner setting |
 | web Testing clock tick | no | yes, screen open | 30 s | yes | one per screen | "time ago" text in minutes |
 | web one-shot timers (toasts, confirm buttons, debounces, retries) | each is a single `setTimeout` | yes, cleared on unmount | their own delay | yes | - | not loops |
+| web guided tour element finder | no event for layout | yes, only while a tour step shows | 200 ms | yes | one per tour | ends with the tour |
 
 Bounded waits (model, animation and collision loads, `NetworkRequestControlOfEntity`, shape tests, network ids,
 lock waits, the settings and mission definition waits at start) end at a deadline; one-shot threads (start-up hooks,
@@ -404,6 +405,7 @@ strings do not count.
 | `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
 | `modules/realplayers/surrender.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/access/client/options.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
+| `modules/access/client/training.lua` | 1 | 0 | one-shot thread per /crimsonhelp (opens the tablet, sends the tour); no loop |
 | `modules/money/payments.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/money/payouts.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/profile.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
@@ -456,6 +458,7 @@ strings do not count.
 | `web/src/shared/components/QuietBoundary.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/components/Toasts.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/hooks.ts` | 4 | 0 | `useRequest` poll, `useCountdown` (a timer per second), `useDebounced` (one-shot) |
+| `web/src/shared/tour/TourHost.tsx` | 2 | 0 | the step's element looked for every 200 ms while a tour step shows; a one-shot after a waited click |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |
 | `web/src/shared/NoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |

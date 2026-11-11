@@ -135,7 +135,7 @@ export function Screen({ head, title, subtitle, help, actions, children, classNa
     const shownTitle = title ?? (def ? t(def.title) : undefined);
     const shownHelp = help ?? (def ? t(def.help) : undefined);
     return (
-        <div className={cx('cp-screen', className)} data-head={head}>
+        <div className={cx('cp-screen', className)} data-head={head} data-tour={head ? `screen-${head}` : undefined}>
             {shownTitle || actions ? (
                 <header className="cp-screen__header">
                     <div className="cp-screen__titles">

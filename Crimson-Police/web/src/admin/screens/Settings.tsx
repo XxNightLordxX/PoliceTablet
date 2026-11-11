@@ -52,11 +52,12 @@ import type {
     SettingsViewMode,
     SettingView,
 } from '../../types/settings';
+import { ToursCard, useTourState } from '../../shared/tour';
 import './Settings.css';
 
 // The panels of this screen, in tab order. A new admin panel about settings is one more entry here.
-type Panel = 'settings' | 'presets' | 'features' | 'history' | 'transfer';
-const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' | 'swap' | 'layers' }[] = [
+type Panel = 'settings' | 'presets' | 'features' | 'history' | 'transfer' | 'tours';
+const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' | 'swap' | 'layers' | 'help' }[] = [
     { key: 'settings', labelKey: 'settings.tab.settings', icon: 'sliders' },
     // a group of settings in one click, after a preview (admin/components/SettingsPresets.tsx)
     { key: 'presets', labelKey: 'settings.tab.presets', icon: 'layers' },
@@ -64,6 +65,8 @@ const PANELS: { key: Panel; labelKey: string; icon: 'sliders' | 'zap' | 'clock' 
     { key: 'features', labelKey: 'settings.tab.features', icon: 'zap' },
     { key: 'history', labelKey: 'settings.tab.history', icon: 'clock' },
     { key: 'transfer', labelKey: 'sysadmin.ui.tab.transfer', icon: 'swap' },
+    // the guided tours (Config.Training): replay the Admin tour (shared/tour)
+    { key: 'tours', labelKey: 'settings.tab.tours', icon: 'help' },
 ];
 
 // A Config health line may name the setting that fixes it, or a server.cfg line to paste.
@@ -1239,6 +1242,8 @@ export default function AdminSettings() {
     const simple = view === 'simple';
     const [sectionKey, setSectionKey] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'resetAll' | null>(null);
+    // Config.Training.enabled: the Tours tab
+    const toursOn = useTourState().view?.enabled !== false;
 
     const sections = asArray(data?.sections);
     const all = useMemo(
@@ -1382,6 +1387,7 @@ export default function AdminSettings() {
             />
         );
     else if (panel === 'history') body = <HistoryPanel />;
+    else if (panel === 'tours') body = <ToursCard tours={['admin']} />;
     else if (panel === 'transfer') body = <TransferPanel onImported={() => void refetch()} />;
     else {
         const found = searching
@@ -1598,7 +1604,7 @@ export default function AdminSettings() {
             <Tabs<Panel>
                 value={panel}
                 onChange={setPanel}
-                items={PANELS.map(p => ({
+                items={PANELS.filter(p => p.key !== 'tours' || toursOn).map(p => ({
                     key: p.key,
                     label: t(p.labelKey),
                     icon: p.icon,

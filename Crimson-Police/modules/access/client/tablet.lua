@@ -321,6 +321,11 @@ function T.isOpen()
     return state.open
 end
 
+-- The UI open now ('officer', 'supervisor' or 'admin'), nil while closed.
+function T.openUi()
+    return state.open and state.ui or nil
+end
+
 -- ============================================================================
 --                                 PANEL FOCUS
 -- ============================================================================

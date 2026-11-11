@@ -373,7 +373,7 @@ function NextStep({
     const next = homeNext(data.goals, data.missionsToday, onRun);
     const g = next.goal?.goal;
     return (
-        <Card padding="lg" className={cx('economy-next', `is-${next.status}`)}>
+        <Card padding="lg" className={cx('economy-next', `is-${next.status}`)} data-tour="officer-status">
             <div className="economy-next__row">
                 <div className="economy-next__text">
                     <span className="economy-next__status">

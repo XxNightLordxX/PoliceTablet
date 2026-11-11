@@ -14,6 +14,9 @@ The first version for sale.
   `sasp`), every script on `auto`. Copy it over `config/config.lua` for a fresh city.
 - **First-start setup** on Admin UI -> Home (`Config.AdminUi.setupScreen`): departments and their Qbox jobs,
   supervisor grades, desks, storage, the scripts found and a preset. Every answer is a normal setting. Skippable.
+- **Guided tours** (`Config.Training`): each tablet shows a new character around on first open (Officer, Supervisor,
+  Admin UI, criminal tablet), saved per character; the **?** in every header, the Tours lists and `/crimsonhelp`
+  replay them. Admin UI -> Home's **Setup checklist** ticks off what a new city still has to do.
 - **Escrow-friendly layout:** `config/`, `locales/` and `missions/builtin/` stay readable and editable
   (`escrow_ignore` in `fxmanifest.lua`); custom missions are files written in game; `web/dist` ships built.
 - NPC missions (18 plus a Weekly Boss), mission calls, police actions and custody, the Mission Builder, units and

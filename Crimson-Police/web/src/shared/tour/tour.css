@@ -1,0 +1,158 @@
+/* The guided tour (shared/tour/TourHost.tsx): a ring around one element, a dim around it and a card. Only the card
+   takes clicks; nothing moves on its own (no animation). */
+.cp-tour {
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    pointer-events: none;
+}
+
+.cp-tour__ring {
+    position: fixed;
+    border: 2px solid var(--cp-accent, #e63946);
+    border-radius: 10px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+
+.cp-tour__card {
+    position: fixed;
+    width: 340px;
+    max-width: calc(100vw - 24px);
+    padding: 14px var(--cp-space-4) var(--cp-space-3);
+    border: 1px solid var(--cp-border-strong, rgba(255, 255, 255, 0.18));
+    border-radius: 12px;
+    background: var(--cp-surface, #161a1d);
+    color: var(--cp-text, #f5f3f4);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    pointer-events: auto;
+}
+
+.cp-tour__count {
+    color: var(--cp-muted, #b1a7a6);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.cp-tour__title {
+    margin: var(--cp-space-1) 0 6px;
+    font-size: 16px;
+}
+
+.cp-tour__body {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.cp-tour__hint {
+    margin: var(--cp-space-2) 0 0;
+    color: var(--cp-accent, #e63946);
+    font-size: 13px;
+}
+
+.cp-tour__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: var(--cp-space-3);
+}
+
+.cp-tour__spacer {
+    flex: 1;
+}
+
+.cp-tours {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-tours__row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cp-tours__name {
+    display: flex;
+    flex-direction: column;
+}
+
+.cp-tours__state {
+    color: var(--cp-muted, #b1a7a6);
+    font-size: 12px;
+}
+
+.cp-checklist {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px var(--cp-space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-checklist__item {
+    display: flex;
+    gap: var(--cp-space-2);
+    align-items: flex-start;
+    width: 100%;
+    padding: 6px var(--cp-space-2);
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cp-checklist__item:hover,
+.cp-checklist__item:focus-visible {
+    background: rgba(var(--cp-text-rgb, 245, 243, 244), 0.06);
+}
+
+.cp-checklist__item.is-done {
+    color: var(--cp-muted, #b1a7a6);
+}
+
+.cp-checklist__icon {
+    flex: none;
+    margin-top: 2px;
+    color: var(--cp-warning, #f4a261);
+}
+
+.cp-checklist__item.is-done .cp-checklist__icon {
+    color: var(--cp-success, #2a9d8f);
+}
+
+.cp-checklist__text {
+    display: flex;
+    flex-direction: column;
+}
+
+.cp-checklist__hint {
+    font-size: 12px;
+    color: var(--cp-muted, #b1a7a6);
+}
+
+/* the '?' button in the tablet headers */
+.cp-header__help {
+    color: inherit;
+    opacity: 0.9;
+}
+
+.cp-header__help:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.16);
+    color: inherit;
+    opacity: 1;
+}
+
+.crim-help {
+    color: var(--cp-text);
+}

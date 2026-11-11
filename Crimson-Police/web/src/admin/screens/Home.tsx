@@ -19,6 +19,7 @@ import { useNavigate } from '../../shared/navigation';
 import { NEW_MISSION_PARAMS } from '../../builder/quickMission';
 import { MissionSwitchForm, PayForm, PointsForm, QuickSettingsForm } from '../components/HomeForms';
 import { SetupWizard } from '../components/SetupWizard';
+import { CHECKLIST_OPENS, checklistLeft, checklistOf } from '../components/setupChecklist';
 import type { AdminHomeData, HomeShortcutKey } from '../../types/admin_system';
 import {
     alertLines,
@@ -224,6 +225,50 @@ function Alerts({ data, failed, retry }: { data: AdminHomeData | null; failed: b
     );
 }
 
+// The Setup checklist (Config.Training.setupChecklist): what a new city still has to do, each line ticked by the
+// server from the real state and a click away from the screen that fixes it.
+function SetupChecklist({ data }: { data: AdminHomeData | null }) {
+    const navigate = useNavigate();
+    const list = checklistOf(data?.checklist);
+    if (!list || list.length === 0) return null;
+    const left = checklistLeft(list);
+    return (
+        <Card
+            className="admin-home-checklist"
+            title={t('admin.checklist.title')}
+            subtitle={left > 0 ? t('admin.checklist.left', { n: formatNumber(left) }) : t('admin.checklist.all_done')}
+            icon={left > 0 ? 'list' : 'checkCircle'}
+            data-tour="admin-checklist"
+        >
+            <ul className="cp-checklist">
+                {list.map(item => {
+                    const opens = CHECKLIST_OPENS[item.key];
+                    return (
+                        <li key={item.key}>
+                            <button
+                                type="button"
+                                className={`cp-checklist__item${item.done ? ' is-done' : ''}`}
+                                onClick={() => navigate(opens.screen, opens.params)}
+                            >
+                                <Icon
+                                    name={item.done ? 'checkCircle' : 'circle'}
+                                    size={16}
+                                    className="cp-checklist__icon"
+                                    label={t(item.done ? 'admin.checklist.done' : 'admin.checklist.open')}
+                                />
+                                <span className="cp-checklist__text">
+                                    <span>{t(`admin.checklist.${item.key}`, { n: formatNumber(item.n ?? 0) })}</span>
+                                    <span className="cp-checklist__hint">{t(`admin.checklist.${item.key}_hint`)}</span>
+                                </span>
+                            </button>
+                        </li>
+                    );
+                })}
+            </ul>
+        </Card>
+    );
+}
+
 export default function AdminHome() {
     const { data, error, refetch } = useHome();
     // read once per Home visit, so the tiles do not jump while the admin uses them
@@ -232,6 +277,7 @@ export default function AdminHome() {
     return (
         <Screen head="admin_home" subtitle={t('admin.home.subtitle')} className="admin-home-screen">
             {data?.setup ? <SetupWizard onDone={() => void refetch()} /> : null}
+            <SetupChecklist data={data} />
             <div className="admin-home-top">
                 <LiveNow data={data} />
                 <Alerts data={data} failed={!!error} retry={() => void refetch()} />

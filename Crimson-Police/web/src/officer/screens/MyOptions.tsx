@@ -25,7 +25,8 @@ import { useAction, useRequest } from '../../shared/hooks';
 import { hasKey, t } from '../../shared/i18n';
 import { clientAction } from '../../shared/nui';
 import { useOptions } from '../../shared/options';
-import { useSession } from '../../shared/session';
+import { useSession, useTablet } from '../../shared/session';
+import { ToursCard, type TourId } from '../../shared/tour';
 import type { OfficerOptionValue } from '../../shared/types';
 import type { ProfileData } from '../../types/boards';
 import type { KeyLabel, OptionDef, OptionsView } from '../../types/options';
@@ -474,6 +475,21 @@ function KeysCard() {
 //                                    SCREEN
 // ============================================================================
 
+// Tours (Config.Training): the Officer tour, and the Supervisor tour for a supervisor (it opens the Supervisor UI).
+function MyTours() {
+    const session = useSession();
+    const { switchUi } = useTablet();
+    const tours: TourId[] = session.roles.supervisor ? ['officer', 'supervisor'] : ['officer'];
+    return (
+        <ToursCard
+            tours={tours}
+            onStart={tour => {
+                if (tour === 'supervisor') void switchUi('supervisor');
+            }}
+        />
+    );
+}
+
 export default function MyOptions() {
     const { data, loading, error, refetch } = useRequest<OptionsView>('getOptions', {});
     const { local, server, setLocal } = useOptions();
@@ -567,6 +583,7 @@ export default function MyOptions() {
                         />
                     ))}
                     <KeysCard />
+                    <MyTours />
                 </div>
             )}
         </Screen>

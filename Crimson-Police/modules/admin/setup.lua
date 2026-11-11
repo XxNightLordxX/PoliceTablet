@@ -150,6 +150,79 @@ function Setup.view()
 end
 
 -- ============================================================================
+--                               SETUP CHECKLIST
+-- ============================================================================
+
+-- Whether the audit log holds one row of this action (an admin did it at least once). false when it cannot be read.
+local function Audited(action)
+    CP.Db()
+    local ok, id = pcall(MySQL.scalar.await, 'SELECT id FROM cp_audit WHERE action = ? LIMIT 1', { action })
+    return ok and id ~= nil
+end
+
+-- How many money switches (the settings that need the typed ENABLE, CP.Settings.moneySwitches) are on now.
+local function MoneyOn()
+    local ok, paths = Call('Settings', 'moneySwitches')
+    local n = 0
+    for _, path in ipairs(ok and type(paths) == 'table' and paths or {}) do
+        local node = Config
+        for key in path:gmatch('[^%.]+') do node = type(node) == 'table' and node[key] or nil end
+        if node == true then n = n + 1 end
+    end
+    return n
+end
+
+-- A department's supervisor grade is a grade of one of its jobs above that job's lowest grade.
+local function GradeOk(d, jobsByName)
+    for _, name in ipairs(d.jobs) do
+        local grades = jobsByName[name] and jobsByName[name].grades or {}
+        for i, g in ipairs(grades) do
+            if g.level == d.supervisorGrade and i > 1 then return true end
+        end
+    end
+    return false
+end
+
+-- Admin UI -> Home's Setup checklist (Config.Training.setupChecklist): what a new city still has to do, each line
+-- read from the real state now. { { key, done, n? } } in a fixed order; the tablet names each line and the screen
+-- that fixes it.
+function Setup.checklist()
+    local depts = Departments()
+    local jobsByName = {}
+    for _, j in ipairs(Jobs(depts)) do jobsByName[j.name] = j end
+    local anyDept, grades = false, true
+    for _, d in ipairs(depts) do
+        if d.enabled then
+            local known = #d.jobs > 0
+            for _, name in ipairs(d.jobs) do
+                if not jobsByName[name] then known = false end
+            end
+            if known then anyDept = true end
+            if not GradeOk(d, jobsByName) then grades = false end
+        end
+    end
+    local tablet = type(Config.Tablet) == 'table' and Config.Tablet or {}
+    local access = type(tablet.access) == 'table' and tablet.access or {}
+    local desks = access.desk == false or (type(tablet.desks) == 'table' and #tablet.desks > 0)
+    local db = type(Config.Database) == 'table' and Config.Database or {}
+    local scripts = true
+    for _, s in ipairs(Integrations()) do
+        if not s.active and s.setting ~= 'auto' and s.setting ~= 'none' then scripts = false end
+    end
+    local money = MoneyOn()
+    return {
+        { key = 'departments', done = anyDept },
+        { key = 'grades', done = anyDept and grades },
+        { key = 'desks', done = desks == true },
+        { key = 'storage', done = db.enabled == true and CP.Ext.started('oxmysql') == true },
+        { key = 'scripts', done = scripts },
+        { key = 'money', done = money > 0 or Audited('moneySwitch'), n = money },
+        { key = 'presets', done = Audited('settingsPreset') },
+        { key = 'debug', done = Config.Debug ~= true },
+    }
+end
+
+-- ============================================================================
 --                                 THE ANSWERS
 -- ============================================================================
 

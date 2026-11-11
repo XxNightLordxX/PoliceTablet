@@ -70,7 +70,7 @@ function Today({ tabs, onTab }: { tabs: DeptTab[]; onTab: (tab: DeptTab) => void
     const tiles = todayTiles(data, counts.review, tabs, screens);
     if (tiles.length === 0) return null;
     return (
-        <section className="sup-today" aria-label={t('sup.today.title')}>
+        <section className="sup-today" aria-label={t('sup.today.title')} data-tour="sup-today">
             {tiles.map(tile => (
                 <button
                     key={tile.key}

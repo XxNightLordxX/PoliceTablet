@@ -33,6 +33,7 @@ import { moneySearchWords } from './adminMoney';
 import { navBadge, useNavCounts } from './navBadges';
 // the gear's drawer (only this screen's settings), loaded on the first click
 const ScreenSettings = lazy(() => import('../admin/components/ScreenSettings'));
+import { TourHelpButton } from '../shared/tour';
 import { NotificationBell } from './NotificationBell';
 import { ScreenHost } from './ScreenHost';
 import { screensFor } from './screens';
@@ -177,6 +178,7 @@ export function AdminLayout() {
                         <Icon name="user" size={14} />
                         {who}
                     </span>
+                    <TourHelpButton tablet="admin" />
                     <NotificationBell />
                     <span className="cp-header__role cp-header__role--admin">
                         <Icon name="key" size={14} />
@@ -192,7 +194,7 @@ export function AdminLayout() {
                     more={!searching ? t('ui.nav.more') : undefined}
                     sections={searching ? foundSections : sections}
                     search={
-                        <span ref={searchBox} className="cp-admin__search">
+                        <span ref={searchBox} className="cp-admin__search" data-tour="admin-search">
                             <SearchInput
                                 value={find}
                                 onChange={setFind}
@@ -237,6 +239,7 @@ export function AdminLayout() {
                                     icon="sliders"
                                     size="sm"
                                     variant="secondary"
+                                    data-tour="admin-gear"
                                     label={t('settings.gear.open', { screen: t(adminTitleKey(screen)) })}
                                     onClick={() => setGearOpen(screen)}
                                 />

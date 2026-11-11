@@ -165,7 +165,7 @@ PoliceTablet/                      (git repo)
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
                    012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql,
-                   015_field_training.sql, 016_saved_cases.sql, 017_lookup_indexes.sql
+                   015_field_training.sql, 016_saved_cases.sql, 017_lookup_indexes.sql, 018_tours.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -215,7 +215,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 |---|---|---|
 | `CP.resource`, `CP.isServer`, `CP.prefix` | shared/init.lua | `GetCurrentResourceName()` (`'Crimson-Police'`; everything inside the resource follows a renamed folder, see §5.34 `folder`), bool, `'crimson-police'` |
 | `CP.log(tag, fmt, ...)`, `CP.warn`, `CP.err` | shared/init.lua | tagged `[crimson-police:<tag>]`. On the server every `warn`/`err` line is also kept (below) |
-| `CP.Problems.list({ tag?, level?, limit? }) -> { { at, level = 'warn'\|'error', tag, text } }`, `CP.Problems.total()`, `CP._logSink` | shared/init.lua | Server: a ring buffer of the last 200 `CP.warn`/`CP.err` lines from the first line of `shared/init.lua` on (start-up lines included), newest first. Before a line is kept, webhook links (`https://<host>/api/webhooks/...`), `mysql://...` connection strings, `password=`/`pwd=` values and full licences (`license:` keeps its last 4 characters) are cut out (`CP._redact(text)`). `CP._logSink`, when a module sets it to a function, gets every kept entry (the System → Problems screen) |
+| `CP.Problems.list({ tag?, level?, limit? }) -> { { at, level = 'warn'\|'error', tag, text } }`, `CP.Problems.total()`, `CP._logSink` | shared/init.lua | Server: a ring buffer of the last 200 `CP.warn`/`CP.err` lines from the first line of `shared/init.lua` on (start-up lines included), newest first. Secrets are cut out first (`CP._redact(text)`: webhook links, `mysql://` strings, `password=`/`pwd=` values, all but the last 4 characters of a licence). `CP._logSink`, when a module sets it to a function, gets every kept entry (the System → Problems screen) |
 | `CP.e(name)` | shared/init.lua | `'crimson-police:' .. name` |
 | `CP.configProblem(cfg) -> nil \| 'error'\|'warn', text` | shared/init.lua | The config load check: `'error'` when `Config` is not a table (config.lua did not load), `'warn'` naming the table sections of config.lua and blocks.lua that are missing (config.lua stopped at an error, or is from an older version). The server prints it once as the file loads (tag `config`), before any module can fail on it |
 | `CP.Blocks.register(id, impl)`, `.get(id)`, `.all()` | shared/init.lua | one registry per side |
@@ -227,7 +227,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.Net.callback(name, handler, opts)` | shared/net.lua | server: ox_lib callback `crimson-police:<name>`; handler `(src, args) -> data` or `nil, errKey`; reply `{ok,data,error}`. After a failed start every callback answers `err.not_started` before its handler runs. `opts.latent = true` (the exports `admin:exportAudit`, `admin:exportAuditPart`, `admin:exportPayments`; `Kit.callback` passes it on): given a reply id (the argument after `args`), the data goes by `TriggerLatentClientEvent('crimson-police:client:actionResult', src, Config.Limits.exportBps, id, true, data)` and the answer is `{ ok = true, latent = id }`, so 5000 CSV rows never hold back other events (`exportBps` 200000, at least 100000; 0 = one plain answer) |
 | `CP.Net.rateOk(src, key, max, windowMs)` | shared/net.lua | server: a token bucket per (src, key): `max` calls at once, then one back every `windowMs / max` (new keys start full; `playerDropped` clears them). `CP.Net.action` (`opts.rate`, default 8 a second) and `CP.Net.callback` (default 6) answer `err.rate_limited` past it. `Config.Limits.netRateResponse` (read at each refusal): `'block'` (shipped) refuses quietly; `'log'` also prints one `CP.warn('net', ...)` a minute per player refused 3 x a limit (at least 20) in a minute, never for an admin; `'kick'` prints that warning and calls `DropPlayer(src, CP.L('err.rate_kick'))` once |
 | `CP.Net.action(name, payload, timeoutMs)`, `CP.Net.request(name, args, opts)` | shared/net.lua | client; both return `{ ok, data, error }` and never raise (`err.timeout` after timeoutMs, default 15000; `err.no_response` when ox_lib raises). `opts`: the timeout in ms or `{ timeoutMs, latent = true }` (sends a reply id and, on `{ latent = id }`, waits up to 60 s more for that `actionResult`). The NUI `request` path always passes `latent = true` and waits 90 s (`EXPORT_TIMEOUT_MS`) for the three exports instead of 20 s |
-| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): `weapon(name)`, `ammo()`, `isAutomatic(name)`, `automatic()`, `automaticsIn(t)`, `weaponsAllowed(list, allowed)`, `capAccuracy(acc)`, `scaleAccuracy(acc)`, `shootRate()`, `firingPattern()`, `ability(a)`, `noCharge()`, `driveByAccuracy(acc)`, `driveByPattern()`, `aiDamage()`, `aiMeleeDamage()`, `reassertAiDamage()`, `officerDefense()`, `noCriticalHits()`, `cancelLethalHeadshots()`, `lethalCancelAbove()`, `enabled()` |
+| `CP.NpcCombat.*` | shared/npccombat.lua | Config.NpcCombat read at every call (§5.42): one reader per setting, e.g. `weapon(name)`, `ammo()`, `capAccuracy(acc)`, `aiDamage()`, `enabled()` (the file lists them all) |
 | `CP.OptionDefs.*` | shared/options.lua | Officer options (§5.48), Config.OfficerOptions read at every call: `add(key, { kind = 'bool'\|'enum'\|'list'\|'number', values = list \| function, default, min, max, integer, store = 'server'\|'local', group, order })`, `remove(key)`, `get(key)`, `keys()`, `values(key)`, `check(key, value, bounds, { drop }) -> clean \| nil, errKey` (enum/list membership, lists de-duplicated, numbers clamped; `drop` drops list entries no longer offered), `same(a, b)`, `enabled()`, `resolve(deptKey) -> allow, defaults, bounds` (the option's default <- Config.OfficerOptions <- the department's officerOptions), `checkConfig(t) -> nil \| 'err.option_config', key` |
 | `CP.Twists.*` | shared/twists.lua | Config.Events.twists read at every call (§5.9): `ORDER`, `known(key)`, `cfg(key) -> { enabled, points, cash }`, `sorted(list)`, `of(run|payload) -> keys` (the `modifiers` list, else the one `modifier`), `has(run, key)`, `caps() -> { points, cash }`, `bonus(list) -> { points, cash, lines }` (shares add, multipliers multiply, both capped) |
 | `CP.Db()` | shared/lib.lua | Server: waits for the store (`CP.Migrations.ready`), raises `err.not_started` after a failed start; call it before a query |
@@ -2650,6 +2650,11 @@ shipped false, each with a default money amount).
   `Rewards.enabled` as limits).
 - `suspect.byType` (`{ [mission type] = { got_away, caught } }`, shipped `{}`): `FR.money('suspect', { outcome,
   missionType })` pays the type's amount for that outcome when set, else `money.got_away` / `money.caught`.
+
+### 5.53 CP.Training — modules/access/training.lua (tours)
+Steps: `web/src/shared/tour/tours.ts`. `cp_tours` (018): `{"<tour>": <version>}` per citizenid; `Tr.TOURS` = the
+versions; only steps above the saved one show. `training:get`, `server:training:done`, `server:admin:resetTours`,
+`/crimsonhelp` -> `client:startTour`; `CP.Setup.checklist()` -> `admin:getHome.checklist`.
 
 ## 6. Cross-cutting conventions
 

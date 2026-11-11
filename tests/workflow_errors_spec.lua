@@ -131,6 +131,7 @@ local NOTHING_TO_DO = {
     ['err.op_disabled'] = true,
     ['err.op_none'] = true,
     ['err.rewards_off'] = true,
+    ['err.training_off'] = true,
     ['err.unit_ready_none'] = true,
 }
 local VERB_LIST = [[

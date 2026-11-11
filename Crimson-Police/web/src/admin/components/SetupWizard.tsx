@@ -22,6 +22,7 @@ import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
 import { toast } from '../../shared/toast';
+import { askTour, useTourState } from '../../shared/tour';
 import type { SetupReply, SetupView } from '../../types/admin_system';
 import { useAdminAction } from './kit/useAdminAction';
 import {
@@ -225,6 +226,9 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
     const [answers, setAnswers] = useState<SetupAnswers>(() => initialAnswers(null));
     const [step, setStep] = useState(0);
     const { run, busy } = useAdminAction();
+    // the last page offers the Admin tour (Config.Training): it starts once the setup is saved
+    const toursOn = useTourState().view?.enabled !== false;
+    const [tour, setTour] = useState(true);
     useEffect(() => {
         if (data) setAnswers(initialAnswers(data));
     }, [data]);
@@ -233,6 +237,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
         if (!res.ok) return;
         if (res.data?.presetError) toast('warning', t(res.data.presetError));
         toast('success', t(payload.skip ? 'admin.setup.skipped' : 'admin.setup.done'));
+        if (!payload.skip && toursOn && tour) askTour('admin');
         onDone();
     };
     const key = SETUP_STEPS[step] ?? 'departments';
@@ -272,6 +277,14 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
                     {key === 'storage' ? <Storage view={data} /> : null}
                     {key === 'scripts' ? <Scripts view={data} answers={answers} set={setAnswers} /> : null}
                     {key === 'preset' ? <Preset view={data} answers={answers} set={setAnswers} /> : null}
+                    {last && toursOn ? (
+                        <Checkbox
+                            className="admin-setup__tour"
+                            checked={tour}
+                            onChange={setTour}
+                            label={t('admin.setup.tour')}
+                        />
+                    ) : null}
                     <div className="admin-setup__nav">
                         <Button size="sm" variant="secondary" disabled={step === 0} onClick={() => setStep(step - 1)}>
                             {t('admin.setup.back')}

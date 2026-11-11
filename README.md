@@ -72,9 +72,9 @@ What is in it, one line each:
 - **Profiles**: pictures, bios, commendations and a service record, with moderation.
 - **Admin UI**: every setting, payout and tool in game ([7](#7-admin-ui-tour)); you never have to edit `config.lua`.
 - **Mission Builder**: supervisors and admins build new missions in game, with no coding.
-- **Test mode**: admins play any mission at any location and size; nothing is saved or paid. Testing is
-  optional: nothing needs a test before it is used.
+- **Test mode**: admins play any mission at any location and size; nothing is saved or paid (never required).
 - **Item rewards**: optional ox_inventory items for finished missions. **Off** until you turn them on.
+- **Guided tours** of each tablet on first open, and a setup checklist.
 - **No SQL to import**: Crimson-Police makes its own tables, or saves to files with the database off.
 
 English is the only language.
@@ -230,20 +230,20 @@ result. On a good install the console shows lines like these (the order can diff
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
-[crimson-police] Crimson-Police saves folder at version 17
+[crimson-police] Crimson-Police saves folder at version 18
 [crimson-police] missions loaded: 19 built-in, 0 custom, 0 rejected
 [crimson-police] Start-up check: all 18 checks passed. Type CrimsonPoliceAdmin check in the server console to see them
 ```
 
 - With the database on, the first line reads `storage: MySQL/MariaDB through oxmysql`, the "first start" line is
-  not there, and the version line reads `Crimson-Police database at version 17`. On a database made by txAdmin's
+  not there, and the version line reads `Crimson-Police database at version 18`. On a database made by txAdmin's
   recipe, the first start also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
   (once)` line per table.
 - The `applied migration` lines only show on the first start and after an update. A migration is Crimson-Police
   creating or upgrading its own tables.
 - The number of checks on the last line depends on your setup.
 - The copy you downloaded has `Config.Debug = true`, so you also see many extra lines that start with
-  `[crimson-police:` (for example `[crimson-police:admin] /CrimsonPoliceAdmin registered`). They are normal and help
+  `[crimson-police:`. They are normal and help
   while you test. Before go-live, set `Config.Debug = false` in `config/config.lua` for a quiet console (see
   [5.1](#51-the-two-switches-at-the-top-debug-and-storage)).
 
@@ -618,7 +618,7 @@ In the server console, type every command **without** the slash.
 |---|---|---|
 | `/CrimsonPolice` | Officers (on duty, department job) | Opens the tablet (**Esc** or the **X** closes it) |
 | `/CrimsonPoliceAdmin` | Admins, in game | Opens the Admin UI. Typed in the server console, it lists the subcommands |
-| `CrimsonPoliceState` | Anyone, in the **F8** console | Prints what holds the screen, the NUI focus, the camera and the controls right now, and which part is Crimson-Police's. `CrimsonPoliceState unstick` releases only Crimson-Police's own (see [8.4](#84-the-screen-froze-or-the-controls-stopped)) |
+| `CrimsonPoliceState` | Anyone, in the **F8** console | Prints what holds the screen, NUI focus, camera and controls now, and which part is Crimson-Police's. `CrimsonPoliceState unstick` releases only Crimson-Police's own (see [8.4](#84-the-screen-froze-or-the-controls-stopped)) |
 | `/CrimsonPoliceAdmin help` | Admins, console | Lists every subcommand (in game: a one-line list) |
 | `/CrimsonPoliceAdmin check` | Admins, console | Runs the start-up check again. The console lists every line; in game you get the counts |
 | `/CrimsonPoliceAdmin payout type <type> <amount\|clear> <reason>` | Admins, console | Sets a mission type's payout for good, or clears it back to `config.lua`. Type = `patrol`, `training`, `investigation` or `tactical`. Example: `payout type tactical 1000 Summer event` |
@@ -636,10 +636,11 @@ In the server console, type every command **without** the slash.
 | `CrimsonPoliceAdmin settings` | Console only | Lists every setting changed in game (Admin UI → **Settings**) |
 | `CrimsonPoliceAdmin settings reset <path>` | Console only | Puts one setting back to its config.lua value. Example: `settings reset Cash.source` |
 | `CrimsonPoliceAdmin settings reset all` | Console only | Puts every setting changed in game back to config.lua |
-| `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not while a Cross-Department Mission runs; 2 minutes between calls from the same person (the console counts as one) |
-| `/crimsonheat` | Players who are **not** on police duty, only with `Config.RealPlayers.volunteer.enabled = true` | Volunteers to play a mission's suspect for `Config.RealPlayers.volunteer.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, Change the suspects you play, Stop, and Cancel this case while you play one). The name is `Config.RealPlayers.volunteer.command` (restart to change it). See [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
-| `/crimtab` | Players who are **not** on a police job (or who hold the `criminalTablet` extra grant), only with `Config.RealPlayers.criminalTablet.enabled = true`; never on police duty | Opens the criminal tablet: Home (get on or off the volunteer list), Jobs, Active, History and Rules. The name is `Config.RealPlayers.criminalTablet.command` (restart to change it). See [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
-| `/surrender` | A suspect of a live case, only with `Config.RealPlayers.liveCrime.enabled = true` | Asks him to confirm, then surrenders him to the officers of his case (one must be within `Config.RealPlayers.surrender.surrenderRange`, 50 m). The name is `Config.RealPlayers.surrender.command` (restart to change it). See [guide 6.2](docs/OWNER_GUIDE.md#62-rules-for-cases-with-real-suspects) |
+| `/CrimsonPoliceAdmin missioncall <type> [area]` | Admins, console | Posts a mission call now. Type = `patrol`, `investigation` or `tactical`. Area = `south_ls`, `downtown`, `west_ls`, `vinewood`, `east_ls`, `port`, `senora`, `north`, `west_county` or `county` (the default). Not during a Cross-Department Mission; 2 minutes between calls per person (the console counts as one) |
+| `/crimsonheat` | Players who are **not** on police duty, only with `Config.RealPlayers.volunteer.enabled = true` | Volunteers to play a mission's suspect for `Config.RealPlayers.volunteer.windowMinutes` (60): agree to the rules, tick the suspects to play. Typed again it opens the menu (time left, Renew, change suspects, Stop, Cancel this case). The name is `Config.RealPlayers.volunteer.command` (restart to change it). See [guide 6](docs/OWNER_GUIDE.md#6-real-suspects-live-crimes-and-volunteers) |
+| `/crimtab` | Players who are **not** on a police job (or who hold the `criminalTablet` extra grant), only with `Config.RealPlayers.criminalTablet.enabled = true`; never on police duty | Opens the criminal tablet (Home: get on or off the volunteer list, Jobs, Active, History, Rules). The name is `Config.RealPlayers.criminalTablet.command` (restart to change it). See [guide 6.5](docs/OWNER_GUIDE.md#65-the-criminal-tablet) |
+| `/crimsonhelp [tour]` | Everyone with a tablet | Replays your role's guided tour ([guide 5.16](docs/OWNER_GUIDE.md#516-guided-tours-and-the-setup-checklist)) |
+| `/surrender` | A suspect of a live case, only with `Config.RealPlayers.liveCrime.enabled = true` | Surrenders him, after a confirm, to his case's officers (one within `Config.RealPlayers.surrender.surrenderRange`, 50 m). Its name: `Config.RealPlayers.surrender.command` (restart). See [guide 6.2](docs/OWNER_GUIDE.md#62-rules-for-cases-with-real-suspects) |
 
 "Admins, console" means an admin in game **and** the server console. "Console only" commands are the three ways
 back in for when the Admin UI can't open ([4.5](#45-the-server-console)). Mission ids (for `payout mission` and `test`)
@@ -782,7 +783,7 @@ also show in Admin UI → **Permissions** → **Config health**. Each line start
 | `webhooks: cp_webhook_<name> in server.cfg is not an https:// link` | A webhook link is wrong | `set cp_webhook_<name> "https://discord.com/api/webhooks/..."` |
 | `rewards: Item rewards: "<item>" (<pool>) does not exist in ox_inventory` | A reward item is unknown; it is turned off | Use an item that exists ([guide 3.3](docs/OWNER_GUIDE.md#33-item-rewards)) |
 | `rewards: Item rewards: "<item>" (<pool>) can never be an item reward` | A forbidden item (weapon, ammo, money ...) | Pick another item |
-| `rewards: Item rewards: example item "<item>" (<pool>) does not exist in ox_inventory` | Your ox_inventory has no `water`, `burger` or `sprunk` (the example items). This shows even while item rewards are off | Harmless while `useExamplePools = false`. To use item rewards, fill `byType` with your own items ([guide 3.3](docs/OWNER_GUIDE.md#33-item-rewards)) |
+| `rewards: Item rewards: example item "<item>" (<pool>) does not exist in ox_inventory` | Your ox_inventory lacks the example items (`water`, `burger`, `sprunk`); shown even with item rewards off | Harmless while `useExamplePools = false`. To use item rewards, fill `byType` with your own items ([guide 3.3](docs/OWNER_GUIDE.md#33-item-rewards)) |
 | `rewards: Item rewards: ox_inventory is not started` | Item rewards are on but ox_inventory is stopped | Start ox_inventory |
 | `This check could not run: the server console has the error` | A check crashed | Read the red line in the console |
 

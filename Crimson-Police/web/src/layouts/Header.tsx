@@ -6,6 +6,7 @@ import { Avatar, DeptLogo, Icon, IconButton } from '../shared/components';
 import { t } from '../shared/i18n';
 import { officerLine } from '../shared/session';
 import type { Session, UiKind } from '../shared/types';
+import { TourHelpButton } from '../shared/tour';
 import { NotificationBell } from './NotificationBell';
 import './access.css';
 
@@ -62,6 +63,7 @@ export function Header({
             </div>
             <div className="cp-header__right">
                 {extra}
+                <TourHelpButton tablet={ui} className="cp-header__help" />
                 {ui !== 'admin' ? <NotificationBell /> : null}
                 <span className={`cp-header__role cp-header__role--${ui}`}>
                     <Icon name={ui === 'officer' ? 'shield' : ui === 'supervisor' ? 'shieldCheck' : 'key'} size={14} />

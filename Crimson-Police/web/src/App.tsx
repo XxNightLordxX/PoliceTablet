@@ -27,6 +27,7 @@ import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyAppearance, DEFAULT_THEME, mergeAppearance } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
 import { pushNotification, setToastTime, subscribeToasts, toast, toastMs } from './shared/toast';
+import { TourHost } from './shared/tour';
 import type {
     HudState,
     Notification,
@@ -430,6 +431,11 @@ export default function App() {
                                 </Suspense>
                             </QuietBoundary>
                         ) : null}
+
+                        {/* the guided tours (Config.Training) over the open tablet */}
+                        <QuietBoundary name="tour" resetKey={`${ui ?? ''}:${crim ? 1 : 0}`}>
+                            <TourHost tablet={uiOpen && ui ? ui : crim ? 'criminal' : null} onCrimScreen={crimScreen} />
+                        </QuietBoundary>
 
                         <QuietBoundary name="toasts" resetKey={toasts}>
                             <Toasts

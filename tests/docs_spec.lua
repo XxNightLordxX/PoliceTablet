@@ -153,7 +153,7 @@ end
 -- no build history: no step or plan ids in the documents' prose (the in-game checklist keeps its step tags, which
 -- tests/realsuspects_docs_spec.lua reads; Crimson-Arena's rule numbers C1..C27 are rules, not steps, and (F7) is a key)
 local STEP = {}
-for kind in ('K L M N O P V RP T AP F G H Z LP OP R WF S VC DOC'):gmatch('%S+') do STEP[kind] = true end
+for kind in ('K L M N O P V RP T AP F G H Z LP OP R WF S VC DOC TR'):gmatch('%S+') do STEP[kind] = true end
 for _, rel in ipairs(files) do
     if rel:match('%.md$') and not rel:match('IN_GAME_CHECKLIST%.md$') then
         local s = (ReadRepo(rel:gsub('^%./', '')) or ''):gsub('every step V11%-V27', '')
@@ -272,6 +272,7 @@ local registered = {
     [Cfg.RealPlayers.volunteer.command] = true,
     [Cfg.RealPlayers.criminalTablet.command] = true,
     [Cfg.RealPlayers.surrender.command] = true,
+    [Cfg.Training.command] = true,
 }
 local diag = ReadRepo('Crimson-Police/modules/admin/client/diag.lua') or ''
 registered[diag:match('\nlocal COMMAND = \'([%w_]+)\'') or '?'] = true

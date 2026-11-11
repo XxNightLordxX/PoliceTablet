@@ -423,6 +423,7 @@ function TypeCardView({
                     disabled={blocked || busy}
                     onClick={() => onAccept(card)}
                     title={board ? board.text : undefined}
+                    data-tour="board-accept"
                 >
                     {t('board.card.accept')}
                 </Button>

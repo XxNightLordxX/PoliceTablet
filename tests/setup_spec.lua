@@ -198,6 +198,57 @@ do
 end
 
 -- ============================================================================
+--                      SETUP CHECKLIST (Config.Training)
+-- ============================================================================
+
+do
+    local function Line(key)
+        for _, l in ipairs(Setup.checklist()) do
+            if l.key == key then return l end
+        end
+        return nil
+    end
+    local keys = {}
+    for _, l in ipairs(Setup.checklist()) do keys[#keys + 1] = l.key end
+    H.eq(table.concat(keys, ','), 'departments,grades,desks,storage,scripts,money,presets,debug', 'the eight lines')
+    H.eq(Line('departments').done, true, 'departments: their jobs are Qbox jobs')
+    H.eq(Line('presets').done, true, 'presets: the setup applied one (its audit line)')
+    H.sql('DELETE FROM cp_audit WHERE action = \'settingsPreset\'')
+    H.eq(Line('presets').done, false, 'no preset applied yet: still to do')
+    H.eq(Line('money').done, false, 'money tools: all off and never decided')
+    Config.Cash.allowAddFunds = true
+    H.eq(Line('money').done, true, 'one money tool on: decided')
+    H.eq(Line('money').n, 1, 'and counted')
+    Config.Cash.allowAddFunds = false
+    local debug = Config.Debug
+    Config.Debug = true
+    H.eq(Line('debug').done, false, 'Debug on: still to do for go-live')
+    Config.Debug = false
+    H.eq(Line('debug').done, true, 'Debug off: done')
+    Config.Debug = debug
+    local desks, access = Config.Tablet.desks, Config.Tablet.access
+    Config.Tablet.desks = {}
+    H.eq(Line('desks').done, false, 'no desk: still to do')
+    Config.Tablet.access = { desk = false }
+    H.eq(Line('desks').done, true, 'desks turned off as a way in: done')
+    Config.Tablet.desks, Config.Tablet.access = desks, access
+    local db = Config.Database.enabled
+    Config.Database.enabled = false
+    H.eq(Line('storage').done, false, 'the saves folder: a database is still to do')
+    Config.Database.enabled = db
+    H.eq(Line('scripts').done, true, 'scripts: auto with none found is not a problem')
+    local status = CP.Integrations.status
+    CP.Integrations.status = function() return { { kind = 'banking', setting = 'Renewed-Banking', active = nil } } end
+    H.eq(Line('scripts').done, false, 'a named script that is not running: still to do')
+    CP.Integrations.status = status
+    local home = CP.AdminHome.home(1)
+    H.ok(type(home.checklist) == 'table' and #home.checklist == 8, 'Admin UI -> Home carries the checklist')
+    Config.Training.setupChecklist = false
+    H.eq(CP.AdminHome.home(1).checklist, nil, 'setupChecklist = false: no checklist on Home')
+    Config.Training.setupChecklist = true
+end
+
+-- ============================================================================
 --                               SKIP, AND AGAIN
 -- ============================================================================
 

@@ -46,6 +46,7 @@ type Simple =
     | { kind: 'firstRun' }
     | { kind: 'resetLook' }
     | { kind: 'resetOptions' }
+    | { kind: 'resetTours' }
     | { kind: 'editNow' }
     | { kind: 'recheck' }
     | { kind: 'refresh' }
@@ -61,6 +62,7 @@ const SIMPLE_ACTION: Record<Simple['kind'], string> = {
     firstRun: 'server:admin:resetFirstRun',
     resetLook: 'server:admin:resetLook',
     resetOptions: 'server:admin:resetOfficerOptions',
+    resetTours: 'server:admin:resetTours',
     editNow: 'server:admin:clearProfileCooldown',
     recheck: 'server:admin:recheckBadges',
     refresh: 'server:admin:refreshOfficer',
@@ -542,6 +544,14 @@ export function OfficerTools({ o, onChanged }: { o: OfficerDetail; onChanged: ()
                             onClick={() => setSimple({ kind: 'resetOptions' })}
                         >
                             {t('ui.admin_officers.look.reset_options')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() => setSimple({ kind: 'resetTours' })}
+                        >
+                            {t('ui.admin_officers.look.reset_tours')}
                         </Button>
                         <Button
                             size="sm"

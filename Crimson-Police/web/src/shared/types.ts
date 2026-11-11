@@ -563,6 +563,8 @@ export interface NuiMessageMap {
     // the criminal tablet (modules/realplayers/client/crimtab.lua): open with its view (and a screen), a fresh view, or
     // closed (open = false)
     crimtab: { type: 'crimtab'; open: boolean; view?: unknown; screen?: string | null };
+    // /crimsonhelp (modules/access/client/training.lua): start this guided tour once its tablet shows
+    tour: { type: 'tour'; tour: string };
 }
 export type NuiMessageType = keyof NuiMessageMap;
 export type NuiMessage = NuiMessageMap[NuiMessageType];

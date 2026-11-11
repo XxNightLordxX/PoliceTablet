@@ -105,6 +105,7 @@ function NavButton({
             aria-current={on ? 'page' : undefined}
             title={iconsOnly ? it.label : undefined}
             aria-label={iconsOnly ? it.label : undefined}
+            data-tour={`nav-${it.key}`}
             onClick={onClick}
         >
             <Icon name={it.icon} size={18} className="cp-nav-item__icon" />
@@ -168,7 +169,7 @@ export function Sidebar({
         >
             {heading ? <div className="cp-sidebar__heading">{heading}</div> : null}
             {search ? <div className="cp-sidebar__search">{search}</div> : null}
-            <ul className="cp-sidebar__list">
+            <ul className="cp-sidebar__list" data-tour="sidebar">
                 {inSections(shown, sections).map(({ item: it, heading: h, hint }) => (
                     <li key={it.key}>
                         {h ? <div className="cp-sidebar__section">{h}</div> : null}

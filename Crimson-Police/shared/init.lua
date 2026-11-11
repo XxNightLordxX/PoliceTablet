@@ -341,6 +341,7 @@ local CONFIG_SECTIONS = {
     'Tablet',
     'AdminTheme',
     'AdminUi',
+    'Training',
     'Permissions',
     'AdminControl',
     'MissionControls',

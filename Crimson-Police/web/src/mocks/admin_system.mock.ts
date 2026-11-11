@@ -244,6 +244,17 @@ registerMock('request', 'admin:getHome', (): AdminHomeData => {
         shortcuts: none ? [] : ['newMission', 'missionSwitch', 'pay', 'points', 'settings'],
         shortcutsByUse: typeof window !== 'undefined' && /[?&]homeByUse\b/.test(window.location.search),
         setup: setupPending(),
+        // the Setup checklist as shipped: storage on the saves folder, no preset applied yet, Debug on
+        checklist: [
+            { key: 'departments', done: true },
+            { key: 'grades', done: true },
+            { key: 'desks', done: true },
+            { key: 'storage', done: calm },
+            { key: 'scripts', done: true },
+            { key: 'money', done: calm, n: 0 },
+            { key: 'presets', done: calm },
+            { key: 'debug', done: calm },
+        ],
         serverTime: now(),
     };
 });

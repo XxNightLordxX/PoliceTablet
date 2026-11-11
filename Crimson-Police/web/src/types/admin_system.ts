@@ -150,6 +150,8 @@ export interface AdminHomeData {
     shortcutsByUse?: boolean;
     // true while the First-start setup shows on Home (Config.AdminUi.setupScreen on, setupDone not yet)
     setup?: boolean;
+    // Config.Training.setupChecklist: the Setup checklist lines (CP.Setup.checklist), absent while it is off
+    checklist?: SetupCheck[] | null;
     serverTime?: number;
 }
 
@@ -413,4 +415,12 @@ export interface JobsView {
     weekStartsOn: string;
     runNowMinutes: number;
     requestDays: number;
+}
+
+// One line of Admin UI -> Home's Setup checklist (CP.Setup.checklist): n = how many money tools are on (money only).
+export type SetupCheckKey = 'departments' | 'grades' | 'desks' | 'storage' | 'scripts' | 'money' | 'presets' | 'debug';
+export interface SetupCheck {
+    key: SetupCheckKey;
+    done: boolean;
+    n?: number;
 }

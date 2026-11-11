@@ -37,9 +37,11 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/access/client/access.lua`: CP.Access (client): the latest officer and department the server sent.
 - `Crimson-Police/modules/access/client/options.lua`: CP.Options (client): the officer options as this PC sees them.
 - `Crimson-Police/modules/access/client/tablet.lua`: CP.Tablet (client): the NUI.
+- `Crimson-Police/modules/access/client/training.lua`: CP.Training (client): /crimsonhelp (Config.Training.command, modules/access/training.lua) lands here with the tour of the player's role.
 - `Crimson-Police/modules/access/options.lua`: CP.Options (server): each character's officer options (My options), saved sparse in cp_officers.options (JSON: only the keys that differ from the default).
 - `Crimson-Police/modules/access/permissions.lua`: CP.Permissions: the one place that decides whether a role may do an action.
 - `Crimson-Police/modules/access/tablet.lua`: CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo checks.
+- `Crimson-Police/modules/access/training.lua`: CP.Training (server): the guided tours of the tablets (Config.Training).
 - `Crimson-Police/modules/admin/admin.lua`: CP.Admin (server): supervisor and admin actions, /CrimsonPoliceAdmin, the audit log (cp_audit) and the Discord webhooks.
 - `Crimson-Police/modules/admin/adminhome.lua`: CP.AdminHome (server): Admin UI -> Home, a dashboard in one batched callback (admin:getHome): live now (officers on
 - `Crimson-Police/modules/admin/adminkit.lua`: CP.AdminKit (server): the one wrapper every new admin action goes through (permission, rate, request id, reason, typed word, preview, self, compare-and-set, audit, caches, toasts), bulk jobs, day counts and the busy lock.
@@ -215,6 +217,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/admin/components/screenSettings.walk.ts`: The gear of each Admin UI screen and Settings -> Presets walked against the browser mocks (node walk.mjs, a gate
 - `Crimson-Police/web/src/admin/components/setup.ts`: Admin UI -> Home's First-start setup (admin/components/SetupWizard): the steps, the answers it starts from (what the server runs with now) and the one server:admin:finishSetup payload, which names only what the admin changed.
 - `Crimson-Police/web/src/admin/components/setup.walk.ts`: Admin UI -> Home's First-start setup against the browser mocks (node walk.mjs, a gate step): Home says to show it, the answers start as the server runs now (a finish with nothing changed sends nothing but the done mark), each change goes into the one server:admin:finishSetup payload, and finishing (or skipping) takes it off Home.
+- `Crimson-Police/web/src/admin/components/setupChecklist.ts`: Admin UI -> Home's Setup checklist (Config.Training.setupChecklist): the lines the server ticked from its real state (CP.Setup.checklist), each with the screen that fixes it.
 - `Crimson-Police/web/src/admin/components/spawnCheckStore.ts`: Check spawn points: the admin's check kept in module memory, fed by the Lua testing client's pushes.
 - `Crimson-Police/web/src/admin/screens/Audit.tsx`: Admin UI · Audit Log (screen key 'admin_audit'): filters (also by target, role, the acting player's every character and reason text), export in parts of 5000 rows, and Save to server (saves/exports).
 - `Crimson-Police/web/src/admin/screens/Departments.tsx`: Admin UI · Departments (screen key 'admin_departments'): themes, members, mission desks, personal accents and a preview of each officer look; add, edit, turn off and delete departments, upload logos, and edit the desks.
@@ -338,6 +341,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/mocks/settings.mock.ts`: Browser mocks for Admin UI → Settings and the mission switches (a small sample of the real list).
 - `Crimson-Police/web/src/mocks/teams.mock.ts`: Browser mocks of the teams slice: getUnit + unit actions, sup:getOperation + operation actions.
 - `Crimson-Police/web/src/mocks/testing.mock.ts`: Browser mocks for Admin test mode (admin/screens/Testing.tsx, hud/TestControls.tsx, hud/DebugOverlay.tsx).
+- `Crimson-Police/web/src/mocks/training.mock.ts`: Browser mocks of the guided tours (modules/access/training.lua): training:get and server:training:done.
 - `Crimson-Police/web/src/officer/components/CommendationsCard.tsx`: An officer's commendations, newest first, plus the read-only SC-Dispatch MDT commendations (tagged MDT).
 - `Crimson-Police/web/src/officer/components/ContactPanel.tsx`: Active Mission · Contact panel: every person and car of the current contact objective, its facts, the checks still open, the police actions and the dispositions (CP.Custody.view; decisions go to server:contactDecide).
 - `Crimson-Police/web/src/officer/components/FieldTrainingCard.tsx`: Profile · Field training (Config.Recognition.fieldTraining): the rookie's own training (tasks, progress, trainer, notes, ride-along types) and the trainer's rookies with Sign off (and a count of the tasks ready).
@@ -408,6 +412,13 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/session.tsx`: The open UI's session (ARCHITECTURE §9.2) and tablet controls.
 - `Crimson-Police/web/src/shared/theme.ts`: Department theming (SPEC "Departments & tablet theming").
 - `Crimson-Police/web/src/shared/toast.ts`: The Crimson-Police toast bus.
+- `Crimson-Police/web/src/shared/tour/TourButtons.tsx`: The ways back into a tour: the '?' button in each tablet's header (that tablet's tour from the start) and the Tours card (My options, Admin UI -> Settings): every tour the player may take, whether he finished it, and Start.
+- `Crimson-Police/web/src/shared/tour/TourHost.tsx`: Runs the guided tours (Config.Training) over whichever tablet is open: it reads the player's training view when a
+- `Crimson-Police/web/src/shared/tour/index.ts`: Src/shared/tour · the guided tours (Config.Training): the engine (TourHost), the step lists (tours), the shared state (store) and the ways back into a tour (the '?' button and the Tours card).
+- `Crimson-Police/web/src/shared/tour/place.ts`: Where the tour card goes: under the element it points at, else above, else to its right or left, always inside the window (MARGIN from each edge).
+- `Crimson-Police/web/src/shared/tour/store.ts`: The tour state shared by the whole NUI: the player's training view (training:get: Config.Training and the tours he finished), the tour running now and a tour asked for (the '?' button, a Tours list, /crimsonhelp, the end of the First-start setup).
+- `Crimson-Police/web/src/shared/tour/tours.ts`: The guided tours (Config.Training): one step list per tablet.
+- `Crimson-Police/web/src/shared/tour/tours.walk.ts`: The guided tours (Config.Training) against the browser mocks (node walk.mjs, a gate step): every step's
 - `Crimson-Police/web/src/shared/types.ts`: Every NUI data shape (docs/dev/ARCHITECTURE.md §9.2–§9.6, verbatim) plus the UI-side helper types.
 - `Crimson-Police/web/src/styles/order.ts`: Every stylesheet of the NUI, in one fixed order, loaded with the page.
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
@@ -654,6 +665,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/sup_today_spec.lua`: Supervisor UI -> Department, today at a glance (UI4): the sup:getToday answer and its permission.
 - `tests/teams_spec.lua`: The teams module: modules/teams/units.lua and operations.lua (units and Cross-Department Missions).
 - `tests/testing_spec.lua`: The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data).
+- `tests/training_spec.lua`: The guided tours (modules/access/training CP.Training, Config.Training): the shipped settings, a finished tour
 - `tests/twists_spec.lua`: Twists the officers choose at accept: CP.Twists and CP.Events' fit, offer, check and roll.
 - `tests/volunteer_match_spec.lua`: Volunteer matching: the yes/no pop-up one volunteer at a time with its answer checks, the case that opens
 - `tests/volunteer_modes_spec.lua`: Volunteer modes: Config.RealPlayers.volunteer.modes / missionModes, the volunteerSlot registry, who is free (a 'players_only' accept holds one), the Mission Board card and "Real suspect OK", the draw filter, the pushed-mission refusal, run.volunteer, the release at the run's end and the start-up check.

@@ -29,6 +29,7 @@ import { t, tOr } from '../shared/i18n';
 import { TABLET_H, TABLET_W, tabletScale } from '../layouts/TabletFrame';
 import { action, fetchNui } from '../shared/nui';
 import { toast } from '../shared/toast';
+import { TourHelpButton } from '../shared/tour';
 import type { CrimActive, CrimHistoryRow, CrimJob, CrimRole, CrimScreen, CrimView } from '../types/criminal';
 import { badgeOf, CRIM_SCREENS, hoursLeft, minutesLeft, normalizeCrimView, outcomeKey, rolesPayload } from './model';
 import './criminal.css';
@@ -91,6 +92,7 @@ export function CriminalTablet({ view, screen, onScreen, onView, onClose }: Crim
                     <span className="crim-signal">
                         {view.status.listed ? t('crimtab.header.on') : t('crimtab.header.off')}
                     </span>
+                    <TourHelpButton tablet="criminal" className="crim-help" />
                     <button className="crim-close" onClick={onClose} aria-label={t('crimtab.close')}>
                         <Icon name="x" size={18} />
                     </button>
@@ -103,6 +105,7 @@ export function CriminalTablet({ view, screen, onScreen, onView, onClose }: Crim
                                 <button
                                     key={s}
                                     className={`crim-tab${s === screen ? ' is-on' : ''}`}
+                                    data-tour={`crim-nav-${s}`}
                                     onClick={() => onScreen(s)}
                                 >
                                     <Icon name={ICONS[s]} size={16} />
@@ -169,7 +172,7 @@ function Home({ view, busy, run }: { view: CrimView; busy: boolean; run: Run }) 
 
     if (s.listed) {
         return (
-            <Card title={t('crimtab.home.listed_title')} highlight="primary">
+            <Card title={t('crimtab.home.listed_title')} highlight="primary" data-tour="crim-optin">
                 <p className="crim-big">
                     {t('crimtab.home.minutes_left', { minutes: minutesLeft(s.untilAt, view.now) })}
                 </p>
@@ -194,7 +197,7 @@ function Home({ view, busy, run }: { view: CrimView; busy: boolean; run: Run }) 
     }
     const blocked = hoursLeft(s.blockedUntil, view.now);
     return (
-        <Card title={t('crimtab.home.off_title')} highlight="primary">
+        <Card title={t('crimtab.home.off_title')} highlight="primary" data-tour="crim-optin">
             <p>{t('crimtab.home.off_text', { minutes: view.rules.windowMinutes })}</p>
             {blocked > 0 ? <p className="crim-warn">{t('crimtab.home.blocked', { hours: blocked })}</p> : null}
             {!s.canJoin && s.why && blocked === 0 ? (

@@ -250,6 +250,31 @@ Config.AdminUi = {
     },
 }
 
+-- Guided training: a short tour of each tablet the first time a character opens it (the Officer, Supervisor and
+-- Admin UI and the criminal tablet). Each step points at one part of the screen with a short card (Next, Back, Skip,
+-- Don't show again); Escape always closes it. A finished tour is saved per character on the server, so it shows once;
+-- when a later version adds steps, only the new steps show. Every tour can be replayed from the '?' button in each
+-- tablet's header, from My options -> Tours and from Admin UI -> Settings -> Tours.
+Config.Training = {
+    enabled = true,                  -- false = no tours at all: none starts, no '?' button and no Tours lists
+    autoStart = {                    -- per tour: true = it starts by itself the first time that tablet opens
+        officer = true,              -- the Officer UI: duty, Mission Board, Accept, Active Mission, Unit, Dispatch
+        supervisor = true,           -- the Supervisor UI: Today, the Officers panel, Controls, Review, Calls
+        admin = true,                -- the Admin UI: Home, the search, the groups, the gear, presets, money tools
+        criminal = true,             -- the criminal tablet: opting in, jobs, saying yes, the rules and strikes
+    },
+    -- true = the tour card offers Skip and Don't show again; false = only Back and Next (Escape still closes it,
+    -- and the tour starts again on the next open until it is finished)
+    allowSkip = true,
+    -- The chat command that opens the tour of the player's role (officer, supervisor, admin or the criminal
+    -- tablet), e.g. /crimsonhelp; '' = no command. A new name needs a resource restart
+    command = 'crimsonhelp',
+    -- true = Admin UI -> Home shows the Setup checklist (departments, supervisor grades, desks, storage, other
+    -- scripts, money tools, presets, Debug off for go-live), each line ticked from the server's real state; false =
+    -- no checklist card
+    setupChecklist = true,
+}
+
 -- ============================================================================
 --                                 PERMISSIONS
 -- ============================================================================
