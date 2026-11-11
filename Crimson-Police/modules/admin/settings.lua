@@ -2459,6 +2459,25 @@ KNOWN['Recognition.fieldTraining.tasks'] = {
     end,
 }
 
+-- Config.Markers.rules (WF5C-1): each key is a part of Config.Markers.parts, each department a key of
+-- Config.Departments and each mission type a key of Config.MissionTypes; a typo would hide that part from everyone.
+KNOWN['Markers.rules'].check = function(map, _, ctx)
+    if ctx and ctx.boot then return nil end
+    local parts = CP.Markers and CP.Markers.parts and CP.Markers.parts() or nil
+    local deps = type(Config.Departments) == 'table' and Config.Departments or {}
+    local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
+    for part, rule in pairs(map) do
+        if parts and not ListHas(parts, part) then return 'err.setting_marker_part' end
+        for _, d in ipairs(type(rule.departments) == 'table' and rule.departments or {}) do
+            if type(deps[d]) ~= 'table' then return 'err.setting_marker_department' end
+        end
+        for _, t in ipairs(type(rule.missionTypes) == 'table' and rule.missionTypes or {}) do
+            if type(types[t]) ~= 'table' then return 'err.setting_marker_type' end
+        end
+    end
+    return nil
+end
+
 -- Config.Permissions.grants (Admin UI -> Permissions -> Extra grants): by power key (CP.Permissions.isGrantable: a
 -- supervisor switch, builderTeleport or fieldTraining; never an admin-only action), each with departments (department
 -- key -> { minGrade } or { grades }), gangs (Qbox gang name -> the same) and citizenids (a list).

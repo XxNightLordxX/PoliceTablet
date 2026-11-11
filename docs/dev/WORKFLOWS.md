@@ -38,6 +38,18 @@ department scoping and the self rule, two supervisors at once and the maintenanc
 config first where it is on, then with the switches on, with a restart and a drop and reconnect in the middle and
 every refusal a supervisor meets. Its sections are named "supervisor (n)" below.
 
+**Every admin action.** `tests/workflows_admin_spec.lua` (WF5C) drives every workflow of the Admin UI's groups on
+the same world, with a second admin (a Qbox admin, Config.QboxAdmins), a SAST cadet and a sheriff's deputy added:
+opening the Admin UI, Home with its queues and shortcuts and the officer search; People (an officer's page, his
+suspension and run controls, departments added, renamed, turned off and on and deleted, desks, permissions and extra
+grants); Missions (the mission and location switches, the Mission Builder as an admin, editing and resetting a
+built-in, map markers and extra parts with their rules, the testing tools); Money (pay rates, payments and their row
+actions, the money tools behind ENABLE, department funds, item rewards); Review (flagged runs, disputes, corrections,
+restrictions, the audit log and its export); System (Settings, presets with their preview, storage, the jobs screen,
+problems, the first-start setup, backups and restore) and the maintenance lock a restore holds. Each part runs on the
+shipped config first, then with the switches on, with a restart and a drop and reconnect in the middle and every
+refusal an admin screen meets. Its sections are named "admin (n)" below.
+
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
@@ -72,17 +84,30 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Extra grants for non-supervisors | supervisor (8), full (1) | yes | - | owner stack only | Pass |
 | Two supervisors at once, maintenance lock | supervisor (9, 10) | - | - | owner stack only | Pass |
 | Supervisor actions and awards | full (8), workflows_e2e (5) | yes | the barred officer (the ban stays) | yes | Pass |
-| Review, void, dispute | workflows_e2e (6), supervisor (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after fix WF5B-2) |
-| Mission Builder | full (11), admin_control_e2e (2) | yes | the supervisor in his test run | yes | Pass |
+| Review, void, dispute | workflows_e2e (6), supervisor (5), admin (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after fix WF5B-2) |
+| Mission Builder | full (11), admin_control_e2e (2), admin (3) | yes | the supervisor or the admin in his test run | yes | Pass |
 | Field training | live_fto_e2e (4, 5), officer (9), supervisor (7) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass (after fix WF5B-3) |
 | Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7) | yes | the volunteer and the partner | off (needs a police script) | Pass |
-| Settings, Features, Rewards, grant | full (1) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
-| Corrections | full (9), admin_control_e2e (1) | yes | the officer offline for the void and restore | yes | Pass |
-| Backups and restore | full (10), admin_control_e2e (4) | yes | the admin before the restart (the lock holds) | yes | Pass |
+| Settings, Features, Rewards, grant | full (1), admin (6) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
+| Corrections | full (9), admin_control_e2e (1), admin (5) | yes | the officer offline for the void and restore | yes | Pass |
+| Backups and restore, the maintenance lock | full (10), admin_control_e2e (4), admin (7) | yes | the admin before the restart (the lock holds) | yes | Pass |
 | Storage copy | full (12), storage_copy | - | the admin after the copy | yes | Pass |
+| Admin UI, Home, shortcuts, officer search | admin (1) | yes (the shortcuts kept) | the admin with Home open | owner stack only | Pass |
+| Officer page, suspension, run controls | admin (2) | yes (the suspension, the day's clears) | the suspended officer | owner stack only | Pass |
+| Departments and desks | admin (2) | yes | the admin before the restart | owner stack only | Pass |
+| Permissions and extra grants | admin (2), supervisor (8) | yes | the granted officer | owner stack only | Pass |
+| Mission and location switches, mission files reload | admin (3) | yes | - | owner stack only | Pass |
+| Map markers and extra parts, their rules | admin (3) | yes | - | owner stack only | Pass (after fix WF5C-1) |
+| Testing tools | admin (3) | yes | - | owner stack only | Pass |
+| Pay rates, Adjust all | admin (4), e2e | yes | - | owner stack only | Pass |
+| Payments: Pay now, Mark paid, Cancel, Retry all | admin (4) | yes | the officer while her payment waits | owner stack only | Pass |
+| Money tools (ENABLE), department funds | admin (4) | yes | - | owner stack only | Pass (after fix WF5C-2) |
+| Item rewards for admins | admin (4) | yes | the officer with rewards waiting | owner stack only | Pass |
+| Restrictions, audit log and export | admin (5) | yes | - | owner stack only | Pass |
+| Presets, storage panel, jobs, problems, first-start setup | admin (6) | yes | the admin with the setup open | owner stack only | Pass |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
 
-"full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
+"admin" = tests/workflows_admin_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
 = tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
 with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's
 stack only.
@@ -566,6 +591,58 @@ Steps: Copy, Switch storage and Use again answered and then the Storage panel wa
 admin:getStorage allows one read in 5 seconds, so that second read could be refused and leave the panel stale; now each
 reply carries the fresh Storage view (2 requests -> 1, never refused, a pure speed-up). The typed REPLACE, SWITCH and
 USE stay (risky).
+
+### Every admin action (WF5C)
+
+How it works: the Admin UI (`/CrimsonPoliceAdmin`) opens for the AdminAce admins and, with Config.QboxAdmins, the
+Qbox admins; who is an admin comes only from config.lua. Every change is an admin action with its own guards (the
+maintenance lock, the permission, a rate, a request id, a reason, a typed word, a preview, never the admin's own
+records) and is audited.
+
+Spec: tests/workflows_admin_spec.lua. Covers: (1) the Admin UI for both kinds of admin and refused to a supervisor,
+an officer and a cadet, AdminAce and QboxAdmins locked in Settings, Home's on-duty count, runs going, queues and the
+shipped five shortcuts, the admin's own shortcuts (a double and an unknown one refused, none, by use) across a
+**restart**, the officer search by name, citizenid and department, the admin **drops** with Home open. (2) An
+officer's page, a suspension kept by a **restart** and the officer's **drop**, lifted, lifting twice refused; his
+cooldowns read and cleared up to the day's limit with a **restart** and his **drop** in between; a department added
+from a Qbox job (an unknown job, another department's job and an existing key refused), its deputy opens the tablet,
+renamed, a **restart**, turned off (refused while its officer is on a run, the typed tag), on again, a department with
+history never deleted, one without deleted; a desk added where the admin stands, a bad size and department refused,
+limited to FIB, a **restart**, teleport, removed; a supervisor power off and on, extra grants by citizenid and by
+grade, an admin-only power never granted, a **restart**. (3) Beat Patrol switched off (never drawn, a **restart**)
+and on, a location off, reset, a mission files reload; the Mission Builder as an admin with testing required for
+supervisors (a **drop** in the first test, a test driven through, published, drawn and paid after a **restart**,
+archived, restored); EVOC edited, a **restart**, Reset to original with its typed id, editBuiltins off; map markers:
+no extra parts as shipped, the partner part on for a unit, a rule naming an unknown part, department or mission type
+refused, the leader-only rule kept by a **restart**; the testing tools (a test run ended by the other admin, recorded,
+a **restart**, hidden and shown, a location marked checked). (4) Pay rates: Patrol to $400 paid after a **restart**,
+a mission payout and its clear, Adjust all with its preview and typed ADJUST; payments: a refused payout pending, Pay
+now while the officer is offline, a **restart**, her login pays it, a stuck payment marked paid (Pay again ships off),
+a pending one cancelled with its typed amount, Retry all, the export; the money tools refused until ENABLE, a
+**restart**, Pay by hand, an unknown citizenid, a clawback; department funds; item rewards waiting, Deliver now
+refused while she is offline, a **restart**, one cancelled, the other delivered once. (5) Flagged runs of both
+departments in the admin's queue and on Home, a **restart** and the admin's **drop**, approved and voided, the second
+admin's approve refused; a dispute (another officer's refused, a second one refused), the officer **drops**, approved
+after a **restart**, paid back online; corrections (points with their typed confirm, a void and restore across a
+**restart**, a bulk void with its preview and its batch Undo after a **restart**, retire and unretire);
+restrictions (lift and extend, a supervisor refused, Extend switched off); the audit log, its export and Save to
+server. (6) Settings (bad values, JSON and paths refused, the history, a **restart**, Revert, Reset, the config.lua
+only settings, export and a refused import); presets (the preview, an unknown one, Go-live applied, a **restart**,
+applied again changes nothing, a city's own preset); the storage panel and Switch's typed SWITCH; the jobs screen
+(Run now with a reason, an unknown job, not twice in a row); problems; the first-start setup across a **restart** and
+the admin's **drop**, finished with a preset. (7) A backup, RESTORE: the maintenance lock refuses every admin change
+(settings, a mission switch, pay, a suspension, points, a desk, a preset, a job, a backup, a test, the Builder) while
+every screen still reads and no run starts, the admin **drops**, a **restart** ends the lock. Result: **Pass (after
+fixes WF5C-1 and WF5C-2)**.
+
+Fix WF5C-1: Settings -> Config.Markers.rules took a rule for a part, department or mission type that does not exist
+(a typo such as `partnr` or `patrl`), and that part then silently never showed for anyone. The rule is now refused
+with a message naming what to fix.
+
+Fix WF5C-2: an action on one officer that must never touch the admin's own characters (Pay by hand, giving points
+and the other strict ones) answered a citizenid nobody has (a typo) with "This player's licence can't be found". It
+now says "No officer with that citizen ID has used Crimson-Police yet. Check the ID and try again."; an officer whose
+licence is really unknown keeps the licence message.
 
 ## System
 

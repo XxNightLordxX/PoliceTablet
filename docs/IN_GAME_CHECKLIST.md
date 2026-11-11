@@ -859,3 +859,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   second Void on, void a flagged run, restart the resource, and have the other supervisor void it: it is voided (the
   first Void was kept). As a unit leader accept a type that has no mission for your unit size: after Ready you get a
   toast saying no mission was left. (WF5B)
+- [ ] Admin workflows (WF5C): open the Admin UI as an admin (a supervisor is refused) and check Home's on-duty count,
+  queues and the five shortcuts; search an officer by name. Suspend an officer for a day and lift it. Add a department
+  for a Qbox job, rename it, turn it off (its officers lose the tablet) and on again. Add a desk where you stand, limit
+  it to one department, remove it. Switch Beat Patrol off and on; make a mission in the Mission Builder, test it,
+  publish it; edit EVOC and Reset to original. In Settings, Markers -> Rules, save a rule with a typo (a part, a
+  department or a mission type that does not exist): it is refused with a message naming what to fix. Set Patrol pay
+  to $400 and play one. With Pay by hand on (ENABLE), type a citizen ID nobody has: the message says no officer has
+  that ID. Make a backup, restore it (RESTORE): every change waits until you restart the resource. (WF5C)

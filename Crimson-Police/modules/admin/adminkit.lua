@@ -783,6 +783,11 @@ GuardRest = function(entry, n, p, ctx)
         if type(who) == 'table' then
             if who.citizenid ~= nil then
                 local self, errS, unknown = Kit.isSelf(n, who.citizenid, who.strict)
+                -- WF5C-2: a citizenid no officer has (a typo) is an unknown officer, not a licence that can't be found
+                if self == nil and Has('Admin', 'resolveCitizenId')
+                    and not CP.Admin.resolveCitizenId(who.citizenid) then
+                    return Refuse(ctx, 'err.unknown_officer')
+                end
                 if self == nil then return Refuse(ctx, errS) end
                 if self then return Refuse(ctx, 'err.self_target') end
                 if unknown then ctx.licenceUnknown = true end

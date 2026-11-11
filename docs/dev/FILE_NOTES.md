@@ -659,6 +659,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/volunteers_client_spec.lua`: Volunteer opt-in, the client: the command exists only once Config.RealPlayers.volunteer.enabled is on, and the server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications.
 - `tests/volunteers_spec.lua`: Volunteer opt-in: CP.Volunteers on the server, the command's event (open, join, renew, roles, stop), the window, the ends (expired, on duty, excluded, disabled, left) and strikes.
 - `tests/workflow_errors_spec.lua`: Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
+- `tests/workflows_admin_spec.lua`: WF5C: every admin workflow, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/workflows_e2e_spec.lua`: End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch turned on by the admin through the Admin UI's own Settings action.
 - `tests/workflows_full_spec.lua`: Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
 - `tests/workflows_none_ambulance_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.ambulance set to none.

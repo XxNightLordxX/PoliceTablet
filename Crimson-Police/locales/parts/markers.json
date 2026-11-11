@@ -124,5 +124,8 @@
   "admin.map_markers.kind.scene": "Scene",
   "admin.map_markers.kind.point": "Point to check",
   "admin.map_markers.kind.device": "Device",
-  "admin.map_markers.kind.objective": "Any other objective"
+  "admin.map_markers.kind.objective": "Any other objective",
+  "err.setting_marker_part": "A map marker rule names an unknown part. Use a part of Config.Markers.parts (such as partner or evidence).",
+  "err.setting_marker_department": "A map marker rule names an unknown department. Use a department key of Config.Departments (such as sast).",
+  "err.setting_marker_type": "A map marker rule names an unknown mission type. Use a mission type in Config.MissionTypes (such as patrol or tactical)."
 }

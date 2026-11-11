@@ -340,7 +340,11 @@ do
     H.eq(ok, true, 'another admin may act on that character')
     ok, data = Act('server:admin:kitTest', 1,
         { requestId = Rid(12), reason = 'r', citizenid = 'NOBODY01', strict = true })
-    H.ok(ok == false and data == 'err.self_unknown', 'money and points: an unknown license is refused')
+    H.ok(ok == false and data == 'err.unknown_officer', 'money and points: a citizenid no officer has (WF5C-2)')
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'NOLIC001\', \'sast\')')
+    ok, data = Act('server:admin:kitTest', 1,
+        { requestId = Rid(90), reason = 'r', citizenid = 'NOLIC001', strict = true })
+    H.ok(ok == false and data == 'err.self_unknown', 'money and points: an officer whose license is unknown is refused')
     ok = Act('server:admin:kitTest', 1, { requestId = Rid(13), reason = 'plain', citizenid = 'NOBODY01' })
     H.eq(ok, true, 'other actions go ahead')
     local a = H.sql('SELECT reason, actor_ident FROM cp_audit WHERE action = \'kitTest\' ORDER BY id DESC LIMIT 1')[1]
