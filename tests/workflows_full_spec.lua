@@ -11,9 +11,14 @@
 
 local H = dofile('tests/harness.lua')
 H.useFiles()
-local STACK = rawget(_G, 'CP_WF_STACK') or 'owner'   -- 'owner' | 'none' (tests/workflows_none_spec.lua)
+-- 'owner' | 'none' (tests/workflows_none_spec.lua) | 'none:<kind>' (tests/workflows_none_<kind>_spec.lua: the owner's
+-- scripts all run, and only that Config.Integrations kind is set to 'none' in Settings)
+local STACK = rawget(_G, 'CP_WF_STACK') or 'owner'
 local NONE = STACK == 'none'
-H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. (NONE and '_wf_none' or '_wf_full')
+local ONE = STACK:match('^none:(%a+)$')
+-- Config.Integrations kind -> true when it is set to 'none' in Settings on this walk
+local function KindOff(kind) return NONE or ONE == kind end
+H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. (NONE and '_wf_none' or ONE and ('_wf_' .. ONE) or '_wf_full')
 H.resetSaves()
 local cjson = require('cjson')
 local U, Runs
@@ -627,17 +632,21 @@ do
         end
     end
     -- WF4: a city without the owner's scripts sets every kind to 'none' in Settings (Other scripts)
-    if NONE then
-        for _, kind in ipairs(CP.Integrations.KINDS) do
+    -- FIN11: tests/workflows_none_<kind>_spec.lua sets one kind at a time to 'none', the owner's other scripts picked
+    local OWNER_PICK = {
+        dispatch = 'sc-dispatch',
+        ambulance = 'sc-ambulance',
+        banking = 'Renewed-Banking',
+        police = 'sc-police',
+    }
+    for _, kind in ipairs(CP.Integrations.KINDS) do
+        if KindOff(kind) then
             ok, err = Setting('Integrations.' .. kind, 'none')
             H.eq(ok, true, ('integrations: %s set to none: %s'):format(kind, tostring(err)))
             H.eq(select(2, CP.Integrations.pick(kind)), 'off', 'integrations: ' .. kind .. ' served by no script')
+        else
+            H.eq(CP.Integrations.pick(kind), OWNER_PICK[kind], 'integrations: the owner\'s ' .. kind .. ' script')
         end
-    else
-        H.eq(CP.Integrations.pick('dispatch'), 'sc-dispatch', 'integrations: the owner\'s dispatch')
-        H.eq(CP.Integrations.pick('ambulance'), 'sc-ambulance', 'integrations: ...ambulance')
-        H.eq(CP.Integrations.pick('banking'), 'Renewed-Banking', 'integrations: ...banking')
-        H.eq(CP.Integrations.pick('police'), 'sc-police', 'integrations: ...and police')
     end
     H.eq(Config.Rewards.enabled, true, 'features: item rewards on at once')
     H.eq(Config.Limits.maxCompletionsHour, 12, 'settings: the hourly cap at once')
@@ -664,7 +673,7 @@ do
     H.eq(CP.Permissions.can(7, 'missionCalls'), true, 'restart: the extra grant kept')
     H.eq(Config.Database.enabled, false, 'restart: still the saves folder')
     for _, kind in ipairs(CP.Integrations.KINDS) do
-        H.eq(Config.Integrations[kind], NONE and 'none' or 'auto', 'restart: Integrations.' .. kind .. ' kept')
+        H.eq(Config.Integrations[kind], KindOff(kind) and 'none' or 'auto', 'restart: Integrations.' .. kind .. ' kept')
     end
 end
 
@@ -709,7 +718,7 @@ do
     H.eq(r.state, 'completed', 'training: completed row')
     H.eq(r.cash_status, 'paid', 'training: paid')
     H.eq(select(2, Paid(cid)), 350, 'training: one Qbox AddMoney of $350')
-    if NONE then
+    if KindOff('banking') then
         H.eq(bankEntries, 0, 'training: no banking script: paid with no bank history entry (Integrations.banking)')
     else
         H.ok(bankEntries > 0, 'training: Renewed-Banking got the bank history entry')
@@ -1471,6 +1480,85 @@ do
     if run then Act('server:abandon', 6, run.id) end
     Config.DisabledMissions = {}
     os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
+end
+
+-- ============================================================================
+--                13. A DROP AND RECONNECT IN EACH MISSION BLOCK
+-- ============================================================================
+-- FIN11: investigation (field_contact scene), a raid (interact_points together, a unit of two), the traffic stop
+-- (pursuit then field_contact stop), parking patrol (field_contact parked) and a downed officer: the one who quits
+-- mid-run gets a Failed row with no cash and the mission's cooldown, and is on no run when he is back.
+
+-- Every other mission of the type is off, so the type draws missionId.
+local function OnlyMission(typeKey, missionId)
+    local off = {}
+    for _, def in ipairs(CP.Missions.byType(typeKey)) do
+        if def.id ~= missionId then off[#off + 1] = def.id end
+    end
+    return off
+end
+local function DropMid(typeKey, missionId, lead, mate)
+    H.time = H.time + 3700                         -- every cooldown of the sections above is over
+    Place(lead, vec3(-300.0, -1400.0, 30.0))
+    if mate then
+        Place(mate, vec3(-296.0, -1400.0, 30.0))
+        FormUnit(lead, mate)
+    end
+    local run = Accept(lead, typeKey, OnlyMission(typeKey, missionId))
+    H.eq(run and run.missionId, missionId, ('blocks: %s drawn'):format(missionId))
+    if not run then return end
+    Arrive(run, lead)
+    if mate then Arrive(run, mate) end
+    Secs(5)
+    H.eq(run.state, 'in_progress', ('blocks: %s in progress'):format(missionId))
+    local who = mate or lead
+    local money1 = #addMoney
+    Drop(who)
+    H.eq(Runs.getBySrc(who), nil, ('drop: %s: he is off the run'):format(missionId))
+    local rd = Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[who] })[1] or {}
+    H.eq(rd.state, 'failed', ('drop: %s: his row is Failed'):format(missionId))
+    H.eq(tonumber(rd.cash_paid) or 0, 0, ('drop: %s: ...with no cash'):format(missionId))
+    H.eq(#addMoney, money1, ('drop: %s: nothing paid'):format(missionId))
+    if mate then H.eq(run.state, 'in_progress', ('drop: %s: the run goes on for the leader'):format(missionId)) end
+    Reconnect(who)
+    H.eq(Runs.getBySrc(who), nil, ('reconnect: %s: he is not put back on the run'):format(missionId))
+    H.ok(Runs.cooldowns(CID[who]).missions[missionId] ~= nil, ('reconnect: %s is on its cooldown'):format(missionId))
+    if Runs.getBySrc(lead) then Act('server:abandon', lead, run.id) end
+    if CP.Units.unitOf(lead) then Act('server:teamLeave', lead) end
+    Config.DisabledMissions = {}
+end
+
+DropMid('investigation', 'suspicious_activity', 1)
+DropMid('tactical', 'drug_lab_raid', 1, 6)
+DropMid('patrol', 'traffic_enforcement', 1)
+DropMid('patrol', 'parking_patrol', 1)
+
+do
+    -- a downed officer who quits while he waits for the pick-up: one Downed row, nothing more after the reconnect
+    H.time = H.time + 3700
+    Place(6, vec3(-300.0, -1400.0, 30.0))
+    local run = Accept(6, 'patrol', PATROL_OTHERS)
+    if run then
+        Arrive(run, 6)
+        PD[6].metadata.isdead = true
+        Secs(3)
+        H.eq(Runs.getBySrc(6), nil, 'downed: off the run')
+        local rows = Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[6] })
+        H.eq(#rows, 1, 'downed: one row')
+        H.eq((rows[1] or {}).state, 'failed', 'downed: ...Failed')
+        H.eq(Count(
+            'SELECT COUNT(*) AS n FROM cp_mission_runs WHERE run_uuid = ? AND end_reason = ?',
+            { run.id, 'downed' }
+        ), 1, 'downed: ...ended Downed')
+        Drop(6)
+        Secs(20)                                   -- the pick-up time passes while he is offline
+        PD[6].metadata.isdead = false
+        Reconnect(6)
+        H.eq(Runs.getBySrc(6), nil, 'reconnect: the downed officer is on no run')
+        H.eq(#Rows('run_uuid = ? AND citizenid = ?', { run.id, CID[6] }), 1, 'reconnect: ...still one row')
+        H.ok(Cb('getSession', 6, { ui = 'officer' }) ~= nil, 'reconnect: he opens the Officer UI')
+    end
+    Config.DisabledMissions = {}
 end
 
 _G.print = realPrint

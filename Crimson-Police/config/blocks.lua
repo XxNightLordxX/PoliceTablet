@@ -124,6 +124,9 @@ Config.Blocks.pursuit = {
     -- Street Race Bust and other race loops: seconds a racer's car or driver may stay with the game of a player who
     -- is not on the run before the console names that player (the host's game always takes it back); 0 = never
     outsiderWarn = 10,
+    -- hand-off = contact: true = the people still alive in a wrecked car go to the next field_contact step too, to be
+    -- worked there without the car; false = only cars that stopped are handed over (a wreck leaves nothing to work)
+    wreckHandoff = false,
 }
 
 Config.Blocks.interact_points = {

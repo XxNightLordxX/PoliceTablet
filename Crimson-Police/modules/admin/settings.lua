@@ -497,6 +497,7 @@ Play.features = {
             'FeatureRewards.suspect.byType',
             'FeatureRewards.suspect.account',
             'FeatureRewards.suspect.items',
+            'FeatureRewards.suspect.voidWithRun',
             'Rewards.enabled',
         },
     },

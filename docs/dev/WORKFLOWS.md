@@ -16,6 +16,9 @@ Renewed-Banking and sc-police running), and `tests/workflows_none_spec.lua` runs
 of them (and none of ps-dispatch, qbx_ambulancejob or qbx_policejob): their exports fail, and the admin sets every
 `Config.Integrations` kind to `none` in Settings first. Every workflow there ends with the same rows, pay and state;
 the one difference checked is that a payout gets no bank history entry without a banking script.
+`tests/workflows_none_dispatch_spec.lua`, `_ambulance_`, `_banking_` and `_police_spec.lua` run the same walk once
+more for each kind on its own: the owner's four scripts installed, only that one `Config.Integrations` kind set to
+`none` in Settings (the other three keep the owner's script), with the same results.
 
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
@@ -26,7 +29,7 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | --- | --- | --- | --- | --- | --- |
 | Patrol mission | workflows_e2e (2) | e2e (9) | the solo drop of Training (same run code) | Training, full (2) | Pass |
 | Training mission (EVOC) | full (2) | yes | the officer mid-run: Failed, no cash, cooldown | yes | Pass |
-| Investigation, tactical, raids, traffic, parking, downed | e2e (2, 4, 7, 11-14), workflows_e2e (3) | e2e (9) | a unit member mid-fight, full (3) | Gang Shootout, full (5) | Pass |
+| Investigation, tactical, raids, traffic, parking, downed | e2e (2, 4, 7, 11-14), workflows_e2e (3), full (13) | e2e (9) | each block, full (13) | full (13) | Pass |
 | Weekly Boss | full (3) | yes | the partner mid-fight | yes | Pass |
 | Unit | full (4), e2e (16) | yes | the leader: the lead passes on | yes | Pass |
 | Mission call | full (6), workflows_e2e (4), e2e (15) | yes (open and claimed) | the claimer on its run: call closed, Failed | yes | Pass |
@@ -118,7 +121,10 @@ release, Reinforced tier, cross-department x1.10, $920, items. Result: **Pass**.
 How it works: each of these is one mission block with its own objective (breach and clear, stop and check, ticket,
 revive, ...); the HUD names what to do next and the row records the result.
 
-Spec: tests/e2e_spec.lua (4, 7, 11, 12, 14). Covers: Each block's objective to the row. Result: **Pass**.
+Spec: tests/e2e_spec.lua (4, 7, 11, 12, 14), tests/workflows_full_spec.lua (13). Covers: Each block's objective to
+the row; **drop** mid-run in each block (Suspicious Activity, Drug Lab Raid's unit partner, Traffic Enforcement,
+Parking Patrol: his row Failed, no cash, the mission's cooldown, back on no run, the raid goes on for the leader) and a
+downed officer who quits before the pick-up (one Downed row, nothing more after the reconnect). Result: **Pass**.
 
 ### Weekly Boss
 

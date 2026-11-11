@@ -659,7 +659,11 @@ Performance; all as shipped change nothing):
 - `Config.Performance.latentAboveBytes` (try `65536`): sends big answers in the background.
 
 `config/blocks.lua` holds the Mission Builder's ranges and defaults, and `config/banned_words.txt` the default list
-of words refused in bios (one per line). Read that list and change it for your community.
+of words refused in bios (one per line). Read that list and change it for your community. One server rule sits there
+too: `Config.Blocks.pursuit.wreckHandoff` (shipped `false`). A pursuit that hands its stop to a field contact step
+(Traffic Enforcement, Stolen Vehicle Takedown) hands over only the cars that stopped, so a car wrecked in the chase
+leaves that step with nothing to work. `true` = the people still alive in a wrecked car are handed over too, and the
+officers work them there (talk, frisk, detain, cite, arrest, release) without the car.
 
 ### 2.6 Change any setting in game: the Settings screen
 
@@ -1195,6 +1199,10 @@ Features → Money** (no typed word needed). Each row there shows its money, acc
 - A volunteer suspect is paid only for a case the server saw end fairly: officers reached him, he did not drop out
   (no-show, cancel, logging off, leaving the search circle), he was not AFK, and his outcome was escaped, detained or
   booked. Test runs never pay.
+- `suspect.voidWithRun` (shipped `false`): staff voiding the officers' rows of a case leaves the suspect's pay as it
+  is (voiding an officer's row is no proof against the suspect). `true` = once every officer row of his case is
+  voided, his pay row is voided too as a correction (never a strike: not paid at login, forfeited after the dispute
+  window), and it comes back as soon as one of those officer rows is restored.
 
 ### 3.13 Map markers: every part of a mission
 

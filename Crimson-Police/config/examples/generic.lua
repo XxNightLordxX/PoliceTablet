@@ -2422,6 +2422,9 @@ Config.FeatureRewards = {
         -- a type or outcome left out pays the money above. Empty = every type pays the money above
         byType = {},
         items = {},                  -- items for a fair case (see the list shape above)
+        -- true = his pay is voided too (a correction, never a strike) once staff void every officer row of his
+        -- case, and comes back when one of them is restored; false = his pay stands whatever happens to theirs
+        voidWithRun = false,
     },
     -- The officer who talked a live-case suspect down (Talk them down), paid once per suspect when the peaceful
     -- arrest counts (the suspect was not AFK), at the end of a case played out (not abandoned, cancelled or flagged)

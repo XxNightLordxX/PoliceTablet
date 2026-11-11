@@ -805,3 +805,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   undone). Void a flagged run in the queue: the Undo line restores it (Restore run in the Activity log). History on a
   flagged run lists its row, the flag, any decision and dispute, oldest first; the same list is in Officers -> an
   officer -> Runs -> the run.
+- [ ] Finish (FIN11): quit the game half way through a Suspicious Activity, a Traffic Enforcement and a Parking Patrol,
+  and as the partner of a Drug Lab Raid: each time the row is Failed with no cash, the mission is on its cooldown and
+  you are on no run when you rejoin (the raid goes on for the leader). Go down on a patrol and quit before the pick-up:
+  one Downed row. In Settings -> Other scripts set one kind at a time to none (dispatch, ambulance, banking, police):
+  a patrol and a mission call still end and pay the same. Turn `Config.Blocks.pursuit.wreckHandoff` on and wreck a
+  Traffic Enforcement violator with the driver alive: the stop lists him (no car) and you can work him. Turn
+  `Config.FeatureRewards.suspect.voidWithRun` on: void every officer row of a paid volunteer case and the suspect's pay
+  row is voided; restore one and it comes back.

@@ -673,7 +673,8 @@ end
 --                                     STOP
 -- ============================================================================
 -- run.shared.contacts (written by pursuit): { vehicle = netId, occupants = { { netId, seat, state, truth } },
--- observed = { kind, speed, zone } | nil, forced = bool, profileSet = name, taken = objective index | nil }.
+-- observed = { kind, speed, zone } | nil, forced = bool, profileSet = name, taken = objective index | nil,
+-- wrecked = true | nil (Config.Blocks.pursuit.wreckHandoff: the car is a wreck, only its people are worked) }.
 
 local function OccupantProfile(ctx, set, occ, role, rng)
     local truth = occ.truth
@@ -697,23 +698,31 @@ local function TakeStops(ctx, st)
     local n = 0
     for _, entry in ipairs(list) do
         local veh = tonumber(entry.vehicle)
-        local owner = veh and CP.Runs.ownerOf(run, veh)
+        local wreck = entry.wrecked == true
+        -- a wreck's own entity may be gone: its first live occupant says which objective holds the stop
+        local first = wreck and type(entry.occupants) == 'table' and entry.occupants[1] or nil
+        local key = wreck and tonumber(type(first) == 'table' and first.netId or first) or veh
+        local owner = key and CP.Runs.ownerOf(run, key)
         local mine = owner == ctx.index or (entry.taken == nil and owner and owner < ctx.index)
-        if veh and run.entities[veh] and not run.entities[veh].dead and mine and entry.taken == nil then
+        local carOk = veh and run.entities[veh] and not run.entities[veh].dead and not wreck
+        if (carOk or (wreck and key)) and mine and entry.taken == nil then
             entry.taken = ctx.index
-            if owner ~= ctx.index then CP.Runs.adopt(run, veh, ctx.index) end
             local set = entry.profileSet or ctx.obj.profileSet
             local stolen = U.contains(ctx.obj.revealed, 'stolen')
-            local carTruth = stolen and 'stolen' or entry.truth or CP.Custody.rollTruth(r, set, 'vehicle')
-            local car = CP.Custody.register(run, ctx.index, veh, {
-                kind = 'vehicle',
-                role = 'stopped_car',
-                truth = carTruth,
-                actions = CAR_ACTIONS,
-                revealed = ctx.obj.revealed,
-                state = 'stopped',
-            })
-            Track(st, veh, 'vehicle', car)
+            local car = nil
+            if carOk then
+                if owner ~= ctx.index then CP.Runs.adopt(run, veh, ctx.index) end
+                local carTruth = stolen and 'stolen' or entry.truth or CP.Custody.rollTruth(r, set, 'vehicle')
+                car = CP.Custody.register(run, ctx.index, veh, {
+                    kind = 'vehicle',
+                    role = 'stopped_car',
+                    truth = carTruth,
+                    actions = CAR_ACTIONS,
+                    revealed = ctx.obj.revealed,
+                    state = 'stopped',
+                })
+                Track(st, veh, 'vehicle', car)
+            end
             for _, occ in ipairs(type(entry.occupants) == 'table' and entry.occupants or {}) do
                 local netId = tonumber(type(occ) == 'table' and occ.netId or occ)
                 if netId and run.entities[netId] and not run.entities[netId].dead then
@@ -728,7 +737,7 @@ local function TakeStops(ctx, st)
                         truth = profile.truth,
                         demeanour = profile.demeanour,
                         cues = profile.cues,
-                        vehicleOf = veh,
+                        vehicleOf = carOk and veh or nil,
                         actions = STOP_PERSON_ACTIONS,
                         allowWarn = true,
                         custody = ctx.obj.custody,
@@ -739,7 +748,7 @@ local function TakeStops(ctx, st)
                         state = (state == 'cuffed' and 'cuffed') or (state == 'fleeing' and 'fleeing') or 'idle',
                         transportPoint = TransportPoint(ctx),
                     })
-                    if c and role == 'driver' and not stolen then car.owner = netId end
+                    if c and car and role == 'driver' and not stolen then car.owner = netId end
                     Track(st, netId, 'person', c)
                 end
             end

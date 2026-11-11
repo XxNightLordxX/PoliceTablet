@@ -3973,6 +3973,38 @@ do -- fight: drive-by and ram only ever target participants
     H.players[1].vehicle = nil
 end
 
+do -- FIN11: Config.Blocks.pursuit.wreckHandoff: a wreck's live people go to the field_contact step (off: nothing)
+    H.eq(Config.Blocks.pursuit.wreckHandoff, false, 'FIN11: wreckHandoff ships off')
+    local function Wreck(on, clock)
+        Config.Blocks.pursuit.wreckHandoff = on
+        H.clockMs = clock
+        At(1, 5016.0, 5800.0)
+        local ctx = TrafficCtx({ responses = { yield = 0, flee = 1.0, fight = 0 } })
+        ctx.run.objectives = { {}, {} }
+        local adopted = {}
+        local realRuns = CP.Runs
+        CP.Runs = {
+            adoptMany = function(_, ids, to) adopted[#adopted + 1] = { ids = U.deepcopy(ids), to = to } end,
+            noteStat = function() end,
+        }
+        PU.start(ctx)
+        local car = Car(ctx)
+        PU.onEntityDead(ctx, car.netId, nil)
+        CP.Runs = realRuns
+        Config.Blocks.pursuit.wreckHandoff = false
+        return ctx, car, adopted
+    end
+    local ctx, _, adopted = Wreck(false, 9400000)
+    H.eq(#(ctx.run.shared.contacts or {}), 0, 'FIN11: off: a wreck hands nothing over')
+    H.eq(#((adopted[1] or {}).ids or {}), 0, 'FIN11: off: ...and adopts nobody')
+    local ctx2, car2, adopted2 = Wreck(true, 9450000)
+    local c = (ctx2.run.shared.contacts or {})[1]
+    H.ok(c ~= nil and c.wrecked == true, 'FIN11: on: the wreck is handed over as a wrecked contact')
+    H.eq(c and #c.occupants, 1, 'FIN11: on: ...with its live driver')
+    local ids = (adopted2[1] or {}).ids or {}
+    H.ok(#ids == 1 and not U.contains(ids, car2.netId), 'FIN11: on: the driver is adopted, the wrecked car is not')
+end
+
 do -- a removed car (sc-police /imp) is never stopped and never earns vehicle_stopped_fast
     H.clockMs = 9500000
     At(1, 1040.0, 1000.0)

@@ -1764,17 +1764,30 @@ local function ContactIndex(ctx)
     return me + 1
 end
 
+-- A wrecked car with someone still alive in it (Config.Blocks.pursuit.wreckHandoff).
+local function LiveWreck(st, v)
+    if v.state ~= 'wrecked' or Cfg().wreckHandoff ~= true then return false end
+    for _, pk in ipairs(v.occupants) do
+        local p = st.peds[pk]
+        if p and p.state ~= 'dead' then return true end
+    end
+    return false
+end
+
 -- handoff = 'contact': the stopped cars and their people (seated, or caught and cuffed) go to the
 -- field_contact objective (CP.Runs.adoptMany) before this objective completes, so their cuffs, custody
--- events and deaths reach it and never this finished pursuit.
+-- events and deaths reach it and never this finished pursuit. With Config.Blocks.pursuit.wreckHandoff on, the people
+-- still alive in a wrecked car go too (contact.wrecked: field_contact works them without the car).
 local function HandOff(ctx, st)
     st.handedOff = true
     local to = ContactIndex(ctx)
     local ids = {}
     for _, key in ipairs(st.vorder) do
         local v = st.vehicles[key]
-        if v.state == 'stopped' then
+        local wreck = LiveWreck(st, v)
+        if v.state == 'stopped' or wreck then
             RecordContact(ctx, st, v)
+            v.contact.wrecked = wreck or nil
             local occ = {}
             for _, pk in ipairs(v.occupants) do
                 local p = st.peds[pk]
@@ -1790,7 +1803,7 @@ local function HandOff(ctx, st)
             end
             v.contact.occupants = occ
             v.contact.observed = v.observed and U.copy(v.observed) or nil
-            ids[#ids + 1] = v.netId
+            if not wreck then ids[#ids + 1] = v.netId end
         end
     end
     if CP.Runs and CP.Runs.adoptMany and ctx.run and ctx.run.objectives and ctx.run.objectives[to] then

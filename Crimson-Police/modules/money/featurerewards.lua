@@ -329,12 +329,42 @@ end)
 -- officer's own row of a live run (surrender, key '<run_uuid>:<suspect>'). Voiding that row voids the reward row as a
 -- correction (no strike), so its cash is never paid at login and the forfeiture jobs forfeit its cash and items after
 -- the dispute window; restoring the row (a dispute, a batch restore) brings the reward back.
+-- With Config.FeatureRewards.suspect.voidWithRun on, the volunteer suspect's pay of a case follows the officers' rows
+-- of that case the same way (SuspectRewards).
 
 local function Rows(sql, params) return CP.query(TAG, sql, params) end
 
 local function Breakdown(r)
     local t = U.jsonField(r.breakdown)
     return type(t) == 'table' and t or {}
+end
+
+-- Config.FeatureRewards.suspect.voidWithRun: the volunteer suspect's pay of the case of officer row src (its
+-- run_uuid is the case key), voided (true) or not (false). It is voided only once every officer row of that case is
+-- voided, and it comes back with any of them; a suspect row an admin voided himself (no voidedWith) stays voided.
+local function SuspectRewards(src, voided)
+    if (FR.cfg('suspect') or {}).voidWithRun ~= true then return {} end
+    if type(src.run_uuid) ~= 'string' or src.run_uuid == '' or src.mission_id == 'manual_award' then return {} end
+    if not voided then
+        for _, r in
+            ipairs(
+                Rows('SELECT mission_id FROM cp_mission_runs WHERE run_uuid = ? AND voided = 0', { src.run_uuid }) or {})
+        do
+            if type(r.mission_id) ~= 'string' or r.mission_id:sub(1, 7) ~= 'reward_' then return {} end
+        end
+    end
+    local out = {}
+    for _, r in
+        ipairs(Rows(
+            [[SELECT id, breakdown FROM cp_mission_runs WHERE mission_id = 'reward_suspect' AND voided = ?
+        ORDER BY id]],
+            { voided and 1 or 0 }
+        ) or {})
+    do
+        local b = Breakdown(r)
+        if b.caseKey == src.run_uuid and (not voided or b.voidedWith ~= nil) then out[#out + 1] = r end
+    end
+    return out
 end
 
 -- The reward rows paid for row rowId, voided (true) or not (false) -> { id... }.
@@ -375,6 +405,7 @@ local function LinkedRewards(rowId, voided)
         end
         out = mine
     end
+    for _, r in ipairs(SuspectRewards(src, voided)) do out[#out + 1] = r end
     return out
 end
 

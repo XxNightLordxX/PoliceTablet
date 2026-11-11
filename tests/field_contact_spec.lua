@@ -889,6 +889,28 @@ do
 end
 
 do
+    -- FIN11: a wreck with live people (Config.Blocks.pursuit.wreckHandoff): the stop works them without the car
+    Demeanour('clean', 'compliant')
+    local run = W.start({ 1 }, StopMission(
+        { occupants = 2, truths = { 'clean', 'clean' }, wrecked = true, at = vec4(300.0, 300.0, 30.0, 0.0) },
+        { minSeconds = 15 }))
+    W.tick(1)
+    H.eq(Contact(run, 2, 'vehicle'), nil, 'FIN11: a wreck: no car to work')
+    local ppl = W.people(run, 2)
+    H.eq(#ppl, 2, 'FIN11: ...but both people from the wreck are taken')
+    H.eq(run.shared.contacts[1].taken, 2, 'FIN11: the wreck entry is taken')
+    H.ok(Obj(run, 2).status == 'active', 'FIN11: the stop is not empty: it waits for the decisions')
+    for _, p in ipairs(ppl) do
+        W.near(1, run, p.netId)
+        H.eq((W.decide(1, run, p.netId, 'release')), true, 'FIN11: a person from the wreck is released')
+    end
+    W.tick(20)
+    H.eq(Obj(run, 2).status, 'done', 'FIN11: both decided: the stop is done')
+    RestoreDemeanour()
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do
     -- a person who runs from Order out is Evading: caught, Arrest is Best
     Demeanour('clean', 'runner')
     local run = W.start({ 1 }, StopMission({ occupants = 1, truths = { 'clean' }, at = vec4(300.0, 300.0, 30.0, 0.0) }))

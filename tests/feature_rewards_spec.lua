@@ -310,4 +310,40 @@ do
     FC.surrender.enabled = false
 end
 
+-- FIN11: Config.FeatureRewards.suspect.voidWithRun (ships off: the suspect's pay stands); on, it is voided once every
+-- officer row of his case is voided and comes back with one of them.
+do
+    H.eq(FC.suspect.voidWithRun, false, 'FIN11: voidWithRun ships off')
+    FC.suspect.enabled = true
+    local function Off(runUuid, cid)
+        return MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid,
+            department, state, end_reason, points_base) VALUES (?, 'tactical', 'live_case', ?, 'sast', 'completed',
+            'completed', 10)]], { runUuid, cid })
+    end
+    local function Void(id, v)
+        MySQL.update.await('UPDATE cp_mission_runs SET voided = ? WHERE id = ?', { v, id })
+        CP.Hooks.fire(v == 1 and 'row:voided' or 'row:restored', id)
+    end
+    local function Voided(id)
+        return CP.U.truthy(H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { id })[1].voided) and 1 or 0
+    end
+    local a, b = Off('fin11-case-1', 'FR_OFFICER1'), Off('fin11-case-1', 'FR_OFFICER2')
+    local pay = FR.pay('suspect', 'FR_SUSPECT1', { key = 'fin11-case-1', outcome = 'got_away' })
+    H.ok(pay and pay.rowId, 'FIN11: the suspect is paid for the case')
+    Void(a, 1)
+    Void(b, 1)
+    H.eq(Voided(pay.rowId), 0, 'FIN11: off: his pay stands when every officer row is voided')
+    Void(a, 0)
+    Void(b, 0)
+    FC.suspect.voidWithRun = true
+    Void(a, 1)
+    H.eq(Voided(pay.rowId), 0, 'FIN11: on: one officer row voided, another stands: his pay stands')
+    Void(b, 1)
+    H.eq(Voided(pay.rowId), 1, 'FIN11: on: every officer row voided: his pay is voided')
+    Void(a, 0)
+    H.eq(Voided(pay.rowId), 0, 'FIN11: on: restoring one of them brings his pay back')
+    FC.suspect.voidWithRun = false
+    FC.suspect.enabled = false
+end
+
 return H

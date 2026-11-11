@@ -290,9 +290,12 @@ CP.Blocks.register('stub_pursuit', {
             observed = o.observed,
             forced = o.forced == true,
             truth = o.carTruth,
+            wrecked = o.wrecked or nil,
         }
         W.stub[#W.stub + 1] = { car = car, occupants = occ }
-        local ids = { car }
+        -- o.wrecked: the car is a wreck (Config.Blocks.pursuit.wreckHandoff): only its people are handed over
+        if o.wrecked then ctx.run.entities[car].dead = true end
+        local ids = { not o.wrecked and car or nil }
         for _, x in ipairs(occ) do ids[#ids + 1] = x.netId end
         CP.Runs.adoptMany(ctx.run, ids, ctx.index + 1)
         ctx.complete()

@@ -661,5 +661,9 @@ docs/dev/ARCHITECTURE.md.
 - `tests/workflow_errors_spec.lua`: Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
 - `tests/workflows_e2e_spec.lua`: End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch turned on by the admin through the Admin UI's own Settings action.
 - `tests/workflows_full_spec.lua`: Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
+- `tests/workflows_none_ambulance_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.ambulance set to none.
+- `tests/workflows_none_banking_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.banking set to none.
+- `tests/workflows_none_dispatch_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.dispatch set to none.
+- `tests/workflows_none_police_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.police set to none.
 - `tests/workflows_none_spec.lua`: WF4: every workflow of tests/workflows_full_spec.lua on a city with none of the owner's scripts.
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.
