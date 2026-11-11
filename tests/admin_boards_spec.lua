@@ -200,6 +200,14 @@ do
     H.eq(C.currentSeason(true).plannedEnd, H.time + 2 * DAY, 'stored')
     local sent = W.async(function() return C._remindPlannedEnd(H.time + 2 * DAY - 3000) end)
     H.ok((sent or 0) >= 1, 'admins are reminded before the end')
+    local toasted = 0
+    for _, ev in ipairs(H.events) do
+        if ev.name == 'crimson-police:client:notify' and type(ev.args[1]) == 'table'
+            and ev.args[1].key == 'challenge.planned_end_soon' then
+            toasted = toasted + 1
+        end
+    end
+    H.ok(toasted >= 1, 'the reminder is a toast to the online admins (CP.Tablet.notifyMany)')
     local ended = W.async(function() return C._plannedEndCheck(H.time + DAY) end)
     H.ok(not ended, 'not before the date')
     H.time = H.time + 2 * DAY + 60

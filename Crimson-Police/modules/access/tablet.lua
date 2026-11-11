@@ -25,7 +25,7 @@
 --   CP.Tablet.notify(src, kind, key, vars, opts) -> boolean
 --       kind 'info'|'success'|'warning'|'error'; key/vars a locale key and its variables (translated on
 --       the client); opts = { title = localeKey, duration = ms, channel, sound = true (the notice tone) }
---   CP.Tablet.notifyMany(srcs, kind, key, vars)       the same toast for a list of players (deduplicated)
+--   CP.Tablet.notifyMany(srcs, kind, key, vars, opts) the same toast for a list of players (deduplicated)
 --   CP.Tablet.push(src, topic, data) -> boolean       NUI { type = 'push', topic, data } (vectors serialised)
 --   CP.Tablet.openAdmin(src) -> ok, errKey            builds the admin session and opens the Admin UI
 --       (client:openAdmin); err.not_admin, err.not_in_game (console). Called by modules/admin.
@@ -722,14 +722,14 @@ function T.notify(src, kind, key, vars, opts)
     return true
 end
 
-function T.notifyMany(srcs, kind, key, vars)
+function T.notifyMany(srcs, kind, key, vars, opts)
     if type(srcs) ~= 'table' then return 0 end
     local seen, sent = {}, 0
     for _, src in ipairs(srcs) do
         local n = CP.U.toSrc(src)
         if n and not seen[n] then
             seen[n] = true
-            if T.notify(n, kind, key, vars) then sent = sent + 1 end
+            if T.notify(n, kind, key, vars, opts) then sent = sent + 1 end
         end
     end
     return sent
@@ -839,11 +839,6 @@ function T.pushAdmins(topic, data)
         if T.push(src, topic, data) then n = n + 1 end
     end
     return n
-end
-
--- A toast to every online admin.
-function T.notifyAdmins(kind, key, vars)
-    return T.notifyMany(OnlineAdmins(), kind, key, vars)
 end
 
 -- ============================================================================

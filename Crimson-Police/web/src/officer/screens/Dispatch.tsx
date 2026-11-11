@@ -169,7 +169,7 @@ function CallCard({
     busy: boolean;
     blocked: boolean;
     onClaim: (call: MissionCall) => void;
-    // a mission command pushed to this unit: the leader may turn it down
+    // a mission pushed to this unit (or a call paged to it, MissionCalls.pageDecline): the leader may turn it down
     onDecline?: (call: MissionCall) => void;
     // claim in one click (My options): the twists go through the claim dialog, opened by this button
     onTwists?: (call: MissionCall) => void;
@@ -298,7 +298,7 @@ function CallCard({
                         {t('board.card.twists')}
                     </Button>
                 ) : null}
-                {onDecline && call.missionLabel ? (
+                {onDecline && call.declinable ? (
                     <Button
                         variant="ghost"
                         icon="x"
@@ -412,12 +412,13 @@ export default function Dispatch() {
         else setPending(call);
     };
 
-    // a pushed mission: the leader turns it down; nobody else gets it
+    // a pushed mission: the leader turns it down and nobody else gets it; a paged call: its page ends and every unit
+    // may claim it
     const decline = async (call: MissionCall) => {
         const res = await run<{ view?: DispatchView }>(
             'server:answerMissionCall',
             { callId: call.id, answer: 'decline' },
-            { success: 'mc.card.declined' },
+            { success: call.pushed ? 'mc.card.declined' : 'mc.card.page_declined' },
         );
         // the reply carries the fresh view (an older server: ask for it)
         if (res.ok) applyReplyView<DispatchView>(res.data, 'view', setData, refresh);

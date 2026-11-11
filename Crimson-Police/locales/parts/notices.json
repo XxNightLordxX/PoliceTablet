@@ -10,6 +10,8 @@
   "notices.history_none": "No ended notices yet.",
   "notices.ended.removed": "Ended early {date}",
   "notices.ended.expired": "Ran out {date}",
+  "notices.ended_by": "by {name}",
+  "notices.end_reason": "Reason: {reason}",
   "notices.alert_mode.off": "Officers see it on Home.",
   "notices.alert_mode.toast": "On-duty officers also get a toast.",
   "notices.alert_mode.sound": "On-duty officers also get a toast with a tone.",

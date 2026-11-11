@@ -5,7 +5,9 @@
 -- through server:answerMissionCall (claim or decline) and staff post every kind through server:<sup|admin>:mcPost.
 -- Each kind keeps its own rules: checkEvery, laneMaxOpen and pushPerDay in Config.MissionCalls, the departments of
 -- the pushMission control, the claim checks. The old routes and the old MissionControls keys are gone; calls, alerts
--- and missioncalls live in modules/dispatch. Plain stubs, the real deptcontrols, draw and dispatch modules. No
+-- and missioncalls live in modules/dispatch. FIN6: the real calls and the alert suppression are parts of
+-- Config.MissionCalls (realCalls, alertSuppression), a paged call may be declined with pageDecline (ships off), and
+-- the LIVE call uses the one card and toast. Plain stubs, the real deptcontrols, draw and dispatch modules. No
 -- database.
 
 local H = dofile('tests/harness.lua')
@@ -247,6 +249,27 @@ H.eq(Config.MissionCalls.pushPerDay, 5, 'pushes a supervisor a day ship 5, in Mi
 H.eq(Config.MissionControls.callLaneMaxOpen, nil, 'MissionControls.callLaneMaxOpen is gone')
 H.eq(Config.MissionControls.pushMissionPerDay, nil, 'MissionControls.pushMissionPerDay is gone')
 H.eq(Config.MissionCalls.checkEvery, 10, 'the server still checks every 10 s')
+
+-- one dispatch section: the real calls and the alert suppression are parts of Config.MissionCalls
+H.eq(Config.Calls, nil, 'no separate Config.Calls section')
+H.eq(Config.Alerts, nil, 'no separate Config.Alerts section')
+local rc, as = Config.MissionCalls.realCalls, Config.MissionCalls.alertSuppression
+H.ok(
+    rc.strip == true and rc.cache == 15 and rc.npcCallPrefix == 'npccall-' and rc.dodgeWindow == 60
+        and rc.respondingExpiry == 1200 and #rc.ownRunCallPrefixes == 5,
+    'realCalls ships the old values'
+)
+H.ok(as.backstopRadius == 300.0 and as.backstopDelay == 1, 'alertSuppression ships the old values')
+H.eq(Config.MissionCalls.realCallStrip, nil, 'realCallStrip is realCalls.strip')
+H.eq(Config.MissionCalls.realCallCache, nil, 'realCallCache is realCalls.cache')
+for _, f in ipairs({ 'calls', 'alerts' }) do
+    local text = Read(ROOT .. 'modules/dispatch/' .. f .. '.lua')
+    H.eq(text:find('Config.Calls', 1, true) or text:find('Config.Alerts', 1, true), nil, f .. ' reads the one section')
+end
+
+-- one card builder and one toast for every call, the LIVE call included
+H.eq(mcSrc:find('LiveCard', 1, true), nil, 'no own LIVE card builder')
+H.eq(mcSrc:find('LiveToast', 1, true), nil, 'no own LIVE toast')
 local cfgText = Read(ROOT .. 'config/config.lua')
 H.ok(cfgText:find('all on one Dispatch list', 1, true) ~= nil, 'the section comment names the one list')
 
@@ -298,8 +321,31 @@ H.eq(ok, true, 'mcPost with a unit pages it')
 local paged = MC._calls()[data.id]
 H.eq(paged.pagedCid, 'PM011', 'paged to the unit of 11')
 H.eq(audits[#audits].action, 'mcPage', 'audited as before (mcPage)')
+H.eq(Config.MissionCalls.pageDecline, false, 'pageDecline ships off')
 H.eq((select(2, Act('server:answerMissionCall', 11, { callId = paged.id, answer = 'decline' }))), 'err.mc_not_open',
-    'decline is only for a pushed mission')
+    'shipped: decline is only for a pushed mission')
+H.eq(CardOf(11, paged.id).declinable, false, 'shipped: the paged card has no Decline')
+H.eq(CardOf(13, paged.id).status, 'locked', 'another unit waits for the page time')
+
+-- pageDecline on: the paged unit's leader turns the page down, and the call opens to every unit
+Config.MissionCalls.pageDecline = true
+H.eq(CardOf(11, paged.id).declinable, true, 'pageDecline: the paged unit\'s card offers Decline')
+H.eq(CardOf(13, paged.id).declinable, false, 'never on another unit\'s card')
+H.eq((select(2, Act('server:answerMissionCall', 13, { callId = paged.id, answer = 'decline' }))), 'err.mc_paged',
+    'only the paged unit declines it')
+local noteCount = #notes
+local okPD, pd = Act('server:answerMissionCall', 11, { callId = paged.id, answer = 'decline' })
+H.eq(okPD, true, 'the paged unit declines the page')
+H.ok(pd and type(pd.view) == 'table', 'with the fresh Dispatch view')
+H.ok(MC._calls()[paged.id] ~= nil and MC._calls()[paged.id].status == 'open', 'the call stays open')
+H.ok(CardOf(13, paged.id).status ~= 'locked', 'every unit may claim it now')
+H.eq(CardOf(11, paged.id).declinable, false, 'the page is over: no second Decline')
+local toIssuer = nil
+for i = noteCount + 1, #notes do if notes[i].src == 9 then toIssuer = notes[i].key end end
+H.eq(toIssuer, 'mc.toast.page_declined', 'the supervisor who paged hears of it')
+H.eq((select(2, Act('server:answerMissionCall', 11, { callId = paged.id, answer = 'decline' }))), 'err.mc_not_open',
+    'a call whose page is over cannot be declined')
+Config.MissionCalls.pageDecline = false
 H.eq((select(2, Act('server:sup:mcPost', 9, { type = 'patrol', missionId = 'pm_patrol_a' }))), 'err.mc_page_target',
     'a mission needs a unit to push it to')
 

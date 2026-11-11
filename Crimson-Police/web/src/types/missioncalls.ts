@@ -30,6 +30,9 @@ export interface MissionCall {
     // a mission command pushed to a unit; missionLabel only for the paged unit itself
     pushed?: boolean;
     missionLabel?: string | null;
+    // this unit may turn the call down (its leader): a mission pushed to it, or a call paged to it while the page
+    // runs and Config.MissionCalls.pageDecline is on
+    declinable?: boolean;
     // a department lane's call: only that department's officers see it ("SAST call")
     department?: string | null;
     departmentShort?: string | null;

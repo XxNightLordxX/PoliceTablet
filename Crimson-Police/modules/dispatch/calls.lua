@@ -8,24 +8,24 @@
 --
 -- Public API
 --   CP.Calls.isOnCall(src) -> boolean
---       A live real-call responding entry: updated less than Config.Calls.respondingExpiry s ago and still
+--       A live real-call responding entry: updated less than Config.MissionCalls.realCalls.respondingExpiry s ago and still
 --       active in mdt_dispatch (entries are re-checked with CP.Dispatch.lookupActiveCall at most every 10 s
 --       and dropped when inactive: sc-dispatch's 5-minute auto-clear fires no event). May yield (database).
 --
 -- Classification of a ToggleResponding (src, callId, isResponding), in this order:
---   1. The id is normalised with CP.Dispatch.normalizeCallId. An id starting with Config.Calls.npcCallPrefix
+--   1. The id is normalised with CP.Dispatch.normalizeCallId. An id starting with Config.MissionCalls.realCalls.npcCallPrefix
 --      (plain find at position 1, never a pattern) is an SC-NPCPolice call: nothing happens at all (no run
 --      end, no entry, no free abandon, no dodge rule).
 --   2. Marking: only a hit from CP.Dispatch.lookupActiveCall counts (an unknown, inactive or faked id does
 --      nothing); the canonical id it returns is checked against the NPC prefix again.
---   3. If the sender is on a run, an id that is one of Config.Calls.ownRunCallPrefixes followed by the server
+--   3. If the sender is on a run, an id that is one of Config.MissionCalls.realCalls.ownRunCallPrefixes followed by the server
 --      id of ANY participant of that same run (partners who already left included) and '_' (plain find at
 --      position 1) is a call about their own run and does not count for them.
 --   4. Otherwise it is a real call: responding[src][id] = { since, lastUpdate }. An active participant is
 --      removed with CP.Runs.removeParticipant(run, src, 'real_call') (the rest of the unit carries on; no
 --      penalty, no cooldown), gets the toast calls.run_ended, and the free abandon is remembered
 --      { runId, citizenid, at } and written to the audit log (category 'flags', action 'free_abandon').
---   Un-marking: the entry goes; within Config.Calls.dodgeWindow s of that free abandon, an un-mark of the
+--   Un-marking: the entry goes; within Config.MissionCalls.realCalls.dodgeWindow s of that free abandon, an un-mark of the
 --   same call (or of an id the sender never marked, so a different id form cannot slip through) turns it into
 --   a normal abandon: CP.Runs.reclassify(citizenid, runId, 'real_call_cancelled') (audited, toast
 --   calls.reclassified). Listeners run in their own threads and the mark yields twice (the mdt_dispatch
@@ -54,6 +54,12 @@ local pendingMarks = {}           -- pendingMarks[src] = { { raw, unmarkedAt }, 
 --                                   HELPERS
 -- ============================================================================
 
+-- The real-call rules (Config.MissionCalls.realCalls).
+local function RC()
+    local mc = type(Config.MissionCalls) == 'table' and Config.MissionCalls or {}
+    return type(mc.realCalls) == 'table' and mc.realCalls or {}
+end
+
 local function Normalize(id)
     if CP.Dispatch and CP.Dispatch.normalizeCallId then
         local ok, key = pcall(CP.Dispatch.normalizeCallId, id)
@@ -64,7 +70,7 @@ local function Normalize(id)
 end
 
 local function IsNpc(key)
-    local prefix = Config.Calls.npcCallPrefix
+    local prefix = RC().npcCallPrefix
     if type(prefix) ~= 'string' or prefix == '' then return false end
     return type(key) == 'string' and key:find(prefix, 1, true) == 1
 end
@@ -125,7 +131,7 @@ local function AboutOwnRun(run, ...)
             if Exempt(set, ids[j]) then return true end
         end
     end
-    local prefixes = Config.Calls.ownRunCallPrefixes
+    local prefixes = RC().ownRunCallPrefixes
     if type(prefixes) ~= 'table' or type(run) ~= 'table' or type(run.participants) ~= 'table' then return false end
     for pSrc in pairs(run.participants) do
         local n = CP.U.toSrc(pSrc)
@@ -182,12 +188,12 @@ end
 -- ============================================================================
 --                                  RESPONDING
 -- ============================================================================
--- The free abandon becomes a normal one (the un-mark came within Config.Calls.dodgeWindow s).
+-- The free abandon becomes a normal one (the un-mark came within Config.MissionCalls.realCalls.dodgeWindow s).
 local function Dodge(src, fa, at)
     CP.log(TAG, '%d un-marked %s within the dodge window: run %s becomes real_call_cancelled', src, tostring(fa.key),
         tostring(fa.runId))
     RunsCall('reclassify', fa.citizenid, fa.runId, 'real_call_cancelled')
-    CP.notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(Config.Calls.dodgeWindow) or 60 })
+    CP.notify(src, 'warning', 'calls.reclassified', { seconds = tonumber(RC().dodgeWindow) or 60 })
     Audit(fa.citizenid or src, 'real_call_cancelled', fa.runId, fa.key,
         ('un-marked real call %s after %d s'):format(fa.key, math.max(0, at - fa.at)))
 end
@@ -275,7 +281,7 @@ local function OnUnmarked(src, raw, now)
     if al then al[raw] = nil end
     local fa = freeAbandons[src]
     if not fa then return end
-    if now - fa.at > (tonumber(Config.Calls.dodgeWindow) or 60) then
+    if now - fa.at > (tonumber(RC().dodgeWindow) or 60) then
         freeAbandons[src] = nil
         return
     end
@@ -341,7 +347,7 @@ end
 -- The calls that are part of a case with a real suspect and never "a real call" for its officers:
 -- { exact = { [id] = true }, prefixes = { ... } }. exact: the case's own call (run.live.dispatchId, as sent and
 -- normalized); prefixes: '<prefix><src>_' for every participant and every suspect (CP.Opponents.caseOf: the server
--- ids the watch keeps) with each Config.Calls.ownRunCallPrefixes entry plus 'shots_' (an officer's or a suspect's
+-- ids the watch keeps) with each Config.MissionCalls.realCalls.ownRunCallPrefixes entry plus 'shots_' (an officer's or a suspect's
 -- gunfire), so src 1 never matches 12. OnMarked uses it for runs with run.realSuspect; claims pass it to isOnCall.
 function C.exemptFor(run)
     local out = { exact = {}, prefixes = {} }
@@ -353,7 +359,7 @@ function C.exemptFor(run)
         if key ~= '' then out.exact[key] = true end
     end
     local list, have = { 'shots_' }, { shots_ = true }
-    for _, pre in ipairs(type(Config.Calls.ownRunCallPrefixes) == 'table' and Config.Calls.ownRunCallPrefixes or {}) do
+    for _, pre in ipairs(type(RC().ownRunCallPrefixes) == 'table' and RC().ownRunCallPrefixes or {}) do
         if type(pre) == 'string' and pre ~= '' and not have[pre] then
             have[pre] = true
             list[#list + 1] = pre
@@ -390,7 +396,7 @@ function C.isOnCall(src, opts)
     local bySrc = responding[src]
     if not bySrc then return false end
     local except = type(opts) == 'table' and type(opts.except) == 'table' and opts.except or nil
-    local expiry = tonumber(Config.Calls.respondingExpiry) or 1200
+    local expiry = tonumber(RC().respondingExpiry) or 1200
     local keys = {}
     for key in pairs(bySrc) do
         local skip = false
@@ -436,7 +442,7 @@ end
 
 local function Prune()
     local now = os.time()
-    local expiry = tonumber(Config.Calls.respondingExpiry) or 1200
+    local expiry = tonumber(RC().respondingExpiry) or 1200
     for src, bySrc in pairs(responding) do
         for key, e in pairs(bySrc) do
             if now - e.lastUpdate >= expiry then bySrc[key] = nil end
@@ -449,7 +455,7 @@ local function Prune()
         end
         if next(s) == nil then seen[src] = nil end
     end
-    local window = tonumber(Config.Calls.dodgeWindow) or 60
+    local window = tonumber(RC().dodgeWindow) or 60
     for src, fa in pairs(freeAbandons) do
         if now - fa.at > window then freeAbandons[src] = nil end
     end

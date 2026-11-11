@@ -16,6 +16,9 @@ export interface Notice {
     // history only: when and how it ended
     endedAt?: number;
     ended?: 'removed' | 'expired';
+    // ended early: who ended it and why, from the audit log (no reason: none was given)
+    endedBy?: string;
+    endReason?: string;
 }
 
 export interface NoticesView {

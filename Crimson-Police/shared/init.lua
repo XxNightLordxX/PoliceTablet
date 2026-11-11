@@ -357,8 +357,6 @@ local CONFIG_SECTIONS = {
     'Spawning',
     'Route',
     'Markers',
-    'Calls',
-    'Alerts',
     'Downed',
     'AntiCheat',
     'CrossDept',

@@ -614,8 +614,9 @@ local function NewCall(missionType, area, opts)
     opts = opts or {}
     local cfg = Cfg()
     local now = os.time()
-    local code = NextCode(now)
-    local priority = Priority(missionType)
+    local live = opts.live
+    local code = live and opts.code or NextCode(now)
+    local priority = live and 1 or Priority(missionType)
     -- NULL for the missing values (a nil would leave a hole in the parameter list)
     local cols = { code, missionType, area, priority, opts.issuer, opts.pagedCid, opts.department }
     local values, params = {}, {}
@@ -627,19 +628,24 @@ local function NewCall(missionType, area, opts)
             params[#params + 1] = cols[i]
         end
     end
-    CP.Migrations.ready()
-    local okI, id = pcall(
-        MySQL.insert.await,
-        ([[
-        INSERT INTO cp_mission_calls (code, mission_type, area, priority, created_by, paged_to, department, status)
-        VALUES (%s, 'open')
-    ]]):format(table.concat(values, ', ')),
-        params
-    )
-    local err = not okI and id or nil
-    id = okI and math.tointeger(tonumber(id) or -1) or nil
-    if not id or id <= 0 then
-        CP.err(TAG, 'the mission call row could not be written: %s', tostring(err or id))
+    local id = nil
+    if not live then
+        CP.Migrations.ready()
+        local okI, newId = pcall(
+            MySQL.insert.await,
+            ([[
+            INSERT INTO cp_mission_calls (code, mission_type, area, priority, created_by, paged_to, department, status)
+            VALUES (%s, 'open')
+        ]]):format(table.concat(values, ', ')),
+            params
+        )
+        id = okI and math.tointeger(tonumber(newId) or -1) or nil
+        if not id or id <= 0 then
+            CP.err(TAG, 'the mission call row could not be written: %s', tostring(not okI and newId or id))
+            id = nil
+        end
+    end
+    if not id then
         tempId = tempId - 1
         id = tempId
     end
@@ -650,9 +656,9 @@ local function NewCall(missionType, area, opts)
         type = missionType,
         area = area,
         priority = priority,
-        titleIdx = Rng():int(1, titles),
+        titleIdx = live and 1 or Rng():int(1, titles),
         createdAt = now,
-        offerEnds = now + math.floor(Num(cfg.offerTime, 180)),
+        offerEnds = now + math.floor(Num(opts.offerTime or cfg.offerTime, 180)),
         status = 'open',
         staff = opts.staff == true,
         issuer = opts.issuer,
@@ -669,11 +675,17 @@ local function NewCall(missionType, area, opts)
         excluded = {},
         lostBy = {},
         claimants = 0,
+        live = live,
     }
     calls[id] = call
     MarkDirty()
-    CP.log(TAG, 'posted %s (%s, %s, %s)', code, missionType, tostring(area),
-        call.staff and 'staff' or (call.department and ('lane ' .. call.department)) or 'server')
+    if live then
+        CP.log(TAG, 'posted LIVE call %s for crime %s (%s, %d suspect(s))', code, live.crimeKey, missionType,
+            live.suspects)
+    else
+        CP.log(TAG, 'posted %s (%s, %s, %s)', code, missionType, tostring(area),
+            call.staff and 'staff' or (call.department and ('lane ' .. call.department)) or 'server')
+    end
     return call
 end
 
@@ -732,18 +744,36 @@ MC._forgetMuted = function(citizenid) muted[citizenid] = nil end
 
 -- The toast and tone for every member of the given idle units who could claim the call and has not muted calls (or
 -- picked favourite types only and this is not one; skipCid: a unit with that member already had it, e.g. paged).
+-- A LIVE call (a real crime) is the red toast for every idle unit: no draw or claim rule, and the favourite types
+-- are ignored (a muted officer still gets none).
 local function Toast(call, units, skipCid)
     local payload = ToastPayload(call)
+    if call.live then
+        payload.live = true
+        payload.title = call.live.title
+        payload.street = call.live.street
+        payload.titleKey = nil
+    end
     local now = os.time()
     for _, u in ipairs(units) do
-        local st = TypeState(UnitState(u.leader, false, u), call.type)
-        local area = AreaForState(st, call)
-        local rule, soft = CallRule(call, u, UnitDistance(u.srcs, call), now)
         local skip = skipCid ~= nil and Contains(u.cids, skipCid)
-        if not skip and st.ok and EffectivePool(st, area) > 0 and (not rule or soft == 'priority') then
+        local can = call.live ~= nil
+        if not skip and not can then
+            local st = TypeState(UnitState(u.leader, false, u), call.type)
+            local area = AreaForState(st, call)
+            local rule, soft = CallRule(call, u, UnitDistance(u.srcs, call), now)
+            can = st.ok and EffectivePool(st, area) > 0 and (not rule or soft == 'priority')
+        end
+        if not skip and can then
             for i, m in ipairs(u.srcs) do
                 local cid, o = u.cids[i], u.officers[i]
-                if cid and Alerts(cid, o and o.department, call.type) and not IsOnCall(m) then
+                local wants = false
+                if cid and call.live then
+                    wants = not AlertsOf(cid).v
+                elseif cid then
+                    wants = Alerts(cid, o and o.department, call.type)
+                end
+                if wants and not IsOnCall(m) then
                     TriggerClientEvent(CP.e('client:missionCall'), m, payload)
                 end
             end
@@ -1660,17 +1690,35 @@ PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, mis
     return true, { id = call.id, code = call.code }
 end
 
--- The paged unit's leader turns a pushed mission down: the call ends, nobody else gets it.
+-- A call the paged unit may still turn down: a pushed mission always, a plain paged call while its page time runs
+-- and Config.MissionCalls.pageDecline is on.
+local function Declinable(call, now)
+    if not call.pagedCid then return false end
+    if call.missionId then return true end
+    return Cfg().pageDecline == true and now < (call.pagedUntil or 0)
+end
+
+-- The paged unit's leader turns a call down. A pushed mission ends: nobody else gets it. A plain paged call
+-- (Config.MissionCalls.pageDecline) ends its page at once: it is open to every unit, and the others get the toast.
 function MC.decline(src, callId)
     src = CP.U.toSrc(src)
     if not src then return false, 'err.not_in_game' end
     local call = calls[math.tointeger(tonumber(callId) or 0)]
-    if not call or not call.missionId or call.status ~= 'open' or call.window then return false, 'err.mc_not_open' end
+    local now = os.time()
+    if not call or call.status ~= 'open' or call.window or not Declinable(call, now) then
+        return false, 'err.mc_not_open'
+    end
     local unit = UnitInfo(src)
     if not Contains(unit.cids, call.pagedCid) then return false, 'err.mc_paged' end
     if not IsLeader(src) then return false, 'err.mc_page_not_leader' end
+    if not call.missionId then
+        call.pagedUntil = now
+        MarkDirty()
+        NotifyIssuer(call, 'mc.toast.page_declined', { code = call.code })
+        return true
+    end
     -- the call's history row keeps it (withdrawn, reason 'declined')
-    Withdraw(call, 'declined', os.time())
+    Withdraw(call, 'declined', now)
     NotifyIssuer(call, 'mc.toast.push_declined', { code = call.code })
     return true
 end
@@ -1746,9 +1794,10 @@ local function Shown(call, officer, unitCids)
     return type(officer) == 'table' and officer.department == call.department
 end
 
--- The red LIVE card: a real crime, no draw and no pay range; its distance is to the crime's reported
--- place, never to a suspect.
-local function LiveCard(call, v)
+-- One Dispatch card for every call. A red LIVE card (a real crime) has no draw and no pay range, priority 1, and
+-- its distance is to the crime's reported place, never to a suspect; it is locked only for a unit member who is not
+-- the leader. A mission call shows its draw for this viewer's unit and every claim rule.
+local function Card(call, v, tod)
     local now = v.now
     local L = call.live
     local card = {
@@ -1756,94 +1805,64 @@ local function LiveCard(call, v)
         code = call.code,
         type = call.type,
         typeLabel = TypeLabel(call.type),
-        titleKey = 'mc.live.title',
-        live = true,
-        liveTitle = L.title,
-        liveStreet = L.street,
-        suspects = L.suspects,
-        priority = 1,
-        area = call.area and { key = call.area, label = AreaLabel(call.area) } or nil,
-        distance = v.coords and L.coords and math.floor(CP.U.dist2d(v.coords, L.coords) + 0.5) or nil,
         ageS = math.max(0, now - call.createdAt),
         offerEndsIn = math.max(0, call.offerEnds - now),
-        staff = false,
         crew = #v.unit.srcs > 1 and 'unit' or 'solo',
-        cash = { 0, 0 },
-        points = 0,
-        twists = {},
-        rapidPoints = 0,
-        typeOfTheDay = false,
-        redispatched = false,
-        paged = false,
-        pushed = false,
-        status = 'ready',
-    }
-    local w = call.winner
-    if call.status == 'lapsed' then
-        card.status = 'lapsed'
-        card.offerEndsIn = 0
-    elseif call.status == 'claimed' then
-        card.status = 'claimed'
-        card.claimedBy = w and { callsign = w.callsign or w.name, departmentShort = w.departmentShort or '' } or nil
-    elseif call.status == 'claiming' then
-        card.status = 'claiming'
-    elseif not v.isLeader then
-        card.status = 'locked'
-        card.locked = { reason = CP.L('mc.locked.not_leader') }
-    end
-    return card
-end
-
-local function Card(call, v, tod)
-    if call.live then return LiveCard(call, v) end
-    local cfg = Cfg()
-    local now = v.now
-    local st = TypeState(v.state, call.type)
-    local area = AreaForState(st, call)
-    local pool = EffectivePool(st, area)
-    local size = #v.unit.srcs
-    local rr = cfg.rapidResponse or {}
-    -- a pushed mission: its own area and that one mission; only the paged unit learns its name
-    local pushedTo = call.missionId ~= nil and Contains(v.unit.cids, call.pagedCid)
-    local pushErr = nil
-    if call.missionId then
-        area = call.area
-        local okM, def, errM = Call('Draw', 'checkMission', call.missionId, call.type, v.unit.officers, call.area)
-        pool = okM and def and 1 or 0
-        if not (okM and def) then pushErr = errM or 'err.refused' end
-    end
-    local card = {
-        id = call.id,
-        code = call.code,
-        type = call.type,
-        typeLabel = TypeLabel(call.type),
-        titleKey = ('mc.title.%s.%d'):format(call.type, call.titleIdx),
-        priority = call.priority,
-        area = area and { key = area, label = AreaLabel(area) } or nil,
-        distance = Distance(v, st, area),
-        ageS = math.max(0, now - call.createdAt),
-        offerEndsIn = math.max(0, call.offerEnds - now),
-        staff = call.staff,
-        crew = pool > 0 and (size > 1 and 'unit' or 'solo') or 'none',
-        minUnit = pool <= 0 and st.minUnit or nil,
-        cash = st.cash,
-        points = st.points,
-        twists = st.twists or {},
-        rapidPoints = call.staff and 0 or math.floor(st.points * Num(rr.pctOfP, 0.10) + 0.5),
-        typeOfTheDay = tod == call.type,
-        redispatched = call.redispatched,
         paged = call.pagedCid ~= nil,
         pushed = call.missionId ~= nil,
-        missionLabel = pushedTo and MissionName(call.missionId) or nil,
-        department = call.department,
-        departmentShort = DeptShort(call.department),
+        declinable = false,
         status = 'ready',
-        priorityEndsIn = nil,
-        locked = nil,
-        claimedBy = nil,
-        claiming = nil,
-        lostBy = call.lostBy[v.src],
     }
+    local st, pool, pushErr = nil, 0, nil
+    if L then
+        card.titleKey = 'mc.live.title'
+        card.live = true
+        card.liveTitle = L.title
+        card.liveStreet = L.street
+        card.suspects = L.suspects
+        card.priority = 1
+        card.area = call.area and { key = call.area, label = AreaLabel(call.area) } or nil
+        card.distance = v.coords and L.coords and math.floor(CP.U.dist2d(v.coords, L.coords) + 0.5) or nil
+        card.staff = false
+        card.cash = { 0, 0 }
+        card.points = 0
+        card.twists = {}
+        card.rapidPoints = 0
+        card.typeOfTheDay = false
+        card.redispatched = false
+    else
+        local rr = Cfg().rapidResponse or {}
+        st = TypeState(v.state, call.type)
+        local area = AreaForState(st, call)
+        pool = EffectivePool(st, area)
+        -- a call paged to this viewer's unit; a pushed mission: its own area and that one mission, and only the
+        -- paged unit learns its name
+        local pagedTo = call.pagedCid ~= nil and Contains(v.unit.cids, call.pagedCid)
+        if call.missionId then
+            area = call.area
+            local okM, def, errM = Call('Draw', 'checkMission', call.missionId, call.type, v.unit.officers, call.area)
+            pool = okM and def and 1 or 0
+            if not (okM and def) then pushErr = errM or 'err.refused' end
+        end
+        card.titleKey = ('mc.title.%s.%d'):format(call.type, call.titleIdx)
+        card.priority = call.priority
+        card.area = area and { key = area, label = AreaLabel(area) } or nil
+        card.distance = Distance(v, st, area)
+        card.staff = call.staff
+        card.crew = pool > 0 and card.crew or 'none'
+        card.minUnit = pool <= 0 and st.minUnit or nil
+        card.cash = st.cash
+        card.points = st.points
+        card.twists = st.twists or {}
+        card.rapidPoints = call.staff and 0 or math.floor(st.points * Num(rr.pctOfP, 0.10) + 0.5)
+        card.typeOfTheDay = tod == call.type
+        card.redispatched = call.redispatched
+        card.missionLabel = pagedTo and call.missionId and MissionName(call.missionId) or nil
+        card.declinable = pagedTo and Declinable(call, now)
+        card.department = call.department
+        card.departmentShort = DeptShort(call.department)
+        card.lostBy = call.lostBy[v.src]
+    end
     local w = call.winner
     if call.status == 'lapsed' then
         card.status = 'lapsed'
@@ -1853,15 +1872,14 @@ local function Card(call, v, tod)
         card.claimedBy = w and { callsign = w.callsign or w.name, departmentShort = w.departmentShort or '' } or nil
     elseif call.status == 'claiming' then
         card.status = 'claiming'
-        card.claiming = w
-                and {
-                    callsign = w.callsign or w.name,
-                    expiresIn = math.max(0, (call.readyUntil or now) - now),
-                }
-            or nil
+        if not L and w then
+            card.claiming = { callsign = w.callsign or w.name, expiresIn = math.max(0, (call.readyUntil or now) - now) }
+        end
     elseif not v.isLeader then
         card.status = 'locked'
         card.locked = { reason = CP.L('mc.locked.not_leader') }
+    elseif L then
+        return card
     elseif not st.ok then
         card.status = 'locked'
         card.locked = { reason = CP.L(st.errKey or 'err.refused') }
@@ -1940,7 +1958,7 @@ function MC.list(src)
         operation = { missionLabel = type(op) == 'table' and op.missionLabel or '' }
     end
     local realCalls = nil
-    if Cfg().realCallStrip ~= false then
+    if (Cfg().realCalls or {}).strip ~= false then
         local _, summary = Call('Dispatch', 'realCallSummary')
         realCalls = type(summary) == 'table' and summary or nil
     end
@@ -2237,24 +2255,6 @@ local function LiveOf(crimeKey)
     return nil
 end
 
--- The red toast for every member of an idle unit who has not muted call alerts (a real crime ignores the favourite
--- types) and is not on a real call.
-local function LiveToast(call, units)
-    local payload = ToastPayload(call)
-    payload.live = true
-    payload.title = call.live.title
-    payload.street = call.live.street
-    payload.titleKey = nil
-    for _, u in ipairs(units) do
-        for i, m in ipairs(u.srcs) do
-            local cid = u.cids[i]
-            if cid and not AlertsOf(cid).v and not IsOnCall(m) then
-                TriggerClientEvent(CP.e('client:missionCall'), m, payload)
-            end
-        end
-    end
-end
-
 -- Posts the LIVE call of a crime (CP.LiveCrime.post): the call, or nil and why ('off', 'calls_off', 'posted',
 -- 'max_live', 'invalid').
 function MC.postLive(crime)
@@ -2266,27 +2266,13 @@ function MC.postLive(crime)
     if Cfg().enabled == false then return nil, 'calls_off' end
     if LiveOf(crime.crimeKey) then return nil, 'posted' end
     if MC.liveCount() >= math.floor(Num(lc.maxLiveRuns, 2)) then return nil, 'max_live' end
-    local now = os.time()
-    tempId = tempId - 1
     liveSeq = liveSeq + 1
     local okC, hasXY = pcall(function() return tonumber(crime.coords.x) ~= nil and tonumber(crime.coords.y) ~= nil end)
     local coords = okC and hasXY and crime.coords or nil
-    local call = {
-        id = tempId,
+    -- the same call as every other, with no database row, a LIVE code and the live crime's offer time
+    local call = NewCall(crime.missionType, coords and MC.areaOf(coords) or nil, {
         code = ('LIVE-%03d'):format(liveSeq % 1000),
-        type = crime.missionType,
-        area = coords and MC.areaOf(coords) or nil,
-        priority = 1,
-        titleIdx = 1,
-        createdAt = now,
-        offerEnds = now + math.floor(Num(lc.offerTime, 300)),
-        status = 'open',
-        staff = false,
-        redispatched = false,
-        reopened = false,
-        excluded = {},
-        lostBy = {},
-        claimants = 0,
+        offerTime = math.floor(Num(lc.offerTime, 300)),
         live = {
             crimeKey = crime.crimeKey,
             title = tostring(crime.title or crime.label or ''),
@@ -2294,12 +2280,8 @@ function MC.postLive(crime)
             coords = coords,
             suspects = CP.U.count(crime.suspects or {}),
         },
-    }
-    calls[call.id] = call
-    MarkDirty()
-    CP.log(TAG, 'posted LIVE call %s for crime %s (%s, %d suspect(s))', call.code, crime.crimeKey, call.type,
-        call.live.suspects)
-    LiveToast(call, IdleUnits())
+    })
+    Toast(call, IdleUnits())
     return call
 end
 

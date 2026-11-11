@@ -112,9 +112,11 @@ end
 
 function D.realCallSummary()
     local now = os.time()
-    local ttl = tonumber(Config.MissionCalls and Config.MissionCalls.realCallCache) or 15
+    local mc = type(Config.MissionCalls) == 'table' and Config.MissionCalls or {}
+    local rc = type(mc.realCalls) == 'table' and mc.realCalls or {}
+    local ttl = tonumber(rc.cache) or 15
     if summaryCache and now - summaryCache.at < ttl then return summaryCache.value or nil end
-    local prefix = tostring(Config.Calls and Config.Calls.npcCallPrefix or 'npccall-')
+    local prefix = tostring(rc.npcCallPrefix or 'npccall-')
     local value = false
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local ok, rows = pcall(MySQL.query.await, [[

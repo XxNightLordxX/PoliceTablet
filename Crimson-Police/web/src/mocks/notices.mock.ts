@@ -97,9 +97,12 @@ registerMock(
     },
 );
 
-registerMock('action', 'server:notice:end', (p: { id?: number }) => {
+registerMock('action', 'server:notice:end', (p: { id?: number; reason?: string }) => {
     const n = rows.find(r => r.id === p.id && isRunning(r));
     if (!n) throw new Error('err.notice_unknown');
     n.endedAt = nowS();
+    // the history names who ended it and why (the server reads both from the audit log)
+    n.endedBy = n.kind === 'department' ? 'Sgt. Maria Lopez' : 'Admin Alex Reed';
+    n.endReason = p.reason?.trim() || undefined;
     return { id: n.id };
 });

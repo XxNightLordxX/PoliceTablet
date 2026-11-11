@@ -64,6 +64,7 @@ for _, old in ipairs({
     H.eq(CP.AdminKit._actions()[old], nil, old .. ' is gone (one post and one end)')
 end
 H.eq(CP.DeptNotices, nil, 'no CP.DeptNotices any more')
+H.eq(CP.Tablet.notifyAdmins, nil, 'no separate toast-every-admin helper (one toast path: notifyMany to onlineAdmins)')
 H.eq(DC.def('notices').kind, 'action', 'department notices are still the notices Mission control')
 local ok, err = Post(2, 'department', 'Briefing at 8')
 H.eq(ok, false, 'department kind off as shipped: refused (' .. tostring(err) .. ')')
@@ -178,6 +179,15 @@ local kinds = {}
 for _, n in ipairs(view.history) do kinds[n.kind] = (kinds[n.kind] or 0) + 1 end
 H.ok(#view.history == 3 and kinds.staff == 1 and kinds.department == 2 and view.history[1].ended == 'removed',
     'one history of both kinds, ended early')
+-- who ended each one and why, from its end row in the audit log
+local byId = {}
+for _, n in ipairs(view.history) do byId[n.id] = n end
+local hs, hd, hr = byId[staff.id], byId[dnote.id], byId[res.id]
+H.ok(hs and type(hs.endedBy) == 'string' and hs.endedBy ~= '' and hs.endReason == 'done',
+    'history: the admin who ended the staff notice, with his reason')
+H.eq(hd and hd.endReason, 'wrong place', 'history: the reason the admin gave for ending a department notice')
+H.ok(hr and type(hr.endedBy) == 'string' and hr.endedBy ~= '' and hr.endReason == nil,
+    'history: the supervisor who ended his notice, no reason asked')
 view = View(2, 'department')
 H.ok(#view.history == 2 and view.history[1].kind == 'department', 'his history: his department only')
 H.time = H.time + 3 * DAY

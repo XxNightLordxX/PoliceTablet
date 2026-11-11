@@ -808,8 +808,8 @@ do
     for _, p in ipairs({
         'Tablet.title',
         'Tablet.adminCommand',
-        'Calls.npcCallPrefix',
-        'Calls.ownRunCallPrefixes',
+        'MissionCalls.realCalls.npcCallPrefix',
+        'MissionCalls.realCalls.ownRunCallPrefixes',
         'Bonuses.hostile_arrested.each',
         'Bonuses.hostile_arrested.block',
         'Bonuses.rapid_response.engineOnly',
@@ -820,8 +820,8 @@ do
     H.eq(S.view('Tablet.title').locked, 'settings.locked.names', 'with the reason shown')
 
     -- ranges of the real-call, alert, route and downed numbers
-    Err('Calls.dodgeWindow', 5, 'err.setting_range', 'dodgeWindow below 10 s')
-    H.ok((Check('Calls.dodgeWindow', 90)), 'dodgeWindow 90 s')
+    Err('MissionCalls.realCalls.dodgeWindow', 5, 'err.setting_range', 'dodgeWindow below 10 s')
+    H.ok((Check('MissionCalls.realCalls.dodgeWindow', 90)), 'dodgeWindow 90 s')
     Err('Route.maxDrift', 100, 'err.setting_range', 'maxDrift below 200 m')
     -- Hard rule 17's switch (Config.Route.required): an on/off gameplay rule an admin may change, not a money switch
     local req = S.entry('Route.required')
@@ -831,7 +831,7 @@ do
     H.ok((Check('Route.required', false)), 'Route.required may be turned off')
     Err('Route.required', 'no', 'err.setting_type', 'Route.required takes true or false only')
     Err('Downed.checkEvery', 11, 'err.setting_range', 'checkEvery above 10 s')
-    Err('Alerts.backstopRadius', 2000, 'err.setting_range', 'backstopRadius above 1000 m')
+    Err('MissionCalls.alertSuppression.backstopRadius', 2000, 'err.setting_range', 'backstopRadius above 1000 m')
     Err('AdminControl.bulkMaxRows', 0, 'err.setting_range', 'a bulk job changes 1 row at least')
     H.ok(
         S.entry('AdminControl.pointAdjust') ~= nil and S.entry('Cash.allowClawback') ~= nil and S.entry('Labels') ~= nil

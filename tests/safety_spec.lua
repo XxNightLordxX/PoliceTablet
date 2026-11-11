@@ -925,7 +925,7 @@ do
     H.time = T + 1199
     H.eq(CP.Calls.isOnCall(13), true, 'entry alive before the expiry')
     H.time = T + 1200
-    H.eq(CP.Calls.isOnCall(13), false, 'entry expires after Config.Calls.respondingExpiry')
+    H.eq(CP.Calls.isOnCall(13), false, 'entry expires after Config.MissionCalls.realCalls.respondingExpiry')
 
     -- auto-cleared calls: re-checked in mdt_dispatch
     Respond(16, '777', true)

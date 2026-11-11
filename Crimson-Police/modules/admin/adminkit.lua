@@ -640,9 +640,8 @@ function Kit._resumeJobs()
             local okR = pcall(RunJob, job, handlers)
             Kit.unlock('job')
             if not okR then CP.err(TAG, 'job %s could not be finished', job.id) end
-            if Has('Tablet', 'notifyAdmins') then
-                Call('Tablet', 'notifyAdmins', 'warning', 'adminkit.job_resumed', {})
-            end
+            local _, admins = Call('Tablet', 'onlineAdmins')
+            Call('Tablet', 'notifyMany', admins or {}, 'warning', 'adminkit.job_resumed', {})
         elseif job then
             if handlers and type(handlers.rollback) == 'function' then
                 pcall(handlers.rollback, job)
@@ -651,9 +650,8 @@ function Kit._resumeJobs()
                 SetJobState(job, 'failed')
             end
             CP.warn(TAG, 'the %s job %s a restart interrupted could not go on and was stopped', job.kind, job.id)
-            if Has('Tablet', 'notifyAdmins') then
-                Call('Tablet', 'notifyAdmins', 'warning', 'adminkit.job_stopped', {})
-            end
+            local _, admins = Call('Tablet', 'onlineAdmins')
+            Call('Tablet', 'notifyMany', admins or {}, 'warning', 'adminkit.job_stopped', {})
         end
     end
     return n

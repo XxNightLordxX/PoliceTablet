@@ -220,8 +220,14 @@ export function NoticesCard({ kind }: { kind: NoticeKind }) {
                                         {t(`notices.ended.${n.ended ?? 'expired'}`, {
                                             date: fmtDateTime(n.endedAt ?? n.expiresAt),
                                         })}
+                                        {n.endedBy ? ` ${t('notices.ended_by', { name: n.endedBy })}` : ''}
                                         {kind === 'staff' ? ` · ${where(n)}` : ''}
                                     </span>
+                                    {n.endReason ? (
+                                        <span className="cp-notices__soft">
+                                            {t('notices.end_reason', { reason: n.endReason })}
+                                        </span>
+                                    ) : null}
                                 </li>
                             ))}
                         </ul>

@@ -48,8 +48,8 @@
 --
 -- Backstop (CP.Dispatch listeners, receivedAt = os.time() captured at receipt by the integration):
 --   shots fired   from a src whose intent is on, or an arrived active participant of an In-progress run,
---                 within Config.Alerts.backstopRadius (server-side ped coords) of the location start or the
---                 current objective anchor (CP.Runs.anchor) -> after Config.Alerts.backstopDelay s clear
+--                 within Config.MissionCalls.alertSuppression.backstopRadius (server-side ped coords) of the
+--                 location start or the current objective anchor (CP.Runs.anchor) -> after its backstopDelay s clear
 --                 shots_<src>_<t> for t-1, t, t+1 with { 'police' }
 --   person down / dead  from a src in wanted -> clear playerdown_/playerdead_<src>_<t> for t-1, t, t+1
 --                 with { 'police', 'ambulance' }
@@ -599,8 +599,14 @@ end
 --                       BACKSTOP (Crimson-Arena rule 9)
 -- ============================================================================
 
+-- The alert suppression numbers (Config.MissionCalls.alertSuppression).
+local function AS()
+    local mc = type(Config.MissionCalls) == 'table' and Config.MissionCalls or {}
+    return type(mc.alertSuppression) == 'table' and mc.alertSuppression or {}
+end
+
 local function DelayMs()
-    local s = tonumber(Config.Alerts and Config.Alerts.backstopDelay) or 1
+    local s = tonumber(AS().backstopDelay) or 1
     if s < 0 then s = 0 end
     return math.floor(s * 1000)
 end
@@ -624,7 +630,7 @@ local function ClearIds(fmt, src, t, jobs)
 end
 
 local function NearMission(run, coords)
-    local radius = tonumber(Config.Alerts and Config.Alerts.backstopRadius) or 0
+    local radius = tonumber(AS().backstopRadius) or 0
     local start = type(run.location) == 'table' and run.location.start or nil
     if type(start) == 'table' and start.coords and CP.U.dist(coords, start.coords) <= radius then return true end
     if CP.Runs and CP.Runs.anchor then

@@ -10,7 +10,8 @@
 --               Mission control (its switch and grants, CP.DeptControls); perDay a supervisor a day (admins any);
 --               audit deptNoticePost, deptNoticeEnd. Saved with by_actor 'sup:<citizenid>'.
 -- The banned-word list applies to both; one player posts one notice per Config.Notices.postWait seconds. An admin with
--- officerRecords may end any running notice, a supervisor the running notices of his own department.
+-- officerRecords may end any running notice, a supervisor the running notices of his own department. The history
+-- shows who ended a notice early and why, from its end row in the audit log (cp_audit).
 --   notices:get           { kind }                            -> the view of that kind (N.view)
 --   server:notice:post    { kind, text, days, departments?, reason? } -> { id, kind, department? }
 --   server:notice:end     { id, reason? }                     -> { id }
@@ -126,6 +127,46 @@ local function Ended(now)
         .. 'ORDER BY id DESC LIMIT ?'
     ):format(COLUMNS), { now, HISTORY_READ }, now)
 end
+
+-- Who ended each early-ended notice and why, from its end row in the audit log: endedBy (the officer's name, else
+-- the actor as saved) and endReason (nil when none was given). A read error leaves the rows as they are.
+local function EndedBy(rows)
+    local targets, byTarget = {}, {}
+    for _, r in ipairs(rows) do
+        if r.ended == 'removed' then
+            local t = ('notice:%d'):format(r.id)
+            targets[#targets + 1] = t
+            byTarget[t] = r
+        end
+    end
+    if #targets == 0 then return end
+    local marks = ('?, '):rep(#targets):sub(1, -3)
+    local params = U.copy(targets)
+    params[#params + 1] = 'noticeRemove'
+    params[#params + 1] = 'deptNoticeEnd'
+    -- target IN first: the saves folder engine looks rows up by the first indexed IN list (idx_audit_target)
+    local ok, audit = pcall(
+        MySQL.query.await,
+        ([[SELECT a.target, a.actor, a.reason, o.display_name FROM cp_audit a
+        LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE a.target IN (%s) AND a.action IN (?, ?)
+        ORDER BY a.id]]):format(marks),
+        params
+    )
+    if not ok or type(audit) ~= 'table' then
+        CP.err(TAG, 'reading who ended the notices failed: %s', tostring(audit))
+        return
+    end
+    for _, a in ipairs(audit) do
+        local r = byTarget[tostring(a.target)]
+        if r then
+            local name = a.display_name ~= nil and tostring(a.display_name) or ''
+            r.endedBy = name ~= '' and name or tostring(a.actor or '')
+            local why = a.reason ~= nil and tostring(a.reason) or ''
+            r.endReason = why ~= '' and why or nil
+        end
+    end
+end
+N._endedBy = EndedBy
 
 -- A department notice of that department (posted by one of its supervisors for it alone).
 local function OfDept(n, dept)
@@ -273,6 +314,7 @@ function N.view(src, kind)
         if #view.history >= shown then break end
         if def.mine(r, dept) then view.history[#view.history + 1] = r end
     end
+    EndedBy(view.history)
     return view
 end
 
@@ -290,21 +332,20 @@ local function Alert(kind, text, depts, poster)
         want = {}
         for _, d in ipairs(depts) do want[d] = true end
     end
-    local sent = 0
+    local to = {}
     for _, s in ipairs(GetPlayers and GetPlayers() or {}) do
         local src = U.toSrc(s)
         if src and src ~= poster and (not CP.Access.maybeOfficer or CP.Access.maybeOfficer(src)) then
             local o = CP.Access.getOfficer(src)
-            if o and (not want or want[o.department]) then
-                CP.notify(src, 'info', 'notices.alert', { text = text }, {
-                    title = 'notices.alert_title.' .. kind,
-                    sound = alert == 'sound' or nil,
-                })
-                sent = sent + 1
-            end
+            if o and (not want or want[o.department]) then to[#to + 1] = src end
         end
     end
-    return sent
+    if #to == 0 or not (CP.Tablet and CP.Tablet.notifyMany) then return 0 end
+    -- the one toast path (CP.Tablet.notify), the same as every other tablet toast
+    return CP.Tablet.notifyMany(to, 'info', 'notices.alert', { text = text }, {
+        title = 'notices.alert_title.' .. kind,
+        sound = alert == 'sound' or nil,
+    })
 end
 N._alert = Alert
 

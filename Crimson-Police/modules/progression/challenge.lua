@@ -1738,7 +1738,8 @@ function C._remindPlannedEnd(nowTs)
         if left > 0 and left <= r.s and not reminded[key] then
             reminded[key] = true
             sent = sent + 1
-            Call('Tablet', 'notifyAdmins', 'warning', 'challenge.planned_end_soon',
+            local _, admins = Call('Tablet', 'onlineAdmins')
+            Call('Tablet', 'notifyMany', admins or {}, 'warning', 'challenge.planned_end_soon',
                 { season = season.name, when = r.key == '1h' and CP.L('challenge.in_1h') or CP.L('challenge.in_24h') })
         end
     end

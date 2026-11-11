@@ -864,7 +864,8 @@ Config.Draw = {
 -- pushMission Mission control). The first unit to claim a call gets a random mission of that type that starts in
 -- the call's area (a pushed call: the mission chosen); a pushed call's unit may decline it. Every claim goes through
 -- the same accept checks and the unit's ready check (Units.readyCheck). Mission calls are never sent to
--- SC-Dispatch, and real calls always come first.
+-- SC-Dispatch, and real calls always come first: the real-call rules (realCalls) and the alert suppression of mission
+-- participants (alertSuppression) are in this section too.
 Config.MissionCalls = {
     enabled = true,                  -- true = the server posts NPC mission calls to the tablet
     checkEvery = 10,                 -- seconds between server checks
@@ -904,6 +905,9 @@ Config.MissionCalls = {
     -- grace: seconds added to the target time
     rapidResponse = { pctOfP = 0.10, speed = 20.0, grace = 45 },
     pageTime = 30,                   -- seconds a paged call is offered only to the paged unit
+    -- true = the leader of a paged unit may also decline a plain paged call: the page ends at once and the call is
+    -- open to every unit (a pushed mission can always be declined; it then ends)
+    pageDecline = false,
     -- seconds between calls created by the same supervisor (the issuer's own unit can never be paged, and can't claim
     -- a call the issuer paged or created)
     staffCooldown = 120,
@@ -913,8 +917,27 @@ Config.MissionCalls = {
     laneMaxOpen = 2,
     -- missions one supervisor may push to a unit a day (the pushMission Mission control; admins any)
     pushPerDay = 5,
-    realCallStrip = true,            -- show the read-only SC-Dispatch real-call count
-    realCallCache = 15,              -- seconds
+    -- Real calls: SC-Dispatch calls an officer marks himself responding to. While he responds to one he can't take
+    -- a mission, and responding to one during a run ends that run without a penalty.
+    realCalls = {
+        strip = true,               -- show the read-only SC-Dispatch real-call count on the Dispatch screen
+        cache = 15,                 -- seconds the real-call count is kept before it is read again
+        npcCallPrefix = 'npccall-', -- SC-NPCPolice call ids start with this; those calls never end a run
+        -- about a participant: not real calls for their partners
+        ownRunCallPrefixes = { 'playerdown_', 'playerdead_', 'emsdown_', 'emshelp_', 'panic_' },
+        dodgeWindow = 60,           -- un-marking responding within this many seconds makes it a normal abandon
+        -- seconds; a responding entry with no update expires (auto-cleared calls fire no event)
+        respondingExpiry = 1200,
+    },
+    -- Alert suppression: a participant's own shots-fired, person-down and dead calls don't reach real dispatch.
+    -- The flag is the crimsonArena state bag, which SC-Dispatch and SC-Ambulance already check; its name is fixed in
+    -- those resources, so it is not configurable.
+    alertSuppression = {
+        -- clear a shots-fired call from a participant within this many metres of their mission (person-down and
+        -- dead calls are cleared while the flag is on)
+        backstopRadius = 300.0,
+        backstopDelay = 1,      -- seconds to wait for SC-Dispatch to create the call before clearing it
+    },
     -- A location belongs to the area whose centre is nearest. Labels show on the calls.
     areas = {
         { key = 'south_ls', label = 'South Los Santos', center = vec3(150.0, -1750.0, 29.0) },
@@ -927,30 +950,6 @@ Config.MissionCalls = {
         { key = 'north', label = 'Grapeseed & Paleto', center = vec3(700.0, 5600.0, 35.0) },
         { key = 'west_county', label = 'West Blaine County', center = vec3(-2500.0, 2000.0, 20.0) },
     },
-}
-
--- ============================================================================
---                                  REAL CALLS
--- ============================================================================
-
-Config.Calls = {
-    npcCallPrefix = 'npccall-', -- SC-NPCPolice call ids start with this; those calls never end a run
-    -- about a participant: not real calls for their partners
-    ownRunCallPrefixes = { 'playerdown_', 'playerdead_', 'emsdown_', 'emshelp_', 'panic_' },
-    dodgeWindow = 60,           -- un-marking responding within this many seconds makes it a normal abandon
-    respondingExpiry = 1200,    -- seconds; a responding entry with no update expires (auto-cleared calls fire no event)
-}
-
--- ============================================================================
---                              ALERT SUPPRESSION
--- ============================================================================
--- The flag is the crimsonArena state bag, which SC-Dispatch and SC-Ambulance
--- already check; its name is fixed in those resources, so it is not configurable.
-Config.Alerts = {
-    -- clear a shots-fired call from a participant within this many metres of their mission (person-down and dead
-    -- calls are cleared while the flag is on)
-    backstopRadius = 300.0,
-    backstopDelay = 1,      -- seconds to wait for SC-Dispatch to create the call before clearing it
 }
 
 -- ============================================================================

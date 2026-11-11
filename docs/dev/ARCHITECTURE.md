@@ -687,8 +687,8 @@ and holds the front doors below (INTEGRATIONS.md "Adding an adapter").
   sc-dispatch is stopped; the numeric form only for digit-only ids; an empty unique_id returns the row id; `npccall-`
   rows are returned, the caller classifies), `clearNotification(uniqueId, jobs) -> bool` (pcall; refuses numbers and
   digit-only strings, which would match unrelated rows by id).
-- `realCallSummary() -> { total, p1 } | nil` (active real calls by priority, excluding `Config.Calls.npcCallPrefix`;
-  cached `Config.MissionCalls.realCallCache` s), `mdtCommendations(citizenid) -> list|nil` (`employee_incidents`
+- `realCallSummary() -> { total, p1 } | nil` (active real calls by priority, excluding `realCalls.npcCallPrefix`;
+  cached `realCalls.cache` s), `mdtCommendations(citizenid) -> list|nil` (`employee_incidents`
   commendations, last 10; `Config.Profile.showMdtCommendations`).
 - Listeners: `onResponding(fn(src, callId, isResponding))` (`sc-dispatch:server:ToggleResponding`, callId as sent,
   validated, at most 64 characters), `onCallCleared(fn(callId))` (server-local), `onDispatchRestart(fn())`
@@ -785,8 +785,8 @@ Server:
 An unknown `via` is the command; a request that names no way (switchUi, refreshSession) uses the src's last passed
 way.
 - `itemOk(src)` — requireItem again for `server:acceptType` and `server:answerMissionCall` (claim).
-- `notify(src, kind, key, vars, { title, duration })` (kind info|success|warning|error), `notifyMany(srcs, ...)`,
-  `push(src, topic, data)` (NUI `{ type = 'push' }`), `pushAdmins(topic, data)`, `notifyAdmins(kind, key, vars)`,
+- `notify(src, kind, key, vars, { title, duration, channel, sound })` (kind info|success|warning|error; the one toast
+  path), `notifyMany(srcs, kind, key, vars, opts)`, `push(src, topic, data)` (NUI `{ type = 'push' }`), `pushAdmins`,
   `onlineAdmins()` (only admins, never anyone else), `openAdmin(src)` (`false, 'err.not_in_game'` from the console).
 - Sidebar badges: `navCounts(src) -> NavCounts`, callback `getNavCounts`.
 - Plain events: `server:tabletClosed` (4/s; ends the nav watch, fires `tablet:closed`), `server:tabletItemGone` (2/s;
@@ -1244,19 +1244,19 @@ the start pin and waypoint so the objective line is his one line).
 | `client:requestEMS` | S → C | runId | |
 | `client:downedEnded` | S → C | runId, reason | once, whenever a downed entry leaves the pending stages |
 
-### 5.13 CP.Calls — modules/dispatch/calls.lua (Hard rule 15)
-- `isOnCall(src, { except })` — a live real-call responding entry (`Config.Calls.respondingExpiry`; each re-checked in
+### 5.13 CP.Calls — modules/dispatch/calls.lua (Hard rule 15; MissionCalls.realCalls)
+- `isOnCall(src, { except })` — a live real-call responding entry (`realCalls.respondingExpiry`; each re-checked in
   mdt_dispatch at most every 10 s, may yield).
 - `exemptFor(run) -> { exact, prefixes }` — the case's own call (`run.live.dispatchId`) and `'<prefix><src>_'` for
-  every participant and suspect with each `Config.Calls.ownRunCallPrefixes` entry plus `shots_`.
+  every participant and suspect with each `realCalls.ownRunCallPrefixes` entry plus `shots_`.
 - Classifying a mark (`CP.Dispatch.onResponding`): NPC prefix (no lookup) → `lookupActiveCall` (only a hit counts) →
   NPC prefix on the canonical id → own-run prefixes (any participant of the sender's run, also partners who left) → in
   a real-suspect case `exemptFor(run)` → a real call.
-- Dodge rule: an un-mark within `Config.Calls.dodgeWindow` of the free abandon (the same call, or one never marked; a
+- Dodge rule: an un-mark within `realCalls.dodgeWindow` of the free abandon (the same call, or one never marked; a
   dispatcher detach looks the same) → `CP.Runs.reclassify(..., 'real_call_cancelled')`.
 - Every free abandon is audited (`free_abandon`, flags, with the count of the last 24 h).
 
-### 5.14 CP.Alerts — modules/dispatch/alerts.lua (Hard rule 16; the only writer of the crimsonArena bag)
+### 5.14 CP.Alerts — modules/dispatch/alerts.lua (Hard rule 16; MissionCalls.alertSuppression; the bag's one writer)
 The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (rules 1–3, 9).
 - `set(src, run)` → `Player(src).state:set('crimsonArena', { active = true, source = 'crimson-police' }, true)`.
 - `clear(src, { force })` — only our value; ignored while CP.Downed holds it (`hold(src, on)`) unless forced.
@@ -1266,9 +1266,9 @@ The full rule set is the Crimson-Arena section of `docs/dev/INTEGRATIONS.md` (ru
 - An in-arena participant is removed here (`removeParticipant(run, src, 'quit', { notify = 'run.left_for_arena' })`
   after `forget`, `CP.Route.stop`, `CP.Downed.cancel`) or by the engine's own re-check, whichever runs first.
 - The 1 s reconcile fires `arena:exited (src)` once when `inArena` turns false.
-- Backstop (not for runs where `alertsGoOut` is true): shots fired within `Config.Alerts.backstopRadius` (3D, of the
+- Backstop (not for runs where `alertsGoOut` is true): shots fired within `alertSuppression.backstopRadius` (3D, of the
   start or `CP.Runs.anchor`) of a flagged or arrived participant, or a flagged person down/dead → clear the call after
-  `Config.Alerts.backstopDelay` s (repeated when an earlier clear may have run before the call existed).
+  `alertSuppression.backstopDelay` s (repeated when an earlier clear may have run before the call existed).
 - Start: removes leftover flags of ours from every player; stop: clears all.
 
 ### 5.15 CP.Downed — modules/runs/downed (Hard rule 18)
@@ -1843,9 +1843,9 @@ One list for every call (server, lane, staff, page, push, LIVE), one answer and 
   `minLocationsPerArea` locations in his pool there.
 - `claim(src, callId) -> ok, { runId } | { pending } | errKey` — every accept check, then the call's rules (excluded
   citizenids, the issuer's unit for the whole offer, paged, priority window, a pool in the area).
-- Staff calls: `withdraw(src, id, reason)`, `page(src, typeKey, area, leaderSrc)`, `create(src, typeKey, area, {
-  skipWait, reason })` (an admin's **Post anyway** during the wait between staff calls, audited `mcCreateSkipWait`;
-  supervisors still wait).
+- Staff calls: `withdraw(src, id, reason)`, `page(src, type, area, leaderSrc)`, `create(src, type, area, { skipWait,
+  reason })` (an admin's **Post anyway**, audited `mcCreateSkipWait`). `decline(src, id)`: a push ends, a page
+  (`pageDecline`) opens to all.
 - `claimableCount(src)` (Home and board `callsOpen`), `stats(citizenid) -> { answered, avgResponse, rapid }`,
   `supView(src) -> SupCallsView` (claimed calls of other departments hidden from supervisors), `history(args) ->
   Paged` (callback `admin:getMissionCalls`), `closeLeftover()` (at start: rows left `open` become `lapsed`, `claimed`
@@ -1971,9 +1971,9 @@ the same tables the same way.
 
 Full admin control:
 - Locked also: `Tablet.title`, `Tablet.command`, `Tablet.adminCommand` (`settings.locked.names`),
-  `Calls.npcCallPrefix`, `Calls.ownRunCallPrefixes` (`settings.locked.call_ids`), `Bonuses.*.each|block|engineOnly`
+  `realCalls.npcCallPrefix`, `.ownRunCallPrefixes` (`settings.locked.call_ids`), `Bonuses.*.each|block|engineOnly`
   (`settings.locked.code_fact`).
-- RANGES for Hard rules 15-18: `Calls.dodgeWindow` 10-300, `respondingExpiry` 60-7200, `Alerts.backstopRadius`
+- RANGES for Hard rules 15-18: `realCalls.dodgeWindow` 10-300, `.respondingExpiry` 60-7200, `alertSuppression.backstopRadius`
   50-1000, `backstopDelay` 0-10, `Downed.pickupDelay` 5-120, `checkEvery` 1-10, `Route.abandonAfter` 10-120,
   `maxDeviation` 30-500, `reportTimeout` 5-60, `maxDrift` 200-5000, `lateArriveRange` 0-500, `followActionSeconds`
   0-1800.
@@ -2342,11 +2342,11 @@ Crimson-Contracts sends these only with `ContractsConfig.LifecycleEvents = true`
   `LC.post(crime)`.
 
 #### The LIVE call
-- `CP.MissionCalls.postLive(crime)` keeps the call in memory only (a negative id, code `LIVE-<n>`), type = the crime's
-  mission type, area from its coords, priority 1, `offerEnds` = now + `Config.RealPlayers.liveCrime.offerTime` (300, 30–3600),
-  `live = { crimeKey, title, street, coords, suspects }`.
-- The toast (`client:missionCall` with `live = true`) goes to every member of an idle unit who has not muted calls and
-  is not on a real call (favourites ignored), shown as a red "LIVE call".
+- `CP.MissionCalls.postLive(crime)`: the one `NewCall` with `opts.live` (memory only: a negative id, code `LIVE-<n>`),
+  type = the crime's mission type, area from its coords, priority 1, `liveCrime.offerTime` (300, 30–3600),
+  `live = { crimeKey, title, street, coords, suspects }`; one `Card` and `Toast`.
+- The toast (`client:missionCall`, `live = true`): every idle unit member who has not muted calls and is not on a real
+  call (favourites ignored), a red "LIVE call".
 
 #### The claim and the case
 - `MC.claim` of a LIVE call: `err.live_case_off` while off; twists dropped; `Draw.check(src, type, nil, { crimeKey })`
@@ -3107,7 +3107,7 @@ Server → client ox_lib callback: `crimson-police:client:spawn:walkIn` `{ car =
 | `server:stunHit` | netId (plain event, no reqId; 2 per s) | custody |
 | `server:tabletItemGone` | — (plain event; 2 per s) | tablet |
 | `server:tabletClosed` | — (plain event, once per close; 4 per s): ends the `nav` watch, fires `tablet:closed` | tablet |
-| `server:answerMissionCall` | `{ callId, answer?, twists? }`: claim (default) → `{ runId }` or `{ pending }` (twists checked before the window); decline: the paged leader turns a pushed mission down → `{ view }` | missioncalls |
+| `server:answerMissionCall` | `{ callId, answer?, twists? }`: claim (default) → `{ runId }` or `{ pending }` (twists checked before the window); decline (`MC.decline`) → `{ view }` | missioncalls |
 | `server:contactDecide` | `{ runId, netId, choice, offence?, confirmed? }` → `{ ok }` or `{ confirm = { factKey } }` | custody |
 | `server:profile:set` / `server:profile:report` | see §5.32 | profile |
 | `server:options:set` | `{ key = value, ... }` → `{ values }` (rate 4; see §5.48) | options |
@@ -3151,7 +3151,7 @@ Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday` (UI4,
 modules/supervisor/today: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
-`notices:get` (`{ kind }`, CP.Notices: limits, running, history), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
+`notices:get` (`{ kind }`, CP.Notices: limits, running, history + cp_audit endedBy/endReason), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:

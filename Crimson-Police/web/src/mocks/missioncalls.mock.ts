@@ -142,6 +142,7 @@ const state: { calls: MockCall[]; recent: RecentCall[]; onRun: boolean } = {
                 paged: true,
                 pushed: true,
                 missionLabel: 'Grove Street Patrol',
+                declinable: true,
                 staff: true,
                 rapidPoints: 0,
             }),
@@ -188,7 +189,7 @@ registerMock('action', 'server:answerMissionCall', (payload: Answer): ClaimCallR
 // A mission command pushed to this unit: only the paged unit's leader declines it.
 function decline(payload: Answer): { view: DispatchView } {
     const m = state.calls.find(c => c.call.id === Number(payload?.callId));
-    if (!m || !m.call.missionLabel) throw new Error('err.mc_not_open');
+    if (!m || !m.call.declinable) throw new Error('err.mc_not_open');
     state.calls = state.calls.filter(c => c !== m);
     // the reply carries the leader's fresh Dispatch view
     return { view: view() };
