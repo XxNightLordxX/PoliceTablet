@@ -893,8 +893,11 @@ local function Backup(src, kind, opts, name)
             local info = schema.tables[tname]
             local okR, rows = pcall(ReadRows, MySQL, info)
             if not okR then
+                -- Z13: a table left out would be wiped by a restore of this backup with no copy of its rows
                 CP.err(TAG, 'backup %s: reading %s failed: %s', name, tname, tostring(rows))
-                rows = nil
+                Cleanup(fs, manifest)
+                RemoveBackup(name)
+                return false, 'err.backup_read'
             end
             if rows then
                 local part = ('%s.t.%s.json'):format(name, tname)

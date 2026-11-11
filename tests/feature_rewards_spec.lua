@@ -346,4 +346,27 @@ do
     FC.suspect.enabled = false
 end
 
+-- Z13: a payment an admin cancelled while its source row was voided stays cancelled when the source row comes back.
+do
+    FC.supAward.enabled = true
+    local award = MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid,
+        department, state, end_reason, points_base) VALUES ('z13-award-1', 'manual_award', 'manual_award',
+        'FR_OFFLINE8', 'sast', 'completed', 'completed', 10)]])
+    local paid = FR.pay('supAward', 'FR_OFFLINE8', { key = ('sup:%s'):format(award), points = 10 })
+    H.ok(paid and paid.status == 'pending', 'Z13: the award money waits for the login')
+    CP.Hooks.fire('row:voided', award)
+    H.ok((CP.Cash.adminForfeit(paid.rowId, 'cancel')), 'Z13: the admin cancels the payment')
+    CP.Hooks.fire('row:restored', award)
+    local r = H.sql('SELECT voided, cash_status, cash_paid FROM cp_mission_runs WHERE id = ?', { paid.rowId })[1]
+    H.eq(CP.U.truthy(r.voided), false, 'Z13: restoring the award brings the money row back')
+    H.eq(r.cash_status, 'forfeited', 'Z13: ...but the cancelled payment stays cancelled')
+    online[10] = 'FR_OFFLINE8'
+    local before = #moneyCalls
+    pcall(CP.Cash.payPending, 10)
+    H.advance(100)
+    H.eq(#moneyCalls, before, 'Z13: ...and his login pays nothing')
+    online[10] = nil
+    FC.supAward.enabled = false
+end
+
 return H

@@ -813,3 +813,33 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   Traffic Enforcement violator with the driver alive: the stop lists him (no car) and you can work him. Turn
   `Config.FeatureRewards.suspect.voidWithRun` on: void every officer row of a paid volunteer case and the suspect's pay
   row is voided; restore one and it comes back.
+- [ ] Deep sweep (Z13): give an offline officer a supervisor award, void the award's row, cancel its payment
+  (Admin UI -> Money), restore the award row: the payment stays cancelled and his login pays nothing. (Z13)
+- [ ] Deep sweep (Z13): stop MariaDB for a moment while a backup runs (System -> Backups -> Back up now): the backup
+  is refused with "A table could not be read", no half backup is listed, and a restore takes no pre-restore backup
+  with a table left out. (Z13)
+- [ ] Deep sweep (Z13): a volunteer says yes to a run and cancels within the grace time: the NPC plays the suspect and
+  the officers' result pays the mission cash and counts for goals and the challenge again. (Z13)
+- [ ] Deep sweep (Z13): First-start setup: untick every department and press Finish: refused (one must stay on). Move
+  a job from one department card to another in one Finish: accepted. Turn off a department whose job is not a Qbox
+  job (Admin UI -> Departments): accepted. (Z13)
+- [ ] Deep sweep (Z13): a builder mission with an interact_points step whose together.count is above its points is
+  refused on save; a saved one completes with as many officers as points. (Z13)
+- [ ] Deep sweep (Z13): a custom mission whose first objective is a pursuit with complete = all_or_timeout_any and a
+  second objective: detain one racer and let the clock run out: the run is Failed (time limit), not Completed. (Z13)
+- [ ] Deep sweep (Z13): with requireTrainerFor = { 'tactical' }, a rookie joins a tactical Cross-Department Mission
+  without his trainer: he is dropped at the start with the "removed at start" toast. (Z13)
+- [ ] Deep sweep (Z13): with Tactical switched off for SAST (Mission control), an SAST officer cannot join a tactical
+  live case as backup either (Off for your department). (Z13)
+- [ ] Deep sweep (Z13): claim a LIVE call: Active Mission shows $0 expected cash with liveCrime.cash off, and no base
+  points with linesOnly on. (Z13)
+- [ ] Deep sweep (Z13): Parking Patrol with a returning driver who argues: the checklist and HUD stay at N of N+1 until
+  an officer explains the citation. (Z13)
+- [ ] Deep sweep (Z13): with adjustDailyLimit = 100, award 80 with /CrimsonPoliceAdmin award in game, then 30 more:
+  the second is refused (over your daily limit); the console has no limit. Two Give or take points at once: one says
+  busy. (Z13)
+- [ ] Deep sweep (Z13): after an in-game Switch storage, run storage copy: the next step names System -> Storage ->
+  Switch storage (or storagemode reset), not config.lua alone. Settings -> Database says the same. (Z13)
+- [ ] Deep sweep (Z13): test a Traffic Enforcement, stop the car, press Restart: the next contact stop takes only the
+  new car. Test a Parking Patrol, let the returning driver take his ticket and Restart within 30 s: the new parked
+  cars stay. (Z13)

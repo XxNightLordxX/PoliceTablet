@@ -1054,6 +1054,30 @@ Act('server:joinOperation', 5, opId)
 Act('server:joinOperation', 3, { operationId = opId })
 H.eq(#O.active().participants, 3, 'Z8: they join again once allowed')
 
+-- Z13: field training's ride-along rule (requireTrainerFor) drops each rookie whose trainer is not taking part
+Clear()
+local ftUnits = {}
+CP.FieldTraining = {
+    unitCheck = function(officers, missionType)
+        ftUnits[#ftUnits + 1] = missionType
+        for _, o in ipairs(officers) do
+            if o.citizenid == 'CID3' or o.citizenid == players[5].citizenid then
+                return false, 'err.fto_trainer_needed', o.citizenid
+            end
+        end
+        return true
+    end,
+}
+ok, data = Act('server:sup:opStart', 1)
+CP.FieldTraining = nil
+H.eq(ftUnits[1], 'tactical', 'Z13: the start checks the unit for the mission type')
+H.eq(data, 'err.op_not_enough', 'Z13: both rookies are dropped: too few to start')
+H.eq(#O.active().participants, 1, 'Z13: only the officer the rule allows is kept')
+H.eq(CountNotes('officer.op.removed_at_start'), 2, 'Z13: both are told')
+Act('server:joinOperation', 5, opId)
+Act('server:joinOperation', 3, { operationId = opId })
+H.eq(#O.active().participants, 3, 'Z13: they join again')
+
 Clear()
 created = {}
 pickResult = 2

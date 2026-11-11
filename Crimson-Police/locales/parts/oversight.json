@@ -1,4 +1,5 @@
 {
+  "err.busy": "Still working on your last request. Wait a moment and try again.",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.no_callsign": "No callsign",
@@ -383,6 +384,7 @@
   "admin.cmd.storage_copy_failed_live": "The copy stopped at {table}: {error}. The {target} is the storage in use, so it was not emptied again: payments, runs and claims stay held. Restart Crimson-Police, then run the copy again with force.",
   "admin.cmd.storage_copy_error": "The copy failed: {error}",
   "admin.cmd.storage_next_restart": "Restart Crimson-Police now, so every feature loads the copied data.",
+  "admin.cmd.storage_next_switch": "The in-game storage switch decides the storage now, not Config.Database in config/config.lua. To use the copy, open Admin UI -> System -> Storage -> Switch storage, or type CrimsonPoliceAdmin storagemode reset in the server console, set Config.Database.enabled in config/config.lua and restart {resource}.",
   "admin.cmd.storage_next_files": "To use the saves folder, set Config.Database.enabled = false in config/config.lua and restart Crimson-Police.",
   "admin.cmd.storage_next_database": "To use the database, set Config.Database.enabled = true in config/config.lua and restart Crimson-Police.",
   "admin.officers.subtitle": "Search any officer: rank, callsign, history, badges, cash earned, suspensions and disputes",

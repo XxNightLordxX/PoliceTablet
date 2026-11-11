@@ -424,6 +424,7 @@ do
     H.ok(Has(lines, 'no_show'), 'staff timeline: the no-show')
     H.eq(LastNote(10), 'volunteer.case.no_show', 'he is told')
     H.eq(V.matchView(run, 2).phase, 'npc', 'onVoid npc: the NPC plays the suspect')
+    H.eq(V.isCase(run), false, 'Z13: and the run is no volunteer case any more (cash, items and goals count again)')
     H.eq(#ended, 0, 'and the run goes on')
     Finish(run, 'completed', 'completed')
 

@@ -3814,6 +3814,11 @@ do -- spawn offset, cue, blip after passing, pace on the median, lights before p
             H.eq(s.truth, nil, 'pu parity: no truth in a snapshot')
         end
     end
+    -- Z13: a test Restart takes the deleted car's hand-off entry out of run.shared.contacts
+    ctx.run.shared.contacts[#ctx.run.shared.contacts + 1] = { vehicle = 999999, occupants = {} }
+    PU.restart(ctx)
+    local left = ctx.run.shared.contacts
+    H.ok(#left == 1 and left[1].vehicle == 999999, 'Z13: pu restart: the old car\'s entry is gone, others stay')
 
     -- lights before the pace: stop without cause for the officer whose lights started it
     H.clockMs = 7000000

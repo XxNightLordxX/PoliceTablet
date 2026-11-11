@@ -2892,6 +2892,19 @@ local function Restart(ctx)
     local st = StateOf(ctx)
     for key in pairs(st.peds) do ctx.delete(tonumber(key)) end
     for _, key in ipairs(st.vorder) do ctx.delete(st.vehicles[key].netId) end
+    -- Z13: the hand-off entries of the deleted cars go too: a net id the restart reuses must not be taken again from
+    -- a stale entry by a later field_contact stop
+    local mine = {}
+    for _, key in ipairs(st.vorder) do
+        local c = st.vehicles[key] and st.vehicles[key].contact
+        if c then mine[c] = true end
+    end
+    local list = ctx.run and ctx.run.shared and ctx.run.shared.contacts
+    if type(list) == 'table' and next(mine) then
+        for i = #list, 1, -1 do
+            if mine[list[i]] then table.remove(list, i) end
+        end
+    end
     local keep = st.rng
     for k in pairs(st) do st[k] = nil end
     st.rng = keep

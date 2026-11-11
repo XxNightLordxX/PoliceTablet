@@ -481,11 +481,12 @@ do
     H.ok(ok == true and res.linkRemoved == nil, 'no link: nothing to remove')
 
     -- ---- THE SETTING IS CHECKED BEFORE THE FILE IS WRITTEN (SaveResourceFile cannot be undone) ----
-    local fibJob = JOBS.fib
-    JOBS.fib = nil   -- the department validator now refuses every fib change (its job is no Qbox job)
+    -- (Z13: an unknown job no longer refuses a logo change, so a validator refuses it here)
+    local refuse = true
+    S.registerValidator('Departments', function() return refuse and 'err.dept_job_unknown' or nil end)
     ok, res = Act('server:admin:uploadLogo', 1,
         { department = 'fib', uploadId = 'refused', index = 1, total = 1, data = B64(webp) })
-    JOBS.fib = fibJob
+    refuse = false
     H.ok(ok == false and res == 'err.dept_job_unknown', 'a refused setting refuses the upload: ' .. tostring(res))
     H.eq(files['logos/fib.webp'], nil, 'and no file was written')
     H.eq(Config.Departments.fib.logo.file, 'fib.png', 'the department keeps its logo')
@@ -1056,6 +1057,59 @@ do
         'Z10: the next part with that maxId leaves out the row written meanwhile')
     local p3 = Sys.auditPart({}, 1)
     H.eq(p3 and p3.total, p1.total + 1, 'Z10: a new export (no maxId) sees it')
+end
+
+-- Z13: the department checks see the whole save (a Setup Finish saves each department's fields as changes of one
+-- save), and a department whose job is no Qbox job can still be turned off.
+do
+    runsNow = {}
+    local on = {}
+    for key, d in pairs(Config.Departments) do
+        if type(d) == 'table' and d.enabled ~= false then on[#on + 1] = key end
+    end
+    table.sort(on)
+    H.ok(#on >= 2, 'Z13: two departments are on: ' .. table.concat(on, ','))
+    local all = {}
+    for _, key in ipairs(on) do all[#all + 1] = { path = ('Departments.%s.enabled'):format(key), value = false } end
+    local ok, e = S.checkMany(all)
+    H.ok(ok == false and e == 'err.dept_last', 'Z13: every department off in one save is refused: ' .. tostring(e))
+    JOBS.z13job = { label = 'Z13', grades = { [0] = { name = 'A' }, [3] = { name = 'B' }, [4] = { name = 'C' } } }
+    local a, b = on[1], on[2]
+    local ja, jb = U.deepcopy(Config.Departments[a].jobs), U.deepcopy(Config.Departments[b].jobs)
+    local function With(list, j)
+        local out = U.deepcopy(list)
+        out[#out + 1] = j
+        return out
+    end
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(a), value = With(ja, 'z13job') },
+        { path = ('Departments.%s.jobs'):format(b), value = With(jb, 'z13job') },
+    })
+    H.ok(ok == false and e == 'err.dept_job_taken',
+        'Z13: one job ticked in two departments of one save: ' .. tostring(e))
+    -- a job moved from a to b in one save
+    Config.Departments[a].jobs = With(ja, 'z13job')
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(a), value = ja },
+        { path = ('Departments.%s.jobs'):format(b), value = With(jb, 'z13job') },
+    })
+    H.ok(ok == true, 'Z13: a job moved between two departments in one save is allowed: ' .. tostring(e))
+    Config.Departments[a].jobs = ja
+    JOBS.z13job = nil
+    -- a department whose job Qbox does not know: off is allowed, on or a new job is not
+    local saved = JOBS[jb[1]]
+    JOBS[jb[1]] = nil
+    ok, e = S.checkMany({ { path = ('Departments.%s.enabled'):format(b), value = false } })
+    H.ok(ok == true, 'Z13: a department whose job is no Qbox job can be turned off: ' .. tostring(e))
+    ok, e = S.checkMany({ { path = ('Departments.%s.label'):format(b), value = 'Renamed' } })
+    H.ok(ok == true, 'Z13: ...and renamed: ' .. tostring(e))
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(b), value = jb },
+        { path = ('Departments.%s.supervisorGrade'):format(b), value = 1 },
+    })
+    H.ok(ok == false and e == 'err.dept_job_unknown',
+        'Z13: ...but a grade change still checks its job: ' .. tostring(e))
+    JOBS[jb[1]] = saved
 end
 
 return H

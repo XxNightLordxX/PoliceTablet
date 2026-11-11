@@ -1236,11 +1236,16 @@ H.ok(PrintedSince(m0, 'the folder ' .. folder2 .. ' is missing: create it by han
 H.eq(RowCount('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'storageCopy\''), copies, 'and nothing is copied')
 H.execute(('mkdir -p \'%s\''):format(folder2)) -- the owner makes it
 m0 = Mark()
+-- Z13: a saved in-game storage switch comes before Config.Database: the next step names Switch storage
+local realOverride = CP.Storage.override
+CP.Storage.override = function() return { mode = 'database', folder = folder2 } end
 admin('storage', 'copy', 'database-to-files')
+CP.Storage.override = realOverride
 out = OutputSince(m0)
 H.ok(out:find('Copied 27 tables and ' .. expected .. ' rows from the database to the saves folder', 1, true) ~= nil,
     'database mode, database-to-files: ' .. (out:match('Copied[^\n]*') or out:sub(1, 300)))
-H.ok(out:find('set Config.Database.enabled = false', 1, true) ~= nil, 'how to switch to the saves folder')
+H.ok(out:find('Switch storage', 1, true) ~= nil and not out:find('set Config.Database.enabled = false', 1, true),
+    'Z13: with the in-game switch saved, how to switch names Switch storage, not config.lua alone')
 local folderDb = M.new({ store = M.folderStore(folder2) }):load()
 H.eq(#folderDb:tableNames(), 29, 'the new saves folder has every table')
 H.eq(EngineCount(folderDb, 'SELECT COUNT(*) AS n FROM cp_schema_migrations'), MIGRATIONS, 'and every migration')

@@ -273,6 +273,45 @@ do
 end
 
 do
+    -- Z13: the returning driver's delete 30 s later outlives a test Restart: it never removes an entity of the
+    -- restarted objective that got a freed net id
+    local m = W.mission({
+        {
+            block = 'field_contact',
+            label = 'Check the cars',
+            mode = 'parked',
+            cars = 1,
+            profileSet = 'test_legal',
+            returning = { chance = 1, max = 1 },
+            thief = { chance = 0 },
+            minSeconds = 0,
+        },
+        { block = 'stub_hold', label = 'After', minSeconds = 0 },
+    }, ParkedLocation(2))
+    local run = W.start({ 1 }, m)
+    W.tick(1)
+    local cars = W.cars(run, 1)
+    W.near(1, run, cars[1].netId)
+    W.decide(1, run, cars[1].netId, 'cite')
+    local st = Obj(run, 1).state
+    local rd = nil
+    for _, t in pairs(st.contacts) do if t.returning then rd = t end end
+    H.ok(rd ~= nil, 'Z13: the driver comes back')
+    rd.returning.outcome = 'takes'
+    rd.returning.walksIn = nil
+    rd.returning.at = 0
+    W.tick(2)
+    H.eq(rd.returning.done, true, 'Z13: he takes the ticket (his delete waits 30 s)')
+    CP.Blocks.get('field_contact').restart(CP.Runs.ctx(run, 1))
+    run.entities[rd.netId] = { entity = 4242424, kind = 'vehicle' }
+    W.tick(35)
+    H.ok(run.entities[rd.netId] ~= nil and run.entities[rd.netId].entity == 4242424,
+        'Z13: after a Restart the old delete leaves a new entity under the same net id alone')
+    run.entities[rd.netId] = nil
+    Runs.endRun(run, 'completed', 'completed')
+end
+
+do
     -- Z8: a returning driver who dies before he is done (traffic, an NPC: not a participant) no longer leaves the
     -- objective waiting until its time limit
     local m = W.mission({
@@ -303,6 +342,13 @@ do
     if c then c.arguing = true end
     W.tick(2)
     H.eq(Obj(run, 1).status, 'active', 'Z8: the objective waits for him')
+    -- Z13: and the checklist does not call the step done while he waits
+    local okC, items = pcall(CP.Blocks.get('field_contact').checklist, CP.Runs.ctx(run, 1))
+    H.ok(
+        okC and items[1].done == false and items[1].value < items[1].max,
+        'Z13: an arguing returning driver keeps the checklist open: ' .. tostring(okC and items[1].value) .. '/'
+            .. tostring(okC and items[1].max)
+    )
     local mdl = W.model(run, rd.netId)
     mdl.killer = 0
     mdl.health = 0

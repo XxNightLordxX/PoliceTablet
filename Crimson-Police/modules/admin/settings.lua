@@ -4307,20 +4307,40 @@ local function GradeExists(job, grade)
     return grades[grade] ~= nil or grades[tostring(grade)] ~= nil
 end
 
--- Config.Departments as it would be after this change (path, clean value).
-local function DepartmentsAfter(path, clean, none)
-    local deps = U.deepcopy(type(Config.Departments) == 'table' and Config.Departments or {})
-    if path == 'Departments' then return type(clean) == 'table' and U.deepcopy(clean) or {} end
-    local key, rest = path:match('^Departments%.([^%.]+)%.?(.*)$')
-    if not key then return deps end
-    local v = nil
-    if not none then v = U.deepcopy(clean) end
-    if rest == '' then
-        deps[key] = v
-    else
-        deps[key] = type(deps[key]) == 'table' and deps[key] or {}
-        U.setPath(deps[key], rest, v)
+-- Config.Departments as it would be after this change (path, clean value). Z13: with pending (the other changes of
+-- the same save), after all of them: a Setup Finish turns several departments off or moves a job in one save, so each
+-- change is checked against the whole save, not against the live departments with only its own change.
+local function DepartmentsAfter(path, clean, none, pending)
+    local function ApplyDepartment(deps, p, v)
+        if p == 'Departments' then return type(v) == 'table' and U.deepcopy(v) or {} end
+        local key, rest = p:match('^Departments%.([^%.]+)%.?(.*)$')
+        if not key then return deps end
+        v = U.deepcopy(v)
+        if rest == '' then
+            deps[key] = v
+        else
+            deps[key] = type(deps[key]) == 'table' and deps[key] or {}
+            U.setPath(deps[key], rest, v)
+        end
+        return deps
     end
+    local deps = U.deepcopy(type(Config.Departments) == 'table' and Config.Departments or {})
+    local own = nil
+    if not none then own = clean end
+    local list = { { path = path, value = own } }
+    for p, v in pairs(type(pending) == 'table' and pending or {}) do
+        if p ~= path and (p == 'Departments' or p:sub(1, 12) == 'Departments.') then
+            list[#list + 1] = { path = p, value = v }
+        end
+    end
+    local function Depth(p) return select(2, p:gsub('%.', '')) end
+    -- the whole departments first, then each department, then its fields
+    table.sort(list, function(a, b)
+        local da, db = Depth(a.path), Depth(b.path)
+        if da ~= db then return da < db end
+        return a.path < b.path
+    end)
+    for _, c in ipairs(list) do deps = ApplyDepartment(deps, c.path, c.value) end
     return deps
 end
 
@@ -4340,7 +4360,7 @@ end
 function Settings.checkDepartments(path, clean, ctx, none)
     ctx = ctx or {}
     local before = type(Config.Departments) == 'table' and Config.Departments or {}
-    local after = DepartmentsAfter(path, clean, none)
+    local after = DepartmentsAfter(path, clean, none, not ctx.boot and ctx.pending or nil)
     local byJob, clash = JobMap(after)
     if not byJob then return 'err.dept_job_taken', clash end
     local enabled = 0
@@ -4389,7 +4409,18 @@ function Settings.checkDepartments(path, clean, ctx, none)
     local jobs = QboxJobs()
     if jobs then
         for key, d in pairs(after) do
-            if type(d) == 'table' and not Same(d, before[key]) then
+            local was = type(before[key]) == 'table' and before[key] or nil
+            -- Z13: only a department that is on after the change, and only when its jobs or supervisor grade change
+            -- or it is turned on: a department whose job is no Qbox job can still be turned off, renamed or recoloured
+            local check = type(d) == 'table'
+                and d.enabled ~= false
+                and (
+                    not was
+                    or was.enabled == false
+                    or not Same(d.jobs, was.jobs)
+                    or not Same(d.supervisorGrade, was.supervisorGrade)
+                )
+            if check then
                 for _, j in ipairs(type(d.jobs) == 'table' and d.jobs or {}) do
                     if jobs[j] == nil then return 'err.dept_job_unknown', j end
                     if not GradeExists(jobs[j], math.tointeger(tonumber(d.supervisorGrade) or -1)) then

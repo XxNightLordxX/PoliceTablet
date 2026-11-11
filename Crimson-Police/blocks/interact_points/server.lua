@@ -349,6 +349,15 @@ TogetherNeed = function(ctx)
     local t = ctx.obj.together
     if type(t) ~= 'table' then return 0 end
     local n = #(ctx.participants() or {})
+    -- Z13: and at the points still to do (each point holds one officer, so more could never hold them together)
+    local st = ctx.state
+    if type(st) == 'table' and type(st.points) == 'table' and #st.points > 0 then
+        local open = 0
+        for _, p in ipairs(st.points) do
+            if p.status ~= 'done' then open = open + 1 end
+        end
+        if open > 0 then n = math.min(n, open) end
+    end
     return math.max(1, math.min(Idx(t.count) or 2, n))
 end
 
@@ -947,6 +956,10 @@ CP.Blocks.register(BLOCK, {
                 if InNoBuild(p.coords) then
                     return Bad('block.interact_points.invalid.points_zone', { location = li })
                 end
+            end
+            -- Z13: a together step needs as many officers as points at most (each point holds one officer)
+            if type(obj.together) == 'table' and (Idx(obj.together.count) or 2) > used then
+                return Bad('block.interact_points.invalid.together')
             end
             if obj.hidden and Idx(obj.hidden.count) > used then
                 return Bad('block.interact_points.invalid.hidden_count', { location = li, have = used })

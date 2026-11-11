@@ -1285,6 +1285,8 @@ if Kit and Kit.action then
         targetRate = { 1, 10000 },
         self = SelfCidStrict,
         confirm = Corr.adjustConfirm,
+        -- Z13: the daily limit is read before a yield: one adjustment of an admin at a time
+        oneAtATime = true,
     })
 
     -- ---- BULK VOID AND RESTORE ---------------------------------------------

@@ -597,6 +597,26 @@ local function DoStart(cur, actorSrc, auto)
             dropped[#dropped + 1] = p
         end
     end
+    -- Z13: field training's ride-along rule (requireTrainerFor), as a unit's accept checks it: a rookie whose trainer
+    -- is not among the kept participants is dropped
+    local def0 = MissionDef(cur.missionId)
+    if def0 and CP.FieldTraining and CP.FieldTraining.unitCheck then
+        for _ = 1, #valid do
+            local okF, allowed, _, rookie = pcall(CP.FieldTraining.unitCheck, valid, def0.type)
+            if not okF or allowed ~= false or type(rookie) ~= 'string' then break end
+            local gone = false
+            for i = #valid, 1, -1 do
+                if valid[i].citizenid == rookie then
+                    for _, p in ipairs(cur.participants) do
+                        if p.src == valid[i].src then dropped[#dropped + 1] = p end
+                    end
+                    table.remove(valid, i)
+                    gone = true
+                end
+            end
+            if not gone then break end
+        end
+    end
     if op ~= cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
     for _, p in ipairs(dropped) do
         for i = #cur.participants, 1, -1 do

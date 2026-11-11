@@ -125,6 +125,18 @@ do
     ok, e = Adj(1, { citizenid = 'OFF00003', points = 20, reason = 'limit', requestId = Rid() })
     H.ok(not ok and e == 'err.adjust_daily_limit',
         'over the admin\'s daily limit (40 + 50 + 600 used): ' .. tostring(e))
+    -- Z13: the legacy award action and the award subcommand in game count toward the same limit
+    local awards = Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE mission_id = 'manual_award']])
+    H.clockMs = H.clockMs + 11000
+    ok, e = Act('server:admin:awardPoints', 1, { citizenid = 'OFF00003', points = 20, reason = 'legacy' })
+    H.ok(not ok and e == 'err.adjust_daily_limit',
+        'Z13: server:admin:awardPoints keeps the daily limit: ' .. tostring(e))
+    H.clockMs = H.clockMs + 11000
+    W.async(function() return CP.Admin.command(1, { 'award', 'OFF00003', '20', 'command' }) end)
+    H.eq(Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE mission_id = 'manual_award']]), awards,
+        'Z13: ...and so does the award subcommand in game')
+    H.eq(Kit._actions()['server:admin:adjustPoints'].opts.oneAtATime, true,
+        'Z13: Give or take points runs one at a time per admin (the limit is read before a yield)')
     ok = Adj(5, { citizenid = 'OFF00003', points = 20, reason = 'other admin', requestId = Rid() })
     H.eq(ok, true, 'another admin has their own limit')
     Config.AdminControl.adjustDailyLimit = 0

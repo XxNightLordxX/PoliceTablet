@@ -1,6 +1,7 @@
 {
   "err.backup_folder": "The backups folder Crimson-Police/saves/_backups is missing or cannot be written. Create it by hand (the server cannot create folders on Linux) and make sure the server may write to it.",
   "err.backup_protected": "The newest backup and the latest automatic one made before a restore are never deleted. Delete an older backup instead.",
+  "err.backup_read": "A table could not be read for the backup, so no backup was made and nothing was changed. The server console names the table.",
   "err.backup_unknown": "That backup no longer exists. Refresh the backups list and pick another one.",
   "err.backup_write": "The backup could not be written. Nothing was changed.",
   "err.cannot_carry": "Their inventory has no room for the tablet item. Ask them to free some space first.",

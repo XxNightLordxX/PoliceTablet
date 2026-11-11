@@ -167,6 +167,13 @@ do
     H.ok(ok == false and err == 'err.type_off_department', 'Tactical off for SAST: a SAST officer is refused')
     H.eq(D.check(2, 'tactical'), true, 'an FIB officer takes it')
     H.eq(D.check(1, 'patrol'), true, 'another type is fine for SAST')
+    -- Z13: a late backup join to a live case is held to the same switch
+    local okJ, errJ = D.joinCaps(CP.Access.getOfficer(1), 'tactical', true)
+    H.ok(okJ == false and errJ == 'err.type_off_department', 'Z13: a SAST officer cannot join a tactical case late')
+    saved['sast|types'] = { missions = { beat_a = false } }
+    okJ, errJ = D.joinCaps(CP.Access.getOfficer(1), 'patrol', true, 'beat_a')
+    H.ok(okJ == false and errJ == 'err.type_off_department', 'Z13: ...nor a single mission switched off')
+    saved['sast|types'] = { tactical = false }
     units[1] = { leader = 2, members = { 2, 1 } }
     ok, err = D.check(2, 'tactical')
     H.ok(ok == false and err == 'err.type_off_department', 'an FIB-led unit with a SAST member is refused')

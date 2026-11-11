@@ -3874,7 +3874,7 @@ function Runs.addParticipant(run, src, opts)
     local okT, trainerOk, ftErr = Call('FieldTraining', 'joinCheck', o.citizenid, unit, run.missionType)
     if okT and trainerOk == false then return nil, ftErr or 'err.fto_trainer_needed' end
     -- the completion caps a claim is held to: the hour and day caps, the type's daily limit, the type cooldown
-    local okJ, capsOk, capErr = Call('Draw', 'joinCaps', o, run.missionType, true)
+    local okJ, capsOk, capErr = Call('Draw', 'joinCaps', o, run.missionType, true, run.missionId)
     if okJ and capsOk == false then return nil, capErr or 'err.hourly_cap' end
     local okF, first = Call('Scoring', 'isFirstRunSinceDuty', src)
     -- no yield from here until he is in the run: what the lookups may have changed is checked again
@@ -4178,7 +4178,8 @@ local function Timeout(run)
     local o = run.objectives[i]
     local ok, res = CallBlock(run, i, 'onTimeout')
     if run.state ~= 'in_progress' then return end
-    if ok and res == 'completed' and o and o.status == 'active' then
+    -- Z13: only the last objective can complete the run at the time limit (a later one never started)
+    if ok and res == 'completed' and o and o.status == 'active' and i == #run.objectives then
         CP.log(TAG, 'run %s: time limit reached, objective %d completes on timeout', run.id, i)
         o.final = ChecklistOf(run, i)
         o.status = 'done'
@@ -4691,9 +4692,13 @@ local function ExpectedFor(run, p)
     local nDepts = ActiveDepartments(run)
     local mCross = nDepts >= 2 and Num(Config.CrossDepartmentPoints, 1.10) or 1.0
     local cap = Num(Config.Scoring and Config.Scoring.scoreCap, 2.0) * P
-    local pts = math.min(cap, (P + modPts) * Num(tier and tier.points, 1.0) * mCross)
+    -- Z13: the real-player rules settlement applies (CP.Scoring, CP.Cash): a lines-only case has no base points, and
+    -- a live or volunteer case gets the Type of the Day and mission cash only with its mode's switches
+    local okL, liveLines = Call('LiveCrime', 'linesOnly', run)
+    local linesOnly = run.keepEarned == true or (okL and liveLines == true)
+    local pts = math.min(cap, ((linesOnly and 0 or P) + modPts) * Num(tier and tier.points, 1.0) * mCross)
     local todCfg, todOn = CP.Objective('typeOfTheDay')
-    if todOn then
+    if todOn and CP.RealPlayersTakePart(run, 'typeOfTheDay') then
         -- the viewer's department's pick for today, as the scoring reads it
         local dept = type(p) == 'table' and p.department or nil
         local ok, tod = Call('Events', 'typeOfTheDay', nil, dept, run.participants)
@@ -4703,6 +4708,7 @@ local function ExpectedFor(run, p)
     if Has('Scoring', 'bonusOf') then pts = pts * CP.Scoring.bonusOf(run) end
     local mBonus = Has('Cash', 'bonusOf') and CP.Cash.bonusOf(run) or 1.0
     local cash = U.round(Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * bonus.cash * mBonus)
+    if run.keepEarned == true or not CP.RealPlayersTakePart(run, 'cash') then cash = 0 end
     return { cash = cash, points = math.floor(pts) }
 end
 

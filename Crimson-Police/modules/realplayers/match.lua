@@ -151,7 +151,12 @@ local function NoVolunteer(m, afterYes)
     if npc then
         m.phase = 'npc'
         TellOfficers(m.run, 'info', 'volunteer.officer.npc')
-        if afterYes then Line(m, 'volunteer_npc') end
+        if afterYes then
+            Line(m, 'volunteer_npc')
+            -- Z13: the NPC plays the suspect as if nobody had said yes: the run is no volunteer case any more (cash,
+            -- items, goals, the challenge and the Type of the Day count again)
+            m.run.realSuspect = nil
+        end
         CP.log(TAG, 'run %s: the NPC plays the suspect (%s)', m.runId, tostring(m.why))
         return
     end

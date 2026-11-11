@@ -442,9 +442,12 @@ function FR.onSourceRestored(rowId)
     if not rowId then return 0 end
     local n = 0
     for _, r in ipairs(LinkedRewards(rowId, true)) do
-        local before = (Breakdown(r).cash or {}).beforeVoid
+        local cash = Breakdown(r).cash or {}
+        local before = cash.beforeVoid
+        -- Z13: a payment an admin cancelled (Cancel payment) stays cancelled
+        local cancelled = cash.cancelled ~= nil and cash.cancelled ~= ''
         -- cash the forfeiture job forfeited because of this void (no money had moved) is pending again
-        if before == 'held' or before == 'pending' then
+        if not cancelled and (before == 'held' or before == 'pending') then
             pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET cash_status = 'pending',
                 breakdown = IF(JSON_VALID(breakdown), JSON_SET(breakdown, '$.cash.status', 'pending'), breakdown)
                 WHERE id = ? AND voided = 1 AND cash_status = 'forfeited' AND cash_paid = 0]], { r.id })
@@ -458,7 +461,7 @@ function FR.onSourceRestored(rowId)
             Fire('row:restored', r.id)
             Fire('row:approved', r.id)
             Fire('row:forfeitUndone', r.id)
-            if CP.Cash and CP.Cash.release then pcall(CP.Cash.release, r.id) end
+            if not cancelled and CP.Cash and CP.Cash.release then pcall(CP.Cash.release, r.id) end
         end
     end
     return n

@@ -51,7 +51,7 @@
   "settings.health.pending": "{n} setting(s) changed in game take effect after {resource} restarts",
   "settings.health.changed": "{n} setting(s) changed in game are in use (Admin UI → Settings)",
   "settings.health.none": "Every setting has its config.lua value (none changed in game)",
-  "settings.locked.database": "This decides where Crimson-Police saves its data, the settings changed in game included, so it can only change in config/config.lua (then restart).",
+  "settings.locked.database": "This decides where Crimson-Police saves its data, the settings changed in game included, so it cannot change here. Use System -> Storage -> Switch storage, or config/config.lua (then restart). A storage switch made in game comes before config/config.lua.",
   "settings.locked.admin": "This decides who is a Crimson-Police admin, so it can only change in config/config.lua (then restart). That way no one can hand admin to every player or lock every admin out from the tablet.",
   "access.health.check.settings": "Settings changed in game",
   "settings.subtitle": "{n} settings · {changed} changed in game",

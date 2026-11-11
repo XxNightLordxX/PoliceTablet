@@ -710,6 +710,15 @@ do
     H.ok(200 * 1.15 * 1.25 < 287.5, 'precondition: the float product is below the half')
     H.eq(Runs.view(A, 1).expected.cash, 288, 'expected cash: a true half-dollar rounds up ($288, not $287)')
     A.cashBase, A.modifiers = realBase, realMods
+    -- Z13: a volunteer case with volunteer.cash off (shipped) expects no mission cash; a kept-earned case no base P
+    A.realSuspect = 'volunteer'
+    H.eq(Runs.view(A, 1).expected.cash, 0, 'Z13: a volunteer case with its cash switch off expects $0')
+    A.realSuspect = nil
+    A.keepEarned = true
+    local ke = Runs.view(A, 1).expected
+    H.ok(ke.cash == 0 and ke.points < 290,
+        'Z13: a lines-only case expects no cash and no base points: ' .. tostring(ke.points))
+    A.keepEarned = nil
 end
 H.eq(v.radioSilence, false, 'radio silence flag')
 H.eq(v.silenceMode, nil, 'no Radio Silence: no silence mode')
@@ -937,10 +946,31 @@ timeoutResult = 'completed'
 local C2 = Runs.create(
     { mission = mission, locationIndex = 1, missionType = 'tactical', members = { O[1] }, leaderSrc = 1 })
 Runs.markArrived(C2, 1)
+H.advance(6000)
+H.ok(Runs.objectiveComplete(C2, 1), 'C2: objective 1 done, the last one is active')
 Runs.adjustTimer(C2, -599)
 H.advance(2000)
 timeoutResult = nil
-H.eq(RowsOf(C2.id)[1].state, 'completed', 'onTimeout completed -> completed')
+H.eq(RowsOf(C2.id)[1].state, 'completed', 'onTimeout completed on the last objective -> completed')
+
+-- Z13: a 'completed' answer from an objective that is not the last one fails the run (the next never started)
+do
+    H.reset()
+    timeoutResult = 'completed'
+    local C3 = Runs.create({
+        mission = mission,
+        locationIndex = 1,
+        missionType = 'tactical',
+        members = { O[1] },
+        leaderSrc = 1,
+    })
+    Runs.markArrived(C3, 1)
+    Runs.adjustTimer(C3, -599)
+    H.advance(2000)
+    timeoutResult = nil
+    H.eq(RowsOf(C3.id)[1].state, 'failed', 'Z13: onTimeout completed on objective 1 of 2 -> failed')
+    H.eq(RowsOf(C3.id)[1].end_reason, 'time_limit', 'Z13: ...on the time limit')
+end
 
 -- ============================================================================
 --             SCENARIO D: an operation run; disconnect and unload

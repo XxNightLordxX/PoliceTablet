@@ -511,9 +511,13 @@ end
 
 -- The completion caps of one officer joining a run that is already going (CP.Runs.addParticipant: a live case's
 -- backup), as the accept checks them for a claim: the hour and day caps, the type's daily limit and, for a live case
--- with liveCrime.typeCooldown = true, the type cooldown. May yield (database). -> true | false, errKey
-function Draw.joinCaps(o, missionType, live)
+-- with liveCrime.typeCooldown = true, the type cooldown. Z13: and the type (or missionId) his department's Mission
+-- control switched off, as a claim refuses it. May yield (database). -> true | false, errKey
+function Draw.joinCaps(o, missionType, live, missionId)
     if type(o) ~= 'table' or type(o.citizenid) ~= 'string' then return false, 'err.member_unavailable' end
+    if missionType ~= BOSS_KEY and OffBy({ o }, OffOf({ o }), missionType, missionId) then
+        return false, 'err.type_off_department'
+    end
     local caps = Draw.limits({ o })
     if CompletionsLastHour(o.citizenid) >= caps.hour then return false, 'err.hourly_cap' end
     if caps.day > 0 and CompletionsToday(o.citizenid) >= caps.day then return false, 'err.daily_cap' end

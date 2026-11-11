@@ -1192,6 +1192,22 @@ local function ReturningDriver(ctx, st, car, choice, src)
 end
 
 local function ReturningTick(ctx, st)
+    -- Z13: a delete 30 s later, only of the same entities: a test Restart in between spawns new contacts (a new
+    -- st.contacts) that may get a freed net id
+    local function LaterDelete(ids)
+        local contacts, handles = st.contacts, {}
+        for i, id in ipairs(ids) do
+            local e = ctx.run.entities[id]
+            handles[i] = e and e.entity or nil
+        end
+        SetTimeout(30000, function()
+            if ctx.run.state == 'ended' or StateOf(ctx).contacts ~= contacts then return end
+            for i, id in ipairs(ids) do
+                local e = ctx.run.entities[id]
+                if handles[i] ~= nil and e and e.entity == handles[i] then ctx.delete(id) end
+            end
+        end)
+    end
     for _, netId in ipairs(st.order) do
         local t = st.contacts[netId]
         local rd = t and t.returning
@@ -1221,7 +1237,7 @@ local function ReturningTick(ctx, st)
             if rd.outcome == 'takes' or (rd.outcome == 'argues' and c and not c.arguing) then
                 rd.done = true
                 CP.Custody.act(ctx.run, netId, 'leave')
-                SetTimeout(30000, function() if ctx.run.state ~= 'ended' then ctx.delete(netId) end end)
+                LaterDelete({ netId })
             elseif rd.outcome == 'drives_off' then
                 rd.done = true
                 local _, car = EntCoords(ctx, rd.car)
@@ -1234,12 +1250,7 @@ local function ReturningTick(ctx, st)
                         { contact = { label = carC.label, kind = 'vehicle', actions = {} } })
                 end
                 CP.Custody.act(ctx.run, netId, 'drive_off', { veh = rd.car })
-                SetTimeout(30000, function()
-                    if ctx.run.state ~= 'ended' then
-                        ctx.delete(netId)
-                        ctx.delete(rd.car)
-                    end
-                end)
+                LaterDelete({ netId, rd.car })
             end
             st.dirty = true
         end
@@ -1302,6 +1313,17 @@ local function StillToCome(st)
         have = (st.carNet and 1 or 0) + (st.spawnedPeople or 0)
     end
     return math.max(0, (st.planned or 0) - have)
+end
+
+-- Z13: the returning drivers not resolved yet (one who argues waits for an officer's explain) and the walk-ins on their
+-- way: TryComplete waits for them, so the HUD and the checklist count them as still to do.
+local function StillWaiting(st)
+    local n = st.walkIns or 0
+    for _, netId in ipairs(st.order) do
+        local t = st.contacts[netId]
+        if t and t.returning and t.returning.done ~= true then n = n + 1 end
+    end
+    return n
 end
 
 -- procedure_complete: once per officer, every person they arrested was ID-checked and searched before transport.
@@ -1383,7 +1405,7 @@ local function Flush(ctx, st)
         ctx.send({ contacts = list, mode = st.mode, escaping = st.escaping, approached = st.approached == true })
     end
     -- the contacts the objective will have (a parked car still waiting for an officer to get near counts)
-    total = total + StillToCome(st)
+    total = total + StillToCome(st) + StillWaiting(st)
     local text
     if st.escaping then
         text = CP.Lt('block.field_contact.escaping', { seconds = st.escaping })
@@ -1633,7 +1655,7 @@ end
 local function Checklist(ctx)
     local st = StateOf(ctx)
     local done, total = Totals(ctx, st)
-    total = total + StillToCome(st)
+    total = total + StillToCome(st) + StillWaiting(st)
     return {
         {
             label = CP.L('block.field_contact.check_decided'),

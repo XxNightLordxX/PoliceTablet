@@ -488,4 +488,32 @@ do
     H.ok(okB and Names():find(b.name .. '.t.cp_audit.json', 1, true) ~= nil, 'Z11: and that backup is whole')
 end
 
+-- Z13: a table the backup cannot read (a query error or a timeout raises) fails the backup instead of leaving the table
+-- out: a restore of it would wipe that table with no copy of its rows. Nothing it wrote is left behind.
+do
+    local fs = CP.Storage.MemSQL.fs
+    local dir = GetResourcePath() .. '/saves/_backups'
+    local function Names()
+        local out = {}
+        for _, n in ipairs(fs.list(dir) or {}) do out[#out + 1] = n end
+        table.sort(out)
+        return table.concat(out, '|')
+    end
+    local order = Sys.schema().order
+    local victim = order[#order]
+    H.ok(victim ~= nil and #order > 2, 'Z13: the schema lists the tables')
+    local before, count = Names(), #Sys.backups()
+    local realQuery = MySQL.query.await
+    MySQL.query.await = function(sql, params)
+        if sql:find('`' .. victim .. '`', 1, true) then error('Lock wait timeout exceeded') end
+        return realQuery(sql, params)
+    end
+    H.time = H.time + 2
+    local ok, e = Sys.backup(1, 'manual')
+    MySQL.query.await = realQuery
+    H.ok(ok == false and e == 'err.backup_read', 'Z13: a table that cannot be read fails the backup: ' .. tostring(e))
+    H.eq(Names(), before, 'Z13: no part of the failed backup is left behind')
+    H.eq(#Sys.backups(), count, 'Z13: and it is not listed')
+end
+
 return H

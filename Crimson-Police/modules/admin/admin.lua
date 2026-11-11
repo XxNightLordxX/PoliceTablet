@@ -8,7 +8,7 @@
 --       help                                             list the subcommands
 --       payout type <type> <amount|clear> <reason...>    CP.Payouts.setType
 --       payout mission <missionId> <amount|clear> <reason...>  CP.Payouts.setMission
---       award <citizenid> <points> <reason...>           CP.Scoring.manualAward
+--       award <citizenid> <points> <reason...>           CP.Scoring.manualAward (in game: adjustDailyLimit)
 --       season start <name...> | season end              CP.Challenge.startSeason / endSeason
 --       suspend <citizenid> <days> [reason...]           CP.Access.suspend (0 days lifts it), audited here
 --       reload                                           CP.Missions.reload, audited here
@@ -66,7 +66,7 @@
 --   actions
 --     server:sup:forceRecall     { runId, src, reason? }                forceRecall (runs involving their dept)
 --     server:admin:voidRun       { rowId } | { runUuid }, reason         voidAnyRun
---     server:admin:awardPoints   { citizenid, points, reason }           manualAward -> CP.Scoring.manualAward
+--     server:admin:awardPoints   { citizenid, points, reason, confirm? } manualAward -> CP.Scoring.manualAward
 --     server:admin:suspend       { citizenid, days, reason }             suspend -> CP.Access.suspend (audited)
 --   callbacks (shapes in docs/dev/ARCHITECTURE.md §5.25 and web/src/types/oversight.ts)
 --     getMissionList             viewMissionList -> MissionListData
@@ -1082,6 +1082,19 @@ SUB.payout = function(src, args)
     return Usage(src)
 end
 
+-- Z13: an admin's manual award in game (the award subcommand, server:admin:awardPoints) counts toward
+-- Config.AdminControl.adjustDailyLimit, as Give or take points does (the console has no daily limit). nil | errKey.
+local awardBusy = {}
+local function AwardOverLimit(src, points)
+    local ac = type(Config.AdminControl) == 'table' and Config.AdminControl or {}
+    local limit = math.floor(tonumber(ac.adjustDailyLimit) or 0)
+    if src == 0 or limit <= 0 or not (CP.AdminKit and CP.AdminKit.dailySum) then return nil end
+    local used = CP.AdminKit.dailySum({ missionIds = { 'manual_award', 'manual_adjust' }, src = src })
+    if not used then return 'err.internal' end
+    if used + points > limit then return 'err.adjust_daily_limit' end
+    return nil
+end
+
 SUB.award = function(src, args)
     local cid = Admin.resolveCitizenId(args[1])
     if not cid then return Reply(src, 'error', 'err.unknown_officer') end
@@ -1092,6 +1105,8 @@ SUB.award = function(src, args)
     local okP, eP = Can(src, 'manualAward')
     if not okP then return Reply(src, 'error', eP) end
     if not Has('Scoring', 'manualAward') then return Reply(src, 'error', 'err.module_unavailable') end
+    local over = AwardOverLimit(src, points)
+    if over then return Reply(src, 'error', over) end
     local ok, e = Outcome(Call('Scoring', 'manualAward', src, cid, points, reason))
     if not ok then return Reply(src, 'error', e) end
     return Reply(src, 'success', 'admin.cmd.awarded', { points = points, citizenid = cid })
@@ -2010,6 +2025,9 @@ local function StorageCopy(src, direction, force)
     Reply(src, 'success', 'admin.cmd.storage_copied', done)
     if target.live then
         Reply(src, 'warning', 'admin.cmd.storage_next_restart')
+    elseif CP.Storage and CP.Storage.override and CP.Storage.override() then
+        -- Z13: a saved in-game switch comes before Config.Database: config.lua alone would change nothing
+        Reply(src, 'info', 'admin.cmd.storage_next_switch', { resource = CP.resource })
     elseif target.kind == 'files' then
         Reply(src, 'info', 'admin.cmd.storage_next_files')
     else
@@ -2204,7 +2222,19 @@ CP.Net.action('server:admin:awardPoints', function(src, payload)
     local cid = Admin.resolveCitizenId(payload.citizenid)
     if not cid then return false, 'err.unknown_officer' end
     if not Has('Scoring', 'manualAward') then return false, 'err.module_unavailable' end
-    local ok, e = Outcome(Call('Scoring', 'manualAward', src, cid, points, reason))
+    -- the typed confirmation of Give or take points (Config.AdminControl.adjustConfirmAbove), and its daily limit
+    local okA, want = Call('Corrections', 'adjustConfirm', { citizenid = cid, points = points })
+    if okA and type(want) == 'string'
+        and not (CP.AdminKit and CP.AdminKit.confirmOk and CP.AdminKit.confirmOk(payload.confirm, want)) then
+        return false, 'err.confirm_mismatch'
+    end
+    -- one award of an admin at a time: the daily limit is read before a yield
+    if awardBusy[src] then return false, 'err.busy' end
+    awardBusy[src] = true
+    local over = AwardOverLimit(src, points)
+    local ok, e = false, over
+    if not over then ok, e = Outcome(Call('Scoring', 'manualAward', src, cid, points, reason)) end
+    awardBusy[src] = nil
     if not ok then return false, e end
     return true, { citizenid = cid, points = points }
 end, { rate = 2 })

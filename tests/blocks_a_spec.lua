@@ -1766,6 +1766,20 @@ do -- two officers breach together within the window; an earlier hold resets wit
     H.eq(st2.points[2].status, 'held', 'ip together: entry 2 held')
 end
 
+do -- Z13: together.count above the points in use: validate refuses it, and a saved one never soft-locks
+    local loc = { entries = entries }
+    local ok, why = IP.validate(IP.defaults({ points = 'entries', together = { count = 3 } }), { source = 'custom' },
+        loc)
+    H.ok(ok == false and ReasonIs(why, 'block.interact_points.invalid.together'),
+        'Z13: ip together: 3 officers on 2 points refused')
+    H.clockMs = 7300000
+    local ctx, st = BreachCtx({ 1, 2, 3 }, { together = { count = 3, window = 6, soloProgress = 8000 } })
+    H.eq(Work(ctx, 1, 1, 3000), true, 'Z13: ip together: officer 1 at entry 1')
+    H.eq(Work(ctx, 2, 2, 3000), true, 'Z13: ip together: officer 2 at entry 2')
+    H.eq(st.points[1].status, 'done', 'Z13: ip together: two officers hold both points: done')
+    H.eq(ctx.calls.complete, 1, 'Z13: ip together: breached (count capped at the points)')
+end
+
 do -- a 2-officer unit that drops to 1 finishes both entries with solo progress
     H.clockMs = 7500000
     local ctx, st = BreachCtx({ 1, 2 })
