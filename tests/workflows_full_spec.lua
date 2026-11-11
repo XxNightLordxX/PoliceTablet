@@ -10,7 +10,11 @@
 -- none of them, every Config.Integrations kind set to 'none' in Settings.
 
 local H = dofile('tests/harness.lua')
-H.useFiles()
+-- WF5E: tests/workflows_system_db_spec.lua runs this world on MariaDB (CP_WF_STORAGE = 'database', database on)
+local ON_DB = rawget(_G, 'CP_WF_STORAGE') == 'database' and H.storage == 'database'
+if not ON_DB then H.useFiles() end
+-- WF5E: tests/workflows_system_generic_spec.lua runs this world on config/examples/generic.lua (copied over config.lua)
+H.configFile = rawget(_G, 'CP_WF_CONFIG')
 -- 'owner' | 'none' (tests/workflows_none_spec.lua) | 'none:<kind>' (tests/workflows_none_<kind>_spec.lua: the owner's
 -- scripts all run, and only that Config.Integrations kind is set to 'none' in Settings)
 local STACK = rawget(_G, 'CP_WF_STACK') or 'owner'
@@ -21,7 +25,14 @@ local function KindOff(kind) return NONE or ONE == kind end
 local WORLD = rawget(_G, 'CP_WF_WORLD')
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test')
     .. (WORLD and ('_wf_' .. WORLD) or NONE and '_wf_none' or ONE and ('_wf_' .. ONE) or '_wf_full')
-H.resetSaves()
+if ON_DB then
+    -- the server's MariaDB database, empty: the real migrations runner builds every table at the first boot
+    os.execute(
+        ('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;"'):format(H.db, H.db))
+    os.execute(('rm -rf \'%s\''):format(H.resourcePath()))
+else
+    H.resetSaves()
+end
 local cjson = require('cjson')
 local U, Runs
 
@@ -333,7 +344,8 @@ local loadedFiles = {}
 do
     -- fxmanifest's server_scripts in its order (the harness has already loaded the saves folder engine)
     for _, file in ipairs(H.manifestScripts('server_scripts')) do
-        if file ~= 'modules/system/memsql.lua' then loadedFiles[#loadedFiles + 1] = file end
+        -- (on MariaDB nothing loaded it: the backups and the storage copy use its file helpers, as in game)
+        if file ~= 'modules/system/memsql.lua' or ON_DB then loadedFiles[#loadedFiles + 1] = file end
     end
 end
 

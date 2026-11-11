@@ -2699,6 +2699,12 @@ function H.load(rel)
     -- the specs call the engine synchronously: a long SELECT does not give the (fake) server its turn here
     -- (tests/memsql_spec.lua 9.14 checks the slicing itself)
     if rel == 'modules/system/storage.lua' and CP and CP.Storage and CP.Storage.db then CP.Storage.db.slice = nil end
+    -- the same for the start-up check's Settings schema build (BOOT0: a tick every 60 steps): one tick is a whole
+    -- H.step here, not a frame, so the build would hold every settings read and save of the first seconds after a
+    -- start (H.settingsBreath = true keeps the ticks for a spec about them)
+    if rel == 'modules/admin/settings.lua' and not H.settingsBreath and CP and CP.Settings and CP.Settings._breath then
+        CP.Settings._breath.every = math.huge
+    end
     return r
 end
 
@@ -3133,7 +3139,8 @@ function H.boot(opts)
     _G.joaat = function(s) return require('cjson') and (#tostring(s) * 2654435761) % 4294967296 end
     _G.GetHashKey = _G.joaat
 
-    H.load('config/config.lua')
+    -- H.configFile: a spec that runs the server on another config.lua (config/examples/generic.lua copied over it)
+    H.load(H.configFile or 'config/config.lua')
     Config.Database = Config.Database or {}
     if H.storage == 'files' then
         Config.Database.enabled = false
@@ -3165,8 +3172,9 @@ function H.boot(opts)
     H.load('shared/weapons.lua')
     if H.storage == 'files' and server and not H.filesMySQL then
         -- a spec run on its own (no tests/run.lua) starts from an empty saves folder: build the tables
+        -- (H.emptySaves: a fresh install's empty saves folder, the real migrations runner builds the tables at boot)
         local fh = io.open(H.savesDir() .. '/_tables.json', 'r')
-        if fh then fh:close() else H.resetSaves() end
+        if fh then fh:close() elseif not H.emptySaves then H.resetSaves() end
         -- what fxmanifest does: the storage files load right after @oxmysql/lib/MySQL.lua
         H.load('modules/system/memsql.lua')
         H.load('modules/system/storage.lua')

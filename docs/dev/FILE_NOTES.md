@@ -670,4 +670,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/workflows_officer_spec.lua`: WF5A: every officer workflow, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/workflows_realplayers_spec.lua`: WF5D: real players and the criminal tablet, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/workflows_supervisor_spec.lua`: WF5B: every supervisor workflow, extensively (the owner: "do extensive workflow testing on everything").
+- `tests/workflows_system_db_spec.lua`: WF5E: tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder.
+- `tests/workflows_system_generic_spec.lua`: WF5E: the generic example config on the real server, with its first-start setup.
+- `tests/workflows_system_spec.lua`: WF5E: the system and its integrations, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.

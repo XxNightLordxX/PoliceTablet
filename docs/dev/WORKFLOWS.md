@@ -59,6 +59,19 @@ screen change nothing), then the switches on through Settings, a live crime from
 Each part has a restart and a drop and reconnect in the middle and every refusal a player meets. Its sections are
 named "realplayers (n)" below.
 
+**Every system workflow.** `tests/workflows_system_spec.lua` (WF5E) drives what the resource does on its own on the
+same world: (1) a fresh install (an empty saves folder, the real migrations runner builds every table at start, a run
+played and paid, a restart applies nothing twice); (2) every `Config.Integrations` kind with each adapter (dispatch:
+sc-dispatch, ps-dispatch, none; ambulance: sc-ambulance, qbx_ambulancejob with and without EMS on duty and with
+qbx_medical stopped, none; banking: Renewed-Banking, none; police: sc-police, qbx_policejob, none), each picked in
+Settings and kept by a restart; (3) a restart and the maintenance lock in the middle of each money and storage action
+(a payout cut off while paying, a pending payment under a restore lock, a restore the server stops part way, a backup
+cut off by a stop, a storage copy and a storage switch with its left-behind lock); (4) the clean-up and the daily
+backup at the daily reset, held back by the lock; (5) the idle check. `tests/workflows_system_db_spec.lua` runs the
+same walk on MariaDB (an empty database built at start, database on), and `tests/workflows_system_generic_spec.lua`
+runs the world on `config/examples/generic.lua` copied over config.lua, through its first-start setup. Its sections
+are named "system (n)" and "generic (n)" below.
+
 **Every screen.** `Crimson-Police/web/src/layouts/everyScreen.walk.ts` (the `walk` gate step) opens each tablet
 from its browser-mock session (Officer, Supervisor, and Admin with every admin power the server gives an admin),
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
@@ -118,9 +131,16 @@ locale), checks that every request a screen sends has a mock that answers it, an
 | Item rewards for admins | admin (4) | yes | the officer with rewards waiting | owner stack only | Pass |
 | Restrictions, audit log and export | admin (5) | yes | - | owner stack only | Pass |
 | Presets, storage panel, jobs, problems, first-start setup | admin (6) | yes | the admin with the setup open | owner stack only | Pass |
+| Fresh install: saves folder and MariaDB, migrations | system (1), system_db (1) | yes (nothing applied twice) | an officer before the restart | owner stack only | Pass |
+| Generic example config and the first-start setup | generic (1-3) | yes | the admin with the setup open; an added department's officer | owner stack (ambulance set to none in the setup) | Pass |
+| Every Config.Integrations kind with each adapter | system (2) | yes (each pick kept) | the officer released by ps-dispatch | each kind none in turn | Pass |
+| Restart and maintenance locks in money and storage actions | system (3), system_db (3) | yes (paying, pending, cut restore, switch) | the paid officer during each lock | owner stack only | Pass |
+| Clean-up and daily backup jobs | system (4), system_db (4) | yes (before the reset) | the admin before the reset | owner stack only | Pass |
+| Idle check | system (5) | yes | - | owner stack only | Pass |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
 
-"admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
+"system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
+tests/workflows_system_generic_spec.lua, "admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
 = tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
 with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's
 stack only.
@@ -724,3 +744,87 @@ with no row, pay, audit or cooldown.
 
 Spec: tests/e2e_spec.lua (9). Covers: Every mission entity and alert flag removed, no row, pay, audit or cooldown.
 Result: **Pass**.
+
+### Fresh install and the start on MariaDB
+
+How it works: on the first start the migrations runner builds every table in the saves folder (database off, as
+shipped) or in the MariaDB database (database on); each later start applies only a migration it has not recorded.
+Nothing else is needed before officers use the tablet.
+
+Spec: tests/workflows_system_spec.lua (1), tests/workflows_system_db_spec.lua (1). Covers: the server stopped, the
+saves folder (or the database) emptied, started: every migration applied, none pending, the tables there (every MariaDB
+table utf8mb4), no lock; the officers online all along open the tablet, a Beat Patrol paid; an officer **drops**, a
+**restart**: no migration applied or recorded twice, the run kept, he reconnects. Result: **Pass**.
+
+### The generic example config and the first-start setup
+
+How it works: a city that buys the resource copies config/examples/generic.lua over config.lua: its departments are
+qbx_core's police jobs (LSPD, BCSO, SASP, supervising from grade 3), every other script is 'auto', and Admin UI -> Home
+opens on the First-start setup until an admin finishes or skips it. The officers can use the tablet meanwhile.
+
+Spec: tests/workflows_system_generic_spec.lua. Covers: (1) a fresh saves folder on the generic config, the setup on
+Home with what it found (the three departments, the Qbox police jobs with the city's own ranger job, the saves folder,
+the scripts 'auto' found, the presets), refused to a supervisor and an officer, the LSPD officer already opens the
+tablet and the ranger cannot, the admin **drops**, a **restart**: still shown. (2) Refused answers (an unknown
+department, a job Qbox lacks, an existing department, an unknown colour source) leave it pending; finished with BCSO
+supervising from 2, Park Rangers added from its Qbox job (its boss grade), ambulance set to none and the casual preset;
+a **restart** keeps it all. (3) An LSPD Beat Patrol paid, the BCSO lieutenant's Department screen, a BCSO officer is no
+supervisor, the ranger opens the tablet across his **drop** and a **restart**. Result: **Pass**.
+
+### Every Config.Integrations kind with each adapter
+
+How it works: Config.Integrations picks the dispatch, ambulance, banking and police script ('auto', a script's name or
+'none'); a change in Admin UI -> Settings works at once and is kept by a restart. A named script that stops is not
+swapped for another one; Config health names it.
+
+Spec: tests/workflows_system_spec.lua (2). Covers: as shipped 'auto' finds the owner's four scripts; a supervisor and a
+script with no adapter refused; ps-dispatch: an officer on a run who responds to one of its real calls is released, the
+sc-dispatch toggle is ignored, a **restart** and the officer's **drop** keep the pick, ps-dispatch stopped (no
+dispatch, still named, Config health says so), none (nobody released); sc-ambulance with no doctor (the free pick-up),
+qbx_ambulancejob with EMS on duty (its own EMS request, no pick-up) and without (the pick-up, qbx_medical's revive), a
+**restart**, qbx_medical stopped (the pick-up cancelled), none (the pick-up); Renewed-Banking (a bank history entry),
+none across a **restart** (paid the same, no history entry, no society account); sc-police (live crimes may run),
+qbx_policejob (jailing but no cuffing: live crimes stay off and Features says why; its events are not read with no
+case open), a **restart**, none. There is no qbx_management adapter: department money goes through the banking kind.
+Result: **Pass**.
+
+### A restart and the maintenance lock in the middle of each money and storage action
+
+How it works: a payout that was cut off while it paid waits as 'paying' for an admin's check and is never paid again
+by itself; while a maintenance lock holds (a restore, a storage switch left behind, a copy) every payment, money tool,
+backup, copy and new run waits, and the screens still read. A restore the server stops part way comes back locked
+(Config.Backups.holdAfterFailedRestore) until a restore works.
+
+Spec: tests/workflows_system_spec.lua (3), tests/workflows_system_db_spec.lua (3). Covers: AddMoney raised (paying),
+a **restart** and her **drop** and login pay nothing, Mark paid; a pending payment, a backup, the restore: Pay now,
+Retry all, manual cash, a clawback, department funds, a pay rate, a backup and a storage copy each refused with
+err.maintenance, her login pays nothing, no run starts, a **restart** ends the lock and pays her once (and a second
+restart never twice); a restore stopped part way: the lock is back at start naming its automatic backup, nothing paid,
+every money action refused, the fix restore, a **restart**, paid once; part files of a backup cut off by a stop are
+never listed and removed at the next start; a storage copy into the other store, a **restart**, a copy over it refused
+without force and REPLACE, then replaced; a storage switch (typed SWITCH) whose restart comes back on the old store:
+the left-behind lock holds payments, money actions and runs, Use again (typed USE, admins only) lifts it, she is paid
+once, audited. Result: **Pass**.
+
+### The clean-up and the daily backup
+
+How it works: at each daily reset (Config.Time.resetHour) the clean-up archives runs older than
+Config.Retention.runArchiveMonths and deletes audit rows older than auditDays (0 keeps them); with Config.Backups.daily
+a backup is made first and Config.Backups.keep removes the oldest. A maintenance lock holds both back.
+
+Spec: tests/workflows_system_spec.lua (4), tests/workflows_system_db_spec.lua (4). Covers: a **restart** before the
+reset, the old run archived and the old audit row deleted, no daily backup as shipped, the Jobs screen's last result;
+retention 0 keeps both, the daily backup with keep 2 across the admin's **drop** and a **restart**; under a restore
+lock no clean-up and no backup at the reset; the **restart** ends the lock and the next reset cleans up. Result:
+**Pass**.
+
+### Idle
+
+How it works: with officers on duty and nobody on a run, the server only posts and lapses the NPC mission calls
+(Config.MissionCalls, on as shipped) and sends their cards; with them off it writes and sends nothing. No server thread
+waits less than 500 ms.
+
+Spec: tests/workflows_system_spec.lua (5). Covers: ten idle minutes as shipped (only cp_mission_calls written, only
+mission call cards sent, the cached officer checks read), then mission calls off and a **restart**: nothing written,
+nothing sent. Result: **Pass**.
+
