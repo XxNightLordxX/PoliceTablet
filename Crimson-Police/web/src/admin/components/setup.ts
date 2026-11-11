@@ -12,10 +12,16 @@ export interface DeptAnswer {
     supervisorGrade: number;
     enabled: boolean;
 }
+// A department for a Qbox police job no department lists yet: its colours copied from an existing department ('' =
+// the new-department colours) and a logo link ('' = no logo; Departments uploads a logo file later).
+export interface NewDept {
+    job: string;
+    themeFrom: string;
+    logoUrl: string;
+}
 export interface SetupAnswers {
     departments: Record<string, DeptAnswer>;
-    // Qbox police jobs no department lists yet that get a department of their own
-    add: string[];
+    add: NewDept[];
     // the desk indexes kept
     desks: number[];
     integrations: Record<string, string>;
@@ -55,6 +61,12 @@ export function gradeChoices(view: SetupView | null | undefined, jobs: string[])
     return [...byLevel.values()].sort((a, b) => a.level - b.level);
 }
 
+// The add list with job picked (a new department, no colours or logo yet) or left out.
+export function toggledNew(add: NewDept[], job: string, on: boolean): NewDept[] {
+    if (!on) return add.filter(n => n.job !== job);
+    return add.some(n => n.job === job) ? add : [...add, { job, themeFrom: '', logoUrl: '' }];
+}
+
 function sameList(a: string[], b: string[]): boolean {
     return a.length === b.length && a.every((v, i) => v === b[i]);
 }
@@ -74,7 +86,14 @@ export function finishPayload(view: SetupView | null | undefined, answers: Setup
     }
     const out: Record<string, unknown> = {};
     if (Object.keys(departments).length > 0) out.departments = departments;
-    if (answers.add.length > 0) out.add = [...answers.add];
+    if (answers.add.length > 0) {
+        out.add = answers.add.map(n => {
+            const one: Record<string, string> = { job: n.job };
+            if (n.themeFrom) one.themeFrom = n.themeFrom;
+            if (n.logoUrl.trim()) one.logoUrl = n.logoUrl.trim();
+            return one;
+        });
+    }
     const allDesks = (view?.desks ?? []).map(d => d.index);
     if (!sameList(answers.desks.map(String), allDesks.map(String))) out.desks = [...answers.desks];
     const integrations: Record<string, string> = {};

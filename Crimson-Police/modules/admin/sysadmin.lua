@@ -2097,12 +2097,27 @@ local function ResourceRow(name, required)
 end
 
 function Sys.integrations()
-    local out = { resources = {}, checklist = CHECKLIST }
+    local out = { resources = {}, checklist = CHECKLIST, jobs = {} }
     for _, name in ipairs(REQUIRED_RESOURCES) do out.resources[#out.resources + 1] = ResourceRow(name, true) end
     local I = CP.Integrations
+    -- which script serves each job now (Config.Integrations), and which jobs each script row serves
+    local serves = {}
+    for _, s in ipairs(I and I.status() or {}) do
+        out.jobs[#out.jobs + 1] = {
+            kind = s.kind,
+            setting = s.setting,
+            active = s.active,
+            off = not s.active and I.offText(s) or nil,
+        }
+        if s.active then
+            serves[s.active] = serves[s.active] or {}
+            table.insert(serves[s.active], s.kind)
+        end
+    end
     for _, kind in ipairs(I and I.KINDS or {}) do
         for _, name in ipairs(I.ORDER[kind]) do out.resources[#out.resources + 1] = ResourceRow(name, false) end
     end
+    for _, r in ipairs(out.resources) do r.serves = serves[r.name] end
     for _, name in ipairs(OTHER_RESOURCES) do out.resources[#out.resources + 1] = ResourceRow(name, false) end
     local arena = {
         state = GetResourceState and GetResourceState('Crimson-Arena') or 'missing',
@@ -2139,8 +2154,7 @@ Kit.action('server:admin:addDepartment', 'departmentsAdmin', function(ctx)
     local from = type(p.themeFrom) == 'string' and DeptRaw(p.themeFrom) or nil
     local base = {
         enabled = true,
-        theme = from and U.deepcopy(from.theme)
-            or { primary = '#1f4e8c', accent = '#f2c230', background = '#0d1522', surface = '#152235' },
+        theme = U.deepcopy(from and from.theme or U.NEW_DEPT_THEME),
     }
     if type(base.theme) == 'table' then base.theme.personalAccents = nil end
     local rec = Record(p, base)

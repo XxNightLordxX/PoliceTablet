@@ -80,7 +80,9 @@ so Home opens on its dashboard as before) Admin UI → **Home** shows the **Firs
 presses **Finish** or **Skip setup**. Its five steps:
 
 1. **Departments and supervisor grades**: which Qbox jobs belong to each department (the police jobs qbx_core has,
-   type `leo`), from which grade they supervise, and a new department for each police job none lists.
+   type `leo`), from which grade they supervise, and a new department for each police job none lists, with its
+   colours (the new-department colours, or the same as a department you have) and a logo link (a logo file is
+   uploaded later in Departments).
 2. **Mission desks**: untick a desk your city does not use (the shipped desks stand at the Qbox police stations).
 3. **Storage**: where data is saved now. That choice stays in `config.lua` (`Config.Database.enabled`); the copy
    command takes data along.

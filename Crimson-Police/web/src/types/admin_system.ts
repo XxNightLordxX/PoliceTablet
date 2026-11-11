@@ -204,10 +204,20 @@ export interface ResourceView {
     state: string;
     version?: string | null;
     required: boolean;
+    // the jobs (dispatch, ambulance, banking, police) this script serves now
+    serves?: string[] | null;
+}
+// Which script serves one job now (Config.Integrations), or why none does
+export interface IntegrationJob {
+    kind: string;
+    setting: string;
+    active?: string | null;
+    off?: string | null;
 }
 
 export interface IntegrationsData {
     resources: ResourceView[];
+    jobs: IntegrationJob[];
     // locale keys of the owner guide 4 checklist (settings in the other resources)
     checklist: string[];
     arena: {

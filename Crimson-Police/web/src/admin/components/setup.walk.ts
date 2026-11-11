@@ -12,6 +12,7 @@ import {
     gradeChoices,
     initialAnswers,
     scriptLine,
+    toggledNew,
     unclaimedJobs,
 } from './setup';
 
@@ -53,20 +54,33 @@ async function steps(): Promise<void> {
         // every kind of answer
         const a = initialAnswers(view);
         a.departments.police = { jobs: ['police', 'sasp'], supervisorGrade: 4, enabled: true };
-        a.add = ['bcso'];
+        a.add = toggledNew(toggledNew([], 'bcso', true), 'sasp', true);
+        a.add = a.add.map(n =>
+            n.job === 'bcso' ? { ...n, themeFrom: 'police', logoUrl: ' https://x.test/b.png ' } : n,
+        );
+        a.add = toggledNew(a.add, 'sasp', false);
         a.desks = [1, 3];
         a.integrations.banking = 'none';
         a.preset = 'serious';
         const p = finishPayload(view, a) as {
             departments?: Record<string, { jobs: string[]; supervisorGrade: number }>;
-            add?: string[];
+            add?: { job: string; themeFrom?: string; logoUrl?: string }[];
             desks?: number[];
             integrations?: Record<string, string>;
             preset?: string;
         };
         ok(p.departments?.police?.jobs.join(',') === 'police,sasp', 'the department jobs');
         ok(p.departments?.police?.supervisorGrade === 4, 'the supervisor grade');
-        ok(p.add?.join(',') === 'bcso', 'a new department for bcso');
+        ok(
+            JSON.stringify(p.add) === '[{"job":"bcso","themeFrom":"police","logoUrl":"https://x.test/b.png"}]',
+            'a new department for bcso, with the colours of police and its logo link (sasp unticked again)',
+        );
+        const plain = initialAnswers(view);
+        plain.add = toggledNew(plain.add, 'sasp', true);
+        ok(
+            JSON.stringify(finishPayload(view, plain).add) === '[{"job":"sasp"}]',
+            'no colours or logo picked: the job only',
+        );
         ok(p.desks?.join(',') === '1,3', 'the desks kept');
         ok(JSON.stringify(p.integrations) === '{"banking":"none"}', 'only the script changed');
         ok(p.preset === 'serious', 'the preset');

@@ -475,5 +475,10 @@
   "sysadmin.jobs.desc.reward_forfeiture": "Forfeits the held item rewards of voided runs once their dispute window has closed.",
   "sysadmin.jobs.result.reward_forfeiture": "{n} rows forfeited.",
   "sysadmin.jobs.refresh": "Refresh",
-  "sysadmin.jobs.none": "No timed job has registered yet. Wait a few seconds after the start and refresh."
+  "sysadmin.jobs.none": "No timed job has registered yet. Wait a few seconds after the start and refresh.",
+  "sysadmin.ui.serves": "Serves",
+  "sysadmin.ui.jobs_title": "Who serves each job",
+  "sysadmin.ui.jobs_subtitle": "The script in use for dispatch, ambulance, banking and police (Settings -> Other scripts).",
+  "sysadmin.ui.job_served": "{job}: {name}",
+  "sysadmin.ui.job_off": "{job}: {why}"
 }

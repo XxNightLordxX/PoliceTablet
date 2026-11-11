@@ -637,11 +637,27 @@ do
     local none, noneErr = Cb('admin:getRefusals', 7, {})
     H.ok(none == nil and noneErr == 'err.no_permission', 'officers cannot read the refused starts')
 
+    -- FIN10: police served by sc-police (named), dispatch by none: the screen marks who serves each job
+    CP.Integrations.register('police', 'sc-police', {})
+    local intsBefore = Config.Integrations
+    Config.Integrations = { dispatch = 'none', ambulance = 'auto', banking = 'auto', police = 'sc-police' }
     local ints = Cb('admin:getIntegrations', 1, {})
+    Config.Integrations = intsBefore
     local names = {}
     for _, r in ipairs(ints.resources) do names[r.name] = r end
     H.ok(names['qbx_core'] and names['qbx_core'].version == '2.0' and names['sc-police'].required == false,
         'every dependency with its state and version')
+    H.eq(names['sc-police'].serves and table.concat(names['sc-police'].serves, ','), 'police',
+        'the script row says which job it serves')
+    H.eq(names['sc-dispatch'].serves, nil, 'a script that serves nothing says nothing')
+    local jobs = {}
+    for _, j in ipairs(ints.jobs) do jobs[j.kind] = j end
+    H.ok(jobs.police.active == 'sc-police' and jobs.police.off == nil, 'police: served by sc-police')
+    H.ok(
+        jobs.dispatch.active == nil and jobs.dispatch.setting == 'none' and type(jobs.dispatch.off) == 'string'
+            and #jobs.dispatch.off > 0,
+        'dispatch: none serves it, with the reason'
+    )
     H.ok(#ints.arena.zones == 2, 'the two Crimson-Arena no-build zones are shown')
 
     -- the database side of the status reads information_schema (shadow mode compares it with the saves folder

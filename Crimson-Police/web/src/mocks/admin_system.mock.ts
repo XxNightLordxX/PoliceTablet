@@ -266,9 +266,16 @@ registerMock('request', 'admin:getIntegrations', (): IntegrationsData => ({
     resources: [
         { name: 'qbx_core', state: 'started', version: '1.20.0', required: true },
         { name: 'ox_inventory', state: 'started', version: '2.41.0', required: true },
-        { name: 'sc-dispatch', state: 'started', version: '3.2.1', required: true },
-        { name: 'sc-police', state: 'started', required: false },
+        { name: 'sc-dispatch', state: 'started', version: '3.2.1', required: false, serves: ['dispatch'] },
+        { name: 'sc-police', state: 'started', required: false, serves: ['police'] },
+        { name: 'Renewed-Banking', state: 'missing', required: false },
         { name: 'Crimson-Arena', state: 'missing', required: false },
+    ],
+    jobs: [
+        { kind: 'dispatch', setting: 'auto', active: 'sc-dispatch' },
+        { kind: 'ambulance', setting: 'none', off: 'ambulance: none (Crimson-Police picks up and revives itself)' },
+        { kind: 'banking', setting: 'auto', off: 'banking: no banking script is running' },
+        { kind: 'police', setting: 'auto', active: 'sc-police' },
     ],
     checklist: ['sysadmin.checklist.dispatch_jobs', 'sysadmin.checklist.police_jobs', 'sysadmin.checklist.arena'],
     arena: {

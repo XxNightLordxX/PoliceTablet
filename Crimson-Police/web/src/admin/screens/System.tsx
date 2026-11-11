@@ -697,6 +697,19 @@ function IntegrationsPanel() {
                         },
                         { key: 'version', header: t('sysadmin.ui.version'), width: 110, render: r => r.version ?? '—' },
                         {
+                            key: 'serves',
+                            header: t('sysadmin.ui.serves'),
+                            width: 150,
+                            render: r =>
+                                asArray(r.serves).length > 0 ? (
+                                    <Badge size="sm" tone="primary">
+                                        {asArray(r.serves)
+                                            .map(k => t(`admin.setup.kind.${k}`))
+                                            .join(', ')}
+                                    </Badge>
+                                ) : null,
+                        },
+                        {
                             key: 'required',
                             header: '',
                             width: 120,
@@ -712,6 +725,18 @@ function IntegrationsPanel() {
                     dense
                     aria-label={t('sysadmin.ui.resources_title')}
                 />
+            </Card>
+            <Card title={t('sysadmin.ui.jobs_title')} subtitle={t('sysadmin.ui.jobs_subtitle')} icon="sliders">
+                <ul className="system-checklist">
+                    {asArray(data.jobs).map(j => (
+                        <li key={j.kind}>
+                            <Icon name={j.active ? 'check' : 'alert'} size={13} />
+                            {j.active
+                                ? t('sysadmin.ui.job_served', { job: t(`admin.setup.kind.${j.kind}`), name: j.active })
+                                : t('sysadmin.ui.job_off', { job: t(`admin.setup.kind.${j.kind}`), why: j.off ?? '' })}
+                        </li>
+                    ))}
+                </ul>
             </Card>
             <Card title={t('sysadmin.ui.checklist_title')} icon="checkCircle">
                 <ul className="system-checklist">

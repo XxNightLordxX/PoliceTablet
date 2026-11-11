@@ -134,10 +134,16 @@ end
 do
     local _, e1 = Setup.changes({ departments = { nope = { supervisorGrade = 2 } } })
     H.eq(e1, 'err.dept_unknown', 'an unknown department is refused')
-    local _, e2 = Setup.changes({ add = { 'ambulance_x' } })
+    local _, e2 = Setup.changes({ add = { { job = 'ambulance_x' } } })
     H.eq(e2, 'err.dept_key', 'a job Qbox does not have is refused')
-    local _, e3 = Setup.changes({ add = { 'sast' } })
+    local _, e3 = Setup.changes({ add = { { job = 'sast' } } })
     H.eq(e3, 'err.dept_exists', 'a department key that exists is refused')
+    local _, e6 = Setup.changes({ add = { { job = 'police', themeFrom = 'nope' } } })
+    H.eq(e6, 'err.dept_unknown', 'a new department copies the colours of a department that exists only')
+    local _, e7 = Setup.changes({ add = { 'police' } })
+    H.eq(e7, 'err.invalid_payload', 'each new department is { job, themeFrom?, logoUrl? }')
+    local _, e8 = Setup.changes({ add = { { job = 'police', logoUrl = ('x'):rep(600) } } })
+    H.eq(e8, 'err.dept_logo_url', 'an overlong logo link is refused')
     local _, e4 = Setup.changes({ desks = { 99 } })
     H.eq(e4, 'err.invalid_payload', 'a desk that does not exist is refused')
     local _, e5 = Setup.changes({ departments = { sast = { jobs = {} } } })
@@ -157,18 +163,27 @@ do
     local desks = #Config.Tablet.desks
     local okF, res = Run('server:admin:finishSetup', 1, {
         departments = { sast = { jobs = { 'sast', 'sasp' }, supervisorGrade = 4 } },
-        add = { 'police' },
+        add = {
+            { job = 'police', themeFrom = 'sast', logoUrl = 'https://example.com/lspd.png' },
+            { job = 'bcso' },
+        },
         desks = { 1, 3 },
         integrations = { banking = 'none' },
         preset = 'casual',
     })
     H.ok(okF, 'finished: ' .. tostring(res))
-    H.eq(res.changed, 5, 'five settings changed (jobs, grade, the new department, desks, banking)')
+    H.eq(res.changed, 6, 'six settings changed (jobs, grade, the two new departments, desks, banking)')
     H.eq(table.concat(Config.Departments.sast.jobs, ','), 'sast,sasp', 'the department\'s jobs')
     H.eq(Config.Departments.sast.supervisorGrade, 4, 'its supervisor grade')
     H.eq(Config.Departments.police.label, 'LSPD', 'a department for the Qbox police job, named after it')
     H.eq(Config.Departments.police.supervisorGrade, 4, 'supervising from the job\'s boss grade')
     H.eq(table.concat(Config.Departments.police.jobs, ','), 'police', 'with that job')
+    H.eq(Config.Departments.police.theme.primary, Config.Departments.sast.theme.primary, 'the colours of SAST')
+    H.eq(Config.Departments.police.logo and Config.Departments.police.logo.url, 'https://example.com/lspd.png',
+        'the logo link given')
+    H.eq(Config.Departments.bcso.theme.primary, CP.U.NEW_DEPT_THEME.primary,
+        'no colours picked: the new-department ones')
+    H.eq(Config.Departments.bcso.logo, nil, 'no logo link: no logo')
     H.eq(#Config.Tablet.desks, 2, 'one desk of ' .. desks .. ' left out')
     H.eq(Config.Integrations.banking, 'none', 'the banking script choice')
     H.eq(res.preset and res.preset.key, 'casual', 'the preset applied after')
@@ -179,7 +194,7 @@ do
     H.eq(#a, 1, 'one audit line for the setup')
     local row = H.sql('SELECT reason FROM cp_audit WHERE target = \'Integrations.banking\' ORDER BY id DESC LIMIT 1')[1]
     H.eq(row and row.reason, 'First-start setup', 'each answer is an ordinary setting change with the setup as reason')
-    H.eq(#S.addedDepartments(), 1, 'the new department is an in-game department (Departments edits it)')
+    H.eq(#S.addedDepartments(), 2, 'the new departments are in-game departments (Departments edits them)')
 end
 
 -- ============================================================================

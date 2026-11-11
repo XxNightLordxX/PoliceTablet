@@ -776,6 +776,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Generic config (SALE3), on a stock Qbox test server only: copy `config/examples/generic.lua` over
   `config/config.lua` and restart: the start-up check has no red line, the departments LSPD, BCSO and SASP match
   the jobs `police`, `bcso` and `sasp`, and `/CrimsonPoliceAdmin` opens on the First-start setup. (SALE3)
+- [ ] Sale readiness (FIN10): Admin UI -> System -> Integrations: each script row that serves a job says which one
+  (sc-dispatch "Dispatch script" and so on), and *Who serves each job* lists the four jobs. Set
+  `Integrations.ambulance` to 'none' in Settings: its line gives the reason. Put it back to 'auto'. With
+  `AdminUi.setupScreen` on and a Qbox police job no department lists, tick it in step 1, pick "The same as" a
+  department and a logo link: after Finish the new department has those colours and that logo. (FIN10)
 - [ ] Finish (FIN1): Supervisor UI -> Department -> Officers -> an officer -> Give points: *Your controls used today*
   goes up at once (no 30 s wait). A rookie whose training is done shows his finished training and Pair trainer in
   the panel; pairing him again works as on the Training tab. Admin UI -> Money, Review and Supervisor Department

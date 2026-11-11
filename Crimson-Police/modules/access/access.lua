@@ -62,14 +62,7 @@ CP.Access = CP.Access or {}
 local A = CP.Access
 local TAG = 'access'
 
--- The Crimson-Police default theme (the neutral admin theme; the NUI uses the same values).
-local DEFAULT_THEME = {
-    primary = '#a4161a',
-    accent = '#e5383b',
-    background = '#0b090a',
-    surface = '#161a1d',
-    text = '#f5f3f4',
-}
+local DEFAULT_THEME = CP.U.DEFAULT_THEME
 local COLOUR_KEYS = { 'primary', 'accent', 'background', 'surface' }
 local LOGO_EXTENSIONS = { png = true, webp = true, svg = true, jpg = true, jpeg = true }
 local NO_SUPERVISOR_GRADE = 1000

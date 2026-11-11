@@ -18,6 +18,7 @@
 --   CP.Integrations.adapter(kind) -> table|nil                      that script's adapter
 --   CP.Integrations.is(kind, resource) -> boolean                   resource serves kind now
 --   CP.Integrations.status() -> { { kind, setting, active, why } }  for Config health and Admin UI -> System
+--   CP.Integrations.offText(statusRow) -> text                      why that kind has no script (console, System)
 --   CP.Integrations.featureOff(featureKey) -> text|nil              why a feature of Settings -> Features is off
 --   CP.Integrations.realSuspectsBlocked() -> boolean                live crimes and volunteers need cuff + jail facts
 
@@ -98,7 +99,7 @@ function I.status()
 end
 
 -- Why kind has no script, as text: no adapter for the named script, or the kind's own "no script" line.
-local function OffText(s)
+function I.offText(s)
     if s.why == 'no_adapter' then
         return CP.L('integrations.no_adapter', { kind = s.kind, setting = s.setting })
     end
@@ -116,7 +117,7 @@ function I.report()
             if s.active then
                 CP.log(TAG, '%s: %s', s.kind, s.active)
             else
-                CP.warn(TAG, '%s', OffText(s))
+                CP.warn(TAG, '%s', I.offText(s))
             end
         end
     end
@@ -495,7 +496,7 @@ local function HealthLines()
         else
             out[#out + 1] = {
                 level = s.setting == 'none' and 'ok' or 'warn',
-                text = OffText(s),
+                text = I.offText(s),
                 fix = 'Integrations.' .. s.kind,
             }
         end

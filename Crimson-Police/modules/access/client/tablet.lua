@@ -90,28 +90,22 @@ local TOAST_MS = {
     normal = { info = 5000, success = 5000, warning = 7000, error = 7000 },
     long = { info = 8000, success = 8000, warning = 12000, error = 12000 },
 }
-local QUIET_KINDS = { info = true, success = true } -- the social toasts quietRun keeps in the bell during a run
-local DEFAULT_THEME = {
-    primary = '#a4161a',
-    accent = '#e5383b',
-    background = '#0b090a',
-    surface = '#161a1d',
-    text = '#f5f3f4',
-}
+local QUIET_KINDS = { info = true, success = true }  -- the social toasts quietRun keeps in the bell during a run
+local DEFAULT_THEME = CP.U.DEFAULT_THEME
 local NULLABLE_HUD = { modifier = true, timer = true, route = true, message = true, detail = true, target = true }
 local KEY_MAPPING = 'crimsonpolice_tablet'
 local DISPATCH_MAPPING = 'crimsonpolice_dispatch'
 local DESK_OPTION = 'crimson-police:desk'
-local DESK_TARGET_DISTANCE = 2.0  -- metres: how close ox_target offers "Open Crimson-Police" at a desk
-local DESK_WATCH_MS = 1000        -- how often the desk distance is checked while the tablet is open there
-local ITEM_WATCH_MS = 2000        -- how often the tablet item is looked for while requireItem is on
-local DOWN_WATCH_MS = 1000        -- how often a downed officer is looked for while the tablet is open
-local WATCH_SLACK_MS = 50         -- a watcher pass this early still counts (Wait returns about on time)
-local ANIM_WATCH_MS = 2000        -- how often the tablet animation is checked (other scripts clear tasks)
-local OPEN_ACK_MS = 6000          -- the NUI confirms it shows the UI within this, or the focus is released
-local SETTINGS_WAIT_MS = 10000    -- the start waits this long at most for the settings changed in game
-local PAUSE_CONTROL = 200         -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
-local PAUSE_GUARD_MS = 300        -- when Config.Tablet.pauseGuardMs is missing from an older config.lua
+local DESK_TARGET_DISTANCE = 2.0                     -- metres: how close ox_target offers "Open Crimson-Police" at a desk
+local DESK_WATCH_MS = 1000                           -- how often the desk distance is checked while the tablet is open there
+local ITEM_WATCH_MS = 2000                           -- how often the tablet item is looked for while requireItem is on
+local DOWN_WATCH_MS = 1000                           -- how often a downed officer is looked for while the tablet is open
+local WATCH_SLACK_MS = 50                            -- a watcher pass this early still counts (Wait returns about on time)
+local ANIM_WATCH_MS = 2000                           -- how often the tablet animation is checked (other scripts clear tasks)
+local OPEN_ACK_MS = 6000                             -- the NUI confirms it shows the UI within this, or the focus is released
+local SETTINGS_WAIT_MS = 10000                       -- the start waits this long at most for the settings changed in game
+local PAUSE_CONTROL = 200                            -- INPUT_FRONTEND_PAUSE_ALTERNATE (Escape)
+local PAUSE_GUARD_MS = 300                           -- when Config.Tablet.pauseGuardMs is missing from an older config.lua
 
 -- Tablet prop and animation (held in the hand the animation uses; offsets tuned for this clip).
 local ANIM_DICT = 'amb@code_human_in_bus_passenger_idles@female@tablet@base'

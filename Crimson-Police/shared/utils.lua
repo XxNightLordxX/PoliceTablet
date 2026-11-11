@@ -322,6 +322,17 @@ end
 --                                 HEX COLOURS
 -- ============================================================================
 
+-- The Crimson-Police default theme (the neutral admin theme; the NUI uses the same values). Read-only: copy it.
+U.DEFAULT_THEME = {
+    primary = '#a4161a',
+    accent = '#e5383b',
+    background = '#0b090a',
+    surface = '#161a1d',
+    text = '#f5f3f4',
+}
+-- The colours a new department starts with when it copies no other department's (Departments -> Add, the setup).
+U.NEW_DEPT_THEME = { primary = '#1f4e8c', accent = '#f2c230', background = '#0d1522', surface = '#152235' }
+
 function U.isHexColour(s)
     return type(s) == 'string' and s:match('^#%x%x%x%x%x%x$') ~= nil
 end

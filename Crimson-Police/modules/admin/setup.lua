@@ -13,7 +13,7 @@ local TAG = 'setup'
 local DEPT_KEY = '^[a-z0-9_]+$'
 local DEPTS_MAX = 20              -- departments one finish may change or add
 local LEO_TYPE = 'leo'            -- the Qbox job type of police jobs (qbx_core shared/jobs.lua)
-local THEME = { primary = '#1f4e8c', accent = '#f2c230', background = '#0d1522', surface = '#152235' }
+local LOGO_URL_MAX = 512          -- characters of a new department's logo link
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
@@ -186,7 +186,8 @@ local function BossGrade(job)
 end
 
 -- The settings an answer sheet changes: { { path, value } } | nil, errKey.
--- answers = { departments = { [key] = { jobs?, supervisorGrade?, enabled? } }, add = { jobName },
+-- answers = { departments = { [key] = { jobs?, supervisorGrade?, enabled? } },
+--             add = { { job, themeFrom? (a department key whose colours it copies), logoUrl? (https:// link) } },
 --             desks = { kept desk indexes }, integrations = { [kind] = setting } }
 function Setup.changes(answers)
     if type(answers) ~= 'table' then return nil, 'err.invalid_payload' end
@@ -224,16 +225,32 @@ function Setup.changes(answers)
         end
     end
 
-    -- a new department for each picked Qbox job, named after it (Admin UI -> Departments edits it later)
+    -- a new department for each picked Qbox job, named after it, with the colours of themeFrom (or the new-department
+    -- colours) and the logo link given (Admin UI -> Departments edits all of it later, and uploads a logo file)
     local okJ, all = Call('Qbx', 'getJobs')
     all = okJ and type(all) == 'table' and all or {}
-    for _, name in ipairs(type(answers.add) == 'table' and answers.add or {}) do
+    for _, a in ipairs(type(answers.add) == 'table' and answers.add or {}) do
+        if type(a) ~= 'table' then return nil, 'err.invalid_payload' end
+        local name = a.job
         local job = type(name) == 'string' and all[name] or nil
         if not job or #name > 32 or not name:match(DEPT_KEY) then return nil, 'err.dept_key' end
         if current[name] then return nil, 'err.dept_exists' end
+        local from = nil
+        if a.themeFrom ~= nil and a.themeFrom ~= '' then
+            from = type(a.themeFrom) == 'string' and current[a.themeFrom] and Config.Departments[a.themeFrom] or nil
+            if not from then return nil, 'err.dept_unknown' end
+        end
+        local logo = nil
+        if a.logoUrl ~= nil and a.logoUrl ~= '' then
+            if type(a.logoUrl) ~= 'string' or #a.logoUrl > LOGO_URL_MAX then return nil, 'err.dept_logo_url' end
+            logo = { url = U.trim(a.logoUrl) }
+        end
         n = n + 1
         if n > DEPTS_MAX then return nil, 'err.invalid_payload' end
         local label = tostring(job.label or name):sub(1, 64)
+        local theme = U.deepcopy(
+            type(from) == 'table' and type(from.theme) == 'table' and from.theme or U.NEW_DEPT_THEME)
+        theme.personalAccents = nil
         put('Departments.' .. name, {
             label = label,
             short = label:sub(1, 16),
@@ -241,7 +258,8 @@ function Setup.changes(answers)
             jobs = { name },
             supervisorGrade = BossGrade(job),
             societyAccount = name,
-            theme = U.deepcopy(THEME),
+            theme = theme,
+            logo = logo,
         })
     end
 

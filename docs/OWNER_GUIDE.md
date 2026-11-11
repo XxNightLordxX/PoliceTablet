@@ -2141,7 +2141,8 @@ are not finished, and it waits while a bulk change runs.
   line**). Webhook links are only ever set in server.cfg and are never shown in game.
 - **Problems**: the last 200 warnings and errors since the start, by module. Webhook links, passwords and licences
   are cut out.
-- **Integrations**: every resource Crimson-Police works with (running or not, its version), the checklist of
+- **Integrations**: every resource Crimson-Police works with (running or not, its version, and which job it serves
+  now), **Who serves each job** (the dispatch, ambulance, banking and police script in use, or why none is), the checklist of
   [4](#4-settings-to-check-in-your-other-resources), and Crimson-Arena (running, players in the arena, its two
   no-build zones). Nothing here edits another resource.
 - **Jobs**: every job Crimson-Police runs by itself on a timer, one card each: what it does, when it runs next, its

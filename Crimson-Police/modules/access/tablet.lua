@@ -42,13 +42,7 @@ local UIS = { officer = true, supervisor = true, admin = true }
 local KINDS = { info = true, success = true, warning = true, error = true }
 local PERIODS = { 'weekly', 'monthly', 'season', 'alltime' }
 local FILTER_EXTRAS = { 'unit', 'cross', 'department' }
-local DEFAULT_THEME = {
-    primary = '#a4161a',
-    accent = '#e5383b',
-    background = '#0b090a',
-    surface = '#161a1d',
-    text = '#f5f3f4',
-}
+local DEFAULT_THEME = CP.U.DEFAULT_THEME
 local THEME_KEYS = { 'primary', 'accent', 'background', 'surface' }
 local VIA = { command = true, keybind = true, item = true, export = true, desk = true, dispatch = true }
 local AVATAR_KINDS = { initials = true, preset = true, url = true }

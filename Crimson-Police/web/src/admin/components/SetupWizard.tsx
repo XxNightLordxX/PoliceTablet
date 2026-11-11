@@ -2,12 +2,22 @@
 
 // Admin UI -> Home · First-start setup (Config.AdminUi.setupScreen): shown above the dashboard until an admin
 // finishes or skips it. Five steps: departments (their Qbox jobs and supervisor grade, and a department for each
-// Qbox police job no department lists), desks, storage, the scripts found, and a preset. Finish sends one
+// Qbox police job no department lists, with its colours and logo link), desks, storage, the scripts found, and a preset. Finish sends one
 // server:admin:finishSetup with only what changed; every answer is an ordinary setting, editable in Settings later.
 // The logic is in admin/components/setup.ts.
 
 import { useEffect, useState } from 'react';
-import { Badge, Button, Card, Checkbox, ConfirmButton, LoadingBlock, Select, Toggle } from '../../shared/components';
+import {
+    Badge,
+    Button,
+    Card,
+    Checkbox,
+    ConfirmButton,
+    LoadingBlock,
+    Select,
+    TextInput,
+    Toggle,
+} from '../../shared/components';
 import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
 import { t } from '../../shared/i18n';
@@ -21,7 +31,9 @@ import {
     gradeChoices,
     initialAnswers,
     scriptLine,
+    toggledNew,
     unclaimedJobs,
+    type NewDept,
     type SetupAnswers,
 } from './setup';
 
@@ -78,14 +90,45 @@ function Departments({
             })}
             {free.length > 0 ? (
                 <Card padding="sm" title={t('admin.setup.add_title')} subtitle={t('admin.setup.add_text')}>
-                    {free.map(j => (
-                        <Checkbox
-                            key={j.name}
-                            checked={answers.add.includes(j.name)}
-                            onChange={on => set({ ...answers, add: toggled(answers.add, j.name, on) })}
-                            label={`${j.label} (${j.name})`}
-                        />
-                    ))}
+                    {free.map(j => {
+                        const n = answers.add.find(x => x.job === j.name);
+                        const put = (next: Partial<NewDept>) =>
+                            set({ ...answers, add: answers.add.map(x => (x.job === j.name ? { ...x, ...next } : x)) });
+                        return (
+                            <div key={j.name}>
+                                <Checkbox
+                                    checked={!!n}
+                                    onChange={on => set({ ...answers, add: toggledNew(answers.add, j.name, on) })}
+                                    label={`${j.label} (${j.name})`}
+                                />
+                                {n ? (
+                                    <>
+                                        <div className="admin-setup__label">{t('admin.setup.add_look')}</div>
+                                        <Select
+                                            value={n.themeFrom}
+                                            onChange={v => put({ themeFrom: v })}
+                                            options={[
+                                                { value: '', label: t('admin.setup.add_look_new') },
+                                                ...view.departments.map(d => ({
+                                                    value: d.key,
+                                                    label: t('admin.setup.add_look_from', { name: d.short }),
+                                                })),
+                                            ]}
+                                            aria-label={t('admin.setup.add_look')}
+                                        />
+                                        <div className="admin-setup__label">{t('admin.setup.add_logo')}</div>
+                                        <TextInput
+                                            value={n.logoUrl}
+                                            onChange={v => put({ logoUrl: v })}
+                                            placeholder="https://"
+                                            maxLength={512}
+                                            aria-label={t('admin.setup.add_logo')}
+                                        />
+                                    </>
+                                ) : null}
+                            </div>
+                        );
+                    })}
                 </Card>
             ) : null}
             {view.jobs.length === 0 ? <Badge tone="warning">{t('admin.setup.no_jobs')}</Badge> : null}
