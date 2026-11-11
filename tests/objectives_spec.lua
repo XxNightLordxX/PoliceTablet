@@ -128,4 +128,57 @@ H.ok(r.on == false and r.bountyOn == false, 'challenge.enabled = false: no chall
 H.eq(select(2, CP.Objective('bounty')), false, 'CP.Objective says the same')
 Config.Objectives = CP.U.deepcopy(shipped)
 
+-- ============================================================================
+--                         PER-KIND RESET HOURS (FIN3)
+-- ============================================================================
+-- Config.Objectives.dailyGoal / weeklyGoal / typeOfTheDay .resetHour: each kind's day or week starts at its own hour;
+-- -1 (shipped) = Config.Time.resetHour, as before.
+
+O = Config.Objectives
+H.eq(O.dailyGoal.resetHour, -1, 'dailyGoal.resetHour ships -1 (the server reset hour, as before)')
+H.eq(O.weeklyGoal.resetHour, -1, 'weeklyGoal.resetHour ships -1')
+H.eq(O.typeOfTheDay.resetHour, -1, 'typeOfTheDay.resetHour ships -1')
+H.eq(CP.ObjectiveResetHour('dailyGoal'), nil, '-1: no own hour (CP.Schedule uses Config.Time.resetHour)')
+do
+    local S = CP.Schedule
+    local saved = { dayKey = S.dayKey, dayStart = S.dayStart, weekStart = S.weekStart, weekKey = S.weekKey }
+    local hours = {}
+    for name, fn in pairs(saved) do
+        S[name] = function(ts, hour)
+            hours[name] = hour == nil and 'none' or hour
+            return fn(ts)
+        end
+    end
+    G._pick('daily', 'CID1', nil, false)
+    H.eq(hours.dayStart, 'none', 'the shipped daily goal asks for the server day')
+    O.dailyGoal.resetHour = 6
+    O.weeklyGoal.resetHour = 18
+    O.typeOfTheDay.resetHour = 3
+    hours = {}
+    G._pick('daily', 'CID1', nil, false)
+    H.eq(hours.dayStart, 6, 'dailyGoal.resetHour = 6: the daily goal day starts at 06:00')
+    hours = {}
+    G._pick('weekly', 'CID1', nil, false)
+    H.eq(hours.weekStart, 18, 'weeklyGoal.resetHour = 18: the weekly goal week starts at 18:00')
+    hours = {}
+    E.todDay()
+    H.eq(hours.dayKey, 3, 'typeOfTheDay.resetHour = 3: the Type of the Day changes at 03:00')
+    O.dailyGoal.resetHour = 24
+    H.eq(CP.ObjectiveResetHour('dailyGoal'), nil, 'an hour outside 0-23 is the server reset hour')
+    for name, fn in pairs(saved) do S[name] = fn end
+    -- the real calendar with an own hour
+    local stub = CP.Schedule
+    CP.Schedule = nil
+    H.load('modules/system/schedule.lua')
+    local real = CP.Schedule
+    CP.Schedule = stub
+    Config.Time.resetHour = 0
+    local ts = os.time({ year = 2026, month = 3, day = 10, hour = 5, min = 0, sec = 0 })
+    H.eq(real.dayKey(ts), '2026-03-10', 'server reset 00:00: 05:00 is that day')
+    H.eq(real.dayKey(ts, 6), '2026-03-09', 'own hour 06:00: 05:00 still belongs to the day before')
+    H.eq(real.dayStart(ts, 6), os.time({ year = 2026, month = 3, day = 9, hour = 6, min = 0, sec = 0 }),
+        'and that day started at 06:00')
+end
+Config.Objectives = CP.U.deepcopy(shipped)
+
 return H

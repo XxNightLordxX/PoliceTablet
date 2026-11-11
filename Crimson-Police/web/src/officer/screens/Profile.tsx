@@ -30,7 +30,6 @@ import {
     TierBadge,
     Toggle,
     XpBadge,
-    type IconName,
     type TableColumn,
     ScreenStatus,
 } from '../../shared/components';
@@ -52,10 +51,9 @@ import { meLink } from '../../layouts/officerMe';
 import { useSession } from '../../shared/session';
 import type { RunResult, Session } from '../../shared/types';
 import { asList, type ProfileData, type ProfileRunView } from '../../types/boards';
-import { CommendationsCard } from '../components/CommendationsCard';
-import { FieldTrainingCard } from '../components/FieldTrainingCard';
 import { LookCard } from '../components/LookCard';
 import { ProfileEditDialog } from '../components/ProfileEditDialog';
+import { RecognitionCard } from '../components/RecognitionCard';
 import { ServiceRecordCard } from '../components/ServiceRecordCard';
 import { screenStateOf } from '../../shared/screenHeads';
 import './Profile.css';
@@ -64,12 +62,6 @@ const REPORT_REASONS = ['picture', 'bio', 'other'];
 const REPORT_NOTE_MAX = 140;
 
 const STATE_TONE = { completed: 'success', failed: 'danger', abandoned: 'neutral' } as const;
-const BADGE_ICON: Record<string, IconName> = {
-    week: 'star',
-    champion: 'trophy',
-    top10: 'podium',
-    achievement: 'shieldCheck',
-};
 
 export function missionTypeLabel(type: string, session: Session): string {
     if (type === 'manual_award' || type === 'goal') return t(`profile.type.${type}`);
@@ -451,6 +443,15 @@ export default function Profile() {
     const levelText = level.label
         ? t('profile.level_named', { n: level.n, label: level.label })
         : t('profile.level', { n: level.n });
+    const service = (
+        <ServiceRecordCard
+            lifetime={profile.service?.lifetime}
+            season={profile.service?.season}
+            bests={profile.bests}
+            partner={profile.favouritePartner}
+            cleanArrestRate={own ? profile.cleanArrestRate : null}
+        />
+    );
 
     return (
         <Screen
@@ -580,53 +581,23 @@ export default function Profile() {
                 </Card>
             </Grid>
 
-            <Card title={t('profile.badges')} icon="medal" padding="sm">
-                {badges.length ? (
-                    <div className="boards-badges">
-                        {badges.map(b => (
-                            <div
-                                key={b.id}
-                                className={cx('boards-badge', `is-${b.kind ?? 'achievement'}`)}
-                                title={
-                                    b.earnedAt ? t('profile.earned', { when: formatDateTime(b.earnedAt) }) : undefined
-                                }
-                            >
-                                <span className="boards-badge__icon">
-                                    <Icon name={BADGE_ICON[b.kind ?? 'achievement'] ?? 'shieldCheck'} size={16} />
-                                </span>
-                                <span className="boards-badge__text">
-                                    <span className="boards-badge__label">{b.label}</span>
-                                    {b.earnedAt ? (
-                                        <span className="boards-badge__when">{formatDateTime(b.earnedAt)}</span>
-                                    ) : null}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <EmptyState
-                        compact
-                        icon="medal"
-                        title={t('profile.no_badges')}
-                        text={own ? t('profile.no_badges_text') : undefined}
-                    />
-                )}
-            </Card>
+            <RecognitionCard
+                badges={profile.badges}
+                commendations={profile.commendations}
+                mdt={profile.mdtCommendations}
+                own={own}
+            />
 
-            <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="start">
-                <ServiceRecordCard
-                    lifetime={profile.service?.lifetime}
-                    season={profile.service?.season}
-                    bests={profile.bests}
-                    partner={profile.favouritePartner}
-                    cleanArrestRate={own ? profile.cleanArrestRate : null}
-                />
-                <div className="boards-profile-side">
-                    <CommendationsCard commendations={profile.commendations} mdt={profile.mdtCommendations} />
-                    {own ? <FieldTrainingCard /> : null}
-                    {own ? <LookCard version={lookVersion} onEdit={() => setEditing(true)} /> : null}
-                </div>
-            </Grid>
+            {own ? (
+                <Grid cols="minmax(0, 3fr) minmax(0, 2fr)" gap={4} align="start">
+                    {service}
+                    <div className="boards-profile-side">
+                        <LookCard version={lookVersion} onEdit={() => setEditing(true)} />
+                    </div>
+                </Grid>
+            ) : (
+                service
+            )}
 
             <Card
                 title={t('profile.history')}

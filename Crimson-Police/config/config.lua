@@ -1904,6 +1904,10 @@ Config.Recognition = {
         crossDepartment = false,     -- true = supervisors may commend officers of other departments
         announceDays = 7,            -- days the Home announcement shows for the recipient
         announce = false,            -- also post it to the board webhook
+        -- Rules of one kind, by kind id: sameKindCooldownDays and crossDepartment for that kind only, such as
+        -- { valor = { sameKindCooldownDays = 30, crossDepartment = true } }. A kind left out, or a rule left out of
+        -- its row, uses the shared rule above
+        kindRules = {},
     },
     -- Field training (FTO): a supervisor (or an admin) pairs a trainer with a rookie of his own department in
     -- Supervisor UI -> Department. Completed missions the rookie runs together with his trainer (both finish the same
@@ -1983,6 +1987,8 @@ Config.Notices = {
 -- and weekly goal, the department challenge, the weekly bounty and the Type of the Day. Each kind has its own on/off,
 -- points (or multiplier) and picking rules. Daily things (the daily goal, the Type of the Day) reset at
 -- Config.Time.resetHour; weekly things (the weekly goal, the bounty) at that hour on Config.Leaderboard.weekStartsOn.
+-- The daily goal, the weekly goal and the Type of the Day may each reset at their own hour (resetHour below; -1 =
+-- Config.Time.resetHour). The department challenge and the bounty always follow the leaderboard week.
 -- A supervisor may narrow the goals or pick tomorrow's type for his department (Config.MissionControls: goals,
 -- typeOfTheDay). Usually changed here: the goals' points and lists, and the Type of the Day multiplier.
 --
@@ -1994,6 +2000,7 @@ Config.Objectives = {
     dailyGoal = {
         enabled = true,          -- true = each officer gets one goal a day; false = no daily goal
         points = 50,             -- points for finishing the daily goal
+        resetHour = -1,          -- hour (0-23) a new daily goal starts; -1 = the server's reset hour (Config.Time)
         goals = {                -- the goals a daily goal is drawn from (the fields above)
             { id = 'patrol_2', label = 'Complete 2 Patrol missions', type = 'patrol', count = 2 },
             { id = 'any_3', label = 'Complete 3 missions of any type', count = 3 },
@@ -2005,6 +2012,7 @@ Config.Objectives = {
     weeklyGoal = {
         enabled = true,          -- true = each officer gets one goal a week; false = no weekly goal
         points = 200,            -- points for finishing the weekly goal
+        resetHour = -1,          -- hour (0-23) a new weekly goal starts on the week's first day; -1 = Config.Time
         goals = {                -- the goals a weekly goal is drawn from (the fields above)
             { id = 'tactical_5', label = 'Complete 5 Tactical missions', type = 'tactical', count = 5 },
             { id = 'cross_2', label = 'Complete 2 cross-department runs', crossDepartment = true, count = 2 },
@@ -2033,6 +2041,7 @@ Config.Objectives = {
     typeOfTheDay = {
         enabled = true,          -- true = one mission type a day earns the points multiplier below
         multiplier = 2.0,        -- points only: cash is never multiplied
+        resetHour = -1,          -- hour (0-23) a new Type of the Day starts; -1 = the server's reset hour (Config.Time)
     },
 }
 

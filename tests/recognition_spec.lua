@@ -126,6 +126,21 @@ H.eq(S.xpLevel(0).label, 'Probationary', 'and the levels stay')
 H.eq(Need('iron_wheels'), 20, 'and the auto badges stay')
 C.enabled = true
 
+-- Per-kind rules (FIN3): commendations.kindRules gives one kind its own cooldown or cross-department rule; a kind (or
+-- a rule) left out keeps the shared one. Shipped empty, so every kind follows the shared rules as before.
+H.load('modules/progression/profile.lua')
+local KindRule = CP.Profile._kindRule
+H.eq(next(C.kindRules), nil, 'kindRules ships empty: every kind keeps the shared rules')
+H.eq(KindRule(C, 'valor', 'sameKindCooldownDays'), 7, 'no row: the shared 7-day cooldown')
+H.eq(KindRule(C, 'valor', 'crossDepartment'), false, 'no row: own department only')
+C.kindRules = { valor = { sameKindCooldownDays = 30, crossDepartment = true }, teamwork = { sameKindCooldownDays = 0 } }
+H.eq(KindRule(C, 'valor', 'sameKindCooldownDays'), 30, 'valor: its own 30-day cooldown')
+H.eq(KindRule(C, 'valor', 'crossDepartment'), true, 'valor: may go to another department')
+H.eq(KindRule(C, 'teamwork', 'sameKindCooldownDays'), 0, 'teamwork: no cooldown (0 is a rule, not "left out")')
+H.eq(KindRule(C, 'teamwork', 'crossDepartment'), false, 'teamwork: the rule it leaves out is the shared one')
+H.eq(KindRule(C, 'leadership', 'sameKindCooldownDays'), 7, 'a kind not listed: the shared rules')
+C.kindRules = {}
+
 -- ============================================================================
 --                             WEEKLY BOARD BADGES
 -- ============================================================================

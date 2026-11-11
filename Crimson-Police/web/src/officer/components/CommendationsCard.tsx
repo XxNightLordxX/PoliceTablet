@@ -21,11 +21,76 @@ export interface CommendationsCardProps {
     canRevoke?: (c: Commendation) => boolean;
     // a Commend button in the header (supervisors and admins)
     onCommend?: () => void;
+    // only the list, without its card (a tab of the profile's Recognition section)
+    bare?: boolean;
 }
 
-export function CommendationsCard({ commendations, mdt, onRevoke, canRevoke, onCommend }: CommendationsCardProps) {
+export function CommendationsCard({
+    commendations,
+    mdt,
+    onRevoke,
+    canRevoke,
+    onCommend,
+    bare,
+}: CommendationsCardProps) {
     const list = asList(commendations ?? undefined);
     const mdtList = asList(mdt ?? undefined);
+    const body =
+        list.length === 0 && mdtList.length === 0 ? (
+            <EmptyState compact icon="medal" title={t('profile.commend.none')} />
+        ) : (
+            <ul className="profile-commend__list">
+                {list.map(c => (
+                    <li key={c.id} className={cx('profile-commend__item', c.revoked && 'is-revoked')}>
+                        <span className="profile-commend__icon" aria-hidden>
+                            <Icon name="medal" size={16} />
+                        </span>
+                        <span className="profile-commend__text">
+                            <span className="profile-commend__head">
+                                <strong>{commendationKindLabel(c.kind)}</strong>
+                                {c.revoked ? (
+                                    <Badge tone="danger" size="sm">
+                                        {t('profile.commend.revoked')}
+                                    </Badge>
+                                ) : null}
+                            </span>
+                            <span className="profile-commend__citation">{c.citation}</span>
+                            <span className="profile-commend__by">
+                                {t('profile.commend.by', {
+                                    name: c.byRank ? `${c.byRank} ${c.by}` : c.by,
+                                    date: fmtDate(c.at),
+                                })}
+                                {c.revoked && c.revokeReason ? ` · ${c.revokeReason}` : ''}
+                            </span>
+                        </span>
+                        {onRevoke && !c.revoked && (!canRevoke || canRevoke(c)) ? (
+                            <Button size="sm" variant="ghost" icon="xCircle" onClick={() => onRevoke(c)}>
+                                {t('profile.commend.revoke')}
+                            </Button>
+                        ) : null}
+                    </li>
+                ))}
+                {mdtList.map((m, i) => (
+                    <li key={`mdt-${i}`} className="profile-commend__item is-mdt">
+                        <span className="profile-commend__icon" aria-hidden>
+                            <Icon name="fileText" size={16} />
+                        </span>
+                        <span className="profile-commend__text">
+                            <span className="profile-commend__head">
+                                <strong>{m.title}</strong>
+                                <Badge tone="neutral" size="sm" variant="outline">
+                                    {t('profile.commend.mdt')}
+                                </Badge>
+                            </span>
+                            <span className="profile-commend__by">
+                                {t('profile.commend.by', { name: m.by, date: fmtDate(m.at) })}
+                            </span>
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        );
+    if (bare) return <div className="profile-commend">{body}</div>;
     return (
         <Card
             title={t('profile.commend.title')}
@@ -40,60 +105,7 @@ export function CommendationsCard({ commendations, mdt, onRevoke, canRevoke, onC
                 ) : undefined
             }
         >
-            {list.length === 0 && mdtList.length === 0 ? (
-                <EmptyState compact icon="medal" title={t('profile.commend.none')} />
-            ) : (
-                <ul className="profile-commend__list">
-                    {list.map(c => (
-                        <li key={c.id} className={cx('profile-commend__item', c.revoked && 'is-revoked')}>
-                            <span className="profile-commend__icon" aria-hidden>
-                                <Icon name="medal" size={16} />
-                            </span>
-                            <span className="profile-commend__text">
-                                <span className="profile-commend__head">
-                                    <strong>{commendationKindLabel(c.kind)}</strong>
-                                    {c.revoked ? (
-                                        <Badge tone="danger" size="sm">
-                                            {t('profile.commend.revoked')}
-                                        </Badge>
-                                    ) : null}
-                                </span>
-                                <span className="profile-commend__citation">{c.citation}</span>
-                                <span className="profile-commend__by">
-                                    {t('profile.commend.by', {
-                                        name: c.byRank ? `${c.byRank} ${c.by}` : c.by,
-                                        date: fmtDate(c.at),
-                                    })}
-                                    {c.revoked && c.revokeReason ? ` · ${c.revokeReason}` : ''}
-                                </span>
-                            </span>
-                            {onRevoke && !c.revoked && (!canRevoke || canRevoke(c)) ? (
-                                <Button size="sm" variant="ghost" icon="xCircle" onClick={() => onRevoke(c)}>
-                                    {t('profile.commend.revoke')}
-                                </Button>
-                            ) : null}
-                        </li>
-                    ))}
-                    {mdtList.map((m, i) => (
-                        <li key={`mdt-${i}`} className="profile-commend__item is-mdt">
-                            <span className="profile-commend__icon" aria-hidden>
-                                <Icon name="fileText" size={16} />
-                            </span>
-                            <span className="profile-commend__text">
-                                <span className="profile-commend__head">
-                                    <strong>{m.title}</strong>
-                                    <Badge tone="neutral" size="sm" variant="outline">
-                                        {t('profile.commend.mdt')}
-                                    </Badge>
-                                </span>
-                                <span className="profile-commend__by">
-                                    {t('profile.commend.by', { name: m.by, date: fmtDate(m.at) })}
-                                </span>
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            )}
+            {body}
         </Card>
     );
 }

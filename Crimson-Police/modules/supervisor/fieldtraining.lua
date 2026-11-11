@@ -14,7 +14,6 @@ local Kit = CP.AdminKit
 local U = CP.U
 local TAG = 'fieldtraining'
 
-local CITIZENID_MAX = 50
 local NAME_MAX = 64
 local BADGE_MAX = 40
 local CANDIDATES_MAX = 300   -- officers of one department the pair dialog lists
@@ -30,17 +29,12 @@ local function Cfg() return (CP.Recognition('fieldTraining')) end
 
 function FT.enabled() return select(2, CP.Recognition('fieldTraining')) end
 
-local function Cid(v)
-    if type(v) ~= 'string' then return nil end
-    local s = U.trim(v)
-    if s == '' or #s > CITIZENID_MAX or not s:match('^[%w_%-]+$') then return nil end
-    return s
-end
+local Cid = CP.cidOf
 
+-- A whole number, or nil when v is no finite number (CP.Int would read it as 0).
 local function Int(v)
-    local n = tonumber(v)
-    if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
-    return math.floor(n)
+    local n = CP.Num(v)
+    return n and math.floor(n) or nil
 end
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
@@ -170,20 +164,8 @@ end
 
 local function Active(record) return type(record) == 'table' and record.doneAt == nil end
 
--- The officer's department: his Qbox job while online, else cp_officers.department.
-local function DeptOf(cid, row)
-    local okS, src = Call('Qbx', 'getByCitizenId', cid)
-    src = okS and math.tointeger(tonumber(src) or 0) or 0
-    if src and src > 0 then
-        local _, info = Call('Qbx', 'getInfo', src)
-        if type(info) == 'table' and type(info.job) == 'table' then
-            local _, dept = Call('Access', 'departmentForJob', info.job.name)
-            if type(dept) == 'string' then return dept end
-        end
-    end
-    row = row or ReadRow(cid)
-    return type(row) == 'table' and type(row.department) == 'string' and row.department ~= '' and row.department or nil
-end
+-- The officer's department (CP.deptOfCitizen; row: his cp_officers row, read when not given).
+local function DeptOf(cid, row) return CP.deptOfCitizen(cid, row or ReadRow(cid)) end
 
 -- The active rookies of one trainer: { { citizenid, name, callsign, department, record } }.
 local function RookiesOf(trainerCid)

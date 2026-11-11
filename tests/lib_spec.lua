@@ -265,4 +265,71 @@ do
     H.eq(links:reserve('cid', 0, 1), nil, 'a cap of 0 lets nothing through')
 end
 
+-- ============================================================================
+--               FIN3: THE PROGRESS ENGINE AND THE SMALL HELPERS
+-- ============================================================================
+
+do
+    local P = CP.Progress
+    H.eq(P.counted('r.'), 'r.state = \'completed\' AND r.mission_type NOT IN (\'manual_award\', \'goal\')',
+        'a counted run: completed, never a point award or goal reward row')
+    local sql, params = P.where({ type = 'tactical', unit = true }, 'r.')
+    H.ok(sql:find('r.mission_type = ?', 1, true) and sql:find('r.participants >= 2', 1, true), 'type and unit parts')
+    H.eq(params[1], 'tactical', 'the mission type is a ? value, never in the SQL text')
+    local sum, sp = P.sum({ stat = 'arrests', crossDepartment = true }, 'r.')
+    H.ok(sum:find('THEN r.arrests ELSE 0', 1, true) and sum:find('r.departments_n >= 2', 1, true),
+        'a stat condition sums its column over the matching runs')
+    H.eq(#sp, 0, 'no values for a stat and a flag')
+    H.eq((P.sum({ stat = 'final_points; DROP' })), nil, 'a stat that is not a service-record column: nothing')
+    H.eq(P.value({}), '1', 'no stat: each run counts 1')
+    local call = P.where({ missionCall = true, mission = 'm1' })
+    H.ok(call:find('mission_call_id IS NOT NULL', 1, true) and call:find('mission_id = ?', 1, true),
+        'mission call and one mission, without an alias')
+end
+
+H.eq(CP.Num0('x'), 0, 'Num0: not a number is 0')
+H.eq(CP.Num0('2.5'), 2.5, 'Num0: a numeric string')
+H.eq(CP.Int('7.9'), 7, 'Int: rounded down')
+H.eq(math.type(CP.Int(3.0)), 'integer', 'Int: an integer')
+Config.FinThreeTest = { off = false }
+H.eq(CP.Cfg('FinThreeTest', 'off', true), false, 'Cfg: a switch set to false reads false')
+H.eq(CP.Cfg('FinThreeTest', 'missing', 5), 5, 'Cfg: left out is the default')
+H.eq(CP.Cfg('NoSuchSection', 'k', 'd'), 'd', 'Cfg: a missing section is the default')
+Config.FinThreeTest = nil
+H.eq(CP.NonEmpty('  a b  '), 'a b', 'NonEmpty: trimmed')
+H.eq(CP.NonEmpty('   '), nil, 'NonEmpty: only spaces is nil')
+H.eq(CP.cidOf(' ABC123 '), 'ABC123', 'cidOf: a trimmed citizenid')
+H.eq(CP.cidOf('a b'), nil, 'cidOf: a space inside is no citizenid')
+H.eq(CP.cidOf(('x'):rep(51)), nil, 'cidOf: longer than 50 is no citizenid')
+H.eq(CP.SqlTs(0), os.date('%Y-%m-%d %H:%M:%S', 0), 'SqlTs: server local DATETIME text')
+do
+    local lines, realWarn = 0, CP.warn
+    CP.warn = function() lines = lines + 1 end
+    H.eq(CP.warnOnce('t', 'k', 'x'), true, 'warnOnce: the first one prints')
+    H.eq(CP.warnOnce('t', 'k', 'x'), false, 'warnOnce: the same key again does not')
+    H.eq(CP.warnOnce('t', 'k2', 'x'), true, 'warnOnce: another key prints')
+    CP.warn = realWarn
+    H.eq(lines, 2, 'two lines in all')
+    local savedS = CP.Schedule
+    CP.Schedule = {
+        now = function() return 1234 end,
+    }
+    H.eq(CP.now(), 1234, 'now: CP.Schedule.now when it is there (tests move its clock)')
+    CP.Schedule = savedS
+end
+do
+    local savedQ, savedA = CP.Qbx, CP.Access
+    CP.Qbx = {
+        getByCitizenId = function(cid) return cid == 'ON1' and 5 or nil end,
+        getInfo = function() return { job = { name = 'police' } } end,
+    }
+    CP.Access = {
+        departmentForJob = function(job) return job == 'police' and 'sast' or nil end,
+    }
+    H.eq(CP.deptOfCitizen('ON1'), 'sast', 'deptOfCitizen: the online job department')
+    H.eq(CP.deptOfCitizen('OFF1', { department = 'fib' }), 'fib', 'deptOfCitizen: offline, the officer row given')
+    H.eq(CP.deptOfCitizen('OFF1', { department = '' }), nil, 'deptOfCitizen: an empty department is none')
+    CP.Qbx, CP.Access = savedQ, savedA
+end
+
 return H

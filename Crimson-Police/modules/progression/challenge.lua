@@ -84,6 +84,8 @@ local BOOT_DELAY_MS = 1500
 local HISTORY_LIMIT = 60
 local CONTRIBUTORS_LIMIT = 200
 local ACTIVITY_LIMIT = 100
+-- The weekly bounty kinds: the week field each one counts, by the condition of the one progress engine (CP.Progress)
+-- the daily and weekly goals count by too.
 local BOUNTY_KINDS = {
     most_tactical = 'tactical',
     most_cross = 'cross',
@@ -91,6 +93,15 @@ local BOUNTY_KINDS = {
     most_completed = 'completed',
     most_arrests = 'arrests',
     most_calls = 'calls',
+}
+-- Every week field (completed and unit also rank the challenge), in column order, with its condition.
+local WEEK_FIELDS = {
+    { field = 'completed', cond = {} },
+    { field = 'unit', cond = { unit = true } },
+    { field = 'tactical', cond = { type = 'tactical' } },
+    { field = 'cross', cond = { crossDepartment = true } },
+    { field = 'arrests', cond = { stat = 'arrests' } },
+    { field = 'calls', cond = { missionCall = true } },
 }
 local SCORING = { average = true, total = true, top10 = true }
 
@@ -100,23 +111,12 @@ local collectGen = 0       -- bumped by invalidate(): aggregates read before it 
 local bannerCache = nil    -- { at, row }
 local busy = false
 local booted = false
-local warned = {}
 
 -- ============================================================================
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v) return tonumber(v) or 0 end
-local function Int(v) return math.floor(Num(v) + 0.0) end
-
-local function Cfg(section, key, default)
-    local s = Config[section]
-    -- not `and s[key] or nil`: a switch set to false must read as false
-    local v = nil
-    if type(s) == 'table' then v = s[key] end
-    if v == nil then return default end
-    return v
-end
+local Num, Int, Cfg = CP.Num0, CP.Int, CP.Cfg
 
 local function CacheSeconds() return math.max(0, Num(Cfg('Leaderboard', 'cacheSeconds', 60))) end
 -- The department challenge and the weekly bounty are two kinds of Config.Objectives (CP.Objective).
@@ -134,11 +134,7 @@ local function BonusShare()
 end
 local function SeasonWeeks() return math.max(0, Int(Cfg('Leaderboard', 'seasonWeeks', 8))) end
 
-local function WarnOnce(key, fmt, ...)
-    if warned[key] then return end
-    warned[key] = true
-    CP.warn(TAG, fmt, ...)
-end
+local function WarnOnce(key, fmt, ...) return CP.warnOnce(TAG, key, fmt, ...) end
 
 local function ScoringMode()
     local m = Challenge().scoring or 'average'
@@ -154,18 +150,11 @@ local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function ValidCitizenId(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCitizenId = CP.ValidCid
 
-local function NonEmpty(s)
-    if type(s) ~= 'string' then return nil end
-    s = U.trim(s)
-    if s == '' then return nil end
-    return s
-end
+local NonEmpty = CP.NonEmpty
 
-local function SqlTs(ts) return os.date('%Y-%m-%d %H:%M:%S', math.floor(Num(ts))) end
+local SqlTs = CP.SqlTs
 
 -- 'YYYY-MM-DD' in server time (nil for 0): the tablet shows it as is, never in the player's time zone.
 local function DateKey(ts) return Num(ts) > 0 and os.date('%Y-%m-%d', math.floor(Num(ts))) or nil end
@@ -440,29 +429,48 @@ end
 --                              SEASON AGGREGATES
 -- ============================================================================
 
-local OFFICER_SQL = [[
+-- The SELECT columns of the week fields (n_<field>), counted by CP.Progress, and their ? values.
+local function FieldColumns(fields)
+    local cols, params = {}, {}
+    for _, f in ipairs(fields) do
+        local sql, p = CP.Progress.sum(f.cond, 'r.')
+        cols[#cols + 1] = ('  %s AS n_%s'):format(sql, f.field)
+        for _, v in ipairs(p) do params[#params + 1] = v end
+    end
+    return table.concat(cols, ',\n'), params
+end
+
+-- Per officer: season points, completed runs and unit runs. Returns sql, params (the season id last).
+local function OfficerSql(live, seasonId)
+    local cols, params = FieldColumns({ WEEK_FIELDS[1], WEEK_FIELDS[2] })
+    params[#params + 1] = seasonId
+    return ([[
 SELECT r.department, r.citizenid,
   SUM(r.final_points) AS points,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN 1 ELSE 0 END) AS completed,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.participants >= 2 THEN 1 ELSE 0 END) AS unit_runs
+%s
 FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0%s
-GROUP BY r.department, r.citizenid]]
+GROUP BY r.department, r.citizenid]]):format(cols, live),
+        params
+end
 
 -- Summed per season week, its bounds made here (WeekCase), not per DATE(): a calendar date computed in SQL
--- follows the database's time zone, and the weeks follow the game server's calendar (WeekIndex).
-local WEEK_SQL = [[
+-- follows the database's time zone, and the weeks follow the game server's calendar (WeekIndex). Returns sql, params.
+local function WeekSql(weekSql, weekParams, live, seasonId)
+    local cols, colParams = FieldColumns(WEEK_FIELDS)
+    local params = {}
+    for _, v in ipairs(weekParams) do params[#params + 1] = v end
+    for _, v in ipairs(colParams) do params[#params + 1] = v end
+    params[#params + 1] = seasonId
+    return ([[
 SELECT r.department, %s AS week,
   SUM(r.final_points) AS points,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN 1 ELSE 0 END) AS completed,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.participants >= 2 THEN 1 ELSE 0 END) AS unit_runs,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type = 'tactical' THEN 1 ELSE 0 END) AS tactical,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.departments_n >= 2 THEN 1 ELSE 0 END) AS cross_runs,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') THEN r.arrests ELSE 0 END) AS arrests,
-  SUM(CASE WHEN r.state = 'completed' AND r.mission_type NOT IN ('manual_award', 'goal') AND r.mission_call_id IS NOT NULL THEN 1 ELSE 0 END) AS calls
+%s
 FROM cp_mission_runs r
 WHERE r.season_id = ? AND r.voided = 0 AND r.flagged = 0%s
-GROUP BY r.department, week]]
+GROUP BY r.department, week]]):format(weekSql, cols, live),
+        params
+end
 
 -- CASE WHEN r.created_at < FROM_UNIXTIME(<start of week 2>) THEN 1 ... ELSE <the last week> END, and its values.
 local function WeekCase(season)
@@ -495,29 +503,25 @@ local function Collect(seasonId, fresh)
     local gen = collectGen
     local data = { at = os.time(), season = season, officers = {}, weeks = {}, bounties = {} }
     local live = LiveFilter()
-    for _, r in ipairs(MySQL.query.await(OFFICER_SQL:format(live), { seasonId }) or {}) do
+    local officerSql, officerParams = OfficerSql(live, seasonId)
+    for _, r in ipairs(MySQL.query.await(officerSql, officerParams) or {}) do
         local dept = tostring(r.department)
         data.officers[dept] = data.officers[dept] or {}
         data.officers[dept][tostring(r.citizenid)] = {
             points = Int(r.points),
-            completed = Int(r.completed),
-            unitRuns = Int(r.unit_runs),
+            completed = Int(r.n_completed),
+            unitRuns = Int(r.n_unit),
         }
     end
-    local weekSql, weekParams = WeekCase(season)
-    weekParams[#weekParams + 1] = seasonId
-    for _, r in ipairs(MySQL.query.await(WEEK_SQL:format(weekSql, live), weekParams) or {}) do
+    local weekCase, caseParams = WeekCase(season)
+    local weekSql, weekParams = WeekSql(weekCase, caseParams, live, seasonId)
+    for _, r in ipairs(MySQL.query.await(weekSql, weekParams) or {}) do
         local n = Int(r.week)
         local dept = tostring(r.department)
         data.weeks[n] = data.weeks[n] or {}
         local w = data.weeks[n][dept] or EmptyWeek()
         w.points = w.points + Int(r.points)
-        w.completed = w.completed + Int(r.completed)
-        w.unit = w.unit + Int(r.unit_runs)
-        w.tactical = w.tactical + Int(r.tactical)
-        w.cross = w.cross + Int(r.cross_runs)
-        w.arrests = w.arrests + Int(r.arrests)
-        w.calls = w.calls + Int(r.calls)
+        for _, f in ipairs(WEEK_FIELDS) do w[f.field] = w[f.field] + Int(r['n_' .. f.field]) end
         data.weeks[n][dept] = w
     end
     for _, r in
@@ -1319,7 +1323,7 @@ local function ReportDepartment(src, args)
 end
 
 -- The service-record columns of the Department Report: counted completed rows only (not voided, not flagged).
-local REPORT_DONE = 'r.voided = 0 AND r.flagged = 0 AND r.state = \'completed\' AND r.mission_type NOT IN (\'manual_award\', \'goal\')'
+local REPORT_DONE = 'r.voided = 0 AND r.flagged = 0 AND ' .. CP.Progress.counted('r.')
 local REPORT_STATS = ([[
     SUM(CASE WHEN %s THEN r.arrests ELSE 0 END) AS arrests,
     SUM(CASE WHEN %s THEN r.citations ELSE 0 END) AS citations,

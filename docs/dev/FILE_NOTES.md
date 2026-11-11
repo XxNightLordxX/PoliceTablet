@@ -344,6 +344,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/components/MissionCallsLink.tsx`: Mission call pieces on the Mission Board: the "n mission calls open" link to Dispatch, the daily-limit badge and the ready-check toast text (their texts live in the mission calls locale part).
 - `Crimson-Police/web/src/officer/components/ProfileEditDialog.tsx`: Officer UI · Edit profile: picture (initials, presets, an approved link), bio, look (appearance, accent, tablet size) and call alerts.
 - `Crimson-Police/web/src/officer/components/ReadyCheckBanner.tsx`: The unit ready check: "Ready for Tactical?" with a countdown, Ready / Not ready (the type only, never a mission).
+- `Crimson-Police/web/src/officer/components/RecognitionCard.tsx`: Profile · Recognition (Config.Recognition): everything an officer is recognised with, in one section with a tab per kind: his badges, his commendations (with the read-only SC-Dispatch MDT ones) and, on his own profile while field training is on, his training as a rookie and his rookies as a trainer (Sign off).
 - `Crimson-Police/web/src/officer/components/RewardsLocker.tsx`: The Rewards locker card on Home: item rewards that could not be given yet (offline, no room, Crimson-Arena).
 - `Crimson-Police/web/src/officer/components/RunNotices.tsx`: Active Mission notices: the intel line a block set (view.intel) and the claimed mission call's response target.
 - `Crimson-Police/web/src/officer/components/ServiceRecordCard.tsx`: The service record of an officer (lifetime or this season), their personal bests and favourite partner.

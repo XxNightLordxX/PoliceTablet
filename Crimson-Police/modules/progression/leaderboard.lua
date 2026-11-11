@@ -86,20 +86,7 @@ local booted = false
 --                                SMALL HELPERS
 -- ============================================================================
 
-local function Num(v) return tonumber(v) or 0 end
-
-local function Int(v)
-    return math.floor(Num(v) + 0.0)
-end
-
-local function Cfg(section, key, default)
-    local s = Config[section]
-    -- not `and s[key] or nil`: a switch set to false must read as false
-    local v = nil
-    if type(s) == 'table' then v = s[key] end
-    if v == nil then return default end
-    return v
-end
+local Num, Int, Cfg = CP.Num0, CP.Int, CP.Cfg
 
 local function CacheSeconds() return math.max(0, Num(Cfg('Leaderboard', 'cacheSeconds', 60))) end
 local function MinRuns() return math.max(0, Int(Cfg('Leaderboard', 'minRunsToRank', 3))) end
@@ -109,9 +96,7 @@ local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function ValidCitizenId(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCitizenId = CP.ValidCid
 
 local function FmtInt(n)
     local s = tostring(math.floor(Num(n)))
@@ -122,7 +107,7 @@ local function FmtInt(n)
     return (neg and '-' or '') .. out
 end
 
-local function SqlTs(ts) return os.date('%Y-%m-%d %H:%M:%S', math.floor(Num(ts))) end
+local SqlTs = CP.SqlTs
 
 -- ============================================================================
 --                CALENDAR (CP.Schedule, with a plain fallback)
@@ -203,12 +188,7 @@ local function FirstDepartment()
     return keys[1]
 end
 
-local function NonEmpty(s)
-    if type(s) ~= 'string' then return nil end
-    s = U.trim(s)
-    if s == '' then return nil end
-    return s
-end
+local NonEmpty = CP.NonEmpty
 
 -- Privacy-aware display name for public places (boards, Discord, other officers' profiles).
 function LB.publicName(e)

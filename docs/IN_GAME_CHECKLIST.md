@@ -482,6 +482,13 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Open the Admin UI the first time after a restart: Home shows within a moment, the sidebar at once; every other
   screen opens as before, and every screen looks as it did (colours, spacing, buttons).
 
+## Objectives and recognition (FIN3)
+
+- [ ] Profile: one **Recognition** card with the tabs Badges (n), Commendations (n) and, on your own profile while field training is on and you train or are trained, Field training; Sign off works from that tab. Another officer's profile shows Badges and Commendations only. (FIN3)
+- [ ] Settings -> Objectives: set the daily goal reset hour to the next full hour; at that hour Home shows a new daily goal while the Type of the Day and the weekly goal stay; set it back to -1. Same for the Type of the Day reset hour (the Mission Board's x2 tag moves at that hour). (FIN3)
+- [ ] Settings -> Recognition -> Kind rules `{ "valor": { "sameKindCooldownDays": 0, "crossDepartment": true } }`: a supervisor may commend valor twice in a row and to another department; teamwork still waits 7 days and stays in his department. An unknown kind is refused. (FIN3)
+- [ ] The Challenge tab standings, the weekly bounty counts and Home's goal progress show the same numbers as before (one progress engine). (FIN3)
+
 ## Every workflow end to end
 
 - [ ] Admin only: an officer who sends a setting change gets refused; the admin turns on Volunteers, Volunteers → modes (Investigation: players when available), the criminal tablet (Features), access Granted and Pay volunteer suspects in Settings, each at once, no restart. (G7)

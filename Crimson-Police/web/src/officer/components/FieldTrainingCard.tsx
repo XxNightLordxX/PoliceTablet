@@ -74,8 +74,20 @@ export function readyToSign(rookies: FtoView[]): number {
     return n;
 }
 
-export function FieldTrainingCard() {
-    const { data, refetch } = useRequest<FtoMine | false>('fto:getMine', {});
+export interface FieldTrainingCardProps {
+    // the officer's training when the caller already asked for it (fto:getMine); left out = the card asks itself
+    mine?: FtoMine | false | null;
+    // after a sign-off, with mine given: ask again
+    onChanged?: () => void;
+    // only the content, without its card (a tab of the profile's Recognition section)
+    bare?: boolean;
+}
+
+export function FieldTrainingCard({ mine, onChanged, bare }: FieldTrainingCardProps = {}) {
+    const given = mine !== undefined;
+    const own = useRequest<FtoMine | false>('fto:getMine', {}, { skip: given });
+    const data = given ? mine : own.data;
+    const refetch = given ? async () => onChanged?.() : own.refetch;
     const { run, busy } = useAction();
     const [signing, setSigning] = useState<{ view: FtoView; task: FtoTask } | null>(null);
     const [note, setNote] = useState('');
@@ -97,14 +109,8 @@ export function FieldTrainingCard() {
         void refetch();
     };
 
-    return (
-        <Card
-            title={t('fto.title')}
-            subtitle={t('fto.subtitle')}
-            icon="idCard"
-            padding="sm"
-            className="profile-commend"
-        >
+    const body = (
+        <>
             {data.training ? (
                 <>
                     <p className="profile-commend__head">
@@ -170,6 +176,18 @@ export function FieldTrainingCard() {
                     <Textarea value={note} onChange={setNote} maxLength={255} rows={2} />
                 </Field>
             </Dialog>
+        </>
+    );
+    if (bare) return <div className="profile-commend">{body}</div>;
+    return (
+        <Card
+            title={t('fto.title')}
+            subtitle={t('fto.subtitle')}
+            icon="idCard"
+            padding="sm"
+            className="profile-commend"
+        >
+            {body}
         </Card>
     );
 }

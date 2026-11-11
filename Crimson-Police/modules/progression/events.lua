@@ -71,8 +71,11 @@ local function BossCfg()
     return (Config.Events and Config.Events.weeklyBoss) or {}
 end
 
+-- The Type of the Day's day starts at Config.Objectives.typeOfTheDay.resetHour (nil: -1 = Config.Time.resetHour).
+local function TodHour() return CP.ObjectiveResetHour('typeOfTheDay') end
+
 local function DayKeyNow()
-    if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey() end
+    if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey(nil, TodHour()) end
     return os.date('%Y-%m-%d')
 end
 
@@ -315,7 +318,7 @@ local DEPT_TOD_KEY = 'typeOfTheDay'
 local deptTod = {}   -- deptTod['dept|day'] = { type = key | false, by = citizenid | nil } (one read per day)
 
 local function DayStartOf(ts)
-    if CP.Schedule and CP.Schedule.dayStart then return CP.Schedule.dayStart(ts) end
+    if CP.Schedule and CP.Schedule.dayStart then return CP.Schedule.dayStart(ts, TodHour()) end
     local d = os.date('*t', ts or os.time())
     return os.time({ year = d.year, month = d.month, day = d.day, hour = 0, min = 0, sec = 0 })
 end
@@ -393,7 +396,7 @@ end
 -- Tomorrow's day key (the day a pick made now counts on).
 local function TomorrowKey()
     local start = DayStartOf()
-    if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey(start + 36 * 3600) end
+    if CP.Schedule and CP.Schedule.dayKey then return CP.Schedule.dayKey(start + 36 * 3600, TodHour()) end
     return os.date('%Y-%m-%d', start + 36 * 3600)
 end
 

@@ -11,7 +11,6 @@ local FREE_ABANDON_WINDOW_S = 86400  -- free abandons are shown and made normal 
 local FREE_ABANDON_ROWS = 50
 local CLEAR_KEEP_S = 7 * 86400       -- cooldown clear stamps older than this are dropped from the marker
 local ADD_MINUTES_MAX = 10           -- one "+ minutes" click
-local CITIZENID_MAX = 50
 local MISSION_ID_MAX = 64
 local SCOPES = { all = true, type = true, mission = true }
 
@@ -29,12 +28,7 @@ local function Ctl() return Config.AdminControl or {} end
 
 local function Limit(key, default) return math.max(0, math.floor(Num(Ctl()[key], default))) end
 
-local function Cid(v)
-    if type(v) ~= 'string' then return nil end
-    local s = U.trim(v)
-    if s == '' or #s > CITIZENID_MAX or not s:match('^[%w_%-]+$') then return nil end
-    return s
-end
+local Cid = CP.cidOf
 
 local function RunIdOf(v)
     if type(v) ~= 'string' or v == '' or #v > 64 then return nil end

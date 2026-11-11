@@ -14,10 +14,10 @@
 --
 -- Public API (server)
 --   CP.Schedule.now() -> ts                          os.time()
---   CP.Schedule.dayKey(ts?) -> 'YYYY-MM-DD'          the reset-adjusted day
---   CP.Schedule.dayStart(ts?) -> ts                  resetHour on that day
---   CP.Schedule.weekStart(ts?) -> ts                 resetHour on Config.Leaderboard.weekStartsOn
---   CP.Schedule.weekKey(ts?) -> 'YYYY-MM-DD'         date of the week start
+--   CP.Schedule.dayKey(ts?, hour?) -> 'YYYY-MM-DD'   the reset-adjusted day (hour: a kind's own reset hour)
+--   CP.Schedule.dayStart(ts?, hour?) -> ts           resetHour (or hour) on that day
+--   CP.Schedule.weekStart(ts?, hour?) -> ts          resetHour (or hour) on Config.Leaderboard.weekStartsOn
+--   CP.Schedule.weekKey(ts?, hour?) -> 'YYYY-MM-DD'  date of the week start
 --   CP.Schedule.monthStart(ts?) -> ts                the 1st of the (reset-adjusted) month at resetHour
 --   CP.Schedule.weekday(ts?) -> 'monday'..'sunday'   of the reset-adjusted day
 --   CP.Schedule.sqlTime(ts) -> 'YYYY-MM-DD HH:MM:SS' (server local time, for DATETIME columns)
@@ -90,10 +90,11 @@ end
 
 -- The calendar date (y, m, d) of the reset-adjusted day that contains ts.
 -- Uses date arithmetic with os.time normalisation (not "- 3600 * h"), so DST shifts never move a day.
-local function AdjustedDate(ts)
+-- hour (optional, 0-23): a kind's own reset hour (CP.ObjectiveResetHour); nil = Config.Time.resetHour.
+local function AdjustedDate(ts, hour)
     ts = ts or os.time()
     local t = os.date('*t', ts)
-    if t.hour < ResetHour() then
+    if t.hour < (hour or ResetHour()) then
         local prev = os.date('*t',
             os.time({ year = t.year, month = t.month, day = t.day - 1, hour = 12, min = 0, sec = 0 }))
         return prev.year, prev.month, prev.day, prev.wday
@@ -101,32 +102,32 @@ local function AdjustedDate(ts)
     return t.year, t.month, t.day, t.wday
 end
 
-local function AtReset(y, m, d)
-    return os.time({ year = y, month = m, day = d, hour = ResetHour(), min = 0, sec = 0 })
+local function AtReset(y, m, d, hour)
+    return os.time({ year = y, month = m, day = d, hour = hour or ResetHour(), min = 0, sec = 0 })
 end
 
 function Schedule.now()
     return os.time()
 end
 
-function Schedule.dayKey(ts)
-    local y, m, d = AdjustedDate(ts)
+function Schedule.dayKey(ts, hour)
+    local y, m, d = AdjustedDate(ts, hour)
     return ('%04d-%02d-%02d'):format(y, m, d)
 end
 
-function Schedule.dayStart(ts)
-    local y, m, d = AdjustedDate(ts)
-    return AtReset(y, m, d)
+function Schedule.dayStart(ts, hour)
+    local y, m, d = AdjustedDate(ts, hour)
+    return AtReset(y, m, d, hour)
 end
 
-function Schedule.weekStart(ts)
-    local y, m, d, wday = AdjustedDate(ts)
+function Schedule.weekStart(ts, hour)
+    local y, m, d, wday = AdjustedDate(ts, hour)
     local back = (wday - WeekStartIndex()) % 7
-    return AtReset(y, m, d - back)
+    return AtReset(y, m, d - back, hour)
 end
 
-function Schedule.weekKey(ts)
-    return os.date('%Y-%m-%d', Schedule.weekStart(ts))
+function Schedule.weekKey(ts, hour)
+    return os.date('%Y-%m-%d', Schedule.weekStart(ts, hour))
 end
 
 function Schedule.monthStart(ts)

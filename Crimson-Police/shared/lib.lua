@@ -10,15 +10,19 @@
 --   CP.push      a tablet push (server: to one player, through CP.Tablet.push and its Config.Performance.pushGapMs
 --                rule; client: to this player's own screen)
 --   CP.srcOf     the source of the player who has a character loaded (server); CP.notifyCitizen and
---                CP.pushCitizen: a toast or push to him
+--                CP.pushCitizen: a toast or push to him; CP.deptOfCitizen: his department
 --   CP.Ext       a safe call into another resource's export, with the resource-started check (failures through
 --                CP.errEvery)
 --   CP.Lock      one-at-a-time per key (an officer, a row, a player), freed on error and when a player drops
 --   CP.Daily     per-day counters for caps: count and reserve in one step, so two requests cannot pass a cap
 --   CP.Objective one kind of Config.Objectives (dailyGoal, weeklyGoal, challenge, bounty, typeOfTheDay) and its switch
+--   CP.ObjectiveResetHour the hour one objective kind's day and week start at (nil = Config.Time.resetHour)
+--   CP.Progress  the one progress engine: the counted-run rule and the conditions goals and bounties count by
 --   CP.Recognition one part of Config.Recognition (levels, levelCurve, badges, weeklyBadges, commendations,
 --                fieldTraining) and its switch
---   CP.Num       a finite number or the default, kept between lo and hi
+--   CP.Num       a finite number or the default, kept between lo and hi; CP.Num0 (default 0), CP.Int (whole)
+--   CP.Cfg       Config[section][key] or a default; CP.NonEmpty a trimmed string or nil; CP.cidOf a payload's
+--                citizenid; CP.now seconds now; CP.SqlTs a DATETIME text; CP.warnOnce a warning once per tag and key
 --   CP.Has       whether CP.<Mod>.<fn> is there (a module that may be missing or not loaded yet)
 --   CP.can       whether a player may use a power (CP.Permissions.can, safe, always an error key on false)
 --   CP.Call      a safe call into another module of this resource (CP.<Mod>.<fn> in pcall, failures through
@@ -85,10 +89,67 @@ function CP.Num(v, default, lo, hi)
     return v
 end
 
+-- CP.Num with 0 as the default (the counts and sums of a query row).
+---@return number
+function CP.Num0(v) return CP.Num(v, 0) end
+
+-- CP.Num0 rounded down to a whole number.
+---@return integer
+function CP.Int(v) return math.floor(CP.Num(v, 0) + 0.0) end
+
+-- Config[section][key] as it is now, or default when it is left out (a switch set to false reads as false).
+---@param section string
+---@param key string
+function CP.Cfg(section, key, default)
+    local s = type(Config) == 'table' and Config[section] or nil
+    local v = nil
+    if type(s) == 'table' then v = s[key] end
+    if v == nil then return default end
+    return v
+end
+
+-- A trimmed string, or nil when it is not a string or holds only spaces.
+---@return string|nil
+function CP.NonEmpty(s)
+    if type(s) ~= 'string' then return nil end
+    s = CP.U.trim(s)
+    if s == '' then return nil end
+    return s
+end
+
+-- Seconds now: CP.Schedule.now on the server (tests move its clock), else os.time or the game timer.
+---@return integer
+function CP.now()
+    local S = CP.Schedule
+    if type(S) == 'table' and type(S.now) == 'function' then return S.now() end
+    return NowS()
+end
+
+local warnedOnce = {} -- warnedOnce[tag .. '\0' .. key] = true once that warning was printed
+
+-- CP.warn(tag, fmt, ...) once per tag and key (a config mistake read on every call warns one time).
+---@param tag string
+---@param key any
+---@return boolean printed
+function CP.warnOnce(tag, key, fmt, ...)
+    local k = tostring(tag) .. '\0' .. tostring(key)
+    if warnedOnce[k] then return false end
+    warnedOnce[k] = true
+    CP.warn(tag, fmt, ...)
+    return true
+end
+
 -- A Qbox citizenid as the store keeps it: 1-50 letters, digits, _ or -.
 ---@return boolean
 function CP.ValidCid(v)
     return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
+end
+
+-- A citizenid from a payload: trimmed, then CP.ValidCid; nil otherwise.
+---@return string|nil
+function CP.cidOf(v)
+    local s = CP.NonEmpty(v)
+    return CP.ValidCid(s) and s or nil
 end
 
 -- true when CP[modName][fnName] is a function.
@@ -143,6 +204,10 @@ local function TabletCall(fnName, ...)
 end
 
 if CP.isServer then
+    -- 'YYYY-MM-DD HH:MM:SS' in server local time, for DATETIME columns.
+    ---@return string
+    function CP.SqlTs(ts) return os and os.date('%Y-%m-%d %H:%M:%S', math.floor(CP.Num(ts, 0))) end
+
     -- A tablet toast to one player: kind ('success' | 'error' | 'info' | 'warning'), a locale key and its vars;
     -- opts as CP.Tablet.notify takes them ({ channel = 'social' } ...). Nothing for a bad source or the console.
     function CP.notify(src, kind, key, vars, opts)
@@ -157,6 +222,31 @@ if CP.isServer then
         if type(citizenid) ~= 'string' or citizenid == '' or citizenid == 'console' then return nil end
         local ok, s = CP.Call('lib', 'Qbx', 'getByCitizenId', citizenid)
         return ok and CP.U.toSrc(s) or nil
+    end
+
+    -- An officer's department: his Qbox job's department while he is online (on duty or not), else his officer row
+    -- (row: the cp_officers row when the caller already read it), else nil.
+    ---@param citizenid string
+    ---@param row? table
+    ---@return string|nil
+    function CP.deptOfCitizen(citizenid, row)
+        local n = CP.srcOf(citizenid)
+        if n then
+            local _, info = CP.Call('lib', 'Qbx', 'getInfo', n)
+            if type(info) == 'table' and type(info.job) == 'table' then
+                local _, dept = CP.Call('lib', 'Access', 'departmentForJob', info.job.name)
+                if type(dept) == 'string' then return dept end
+            end
+        end
+        if type(row) == 'table' then
+            return type(row.department) == 'string' and row.department ~= '' and row.department or nil
+        end
+        local M = CP.Migrations
+        if M and M.ready then M.ready() end
+        local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
+            { citizenid })
+        if ok and type(d) == 'string' and d ~= '' then return d end
+        return nil
     end
 
     -- CP.notify to the player who has that character loaded: the source it went to, or nil (offline).
@@ -397,6 +487,105 @@ function CP.Objective(kind)
         on = ch.enabled ~= false
     end
     return cfg, on
+end
+
+-- The hour a kind's day and week start at (Config.Objectives.<kind>.resetHour, 0-23), or nil: -1 or left out
+-- = the server's reset hour (Config.Time.resetHour), as every kind started before.
+---@param kind string 'dailyGoal' | 'weeklyGoal' | 'typeOfTheDay'
+---@return integer|nil
+function CP.ObjectiveResetHour(kind)
+    local h = CP.Num((CP.Objective(kind)).resetHour, -1)
+    h = math.floor(h)
+    if h < 0 or h > 23 then return nil end
+    return h
+end
+
+-- ============================================================================
+--                                   PROGRESS
+-- ============================================================================
+-- The one progress engine of the objectives: what a counted run is (a completed mission row; a point award or a
+-- goal reward row never counts) and the conditions a goal or a weekly bounty counts it by. The daily and weekly
+-- goals (modules/progression/goals.lua) and the department challenge and its bounty
+-- (modules/progression/challenge.lua) both build their cp_mission_runs counts here, so one rule counts for both.
+-- A condition: { type = mission type, mission = mission id, unit = true (2+ officers), crossDepartment = true
+-- (2+ departments), missionCall = true (answered a mission call), stat = service-record column (the sum of it) };
+-- none = every counted run.
+
+CP.Progress = CP.Progress or {}
+local Progress = CP.Progress
+
+-- The service-record columns a condition may sum (stat = ...).
+Progress.STATS = {
+    arrests = true,
+    citations = true,
+    impounds = true,
+    rescues = true,
+    vehicles_stopped = true,
+    evidence = true,
+    decisions_ok = true,
+    decisions_best = true,
+}
+
+-- The counted-run rule as SQL (alias: the table alias with its dot, such as 'r.', or '').
+---@param alias? string
+---@return string
+function Progress.counted(alias)
+    local a = alias or ''
+    return ('%sstate = \'completed\' AND %smission_type NOT IN (\'manual_award\', \'goal\')'):format(a, a)
+end
+
+-- The SQL of a condition on top of the counted-run rule (' AND ...' parts, '' for none) and its ? values.
+---@param cond table|nil
+---@param alias? string
+---@return string sql, table params
+function Progress.match(cond, alias)
+    local a = alias or ''
+    local parts, params = {}, {}
+    cond = type(cond) == 'table' and cond or {}
+    if type(cond.type) == 'string' and cond.type ~= '' then
+        parts[#parts + 1] = (' AND %smission_type = ?'):format(a)
+        params[#params + 1] = cond.type
+    end
+    if type(cond.mission) == 'string' and cond.mission ~= '' then
+        parts[#parts + 1] = (' AND %smission_id = ?'):format(a)
+        params[#params + 1] = cond.mission
+    end
+    if cond.unit == true then parts[#parts + 1] = (' AND %sparticipants >= 2'):format(a) end
+    if cond.crossDepartment == true then parts[#parts + 1] = (' AND %sdepartments_n >= 2'):format(a) end
+    if cond.missionCall == true then parts[#parts + 1] = (' AND %smission_call_id IS NOT NULL'):format(a) end
+    return table.concat(parts), params
+end
+
+-- What one counted run adds: 1, or its stat column. nil for a stat that is not a service-record column.
+---@param cond table|nil
+---@param alias? string
+---@return string|nil
+function Progress.value(cond, alias)
+    local stat = type(cond) == 'table' and cond.stat or nil
+    if stat == nil then return '1' end
+    if type(stat) ~= 'string' or not Progress.STATS[stat] then return nil end
+    return (alias or '') .. stat
+end
+
+-- WHERE parts for "the counted runs that match cond": counted-run rule plus the condition, and its ? values.
+---@param cond table|nil
+---@param alias? string
+---@return string sql, table params
+function Progress.where(cond, alias)
+    local sql, params = Progress.match(cond, alias)
+    return Progress.counted(alias) .. sql, params
+end
+
+-- A SELECT column that counts the matching counted runs of a group: SUM(CASE WHEN ... THEN 1 | stat ELSE 0 END),
+-- and its ? values (in the order they appear). nil for an unknown stat.
+---@param cond table|nil
+---@param alias? string
+---@return string|nil sql, table params
+function Progress.sum(cond, alias)
+    local value = Progress.value(cond, alias)
+    if not value then return nil, {} end
+    local sql, params = Progress.where(cond, alias)
+    return ('SUM(CASE WHEN %s THEN %s ELSE 0 END)'):format(sql, value), params
 end
 
 -- ============================================================================

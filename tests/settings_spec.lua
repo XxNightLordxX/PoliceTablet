@@ -1486,6 +1486,22 @@ do
     H.ok(not (Check('Objectives.bounty.objectives', {})), 'no bounty kind while the bounty is on: refused')
     H.eq(S.entry('Goals.dailyPoints'), nil, 'the old Goals section is gone')
     H.eq(S.entry('Challenge.enabled'), nil, 'the old Challenge section is gone')
+    -- FIN3: each daily or weekly kind may reset at its own hour (-1 = Config.Time.resetHour), described in Settings
+    for _, k in ipairs({ 'dailyGoal', 'weeklyGoal', 'typeOfTheDay' }) do
+        local p = 'Objectives.' .. k .. '.resetHour'
+        H.eq(E(p).default, -1, p .. ': ships -1 (the server reset hour, as before)')
+        H.ok((E(p).desc or ''):find('Config.Time', 1, true) ~= nil, p .. ': the comment says what -1 means')
+        H.ok(Check(p, 6) and Check(p, -1), p .. ': an hour or -1 is taken')
+        H.ok(not Check(p, 24), p .. ': 24 is refused')
+    end
+end
+-- FIN3: commendations.kindRules (one kind's own cooldown and cross-department rule) only for known kinds
+do
+    local p = 'Recognition.commendations.kindRules'
+    H.ok(S.entry(p) ~= nil and (S.entry(p).desc or '') ~= '', p .. ': a described setting')
+    H.ok(Check(p, { valor = { sameKindCooldownDays = 30, crossDepartment = true } }), p .. ': a known kind is taken')
+    H.ok(not Check(p, { bravery = { sameKindCooldownDays = 1 } }), p .. ': an unknown kind is refused')
+    H.ok(not Check(p, { valor = { sameKindCooldownDays = 999 } }), p .. ': a cooldown above 365 days is refused')
 end
 
 -- Config.Markers (PLAN M1, BLIPS_FINAL section 4): its own section, each comment alone, the limits, read live.

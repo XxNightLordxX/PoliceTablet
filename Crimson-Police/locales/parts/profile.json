@@ -66,6 +66,7 @@
   "profile.service.partner": "Favourite partner: {name}",
   "profile.service.bests": "Personal bests",
 
+  "profile.recognition": "Recognition",
   "profile.commend.title": "Commendations",
   "profile.commend.none": "No commendations yet",
   "profile.commend.by": "{name} · {date}",
@@ -177,6 +178,7 @@
   "err.commend_self": "You can't commend yourself. Pick another officer.",
   "err.commend_other_dept": "You can only commend officers of your own department. Pick an officer of your department.",
   "err.commend_limit": "You have given all of today's commendations. Try again tomorrow.",
+  "err.setting_commend_kind": "A rule names an unknown commendation kind. Use a kind of Config.Recognition.commendations.kinds (such as valor).",
   "err.commend_recent": "That officer got this kind of commendation in the last {days} days. Pick another kind, or wait.",
   "err.commend_own_run": "You took part in that run, so you can't commend for it.",
   "err.commend_run": "That officer did not take part in that run. Pick a run the officer was on.",

@@ -14,7 +14,6 @@ local TAG = 'missionban'
 
 local KEY = 'missionBan'
 local HOURS_MAX = 168          -- the admin's max may not go past a week
-local CITIZENID_MAX = 50
 local NAME_MAX = 64
 
 local Bans = nil               -- citizenid -> { until, by, name, dept, reason, at } (nil until read from the store)
@@ -27,12 +26,7 @@ local Num = CP.Num
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Cid(v)
-    if type(v) ~= 'string' then return nil end
-    local s = U.trim(v)
-    if s == '' or #s > CITIZENID_MAX or not s:match('^[%w_%-]+$') then return nil end
-    return s
-end
+local Cid = CP.cidOf
 
 local function Decode(v)
     if type(v) == 'table' then return v end
@@ -150,23 +144,7 @@ MB.register = Register
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
 
--- The officer's department: his Qbox job while online, else cp_officers.department.
-local function DeptOf(citizenid)
-    local okS, src = Call('Qbx', 'getByCitizenId', citizenid)
-    src = okS and math.tointeger(tonumber(src) or 0) or 0
-    if src and src > 0 then
-        local _, info = Call('Qbx', 'getInfo', src)
-        if type(info) == 'table' and type(info.job) == 'table' then
-            local _, dept = Call('Access', 'departmentForJob', info.job.name)
-            if type(dept) == 'string' then return dept end
-        end
-    end
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
-        { citizenid })
-    if ok and type(d) == 'string' and d ~= '' then return d end
-    return nil
-end
+local DeptOf = CP.deptOfCitizen
 
 -- CanUse for one officer: an admin works in the officer's department (its switch and hours), not his own.
 local function CanUseFor(src, cid)

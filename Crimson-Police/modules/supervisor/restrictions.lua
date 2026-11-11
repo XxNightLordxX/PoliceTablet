@@ -12,20 +12,13 @@
 CP.Restrictions = CP.Restrictions or {}
 local R = CP.Restrictions
 local Kit = CP.AdminKit
-local U = CP.U
 local TAG = 'restrictions'
 
-local CITIZENID_MAX = 50
 local AUDIT_ROWS = 500 -- the newest audit rows read for "set by" and "reason" of the kinds that keep neither
 
 local function Kinds() return CP.RestrictionKinds end
 
-local function Cid(v)
-    if type(v) ~= 'string' then return nil end
-    local s = U.trim(v)
-    if s == '' or #s > CITIZENID_MAX or not s:match('^[%w_%-]+$') then return nil end
-    return s
-end
+local Cid = CP.cidOf
 R.cid = Cid
 
 local function Can(src, key)

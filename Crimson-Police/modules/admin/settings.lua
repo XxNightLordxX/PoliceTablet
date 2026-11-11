@@ -423,6 +423,7 @@ Play.features = {
         limits = {
             'Recognition.commendations.perSupervisorPerDay',
             'Recognition.commendations.sameKindCooldownDays',
+            'Recognition.commendations.kindRules',
         },
     },
     -- the Objectives (Config.Objectives): one switch per kind
@@ -430,13 +431,13 @@ Play.features = {
         key = 'daily_goal',
         play = 'team',
         path = 'Objectives.dailyGoal.enabled',
-        limits = { 'Objectives.dailyGoal.points' },
+        limits = { 'Objectives.dailyGoal.points', 'Objectives.dailyGoal.resetHour' },
     },
     {
         key = 'weekly_goal',
         play = 'team',
         path = 'Objectives.weeklyGoal.enabled',
-        limits = { 'Objectives.weeklyGoal.points' },
+        limits = { 'Objectives.weeklyGoal.points', 'Objectives.weeklyGoal.resetHour' },
     },
     {
         key = 'challenge',
@@ -454,7 +455,7 @@ Play.features = {
         key = 'type_of_the_day',
         play = 'team',
         path = 'Objectives.typeOfTheDay.enabled',
-        limits = { 'Objectives.typeOfTheDay.multiplier' },
+        limits = { 'Objectives.typeOfTheDay.multiplier', 'Objectives.typeOfTheDay.resetHour' },
     },
     { key = 'announce_weekly', play = 'team', path = 'Leaderboard.announceWeekly' },
     { key = 'announce_monthly', play = 'team', path = 'Leaderboard.announceMonthly' },
@@ -642,6 +643,7 @@ local OPEN = {
     'Recognition.fieldTraining.trainerGrades',      -- department keys
     'Recognition.fieldTraining.tasks',              -- mission type keys
     'Recognition.fieldTraining.requireTrainerFor',  -- a list of mission type keys
+    'Recognition.commendations.kindRules',          -- commendation kind ids
 }
 
 local WEEKDAYS = { 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' }
@@ -688,6 +690,9 @@ local RANGES = {
     ['Events.modifierChance'] = { 0, 1 },
     ['Events.timeCrunchCut'] = { 0, 0.9 },
     ['Objectives.typeOfTheDay.multiplier'] = { 0, 10 },
+    ['Objectives.typeOfTheDay.resetHour'] = { -1, 23 },
+    ['Objectives.dailyGoal.resetHour'] = { -1, 23 },
+    ['Objectives.weeklyGoal.resetHour'] = { -1, 23 },
     -- twists (CP.Twists): points = a share of P added, cash = a multiplier (below 1.0 it would take cash away)
     ['Events.twists.*.points'] = { 0, 2 },
     ['Events.twists.*.cash'] = { 1, 5 },
@@ -2421,6 +2426,19 @@ KNOWN['Recognition.fieldTraining.trainerGrades'] = {
         local deps = type(Config.Departments) == 'table' and Config.Departments or {}
         for key in pairs(map) do
             if not (ctx and ctx.boot) and type(deps[key]) ~= 'table' then return 'err.setting_fto_department' end
+        end
+        return nil
+    end,
+}
+-- Config.Recognition.commendations.kindRules: one kind's own cooldown and cross-department rule, by kind id of
+-- Config.Recognition.commendations.kinds (a rule left out uses the shared one).
+KNOWN['Recognition.commendations.kindRules'] = {
+    tpl = MapOf(Record({ sameKindCooldownDays = Num(0, 365, true), crossDepartment = true }), '^[%w_%-]+$'),
+    check = function(map, _, ctx)
+        local kinds = ctx and ctx.pending and ctx.pending['Recognition.commendations.kinds']
+        if kinds == nil then kinds = Effective('Recognition.commendations.kinds') end
+        for key in pairs(map) do
+            if not (ctx and ctx.boot) and not ListHas(kinds, key) then return 'err.setting_commend_kind' end
         end
         return nil
     end,

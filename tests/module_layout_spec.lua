@@ -260,6 +260,31 @@ for _, f in ipairs(NUMS) do
         f .. ': Num is CP.Num')
 end
 
+-- FIN3: the progression and supervisor modules keep no copy of a library helper either (number and setting reads,
+-- the citizenid checks, the warn-once line, the officer's department), and the goals and the department challenge
+-- count runs through the one progress engine (CP.Progress) instead of their own counted-run SQL.
+local FIN3_COPIES = {
+    { 'local function Num%(v', 'numbers are CP.Num / CP.Num0' },
+    { 'local function Int%(v%)\n%s*return math%.floor', 'whole numbers are CP.Int' },
+    { 'local function Int%(v%) return math%.floor', 'whole numbers are CP.Int' },
+    { 'local function Cfg%(section, key, default%)', 'setting reads are CP.Cfg' },
+    { 'local function ValidCitizenId%(', 'citizenid checks are CP.ValidCid' },
+    { 'local function NonEmpty%(', 'trimmed text is CP.NonEmpty' },
+    { 'CITIZENID_MAX', 'payload citizenids are CP.cidOf' },
+    { 'warned%[key%] = true', 'warn-once lines are CP.warnOnce' },
+    { 'SELECT department FROM cp_officers WHERE citizenid = %? LIMIT 1', 'the department is CP.deptOfCitizen' },
+}
+for _, f in ipairs(Lines('find modules/progression modules/supervisor -name "*.lua" | sort')) do
+    local src = Read(f) or ''
+    for _, c in ipairs(FIN3_COPIES) do H.ok(not src:find(c[1]), f .. ': ' .. c[2]) end
+end
+for _, f in ipairs({ 'modules/progression/goals.lua', 'modules/progression/challenge.lua' }) do
+    local src = Read(f) or ''
+    H.ok(src:find('CP.Progress.', 1, true) ~= nil, f .. ': counts through CP.Progress')
+end
+H.ok(not (Read('modules/progression/goals.lua') or ''):find('NOT IN (\'manual_award\', \'goal\')', 1, true),
+    'goals: no counted-run SQL of its own')
+
 -- the shared ones answer as the private copies did
 H.boot({ side = 'server' })
 CP.Probe = {

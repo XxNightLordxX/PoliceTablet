@@ -33,26 +33,24 @@ local busy = CP.Lock.new() -- an officer's citizenid while his goals are checked
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, default)
-    local n = tonumber(v)
-    if n == nil or n ~= n or n == math.huge or n == -math.huge then return default end
-    return n
-end
+local Num = CP.Num
 
-local function Now()
-    if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
-    return os.time()
-end
+local Now = CP.now
 
+-- The key and start of the period of 'kind' that contains ts. Each kind starts at its own hour
+-- (Config.Objectives.dailyGoal / weeklyGoal .resetHour; -1 = Config.Time.resetHour), the weekly goal on
+-- Config.Leaderboard.weekStartsOn.
 local function Period(kind, ts)
     ts = ts or Now()
+    local S = CP.Schedule or {}
+    local hour = CP.ObjectiveResetHour(kind == 'daily' and 'dailyGoal' or 'weeklyGoal')
     if kind == 'daily' then
-        local key = CP.Schedule and CP.Schedule.dayKey and CP.Schedule.dayKey(ts) or os.date('%Y-%m-%d', ts)
-        local start = CP.Schedule and CP.Schedule.dayStart and CP.Schedule.dayStart(ts) or (ts - ts % 86400)
+        local key = S.dayKey and S.dayKey(ts, hour) or os.date('%Y-%m-%d', ts)
+        local start = S.dayStart and S.dayStart(ts, hour) or (ts - ts % 86400)
         return key, start
     end
-    local start = CP.Schedule and CP.Schedule.weekStart and CP.Schedule.weekStart(ts) or (ts - 7 * 86400)
-    local key = CP.Schedule and CP.Schedule.weekKey and CP.Schedule.weekKey(ts) or os.date('%Y-%m-%d', start)
+    local start = S.weekStart and S.weekStart(ts, hour) or (ts - 7 * 86400)
+    local key = S.weekKey and S.weekKey(ts, hour) or os.date('%Y-%m-%d', start)
     return key, start
 end
 
@@ -181,19 +179,7 @@ local function AnyOn()
     return false
 end
 
--- The officer's department: his job while he is online (on duty or not), else his officer row.
-local function DeptOf(citizenid)
-    local src = CP.srcOf(citizenid)
-    local info = src and CP.Qbx.getInfo and CP.Qbx.getInfo(src)
-    if type(info) == 'table' and type(info.job) == 'table' and CP.Access and CP.Access.departmentForJob then
-        local dept = CP.Access.departmentForJob(info.job.name)
-        if dept then return dept end
-    end
-    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
-        { citizenid })
-    if ok and type(d) == 'string' and d ~= '' then return d end
-    return nil
-end
+local DeptOf = CP.deptOfCitizen
 
 -- The officer's department once for several reads: false while no department has the control on.
 local function ResolveDept(citizenid)
@@ -253,45 +239,26 @@ local function LabelOf(goal)
     return CP.L('goals.unnamed', { count = math.floor(Num(goal.count, 1)) })
 end
 
--- Service-record columns a stat goal may count (Config.Objectives goals: stat = ...); completed rows only.
-local STAT_COLUMNS = {
-    arrests = true,
-    citations = true,
-    impounds = true,
-    rescues = true,
-    vehicles_stopped = true,
-    evidence = true,
-    decisions_ok = true,
-    decisions_best = true,
-}
-
--- Counted runs since 'start' that match the goal (a stat goal: the sum of that column over them).
+-- Counted runs since 'start' that match the goal (a stat goal: the sum of that column over them), counted by the one
+-- progress engine (CP.Progress) the weekly bounty counts by too.
 local function ProgressOf(goal, citizenid, start)
-    local what = 'COUNT(*)'
-    if type(goal.stat) == 'string' then
-        if not STAT_COLUMNS[goal.stat] then return 0 end
-        what = ('COALESCE(SUM(%s), 0)'):format(goal.stat)
-    end
-    local sql = {
-        [[SELECT ]] .. what .. [[ AS n FROM cp_mission_runs
-          WHERE citizenid = ? AND state = 'completed' AND voided = 0 AND flagged = 0
-            AND mission_type NOT IN ('manual_award', 'goal') AND created_at >= FROM_UNIXTIME(?)]],
-    }
-    local params = { citizenid, start }
-    if type(goal.type) == 'string' and goal.type ~= '' then
-        sql[#sql + 1] = 'AND mission_type = ?'
-        params[#params + 1] = goal.type
-    end
-    if type(goal.mission) == 'string' and goal.mission ~= '' then
-        sql[#sql + 1] = 'AND mission_id = ?'
-        params[#params + 1] = goal.mission
-    end
-    if goal.unit == true then sql[#sql + 1] = 'AND participants >= 2' end
-    if goal.crossDepartment == true then sql[#sql + 1] = 'AND departments_n >= 2' end
-    if goal.missionCall == true then sql[#sql + 1] = 'AND mission_call_id IS NOT NULL' end
-    -- live-case and volunteer-case rows count only with their mode's goals switch (Config.RealPlayers, shipped false)
-    sql[#sql + 1] = CP.RealPlayersRowFilter('goals', '')
-    local ok, n = pcall(MySQL.scalar.await, table.concat(sql, ' '), params)
+    local value = CP.Progress.value(goal)
+    if not value then return 0 end
+    local what = value == '1' and 'COUNT(*)' or ('COALESCE(SUM(%s), 0)'):format(value)
+    local where, params = CP.Progress.where(goal)
+    local sql = (
+        'SELECT %s AS n FROM cp_mission_runs WHERE citizenid = ? AND voided = 0'
+        .. ' AND flagged = 0 AND created_at >= FROM_UNIXTIME(?) AND %s%s'
+    ):format(
+        what,
+        where,
+        -- live-case and volunteer-case rows count only with their mode's goals switch (Config.RealPlayers, shipped
+        -- false)
+        CP.RealPlayersRowFilter('goals', '')
+    )
+    local args = { citizenid, start }
+    for _, v in ipairs(params) do args[#args + 1] = v end
+    local ok, n = pcall(MySQL.scalar.await, sql, args)
     if not ok then
         CP.err(TAG, 'goal progress of %s (%s) failed: %s', citizenid, goal.id, tostring(n))
         return nil

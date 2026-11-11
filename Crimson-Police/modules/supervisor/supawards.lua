@@ -9,11 +9,9 @@
 CP.SupAwards = CP.SupAwards or {}
 local SA = CP.SupAwards
 local Kit = CP.AdminKit
-local U = CP.U
 local TAG = 'supawards'
 
 local KEY = 'awardPoints'
-local CITIZENID_MAX = 50
 local POINTS_HARD_MAX = 10000      -- never above what one admin adjustment may move (CP.Corrections.adjustMax)
 
 -- ============================================================================
@@ -24,12 +22,7 @@ local Num = CP.Num
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Cid(v)
-    if type(v) ~= 'string' then return nil end
-    local s = U.trim(v)
-    if s == '' or #s > CITIZENID_MAX or not s:match('^[%w_%-]+$') then return nil end
-    return s
-end
+local Cid = CP.cidOf
 
 local function McCfg() return type(Config.MissionControls) == 'table' and Config.MissionControls or {} end
 
@@ -85,23 +78,7 @@ local function PointsRange(dept)
     return lo, hi
 end
 
--- The officer's department: his Qbox job while online, else cp_officers.department.
-local function DeptOf(citizenid)
-    local okS, src = Call('Qbx', 'getByCitizenId', citizenid)
-    src = okS and math.tointeger(tonumber(src) or 0) or 0
-    if src and src > 0 then
-        local _, info = Call('Qbx', 'getInfo', src)
-        if type(info) == 'table' and type(info.job) == 'table' then
-            local _, dept = Call('Access', 'departmentForJob', info.job.name)
-            if type(dept) == 'string' then return dept end
-        end
-    end
-    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
-    local ok, d = pcall(MySQL.scalar.await, 'SELECT department FROM cp_officers WHERE citizenid = ? LIMIT 1',
-        { citizenid })
-    if ok and type(d) == 'string' and d ~= '' then return d end
-    return nil
-end
+local DeptOf = CP.deptOfCitizen
 
 -- CanUse for one officer: an admin works in the officer's department (its switch and bounds), not his own.
 local function CanUseFor(src, cid)

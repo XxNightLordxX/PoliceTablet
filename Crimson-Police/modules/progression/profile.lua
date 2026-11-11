@@ -24,23 +24,27 @@ local banned = nil                 -- { words = { lower-case entry }, source = C
 --                                   HELPERS
 -- ============================================================================
 
-local function Num(v, d)
-    local n = tonumber(v)
-    if n == nil or n ~= n then return d end
-    return n
-end
-
-local function Int(v) return math.floor(Num(v, 0) + 0.0) end
+local Num, Int = CP.Num, CP.Int
 
 local function Cfg() return type(Config.Profile) == 'table' and Config.Profile or {} end
 
 local function CommendCfg() return (CP.Recognition('commendations')) end
 
+-- One commendation kind's rule: its own value in Config.Recognition.commendations.kindRules[kind] when set, else
+-- the shared one (cfg[key]).
+local function KindRule(cfg, kind, key)
+    local rules = type(cfg.kindRules) == 'table' and cfg.kindRules or {}
+    local row = type(rules[kind]) == 'table' and rules[kind] or {}
+    if row[key] ~= nil then return row[key] end
+    return cfg[key]
+end
+Profile._kindRule = KindRule
+
 local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Now() return os.time() end
+local Now = CP.now
 
 local function DayStart(ts)
     ts = ts or Now()
@@ -49,20 +53,13 @@ local function DayStart(ts)
     return os.time({ year = t.year, month = t.month, day = t.day, hour = 0, min = 0, sec = 0 })
 end
 
-local function ValidCitizenId(v)
-    return type(v) == 'string' and #v >= 1 and #v <= 50 and v:match('^[%w_%-]+$') ~= nil
-end
+local ValidCitizenId = CP.ValidCid
 
 local function ValidRunUuid(v)
     return type(v) == 'string' and #v >= 1 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
 end
 
-local function NonEmpty(s)
-    if type(s) ~= 'string' then return nil end
-    s = U.trim(s)
-    if s == '' then return nil end
-    return s
-end
+local NonEmpty = CP.NonEmpty
 
 -- Plain text from a player: control characters removed (a newline kept when allowed), CRLF made LF, trimmed.
 local function CleanText(s, keepNewlines)
@@ -690,7 +687,9 @@ function Profile.commend(src, role, payload)
     if not target then return false, 'err.unknown_officer' end
     local dept = NonEmpty(target.department)
     if role == 'supervisor' then
-        if cfg.crossDepartment ~= true and dept ~= issuerDept then return false, 'err.commend_other_dept' end
+        if KindRule(cfg, kind, 'crossDepartment') ~= true and dept ~= issuerDept then
+            return false, 'err.commend_other_dept'
+        end
         local today = MySQL.scalar.await(
             'SELECT COUNT(*) AS n FROM cp_commendations WHERE issued_by = ? AND created_at >= FROM_UNIXTIME(?)',
             { issuer, DayStart() })
@@ -704,7 +703,7 @@ function Profile.commend(src, role, payload)
             return false, 'err.commend_run'
         end
     end
-    local cooldown = math.max(0, Int(cfg.sameKindCooldownDays or 7)) * DAY_S
+    local cooldown = math.max(0, Int(KindRule(cfg, kind, 'sameKindCooldownDays') or 7)) * DAY_S
     if cooldown > 0 then
         local recent = MySQL.scalar.await([[SELECT COUNT(*) AS n FROM cp_commendations
             WHERE citizenid = ? AND kind = ? AND revoked = 0 AND created_at >= FROM_UNIXTIME(?)]],
