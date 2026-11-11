@@ -239,7 +239,6 @@ local NO_REOPEN = { arena = true, unload = true, dead = true, deleted = true, ru
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function Round2(v) return math.floor(v * 100 + 0.5) / 100 end
 local function Clamp(x, lo, hi) if x < lo then return lo end if x > hi then return hi end return x end
 local function NormHeading(h) return ((h % 360.0) + 360.0) % 360.0 end
@@ -291,7 +290,7 @@ end
 
 local function ValidId(id) return type(id) == 'string' and #id > 0 and #id <= MAX_ID and id:match(ID_PATTERN) ~= nil end
 local function ValidKey(k) return type(k) == 'string' and #k > 0 and #k <= MAX_KEY and k:match(KEY_PATTERN) ~= nil end
-local function ValidLocation(v) return IsInt(v) and v >= 1 and v <= MAX_LOCATIONS end
+local function ValidLocation(v) return CP.IsInt(v) and v >= 1 and v <= MAX_LOCATIONS end
 
 -- Trimmed display text of at most MAX_LABEL characters (UTF-8 safe), or nil.
 local function LabelOf(s)
@@ -603,10 +602,10 @@ function B.parsePlace(p)
     local points = VecList(src, MAX_POINTS)
     if not points then return nil, 'err.invalid_payload' end
     local min = p.min
-    if min ~= nil and not (IsInt(min) and min >= 0 and min <= MAX_POINTS) then return nil, 'err.invalid_payload' end
+    if min ~= nil and not (CP.IsInt(min) and min >= 0 and min <= MAX_POINTS) then return nil, 'err.invalid_payload' end
     local max = p.max
     if max == nil then max = p.count end
-    if max ~= nil and not (IsInt(max) and max >= 1 and max <= MAX_POINTS) then return nil, 'err.invalid_payload' end
+    if max ~= nil and not (CP.IsInt(max) and max >= 1 and max <= MAX_POINTS) then return nil, 'err.invalid_payload' end
     if not o.multiple then
         max = 1
         if min == nil then min = 1 end
@@ -689,7 +688,7 @@ function B.parseTestDrive(p)
     if route.stops ~= nil then
         if type(route.stops) ~= 'table' or #route.stops > MAX_ROUTE_POINTS then return nil, 'err.invalid_payload' end
         for _, s in ipairs(route.stops) do
-            if type(s) ~= 'table' or not IsInt(s.at) or s.at < 1 or s.at > #pts or not IsNum(s.wait) or s.wait < 0
+            if type(s) ~= 'table' or not CP.IsInt(s.at) or s.at < 1 or s.at > #pts or not IsNum(s.wait) or s.wait < 0
                 or s.wait > STOP_WAIT_MAX then
                 return nil, 'err.invalid_payload'
             end
@@ -1495,7 +1494,7 @@ function B.parseAutoPoints(p)
     local o, err = B.parsePlace(p)
     if not o then return nil, err end
     if (o.kind ~= 'ped' and o.kind ~= 'vehicle') or not o.multiple then return nil, 'err.invalid_payload' end
-    if not (IsInt(p.count) and p.count >= 1 and p.count <= MAX_POINTS) then return nil, 'err.invalid_payload' end
+    if not (CP.IsInt(p.count) and p.count >= 1 and p.count <= MAX_POINTS) then return nil, 'err.invalid_payload' end
     if p.anchor ~= nil then
         o.anchor = VecOf(p.anchor)
         if not o.anchor then return nil, 'err.invalid_payload' end

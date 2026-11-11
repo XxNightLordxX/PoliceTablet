@@ -82,8 +82,6 @@ local Has = CP.Has
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
-local function Int(v) return math.tointeger(tonumber(v) or 0) or 0 end
-
 local function Now()
     if CP.Schedule and CP.Schedule.now then return CP.Schedule.now() end
     return os.time()
@@ -366,7 +364,7 @@ local function Clean(row, info)
             if kind == 'dt' then
                 v = math.tointeger(tonumber(v)) or math.floor(tonumber(v) or 0)
             elseif kind == 'bool' then
-                if v == true then v = 1 elseif v == false then v = 0 else v = Int(v) end
+                if v == true then v = 1 elseif v == false then v = 0 else v = CP.Int(v) end
             elseif type(v) == 'boolean' then
                 v = v and 1 or 0
             elseif type(v) == 'table' then
@@ -469,7 +467,7 @@ end
 local function CountRows(db, name)
     local ok, n = pcall(db.scalar.await, 'SELECT COUNT(*) FROM ' .. QuoteName(name), {})
     if not ok then return nil end
-    return Int(n)
+    return CP.Int(n)
 end
 
 -- ============================================================================
@@ -546,7 +544,7 @@ end
 
 local function IdTaken(db, name, id)
     local ok, n = pcall(db.scalar.await, ('SELECT COUNT(*) FROM %s WHERE id = ?'):format(QuoteName(name)), { id })
-    return not ok or Int(n) > 0
+    return not ok or CP.Int(n) > 0
 end
 
 local function RestPaid(bd)
@@ -561,9 +559,9 @@ end
 
 -- true when run row s moved more money than row c: more paid, more taken back, the cut rest paid, or a payment begun.
 local function RunAhead(s, c)
-    local sp, cp = Int(s.cash_paid), Int(c.cash_paid)
+    local sp, cp = CP.Int(s.cash_paid), CP.Int(c.cash_paid)
     if sp ~= cp then return sp > cp end
-    local sr, cr = Int(s.cash_reclaimed), Int(c.cash_reclaimed)
+    local sr, cr = CP.Int(s.cash_reclaimed), CP.Int(c.cash_reclaimed)
     if sr ~= cr then return sr > cr end
     local srest, crest = RestPaid(s.breakdown), RestPaid(c.breakdown)
     if srest ~= crest then return srest end
@@ -603,7 +601,7 @@ local function SetRow(db, name, cols, r, id)
         if c == 'breakdown' then
             v = v or '{}'
         elseif c == 'cash_paid' or c == 'cash_reclaimed' then
-            v = Int(v)
+            v = CP.Int(v)
         end
         if v == nil then
             sets[#sets + 1] = QuoteName(c) .. ' = NULL'
@@ -643,12 +641,12 @@ function Sys.moneyReapply(db, snap, opts)
         elseif cur and ahead then
             db.update.await(
                 'UPDATE cp_item_rewards SET status = ?, given_at = IF(? = 0, NULL, FROM_UNIXTIME(?)) WHERE id = ?',
-                { r.status, Int(r.given_at), Int(r.given_at), cur.id })
+                { r.status, CP.Int(r.given_at), CP.Int(r.given_at), cur.id })
             done.updated = done.updated + 1
         elseif cur then
             db.update.await([[UPDATE cp_item_rewards SET citizenid = ?, status = ?,
                 given_at = IF(? = 0, NULL, FROM_UNIXTIME(?)) WHERE id = ?]],
-                { r.citizenid, r.status, Int(r.given_at), Int(r.given_at), cur.id })
+                { r.citizenid, r.status, CP.Int(r.given_at), CP.Int(r.given_at), cur.id })
             done.updated = done.updated + 1
         else
             InsertRows(db, items, { WithFreeId(db, 'cp_item_rewards', r) })
@@ -670,7 +668,7 @@ local function SaveIndex(list) return ReplaceJson(BackupPath('index.json'), list
 
 local function SortIndex(out)
     table.sort(out, function(a, b)
-        if Int(a.createdAt) ~= Int(b.createdAt) then return Int(a.createdAt) < Int(b.createdAt) end
+        if CP.Int(a.createdAt) ~= CP.Int(b.createdAt) then return CP.Int(a.createdAt) < CP.Int(b.createdAt) end
         return a.name < b.name
     end)
     return out
@@ -841,7 +839,7 @@ Sys._protected = Protected
 
 -- keepName: a backup that is not removed this time either (the one a restore is about to put back).
 local function Prune(keepName)
-    local keep = math.max(1, Int(type(Config.Backups) == 'table' and Config.Backups.keep or 7))
+    local keep = math.max(1, CP.Int(type(Config.Backups) == 'table' and Config.Backups.keep or 7))
     local list = Index()
     local protected = Protected(list)
     if type(keepName) == 'string' then protected[keepName] = true end
@@ -1024,8 +1022,8 @@ local ITEM_KEPT = { giving = true, given = true, forfeited = true, held = true, 
 -- The rows MONEY_RUNS or OWED_RUNS select, for a row read from a backup part.
 local function MoneyRun(r)
     if MONEY_STATUS[r.cash_status] or OWED_STATUS[r.cash_status] then return true end
-    if Int(r.cash_paid) > 0 or Int(r.cash_reclaimed) > 0 then return true end
-    return r.cash_status == 'none' and r.state == 'completed' and Int(r.cash_base) > 0
+    if CP.Int(r.cash_paid) > 0 or CP.Int(r.cash_reclaimed) > 0 then return true end
+    return r.cash_status == 'none' and r.state == 'completed' and CP.Int(r.cash_base) > 0
         and r.mission_type ~= 'manual_award' and r.mission_type ~= 'goal'
 end
 
@@ -1080,7 +1078,7 @@ function Sys.previewRestore(name)
             replaced[#replaced + 1] = {
                 name = tname,
                 now = CountRows(MySQL, tname) or 0,
-                backup = Int(m.tables[tname]),
+                backup = CP.Int(m.tables[tname]),
             }
         else
             kept[#kept + 1] = tname
@@ -1284,7 +1282,7 @@ local function HasData(kind, folder)
     local db = OpenStore('database')
     if not db then return false end
     local ok, n = pcall(db.scalar.await, 'SELECT COUNT(*) FROM cp_schema_migrations', {})
-    return ok and Int(n) > 0
+    return ok and CP.Int(n) > 0
 end
 
 -- System → Storage: the facts of /CrimsonPoliceAdmin storage as data, the in-game switch, the marker, backups.
@@ -1518,7 +1516,7 @@ local function DeptRows(key)
     }) do
         local ok, c = pcall(MySQL.scalar.await, q, { key })
         if not ok then return nil end
-        n = n + Int(c)
+        n = n + CP.Int(c)
     end
     return n
 end
@@ -1609,7 +1607,7 @@ local function UploadChunk(ctx)
     local key = p.department
     if type(key) ~= 'string' or not DeptRaw(key) then return false, 'err.dept_unknown' end
     local id = type(p.uploadId) == 'string' and p.uploadId:match('^[%w%-]+$') and p.uploadId or nil
-    local index, total = Int(p.index), Int(p.total)
+    local index, total = CP.Int(p.index), CP.Int(p.total)
     if not id or #id > 40 or total < 1 or total > 128 or index < 1 or index > total then
         return false, 'err.invalid_payload'
     end
@@ -1701,7 +1699,7 @@ function Sys.positionOf(path, index)
     local e = CP.Settings and CP.Settings.entry and CP.Settings.entry(path)
     if not e then return nil end
     local list = U.getPath(Config, path)
-    local row = type(list) == 'table' and list[Int(index)] or nil
+    local row = type(list) == 'table' and list[CP.Int(index)] or nil
     if row == nil then return nil end
     if path == 'Tablet.desks' then return row.coords end
     local rows = e.rows
@@ -1837,7 +1835,7 @@ local function AuditTotal(args, maxId)
     local n = MySQL.scalar.await(
         ('SELECT COUNT(*) FROM cp_audit a LEFT JOIN cp_officers o ON o.citizenid = a.actor WHERE %s'):format(where),
         params)
-    return Int(n)
+    return CP.Int(n)
 end
 
 -- One part of AUDIT_PART rows (export beyond the 5000 of one part).
@@ -1847,10 +1845,10 @@ function Sys.auditPart(args, part)
     -- Z10: the parts of one export are held to the rows there at its first part (args.maxId, which the Audit screen
     -- sends back with each later part), so audit rows written between the requests never shift the pages
     local maxId = type(args) == 'table' and math.tointeger(tonumber(args.maxId)) or nil
-    if not maxId or maxId <= 0 then maxId = Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {})) end
+    if not maxId or maxId <= 0 then maxId = CP.Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {})) end
     local total = AuditTotal(args, maxId)
     local parts = math.max(1, math.ceil(total / AUDIT_PART))
-    part = math.max(1, math.min(parts, Int(part) > 0 and Int(part) or 1))
+    part = math.max(1, math.min(parts, CP.Int(part) > 0 and CP.Int(part) or 1))
     local rows = AuditRows(args, AUDIT_PART, (part - 1) * AUDIT_PART, maxId)
     return { csv = CP.Admin._csv(rows), rows = #rows, part = part, parts = parts, total = total, maxId = maxId }
 end
@@ -1861,7 +1859,7 @@ function Sys.saveAudit(args)
     CP.Db()
     if not EnsureDir(EXPORT_DIR) then return nil, 'err.export_folder' end
     -- the rows there now: the pages yield, and audit rows written meanwhile would repeat one row and drop the oldest
-    local maxId = Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {}))
+    local maxId = CP.Int(MySQL.scalar.await('SELECT MAX(id) FROM cp_audit', {}))
     local total = math.min(AuditTotal(args, maxId), AUDIT_SAVE_MAX)
     local chunks, n = {}, 0
     for offset = 0, math.max(0, total - 1), AUDIT_PART do
@@ -1993,7 +1991,7 @@ Kit.action('server:admin:backupNow', 'storageAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:backup', 1, 60000) then return false, 'err.rate_limited' end
     local ok, res = Kit.withLock('backup', function() return Sys.backup(ctx.src, 'manual') end)
     if not ok then return false, res end
-    ctx.audit('backupCreated', res.name, nil, ('%d rows'):format(Int(res.rows)))
+    ctx.audit('backupCreated', res.name, nil, ('%d rows'):format(CP.Int(res.rows)))
     return true, WithView(res, Sys.backupsView())
 end, { reason = 'optional', rate = 1 })
 
@@ -2286,7 +2284,7 @@ end, { reason = 'optional', rate = 2 })
 Kit.action('server:admin:updateDesk', 'departmentsAdmin', function(ctx)
     local p = ctx.payload
     local list = Desks()
-    local i = Int(p.index)
+    local i = CP.Int(p.index)
     if not list[i] then return false, 'err.desk_unknown' end
     local desk = DeskFrom(p, list[i])
     if p.moveHere == true then
@@ -2303,7 +2301,7 @@ end, { reason = 'optional', rate = 2 })
 
 Kit.action('server:admin:removeDesk', 'departmentsAdmin', function(ctx)
     local list = Desks()
-    local i = Int(ctx.payload.index)
+    local i = CP.Int(ctx.payload.index)
     if not list[i] then return false, 'err.desk_unknown' end
     local label = list[i].label
     table.remove(list, i)
@@ -2316,7 +2314,7 @@ end, { reason = 'optional', rate = 2 })
 Kit.action('server:admin:teleportToDesk', 'departmentsAdmin', function(ctx)
     if not CP.Net.rateOk(ctx.src, 'sys:teleport', 1, 5000) then return false, 'err.rate_limited' end
     local list = Desks()
-    local d = list[Int(ctx.payload.index)]
+    local d = list[CP.Int(ctx.payload.index)]
     if not d then return false, 'err.desk_unknown' end
     if not Teleport(ctx.src, d.coords) then return false, 'err.no_position' end
     ctx.audit('teleport', 'Tablet.desks', nil, tostring(d.label))
@@ -2335,7 +2333,7 @@ Kit.action('server:admin:teleportTo', 'openAdmin', function(ctx)
     local c = Sys.positionOf(p.path, p.index)
     if not c then return false, 'err.no_position' end
     if not Teleport(ctx.src, c) then return false, 'err.no_position' end
-    ctx.audit('teleport', tostring(p.path):sub(1, 64), nil, tostring(Int(p.index)))
+    ctx.audit('teleport', tostring(p.path):sub(1, 64), nil, tostring(CP.Int(p.index)))
     return true, {}
 end, { rate = 1 })
 

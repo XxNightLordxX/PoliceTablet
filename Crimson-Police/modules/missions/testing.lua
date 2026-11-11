@@ -128,12 +128,6 @@ local function WarnOnce(key, fmt, ...)
     CP.warn(TAG, fmt, ...)
 end
 
-local function ToInt(v)
-    local n = tonumber(v)
-    if not n then return nil end
-    return math.tointeger(n)
-end
-
 local Num = CP.Num
 
 local Has = CP.Has
@@ -934,7 +928,7 @@ local function ValidStartPayload(p)
     if type(p.missionId) ~= 'string' or #p.missionId > 40 then return false end
     local loc = p.location
     if loc ~= nil and loc ~= 'random' then
-        local n = ToInt(loc)
+        local n = CP.IntIn(loc)
         if not n or n < 1 or n > 127 then return false end
     end
     if p.tier ~= nil and (type(p.tier) ~= 'string' or #p.tier > 16) then return false end
@@ -1008,9 +1002,9 @@ function Testing.command(src, args)
             if ValidTier(s) or s == 'auto' then
                 if tier then return false, 'err.test_bad_command' end
                 tier = s
-            elseif s == 'random' or ToInt(s) then
+            elseif s == 'random' or CP.IntIn(s) then
                 if location then return false, 'err.test_bad_command' end
-                if s == 'random' then location = 'random' else location = ToInt(s) end
+                if s == 'random' then location = 'random' else location = CP.IntIn(s) end
             else
                 return false, 'err.test_bad_command'
             end

@@ -62,10 +62,6 @@ local function DistSq(a, b)
     return dx * dx + dy * dy + dz * dz
 end
 
-local function V3(t)
-    return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
-end
-
 -- Driving a vehicle: in one and in its driver seat (the server checks the same with its own natives).
 local function IsDriving(veh)
     return veh ~= nil and veh ~= 0 and DoesEntityExist(veh) and GetPedInVehicleSeat(veh, -1) == cache.ped
@@ -400,7 +396,7 @@ local function Apply(ctx, st, data)
     st.applySeq = (st.applySeq or 0) + 1   -- the HUD line is rebuilt from this snapshot
     st.data = data
     st.points = {}
-    for i, p in ipairs(data.points or {}) do st.points[i] = V3(p) end
+    for i, p in ipairs(data.points or {}) do st.points[i] = Kit.point(p) end
     st.track = data.track or {}
     st.statusTexts = nil
     local running = data.course and data.course.running == true

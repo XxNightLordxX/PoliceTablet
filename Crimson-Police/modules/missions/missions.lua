@@ -132,10 +132,6 @@ local function IsList(t)
     return true
 end
 
-local function IsInt(v)
-    return type(v) == 'number' and v == math.floor(v)
-end
-
 -- A payout- or reward-like top-level name: mission files never carry pay or item rewards (Config.Rewards).
 local function IsPayoutField(k)
     if type(k) ~= 'string' then return false end
@@ -495,8 +491,8 @@ function Missions.normalize(def, meta)
     local maxUnit = tonumber(Config.Limits and Config.Limits.maxUnitSize) or 4
     if
         not (
-            IsInt(d.minOfficers)
-            and IsInt(d.maxOfficers)
+            CP.IsInt(d.minOfficers)
+            and CP.IsInt(d.maxOfficers)
             and d.minOfficers >= 1
             and d.minOfficers <= d.maxOfficers
             and d.maxOfficers <= maxUnit
@@ -506,7 +502,7 @@ function Missions.normalize(def, meta)
     end
     if d.difficulty == nil then d.difficulty = DetailDefault('difficulty', 2) end
     local stars = #((Config.Difficulty and Config.Difficulty.pointsByStars) or { 1, 1, 1 })
-    if not (IsInt(d.difficulty) and d.difficulty >= 1 and d.difficulty <= stars) then
+    if not (CP.IsInt(d.difficulty) and d.difficulty >= 1 and d.difficulty <= stars) then
         return nil, ('difficulty must be 1 to %d stars'):format(stars)
     end
     if not CheckRange(d.timeLimit, 60, 3600) then return nil, 'timeLimit must be 60 to 3600 seconds' end

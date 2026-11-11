@@ -40,7 +40,6 @@ local function Now() return GetGameTimer() end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function InRange(v, r, scale)
     scale = scale or 1
     return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
@@ -333,14 +332,14 @@ local function Validate(obj, mission, location)
         if not ok then return false, why end
     end
     if o.mode == 'scene' then
-        if not IsInt(o.people) or not InRange(o.people, c.people) then
+        if not CP.IsInt(o.people) or not InRange(o.people, c.people) then
             return Bad('block.field_contact.invalid.range', { field = 'people', min = c.people[1], max = c.people[2] })
         end
-        if not IsInt(o.cars) or o.cars < 0 or o.cars > 1 then
+        if not CP.IsInt(o.cars) or o.cars < 0 or o.cars > 1 then
             return Bad('block.field_contact.invalid.range', { field = 'cars', min = 0, max = 1 })
         end
     elseif o.mode == 'parked' then
-        if not IsInt(o.cars) or not InRange(o.cars, c.cars) or o.cars < 1 then
+        if not CP.IsInt(o.cars) or not InRange(o.cars, c.cars) or o.cars < 1 then
             return Bad('block.field_contact.invalid.range', { field = 'cars', min = 1, max = c.cars[2] })
         end
     end

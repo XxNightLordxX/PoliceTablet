@@ -296,6 +296,21 @@ for _, f in ipairs({ 'modules/admin/admin.lua', 'modules/money/payments.lua', 'm
     H.ok((Read(f) or ''):find('local Int = CP.IntIn', 1, true) ~= nil, f .. ': Int is CP.IntIn')
 end
 
+-- FIN9: no module or block keeps a private whole-number helper (CP.Int with its range, CP.Floor, CP.Count,
+-- CP.IntIn, CP.IsInt), and the map's HUD line goes through CP.Call instead of its own pcall
+local INT_COPIES = {
+    { 'local function Int%(v', 'whole numbers come from the library' },
+    { 'local function ToInt%(v', 'whole numbers in a range are CP.IntIn' },
+    { 'local function IsInt%(v', 'whole-number checks are CP.IsInt' },
+    { '\n%s*local function Int%(v', 'whole numbers come from the library' },
+}
+for _, f in ipairs(Lines('find modules blocks -name "*.lua" | sort')) do
+    local src = Read(f) or ''
+    for _, c in ipairs(INT_COPIES) do H.ok(not src:find(c[1]), f .. ': ' .. c[2]) end
+end
+H.ok(not (Read('modules/map/client/markers.lua') or ''):find('pcall(CP.Tablet.hud', 1, true),
+    'markers: the HUD line goes through CP.Call')
+
 -- the shared ones answer as the private copies did
 H.boot({ side = 'server' })
 CP.Probe = {
@@ -317,5 +332,17 @@ H.eq(CP.IntIn('12', 1, 20), 12, 'CP.IntIn: a whole number in the range')
 H.eq(CP.IntIn(1.5, 1, 20), nil, 'CP.IntIn: never rounded')
 H.eq(CP.IntIn(21, 1, 20), nil, 'CP.IntIn: nil past the range')
 H.eq(CP.IntIn(-3), -3, 'CP.IntIn: no range given')
+H.eq(CP.Int('7.9'), 7, 'CP.Int: rounded down')
+H.eq(CP.Int(200, 0, 127), 127, 'CP.Int: kept below hi')
+H.eq(CP.Int(-5, 1, 127), 1, 'CP.Int: kept above lo')
+H.eq(CP.Floor('4.5'), 4, 'CP.Floor: rounded down')
+H.eq(CP.Floor('x'), nil, 'CP.Floor: nil for text')
+H.eq(CP.Count(2.5), 3, 'CP.Count: to the nearest whole number')
+H.eq(CP.Count(-4), 0, 'CP.Count: never below 0')
+H.eq(CP.Count(nil), 0, 'CP.Count: 0 for nothing')
+H.eq(CP.IsInt(3), true, 'CP.IsInt: a whole number')
+H.eq(CP.IsInt(3.5), false, 'CP.IsInt: not a fraction')
+H.eq(CP.IsInt('3'), false, 'CP.IsInt: not text')
+H.eq(CP.IsInt(math.huge), false, 'CP.IsInt: not an infinity')
 
 return H

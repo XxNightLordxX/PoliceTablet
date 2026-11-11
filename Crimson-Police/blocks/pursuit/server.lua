@@ -247,8 +247,6 @@ end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
-local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
 local function InRange(v, r, scale)
     scale = scale or 1
     return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
@@ -565,7 +563,7 @@ local function ArmedCount(obj)
     local o = Defaults(U.deepcopy(obj))
     local hidden = HasArmedWeight(ProfileSetOf(o))
     if o.neverShoots ~= false and not hidden then return 0 end
-    return Int(o.vehicles) * Int(o.suspectsPerVehicle)
+    return CP.Count(o.vehicles) * CP.Count(o.suspectsPerVehicle)
 end
 
 local function RequiredPoints(obj)
@@ -677,7 +675,7 @@ local function ValidateParity(o, c)
             return Bad('block.pursuit.invalid.spawn_offset', { max = MAX_OFFSET })
         end
     end
-    if o.team ~= nil and (not IsInt(o.team) or o.team < 1 or o.team > 8) then
+    if o.team ~= nil and (not CP.IsInt(o.team) or o.team < 1 or o.team > 8) then
         return Bad('block.pursuit.invalid.range', { field = 'team', min = 1, max = 8 })
     end
     local set = ProfileSetOf(o)
@@ -735,12 +733,12 @@ local function Validate(obj, mission, location)
     if not IsNum(o.minSeconds) or o.minSeconds < 0 then return Bad('block.pursuit.invalid.min_seconds') end
     ok, why = range('presenceRange', o.presenceRange, c.presenceRange)
     if not ok then return false, why end
-    if not IsInt(o.vehicles) then
+    if not CP.IsInt(o.vehicles) then
         return Bad('block.pursuit.invalid.range', { field = 'vehicles', min = c.vehicles[1], max = c.vehicles[2] })
     end
     ok, why = range('vehicles', o.vehicles, c.vehicles)
     if not ok then return false, why end
-    if not IsInt(o.suspectsPerVehicle) then
+    if not CP.IsInt(o.suspectsPerVehicle) then
         return Bad('block.pursuit.invalid.range',
             { field = 'suspectsPerVehicle', min = c.suspects[1], max = c.suspects[2] })
     end
@@ -753,7 +751,7 @@ local function Validate(obj, mission, location)
     if not ok then return false, why end
     if not AllAllowed(o.models, strict and allowed.vehicles or nil) then return Bad('block.pursuit.invalid.models') end
     if not AllAllowed(o.peds, strict and allowed.peds or nil) then return Bad('block.pursuit.invalid.peds') end
-    if Int(o.suspectsPerVehicle) > 2 then
+    if CP.Count(o.suspectsPerVehicle) > 2 then
         local four = U.filter(o.models, function(m) return not TWO_SEATERS[tostring(m):lower()] end)
         if #four == 0 then return Bad('block.pursuit.invalid.seats') end
     end
@@ -904,13 +902,13 @@ end
 -- one; while he plays, the mission's other cars only with Config.RealPlayers.volunteer.driverNpcCars (he takes one
 -- car's place).
 local function VehTarget(ctx)
-    local n = Int(ctx.obj.vehicles)
+    local n = CP.Count(ctx.obj.vehicles)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
     if vol == nil then return n end
     if vol == 'real' and (CP.RealPlayers('volunteer')).driverNpcCars == true then return math.max(0, n - 1) end
     return 0
 end
-local function OccTarget(ctx) return math.min(MAX_SEATS, math.max(1, Int(ctx.obj.suspectsPerVehicle))) end
+local function OccTarget(ctx) return math.min(MAX_SEATS, math.max(1, CP.Count(ctx.obj.suspectsPerVehicle))) end
 
 local function StartPoint(ctx)
     local s = ctx.location and ctx.location.start

@@ -225,13 +225,6 @@ local playerMap, playerMapAt = {}, -math.huge
 
 local function Now() return GetGameTimer() end
 
-local function ToInt(v, lo, hi)
-    if type(v) ~= 'number' or v ~= v then return nil end
-    local n = math.tointeger(v)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
-
 -- FXServer's DoesEntityExist answers 1 for yes (false for no), never true.
 local function Exists(e)
     if type(e) ~= 'number' or e == 0 then return false end
@@ -592,7 +585,7 @@ end
 -- ============================================================================
 
 function Npc.setState(run, netId, state, extra)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if not IsLive(run) or not netId then
         CP.warn(TAG, 'setState(%s, %s) ignored: no live run or bad net id', tostring(type(run) == 'table' and run.id),
             tostring(netId))
@@ -674,7 +667,7 @@ function Npc.setState(run, netId, state, extra)
 end
 
 function Npc.getState(netId)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if not netId then return nil end
     local rec = FindRec(netId)
     if not rec then return nil end
@@ -688,7 +681,7 @@ end
 
 -- The record, live run, engine record and entity of a living ped of a live run, or nil.
 local function LiveRec(netId)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     if not rec or rec.dead then return nil end
     local run = RunById(rec.runId)
@@ -738,7 +731,7 @@ function Npc.wornOut(netId, near)
 end
 
 function Npc.rollSurrender(run, netId, chance)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if type(run) ~= 'table' or run.id == nil or not netId then return false end
     local p = tonumber(chance) or 0
     if p ~= p then p = 0 end
@@ -760,7 +753,7 @@ function Npc.rollSurrender(run, netId, chance)
 end
 
 function Npc.enableCuff(run, netId, opts)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if not IsLive(run) or not netId then return false end
     opts = type(opts) == 'table' and opts or {}
     local label = type(opts.label) == 'string' and U.trim(opts.label) or ''
@@ -792,7 +785,7 @@ end
 -- A ped handed to another objective (CP.Runs.adopt): its record and its replicated bag name the new
 -- objective, so its cuff, shot and damage events go there from now on.
 function Npc.adopt(netId, obj)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     obj = math.tointeger(tonumber(obj) or -1)
     if not netId or not obj or obj < 1 then return false end
     local rec = FindRec(netId)
@@ -816,7 +809,7 @@ end
 -- Written through this file's record when there is one for the entity (so its later writes keep or drop the ask
 -- with it), else into the engine's copy (run.entities[netId].bag). No seq change: nothing is re-tasked.
 function Npc.setPlace(run, netId, place)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local info = IsLive(run) and netId and type(run.entities) == 'table' and run.entities[netId] or nil
     if type(info) ~= 'table' then return false end
     local rec = peds[netId]
@@ -901,7 +894,7 @@ end
 -- is still the sender (a forged packet must never cost someone else a penalty or fail the run for
 -- them), and so is an NPC the sender does not own. Returns src|nil, kind.
 local function ShooterOf(src, data)
-    local parent = ToInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
+    local parent = CP.IntIn(data.parentGlobalId, 1, MAX_NETID)
     if parent then
         local pe = NetworkGetEntityFromNetworkId(parent)
         if Exists(pe) then
@@ -931,7 +924,7 @@ local function OnWeaponDamage(src, data, hits)
     local t = Now()
     local done, fired = {}, {}
     for i = 1, math.min(#hits, MAX_HITS) do
-        local netId = ToInt(tonumber(hits[i]), 1, MAX_NETID)
+        local netId = CP.IntIn(hits[i], 1, MAX_NETID)
         local rec = netId and peds[netId] or nil
         if rec and not rec.dead and not done[netId] then
             done[netId] = true
@@ -1022,7 +1015,7 @@ end
 local function AllParticipants(run, hits, above)
     local n = 0
     for i = 1, math.min(#hits, MAX_HITS) do
-        local netId = ToInt(tonumber(hits[i]), 1, MAX_NETID)
+        local netId = CP.IntIn(hits[i], 1, MAX_NETID)
         if not netId then return false end
         local ped = NetworkGetEntityFromNetworkId(netId)
         local s = PlayerFromPed(ped)
@@ -1038,7 +1031,7 @@ end
 
 local function LethalOnOfficer(src, data)
     if data.willKill ~= true then return false end
-    local parent = ToInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
+    local parent = CP.IntIn(data.parentGlobalId, 1, MAX_NETID)
     if not parent then return false end
     local pe = NetworkGetEntityFromNetworkId(parent)
     if not Exists(pe) or PlayerFromPed(pe) then return false end
@@ -1208,7 +1201,7 @@ local function InWatchReach(run, w)
 end
 
 function Npc.watch(run, netId, src, range)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     src = tonumber(src)
     if not IsLive(run) or not netId or not src then return false end
     local w = { runId = run.id, netId = netId, src = src, range = tonumber(range) or DEFAULT_CUFF_RANGE }
@@ -1218,7 +1211,7 @@ function Npc.watch(run, netId, src, range)
 end
 
 function Npc.inReachSince(run, netId, src)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     src = tonumber(src)
     local w = netId and src and watches[WatchKey(netId, src)] or nil
     if not w or type(run) ~= 'table' or w.runId ~= run.id then return nil end
@@ -1227,7 +1220,7 @@ function Npc.inReachSince(run, netId, src)
 end
 
 function Npc.unwatch(netId, src)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     src = tonumber(src)
     if netId and src then watches[WatchKey(netId, src)] = nil end
 end
@@ -1261,7 +1254,7 @@ end
 -- A stun_hit report (client telemetry) is real only when the server saw that ped ragdoll or change state
 -- within windowMs.
 function Npc.stunMatches(netId, windowMs)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     if not rec or rec.dead then return false end
     windowMs = tonumber(windowMs) or 1000
@@ -1273,7 +1266,7 @@ end
 -- no proof here: a cheat menu could send the report the moment a runner starts to run. The game sends the report
 -- again every 1.5 s while he is down, so one that arrives before the server's copy of the ped catches up is not lost.
 local function StunSeen(netId)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     if not rec or rec.dead then return false end
     return RagdollSeen(netId, rec, STUN_PROOF_MS)
@@ -1282,7 +1275,7 @@ end
 -- The re-check of an unseen stun (CP.AntiCheat.stunReport, Config.AntiCheat.stunRecheck): the server saw him fall
 -- within the proof window before the report or in the sinceMs since it.
 function Npc.stunSeenSince(netId, sinceMs)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     if not rec or rec.dead then return false end
     return RagdollSeen(netId, rec, STUN_PROOF_MS + math.max(0, tonumber(sinceMs) or 0))
@@ -1315,7 +1308,7 @@ end
 
 -- The live run a mission ped belongs to, or nil.
 function Npc.runOf(netId)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     local rec = netId and FindRec(netId) or nil
     local run = rec and RunById(rec.runId)
     if IsLive(run) then return run end
@@ -1436,7 +1429,7 @@ local function Tick()
             for key, info in pairs(run.entities) do snapshot[#snapshot + 1] = { key, info } end
             for _, kv in ipairs(snapshot) do
                 local key, info = kv[1], kv[2]
-                local netId = ToInt(tonumber(key), 1, MAX_NETID)
+                local netId = CP.IntIn(key, 1, MAX_NETID)
                 -- every entity of a live run keeps its record (a vehicle's state too); only peds are watched
                 if netId and type(info) == 'table' then seen[netId] = run.id end
                 if netId and type(info) == 'table' and IsPedRecord(netId, info) then
@@ -1510,7 +1503,7 @@ local function HandleCuff(src, runId, netId)
     if type(runId) ~= 'string' or #runId == 0 or #runId > MAX_RUNID then
         return Refuse(src, 'err.npc_invalid', 'bad run id')
     end
-    netId = ToInt(netId, 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if not netId then return Refuse(src, 'err.npc_invalid', 'bad net id') end
     local run = RunById(runId)
     if not IsLive(run) then return Refuse(src, 'err.npc_not_on_run', 'no live run') end

@@ -78,7 +78,6 @@ local function Now() return GetGameTimer() end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function InRange(v, r, scale)
     scale = scale or 1
     return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
@@ -237,7 +236,7 @@ local function Validate(obj, mission, location)
         return Bad('block.protect_rescue.invalid.range',
             { field = 'presenceRange', min = c.presenceRange[1], max = c.presenceRange[2] })
     end
-    if not IsInt(o.count) or not InRange(o.count, c.npcs) then
+    if not CP.IsInt(o.count) or not InRange(o.count, c.npcs) then
         return Bad('block.protect_rescue.invalid.range', { field = 'count', min = c.npcs[1], max = c.npcs[2] })
     end
     if not AllAllowed(o.peds, strict and Config.Builder.allowed.peds or nil) then

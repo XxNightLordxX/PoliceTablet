@@ -46,13 +46,6 @@ local Num = CP.Num
 
 local function Ms(key, default) return math.max(0, Num(CP.RealPlayers()[key], default)) * 1000 end
 
-local function ToInt(v, lo, hi)
-    if type(v) ~= 'number' or v ~= v then return nil end
-    local n = math.tointeger(v)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
-
 -- FXServer's BOOL natives answer 1 for yes (false for no), never true: truthiness only.
 local function Exists(e)
     if type(e) ~= 'number' or e == 0 then return false end
@@ -274,7 +267,7 @@ end
 -- except when the damage came from an NPC the sender simulates (a ped, or a car an NPC drives), which is nobody, as
 -- CP.Npc's ShooterOf reads it.
 local function Blame(src, data)
-    local parent = ToInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
+    local parent = CP.IntIn(data.parentGlobalId, 1, MAX_NETID)
     if not parent then return src end
     local pe = NetworkGetEntityFromNetworkId(parent)
     if not Exists(pe) then return src end
@@ -309,7 +302,7 @@ local function OnDamage(src, data)
     local now = GetGameTimer()
     local done = {}
     for i = 1, math.min(#hits, MAX_HITS) do
-        local netId = ToInt(tonumber(hits[i]), 1, MAX_NETID)
+        local netId = CP.IntIn(hits[i], 1, MAX_NETID)
         local victim = netId and not done[netId] and VictimOf(netId) or nil
         if netId then done[netId] = true end
         if victim and victim ~= src and Bucket(victim) == 0 then

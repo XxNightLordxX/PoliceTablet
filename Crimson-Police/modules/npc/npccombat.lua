@@ -23,13 +23,6 @@ local dropped = {}   -- [runId] = { [src] = true }: officers of that run whose p
 --                                   HELPERS
 -- ============================================================================
 
-local function ToInt(v, lo, hi)
-    if type(v) ~= 'number' or v ~= v then return nil end
-    local n = math.tointeger(v)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
-
 -- FXServer's BOOL natives answer 1 for yes (false for no), never true: truthiness only.
 local function Exists(e)
     if type(e) ~= 'number' or e == 0 then return false end
@@ -124,7 +117,7 @@ end
 -- The player a weapon damage packet is blamed on: its sender, or nobody when the damage came from an NPC the sender's
 -- game moves (a ped, or a car an NPC drives), as CP.Npc's ShooterOf reads it.
 local function Shooter(src, data)
-    local parent = ToInt(tonumber(data.parentGlobalId), 1, MAX_NETID)
+    local parent = CP.IntIn(data.parentGlobalId, 1, MAX_NETID)
     if not parent then return src end
     local pe = NetworkGetEntityFromNetworkId(parent)
     if not Exists(pe) then return src end
@@ -140,7 +133,7 @@ local function OnHit(src, data)
     if #hits == 0 or Shooter(src, data) ~= src then return end
     local seen = {}
     for i = 1, math.min(#hits, MAX_HITS) do
-        local netId = ToInt(tonumber(hits[i]), 1, MAX_NETID)
+        local netId = CP.IntIn(hits[i], 1, MAX_NETID)
         if netId and not seen[netId] then
             seen[netId] = true
             local ped = NetworkGetEntityFromNetworkId(netId)

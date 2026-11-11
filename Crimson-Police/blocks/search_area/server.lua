@@ -108,8 +108,6 @@ local function Now() return GetGameTimer() end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
-local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
 local function InRange(v, r)
     return IsNum(v) and type(r) == 'table' and v >= r[1] - 1e-9 and v <= r[2] + 1e-9
 end
@@ -354,12 +352,12 @@ local function Validate(obj, mission, location)
     if not ok then return false, why end
     ok, why = range('startRadius', o.startRadius, c.startRadius)
     if not ok then return false, why end
-    if not IsInt(o.clueCount) then
+    if not CP.IsInt(o.clueCount) then
         return Bad('block.search_area.invalid.range', { field = 'clueCount', min = c.clues[1], max = c.clues[2] })
     end
     ok, why = range('clueCount', o.clueCount, c.clues)
     if not ok then return false, why end
-    if not IsInt(o.fugitives) then
+    if not CP.IsInt(o.fugitives) then
         return Bad('block.search_area.invalid.range',
             { field = 'fugitives', min = c.fugitives[1], max = c.fugitives[2] })
     end
@@ -484,7 +482,7 @@ end
 -- of one; while he plays, the others only with Config.RealPlayers.volunteer.fugitiveNpcs (he takes one fugitive's
 -- place).
 local function FugTarget(ctx)
-    local n = Int(ctx.obj.fugitives)
+    local n = CP.Count(ctx.obj.fugitives)
     local vol = type(ctx.state) == 'table' and ctx.state.vol or nil
     if vol == nil then return n end
     if vol == 'real' and CP.RealPlayers('volunteer').fugitiveNpcs == true then return math.max(0, n - 1) end
@@ -500,7 +498,7 @@ local function PlanClues(ctx, st)
     st.cluesPlanned = true
     local spots = PointList(ctx.location, ctx.obj.clues)
     local props = ctx.obj.clueProps
-    local picked = RngOf(ctx):sample(Indices(#spots), Int(ctx.obj.clueCount))
+    local picked = RngOf(ctx):sample(Indices(#spots), CP.Count(ctx.obj.clueCount))
     for i, si in ipairs(picked) do
         local model = props[((i - 1) % #props) + 1]
         st.clues[i] = {
@@ -1312,7 +1310,7 @@ end
 local function Checklist(ctx)
     local st = StateOf(ctx)
     local done, total = Totals(ctx, st)
-    local clueTotal = math.max(#st.clues, Int(ctx.obj.clueCount))
+    local clueTotal = math.max(#st.clues, CP.Count(ctx.obj.clueCount))
     local handled = 0
     for _, cl in ipairs(st.clues) do
         if cl.status ~= 'pending' then handled = handled + 1 end

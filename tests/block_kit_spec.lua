@@ -48,6 +48,8 @@ for _, b in ipairs(BLOCKS) do
     H.eq(code:find('lib.progressBar(', 1, true), nil, rel .. ': every progress bar goes through the kit')
     H.eq(code:find('NetworkGetEntityFromNetworkId', 1, true), nil, rel .. ': no entity lookup of its own')
     H.eq(code:find('local active = {}', 1, true), nil, rel .. ': no state table of its own')
+    H.eq(code:find('local function V3(', 1, true), nil, rel .. ': no point helper of its own (Kit.point)')
+    H.eq(code:find('local function Txt(', 1, true), nil, rel .. ': no text helper of its own (Kit.text)')
 end
 for _, b in ipairs({
     'escort',
@@ -106,6 +108,10 @@ H.eq(K.find(a1), nil, 'the cleaned state is gone')
 local v = Kit.vec3({ x = 1, y = 2, z = 3 })
 H.eq(v and v.x, 1.0, 'vec3 of a table')
 H.eq(Kit.vec3('nowhere'), nil, 'vec3 of nothing: nil')
+local pt = Kit.point({ x = 4, y = 5 })
+H.ok(pt and pt.x == 4.0 and pt.z == 0.0, 'point: a missing coordinate is 0')
+H.eq(Kit.text(''), nil, 'text of nothing: nil')
+H.eq(Kit.text('As written'), 'As written', 'text: other text as written')
 H.eq(Kit.entity(nil), nil, 'entity of no net id: nil')
 
 local keepBar, keepActive, keepCancel = lib.progressBar, lib.progressActive, lib.cancelProgress

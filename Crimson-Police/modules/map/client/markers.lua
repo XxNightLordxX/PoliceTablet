@@ -88,11 +88,6 @@ local autoKey = nil     -- objectiveGps 'waypoint': the pointer ('run|index|elem
 
 local function Cfg() return type(Config.Markers) == 'table' and Config.Markers or {} end
 
-local function Int(v)
-    local n = tonumber(v)
-    return n and math.tointeger(n) or nil
-end
-
 local function Text(v)
     if type(v) == 'string' and v ~= '' then return v end
     return nil
@@ -135,7 +130,7 @@ local function GpsMode()
     return (m == 'waypoint' or m == 'off') and m or 'route'
 end
 
-local function AreaAlpha() return CP.U.clamp(Int(Cfg().areaAlpha) or 80, 0, 255) end
+local function AreaAlpha() return CP.U.clamp(CP.IntIn(Cfg().areaAlpha) or 80, 0, 255) end
 
 local function NameBlip(blip, label)
     BeginTextCommandSetBlipName('STRING')
@@ -156,14 +151,14 @@ local function Look(kind, variant)
     local kinds = type(Cfg().kinds) == 'table' and Cfg().kinds or {}
     local k = SERVICE_LOOK[kind] and (ServicePart(kind) or SERVICE_LOOK[kind]) or kinds[kind]
     if type(k) ~= 'table' then k = type(kinds.objective) == 'table' and kinds.objective or DEFAULT_LOOK end
-    local sprite = Int(k.sprite) or DEFAULT_LOOK.sprite
-    local colour = Int(k.colour) or DEFAULT_LOOK.colour
+    local sprite = CP.IntIn(k.sprite) or DEFAULT_LOOK.sprite
+    local colour = CP.IntIn(k.colour) or DEFAULT_LOOK.colour
     local scale = tonumber(k.scale) or DEFAULT_LOOK.scale
     if variant == 'boss' and tonumber(k.bossScale) then scale = tonumber(k.bossScale) end
     if variant == 'next' and tonumber(k.nextScale) then scale = tonumber(k.nextScale) end
     if variant == 'surrendered' then scale = tonumber(k.surrenderedScale) or SURRENDERED_SCALE end
-    if variant == 'followUp' and Int(k.followUpColour) then colour = Int(k.followUpColour) end
-    if variant == 'setback' and Int(k.setbackColour) then colour = Int(k.setbackColour) end
+    if variant == 'followUp' and CP.IntIn(k.followUpColour) then colour = CP.IntIn(k.followUpColour) end
+    if variant == 'setback' and CP.IntIn(k.setbackColour) then colour = CP.IntIn(k.setbackColour) end
     local role = TARGET_VARIANTS[variant] and 'target' or KIND_ROLE[kind] or 'objective'
     return sprite, M.colour(role, colour), scale + 0.0
 end
@@ -470,9 +465,7 @@ local function SendHud(target)
     local key = target and ('%s|%d|%s'):format(target.label, target.distance, tostring(target.inside == true)) or ''
     if key == hudSent then return end
     hudSent = key
-    if not (CP.Tablet and CP.Tablet.hud) then return end
-    local ok, err = pcall(CP.Tablet.hud, { target = target or false })
-    if not ok then CP.err(TAG, 'HUD objective line failed: %s', tostring(err)) end
+    CP.Call(TAG, 'Tablet', 'hud', { target = target or false })
 end
 
 local function HudLine(el, d)
@@ -602,7 +595,7 @@ local function Build(m)
                 adoptKey = Key(m.key),
                 look = Text(m.look) or (r and r > 0 and 'searchArea' or 'objective'),
                 label = Text(m.label),
-                number = Int(m.number),
+                number = CP.IntIn(m.number),
                 coords = c,
                 radius = r and r > 0 and r + 0.0 or nil,
             }
@@ -611,7 +604,7 @@ local function Build(m)
         for i, t in ipairs(m.targets) do
             if #list >= MAX_TARGETS then break end
             if type(t) == 'table' then
-                local netId = Int(t.netId)
+                local netId = CP.IntIn(t.netId)
                 if netId and netId <= 0 then netId = nil end
                 local key = Key(t.key) or (netId and tostring(netId)) or nil
                 local c = Coords(t) or Coords(t.coords)
@@ -623,7 +616,7 @@ local function Build(m)
                         look = Text(t.look) or 'objective',
                         variant = Text(t.variant),
                         label = Text(t.label) or Text(m.label),
-                        number = Int(t.number),
+                        number = CP.IntIn(t.number),
                         coords = c,
                         netId = netId,
                         moving = true,
@@ -765,7 +758,7 @@ function M.service(key, spec)
         return true
     end
     if type(spec) ~= 'table' then return false end
-    local netId = Int(spec.netId)
+    local netId = CP.IntIn(spec.netId)
     if netId and netId <= 0 then netId = nil end
     local n = {
         id = 's:' .. key,
@@ -840,7 +833,7 @@ end
 -- The colour of every Crimson-Police GPS line (Config.Markers.routeColour, 0-85), a block's own line included
 -- (checkpoint_route).
 -- With colour-blind map colours on: the objective's colour.
-function M.routeColour() return M.colour('objective', CP.U.clamp(Int(Cfg().routeColour) or 5, 0, 85)) end
+function M.routeColour() return M.colour('objective', CP.U.clamp(CP.IntIn(Cfg().routeColour) or 5, 0, 85)) end
 
 -- The colour id of a blip's role ('start', 'objective', 'target', 'hostile', 'friendly', 'area') on this officer's
 -- map: the colour-blind one while his colourblindMap option is on (My options -> Map), else fallback.
@@ -866,8 +859,8 @@ function M.style(blip, kind, label, opts)
     else
         SetBlipAsShortRange(blip, Cfg().shortRange == true)
     end
-    SetBlipCategory(blip, Int(Cfg().category) or 2)
-    local n = Int(opts.number)
+    SetBlipCategory(blip, CP.IntIn(Cfg().category) or 2)
+    local n = CP.IntIn(opts.number)
     if n and n >= 0 then ShowNumberOnBlip(blip, n) end
     if Text(label) then NameBlip(blip, label) end
     if SetbackFlash(opts.variant) then SetBlipFlashes(blip, true) end

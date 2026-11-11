@@ -517,7 +517,6 @@ local function DraftBackupPathFor(id, ov) return (ov and OverrideDir() or Export
 local function BasePathFor(id) return OverrideDir() .. id .. '.base.lua' end
 
 local function IsNum(v) return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function InRange(v, r) return IsNum(v) and type(r) == 'table' and v >= r[1] - 1e-9 and v <= r[2] + 1e-9 end
 local function Round(x, places)
     local m = 10 ^ (places or 0)
@@ -1297,7 +1296,8 @@ local function CheckRoute(errors, route, path, li, key)
         local ok = type(route.stops) == 'table' and #route.stops <= maxStops
         if ok then
             for _, s in ipairs(route.stops) do
-                if type(s) ~= 'table' or not IsInt(s.at) or s.at < 1 or s.at > #pts or not InRange(s.wait, waitR) then
+                if type(s) ~= 'table' or not CP.IsInt(s.at) or s.at < 1 or s.at > #pts
+                    or not InRange(s.wait, waitR) then
                     ok = false
                 end
             end
@@ -1355,7 +1355,7 @@ local function ItemErrors(items, errors, actor)
         elseif not ItemKnown(name) then
             AddError(errors, p .. '.name', 'builder.error.item_unknown', { name = name })
         end
-        if type(it) ~= 'table' or not IsInt(it.count) or not InRange(it.count, ITEM_COUNT) then
+        if type(it) ~= 'table' or not CP.IsInt(it.count) or not InRange(it.count, ITEM_COUNT) then
             AddError(errors, p .. '.count', 'builder.error.item_count',
                 { n = i, min = ITEM_COUNT[1], max = ITEM_COUNT[2] })
         end
@@ -1905,8 +1905,8 @@ function B.validate(def, opts)
     local off = d.officers or { 1, 4 }
     if
         not (
-            IsInt(def.minOfficers)
-            and IsInt(def.maxOfficers)
+            CP.IsInt(def.minOfficers)
+            and CP.IsInt(def.maxOfficers)
             and InRange(def.minOfficers, off)
             and InRange(def.maxOfficers, off)
             and def.minOfficers <= def.maxOfficers
@@ -1915,7 +1915,7 @@ function B.validate(def, opts)
         AddError(errors, 'maxOfficers', 'builder.error.officers', { min = off[1], max = off[2] })
     end
     local stars = d.difficulty or { 1, 3 }
-    if not (IsInt(def.difficulty) and InRange(def.difficulty, stars)) then
+    if not (CP.IsInt(def.difficulty) and InRange(def.difficulty, stars)) then
         AddError(errors, 'difficulty', 'builder.error.difficulty', { min = stars[1], max = stars[2] })
     end
     local tl = d.timeLimit or { 120, 1200 }
@@ -1933,7 +1933,7 @@ function B.validate(def, opts)
     if type(def.vehiclePenalties) ~= 'boolean' then
         AddError(errors, 'vehiclePenalties', 'builder.error.vehicle_penalties')
     end
-    if IsInt(def.maxOfficers) then info.requiredTier = RequiredTierName(def.maxOfficers) end
+    if CP.IsInt(def.maxOfficers) then info.requiredTier = RequiredTierName(def.maxOfficers) end
 
     -- the runtime form (file units + vec3/vec4) that blocks and the loader validate
     local rt = B.toRuntime(B.toFileUnits(def))
@@ -4287,7 +4287,7 @@ CP.Net.action('server:builder:test', function(src, payload)
     local location = payload.location
     local nLoc = type(draft.locations) == 'table' and #draft.locations or 0
     if location == nil then location = 1 end
-    if location ~= 'random' and not (IsInt(location) and location >= 1 and location <= nLoc) then
+    if location ~= 'random' and not (CP.IsInt(location) and location >= 1 and location <= nLoc) then
         return false, 'err.builder_bad_location'
     end
     local useStartRoute = payload.useStartRoute
@@ -4319,7 +4319,7 @@ CP.Net.action('server:builder:test', function(src, payload)
     end
     if not startRes then return false, startData or 'err.builder_testing_unavailable' end
     -- the location that actually runs (CP.Testing picks one for 'random'); the tester records the result for it
-    if type(startData) == 'table' and IsInt(tonumber(startData.locationIndex)) then
+    if type(startData) == 'table' and CP.IsInt(tonumber(startData.locationIndex)) then
         location = math.floor(tonumber(startData.locationIndex))
     end
     pendingTests[row.id] = { hash = hash, version = row.draftVersion, startedBy = actor.citizenid, at = Now() }

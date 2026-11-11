@@ -241,7 +241,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.Daily.new(dayFn?) -> daily`; `daily:reserve(key, cap, n) -> token \| nil`, `:commit(token)`, `:cancel(token)`, `:used(key)`, `:left(key, cap)`, `:add(key, n)`, `:clear(key?)` | shared/lib.lua | In-memory per-day caps (the server day). `reserve` checks the cap with running reservations and takes n in one step, so two requests at once cannot both pass; commit after the save, cancel on failure. Profile picture links use it |
 | `CP.Objective(kind) -> cfg, on` | shared/lib.lua | One kind of `Config.Objectives` (`dailyGoal`, `weeklyGoal`, `challenge`, `bounty`, `typeOfTheDay`) as it is now, never nil, and its switch (`enabled ~= false`; the bounty also needs the challenge). Every objective reads its settings only through it |
 | `CP.ObjectiveResetHour(kind)`, `CP.Progress.*` | shared/lib.lua | A kind's reset hour for `CP.Schedule.dayKey(ts, hour)` etc. (nil = Config.Time); the one progress engine (counted runs, goal and bounty conditions as `?` SQL) |
-| `CP.Num0`, `CP.Int`, `CP.Cfg`, `CP.NonEmpty`, `CP.cidOf`, `CP.now`, `CP.SqlTs`, `CP.warnOnce`, `CP.deptOfCitizen`, `CP.query`/`scalar`/`update` | shared/lib.lua | Shared small reads |
+| `CP.Num0`, `CP.Int`, `CP.IntIn`, `CP.Floor`, `CP.Count`, `CP.IsInt`, `CP.Cfg`, `CP.NonEmpty`, `CP.cidOf`, `CP.now`, `CP.SqlTs`, `CP.warnOnce`, `CP.deptOfCitizen`, `CP.query`/`scalar`/`update` | shared/lib.lua | Shared small reads |
 | `CP.Recognition(part) -> cfg, on` | shared/lib.lua | One part of `Config.Recognition` (`levels`, `levelCurve`, `badges`, `weeklyBadges`, `commendations`, `fieldTraining`) as it is now, never nil, and its switch (commendations `enabled ~= false`, field training `enabled == true`, the others always on). Scoring (levels, auto badges), the boards (weekly badges), profiles (commendations), the tablet and field training read their settings only through it |
 | `CP.RealPlayers(part?) -> cfg, on`, `CP.RealPlayersOn(part?)` | shared/lib.lua | The one reader of `Config.RealPlayers`: a part, never nil, and whether it is on (a mode: its switch, off while the police script sends no cuff and jail facts; `criminalTablet`: its switch; `staff`, `antiFarm`, `surrender`: either mode on); no part: the section, either mode on. Modules keep no Cfg()/On() copy |
 | `CP.RealPlayersTakePart(run, what)`, `CP.RealPlayersRowFilter(what, alias)` | shared/lib.lua | Whether a live or volunteer case takes part in `typeOfTheDay`, `goals`, `challenge`, `cash` or `items` (that switch of its mode; any other run: true), and the SQL that leaves such rows out of goal and challenge sums while the switch is off. Cash, item rewards, scoring, goals and the challenge use them; the modes keep no copy |
@@ -2021,8 +2021,8 @@ Full admin control, System:
   `server:admin:importSettings` (§8.4.5).
 
 ### 5.37 CP.AdminKit and CP.Maintenance — modules/admin/adminkit (S)
-The one wrapper every new admin action of full admin control goes through, and the maintenance lock. fxmanifest lists
-the file by name, once, before every module sub-file (so any module may register its admin actions as it loads).
+The one wrapper every new admin action of full admin control goes through, and the maintenance lock (loaded before
+every module, §1).
 
 **`Kit.action(name, permKey, fn, opts)`** registers `CP.Net.action(name)` (rate `opts.rate`, default 2/s).
 
@@ -2821,8 +2821,8 @@ Rules for blocks:
   `addBoxZone` — only participants' clients register them, so non-participants never see them.
   Remove them in `stop` (`removeLocalEntity`, `removeZone`).
 - `CP.BlockKit` (`blocks/_kit/client.lua`, before every block client): `states(fresh, cleanup)` (`of`, `find`,
-  `drop`; resource-stop cleanup), `onStop`, `entity`, `bag`, `vec3`, `progress(opts, what)` (a `lib.progressBar`
-  that never raises), `cancelProgress` and `markers(ctx, S, { range, far, keep, draw })`, one marker loop per run.
+  `drop`; resource-stop cleanup), `onStop`, `entity`, `bag`, `vec3`, `point`, `text`, `progress(opts, what)` (a
+  `lib.progressBar` that never raises), `cancelProgress` and `markers(ctx, S, { range, far, keep, draw })`, one marker loop per run.
 - Skill checks: `lib.skillCheck({ 'easy', 'medium' }, { 'w', 'a', 's', 'd' })`.
 - Evidence sent with `ctx.report({ type = 'checkpoint', index = 3, netId = n, ... })`; the engine adds
   `coords` and `time`. The server half validates distances with server-side coordinates.

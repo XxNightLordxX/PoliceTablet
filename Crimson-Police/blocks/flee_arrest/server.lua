@@ -132,7 +132,6 @@ local function Now() return GetGameTimer() end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function InRange(v, r, scale)
     scale = scale or 1
     return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
@@ -659,7 +658,7 @@ local function Validate(obj, mission, location)
             if not ok then return false, why end
         end
         local a = o.associates
-        if not IsInt(a.count) or a.count < 0 or a.count > c.suspects[2] then
+        if not CP.IsInt(a.count) or a.count < 0 or a.count > c.suspects[2] then
             return Bad('block.flee_arrest.invalid.range', { field = 'associates.count', min = 0, max = c.suspects[2] })
         end
         if a.count > 0 then
@@ -671,7 +670,7 @@ local function Validate(obj, mission, location)
             end
         end
     else
-        if not IsInt(o.suspects) or not InRange(o.suspects, c.suspects) then
+        if not CP.IsInt(o.suspects) or not InRange(o.suspects, c.suspects) then
             return Bad('block.flee_arrest.invalid.range',
                 { field = 'suspects', min = c.suspects[1], max = c.suspects[2] })
         end
@@ -736,8 +735,6 @@ local function StateOf(ctx)
     return st
 end
 
-local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
-
 -- How many of role (associate, inmate) the spawn director left out (no point for them, see LeaveOut).
 local function LeftOut(ctx, role)
     local lo = type(ctx.state) == 'table' and ctx.state.leftOut or nil
@@ -753,12 +750,12 @@ end
 
 local function AssocTarget(ctx)
     if ctx.obj.mode ~= 'door' or NoAssociates(ctx) then return 0 end
-    return math.max(0, Int(ctx.obj.associates and ctx.obj.associates.count) - LeftOut(ctx, 'associate'))
+    return math.max(0, CP.Count(ctx.obj.associates and ctx.obj.associates.count) - LeftOut(ctx, 'associate'))
 end
 
 local function InmateTarget(ctx)
     if ctx.obj.mode ~= 'scatter' then return 0 end
-    return math.max(0, Int(ctx.obj.suspects) - LeftOut(ctx, 'inmate'))
+    return math.max(0, CP.Count(ctx.obj.suspects) - LeftOut(ctx, 'inmate'))
 end
 
 local function Indices(n)

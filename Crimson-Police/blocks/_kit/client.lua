@@ -5,6 +5,8 @@
 --   entity(netId)           the entity of a net id, or nil when it is not in this game
 --   bag(ent)                the entity's 'cp' state bag, or nil (never raises on a gone entity)
 --   vec3(v)                 any x/y/z shape as a vector3, or nil
+--   point(t)                a mission file's { x, y, z } as a vector3, a missing coordinate 0
+--   text(s)                 a locale key's text, other text as written, nil for no text
 --   progress(opts, what)    lib.progressBar that never raises: true only when the bar ran to its end
 --   cancelProgress()        stops this player's progress bar, if one runs
 --   markers(ctx, S, source) the one marker loop of a run: per frame while any of its markers is in range, the
@@ -94,6 +96,16 @@ function Kit.vec3(v)
     local x, y, z = U.xyz(v)
     if not x then return nil end
     return vector3(x + 0.0, y + 0.0, z + 0.0)
+end
+
+function Kit.point(t)
+    return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
+end
+
+function Kit.text(s)
+    if type(s) ~= 'string' or s == '' then return nil end
+    if CP.Locale.has(s) then return CP.L(s) end
+    return s
 end
 
 -- ox_lib raises when an animation fails to load: the bar then counts as cancelled (logged under what), so the

@@ -23,7 +23,8 @@
 --   CP.Storage.MemSQL      the engine's code (modules/system/memsql.lua); this module's one global table holds both
 --
 -- fxmanifest loads memsql.lua and this file right after @oxmysql/lib/MySQL.lua and before every other server
--- module. The modules/**/server.lua glob matches this file a second time; that load returns at once.
+-- module, once. The test harness boots this file before it runs the manifest's list; that second load returns at
+-- once.
 -- FiveM resource KVP is not used anywhere. On FXServer a resource may only write inside resource folders (its
 -- Lua file sandbox): the saves folder is a folder inside Crimson-Police, 'saves' unless Config.Database.folder
 -- names another one.

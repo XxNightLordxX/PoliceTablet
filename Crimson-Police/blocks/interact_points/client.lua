@@ -55,16 +55,6 @@ local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ct
 end)
 local StateOf = states.of
 
-local function V3(t)
-    return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
-end
-
-local function Txt(s)
-    if type(s) ~= 'string' or s == '' then return nil end
-    if CP.Locale.has(s) then return CP.L(s) end
-    return s
-end
-
 local function AnimFor(a)
     if type(a) == 'table' then return a end
     return ANIMS[a] or ANIMS[Config.Blocks[BLOCK].animation] or ANIMS.clipboard
@@ -242,7 +232,7 @@ local function RefreshBlips(ctx, st)
             local p = pts[key]
             local b = e and e.id or AddBlipForCoord(w.x, w.y, w.z)
             CP.Markers.style(b, 'point',
-                Txt(p.label) or Txt(ctx.obj.label) or CP.L('block.interact_points.blip', { n = key }),
+                Kit.text(p.label) or Kit.text(ctx.obj.label) or CP.L('block.interact_points.blip', { n = key }),
                 { number = key, variant = p.status == 'followup' and 'followUp' or nil })
             st.blips[key] = { id = b, at = w.at, look = w.look }
             if not e then HandOver(st, key, b) end
@@ -293,24 +283,24 @@ local function AddZone(ctx, st, n, kind, p)
     local progress = type(obj.progress) == 'table' and obj.progress or {}
     local label, duration, barLabel
     if kind == 'main' then
-        label = Txt(target.label)
+        label = Kit.text(target.label)
             or CP.L(st.hidden and 'block.interact_points.target_search' or 'block.interact_points.target_default')
         duration = tonumber(progress.duration) or (Config.Blocks[BLOCK].progress[3] * 1000)
         -- a together step with one participant left: the solo progress time (the server checks it)
         if st.data and st.data.solo and tonumber(st.data.soloProgress) then
             duration = tonumber(st.data.soloProgress)
         end
-        barLabel = Txt(progress.label) or CP.L('block.interact_points.progress_default')
+        barLabel = Kit.text(progress.label) or CP.L('block.interact_points.progress_default')
     else
         local f = p.followUp or {}
-        label = Txt(f.label) or CP.L('block.interact_points.followup_default')
+        label = Kit.text(f.label) or CP.L('block.interact_points.followup_default')
         duration = tonumber(f.duration) or tonumber(progress.duration) or (Config.Blocks[BLOCK].progress[3] * 1000)
         barLabel = label
     end
     local wantStatus = (kind == 'main') and 'pending' or 'followup'
     local name = ZoneName(ctx, n, kind .. (st.data and st.data.solo and ':solo' or ''))
     local id = exports.ox_target:addSphereZone({
-        coords = V3(p.coords),
+        coords = Kit.point(p.coords),
         radius = tonumber(target.radius) or 1.5,
         debug = false,
         drawSprite = true,
@@ -394,17 +384,18 @@ local function Announce(ctx, st, prev, data)
             if p.status == 'held' then
                 Say(st, CP.L('block.interact_points.hud.held'))
             elseif data.hidden and p.status == 'followup' then
-                local what = Txt(ctx.obj.hidden and ctx.obj.hidden.label) or CP.L('block.interact_points.seize_default')
+                local what = Kit.text(ctx.obj.hidden and ctx.obj.hidden.label)
+                    or CP.L('block.interact_points.seize_default')
                 local f = p.followUp or {}
                 Say(st, CP.L('block.interact_points.hud.found_seize',
-                    { label = what, action = Txt(f.label) or CP.L('block.interact_points.followup_default') }))
+                    { label = what, action = Kit.text(f.label) or CP.L('block.interact_points.followup_default') }))
                 Cue('CHECKPOINT_NORMAL')
             elseif p.find and p.status == 'done' then
                 Say(st, CP.L('block.interact_points.hud.find',
                     { item = CP.L(('block.interact_points.find.%s'):format(p.find)) }))
             elseif data.hidden and p.status == 'done' then
                 if p.found then
-                    local what = Txt(ctx.obj.hidden and ctx.obj.hidden.label)
+                    local what = Kit.text(ctx.obj.hidden and ctx.obj.hidden.label)
                         or CP.L(
                             data.seize and 'block.interact_points.seize_default'
                                 or 'block.interact_points.device_default'
@@ -418,7 +409,7 @@ local function Announce(ctx, st, prev, data)
                 local f = p.followUp or {}
                 Say(st, CP.L('block.interact_points.hud.followup', {
                     outcome = p.outcomeLabel or '',
-                    action = Txt(f.label) or CP.L('block.interact_points.followup_default'),
+                    action = Kit.text(f.label) or CP.L('block.interact_points.followup_default'),
                 }))
             elseif old.status == 'pending' and p.outcomeLabel then
                 Say(st, p.outcomeLabel)

@@ -48,16 +48,6 @@ local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ct
 end)
 local StateOf = states.of
 
-local function V3(t)
-    return vector3((t.x or 0.0) + 0.0, (t.y or 0.0) + 0.0, (t.z or 0.0) + 0.0)
-end
-
-local function Txt(s)
-    if type(s) ~= 'string' or s == '' then return nil end
-    if CP.Locale.has(s) then return CP.L(s) end
-    return s
-end
-
 local function Me()
     return GetPlayerServerId(PlayerId())
 end
@@ -147,11 +137,11 @@ end
 local function BlipLabel(ctx, st, i, variant)
     if variant == 'setback' then
         local sb = st.data and st.data.setback
-        local action = sb and Txt(sb.label) or CP.L('block.skill_check.recover_default')
+        local action = sb and Kit.text(sb.label) or CP.L('block.skill_check.recover_default')
         return CP.L('block.skill_check.blip_setback', { action = action, n = i })
     end
     local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
-    return Txt(target.label) or CP.L('block.skill_check.blip', { n = i })
+    return Kit.text(target.label) or CP.L('block.skill_check.blip', { n = i })
 end
 
 -- Config.Markers.kinds.device (yellow; setbackColour while set back, flashing until it is fixed with
@@ -277,7 +267,7 @@ local function AddRecoverZone(ctx, st, i, t)
     local name = ('crimson-police:%s:%s:%s:%d:recover'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
     local sb = st.data and st.data.setback or {}
     st.zones[i] = exports.ox_target:addSphereZone({
-        coords = V3(t.coords),
+        coords = Kit.point(t.coords),
         radius = TARGET_RADIUS,
         debug = false,
         drawSprite = true,
@@ -313,7 +303,7 @@ local function AddZone(ctx, st, i, t)
     st.zoneKind = st.zoneKind or {}
     st.zoneKind[i] = 'check'
     st.zones[i] = exports.ox_target:addSphereZone({
-        coords = V3(t.coords),
+        coords = Kit.point(t.coords),
         radius = TARGET_RADIUS,
         debug = false,
         drawSprite = true,
@@ -321,7 +311,7 @@ local function AddZone(ctx, st, i, t)
         options = {
             {
                 name = name,
-                label = Txt(target.label) or CP.L('block.skill_check.target_default'),
+                label = Kit.text(target.label) or CP.L('block.skill_check.target_default'),
                 icon = target.icon,
                 distance = TARGET_DISTANCE,
                 canInteract = function()

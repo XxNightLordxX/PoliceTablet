@@ -94,9 +94,34 @@ end
 ---@return number
 function CP.Num0(v) return CP.Num(v, 0) end
 
--- CP.Num0 rounded down to a whole number.
+-- CP.Num0 rounded down to a whole number, then kept between lo and hi when they are given.
 ---@return integer
-function CP.Int(v) return math.floor(CP.Num(v, 0) + 0.0) end
+function CP.Int(v, lo, hi)
+    local n = math.floor(CP.Num(v, 0) + 0.0)
+    if lo and n < lo then n = lo end
+    if hi and n > hi then n = hi end
+    return n
+end
+
+-- v as a finite number rounded down, else nil.
+---@return integer|nil
+function CP.Floor(v)
+    local n = CP.Num(v)
+    return n and math.floor(n) or nil
+end
+
+-- v rounded to the nearest whole number and never below 0 (a missing or broken value is 0).
+---@return integer
+function CP.Count(v)
+    local n = CP.Num(v, 0)
+    return math.max(0, math.floor(n + 0.5))
+end
+
+-- True when v is a finite whole number (a number, not a string).
+---@return boolean
+function CP.IsInt(v)
+    return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge and math.floor(v) == v
+end
 
 -- v as a whole number between lo and hi (each optional), else nil: a payload's id or count, never rounded.
 ---@return integer|nil

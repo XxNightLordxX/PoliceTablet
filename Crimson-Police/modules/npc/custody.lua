@@ -105,13 +105,6 @@ local function Now() return GetGameTimer() end
 local function Cfg() return Config.Custody or {} end
 local function Dec() return Config.Decisions or {} end
 
-local function ToInt(v, lo, hi)
-    if type(v) ~= 'number' or v ~= v then return nil end
-    local n = math.tointeger(v)
-    if not n or n < lo or n > hi then return nil end
-    return n
-end
-
 local Num = CP.Num
 
 -- FXServer's DoesEntityExist answers 1 for yes (false for no), never true.
@@ -327,7 +320,7 @@ local function SetState(run, c, state, extra)
 end
 
 function Custody.register(run, obj, netId, contact)
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if type(run) ~= 'table' or run.state == 'ended' or not netId or type(contact) ~= 'table' then return nil end
     if not (run.entities and run.entities[netId]) then return nil end
     local b = BookOf(run)
@@ -1874,7 +1867,7 @@ local function Resolve(src, runId, netId, action, extra)
             return false, 'err.custody_no_car_ahead', { range = range }
         end
     elseif action == 'seat' or action == 'handover' then
-        c = b.contacts[ToInt(tonumber(netId), 1, MAX_NETID) or -1]
+        c = b.contacts[CP.IntIn(netId, 1, MAX_NETID) or -1]
         if not c then
             for _, x in pairs(b.contacts) do
                 if x.state == 'escorted' and x.escortBy == src then c = x end
@@ -1886,7 +1879,7 @@ local function Resolve(src, runId, netId, action, extra)
             end
         end
     else
-        netId = ToInt(tonumber(netId), 1, MAX_NETID)
+        netId = CP.IntIn(netId, 1, MAX_NETID)
         if not netId then return false, 'err.npc_invalid' end
         local seat = extra and DOOR_SEATS[extra.door]
         if seat ~= nil then
@@ -2022,7 +2015,7 @@ end
 RegisterNetEvent(STUN_EVENT, function(netId)
     local src = source
     if not CP.Net.rateOk(src, STUN_EVENT, 2, 1000) then return end
-    netId = ToInt(tonumber(netId), 1, MAX_NETID)
+    netId = CP.IntIn(netId, 1, MAX_NETID)
     if not netId then return end
     local ok, err = pcall(function()
         local okM, matched = Call('Npc', 'stunMatches', netId, STUN_MATCH_MS)

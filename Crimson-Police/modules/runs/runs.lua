@@ -276,13 +276,6 @@ end
 
 local Num = CP.Num
 
-local function Int(v, lo, hi)
-    local n = math.floor(Num(v, 0) + 0.0)
-    if lo and n < lo then n = lo end
-    if hi and n > hi then n = hi end
-    return n
-end
-
 local function limits() return Config.Limits or {} end
 
 -- Mission controls (Config.MissionControls.controls): the server-wide cooldown changes supervisors may make. A cooldown
@@ -3236,39 +3229,39 @@ local function Settle(run, p, result, endReason, others)
         operation_id = tonumber(run.operationId),
         mission_type = U.clip(run.missionType, 32),
         mission_id = U.clip(run.missionId, 40),
-        mission_version = tonumber(run.version) and Int(run.version, -32768, 32767) or nil,
+        mission_version = tonumber(run.version) and CP.Int(run.version, -32768, 32767) or nil,
         location_label = U.clip(run.location and run.location.label or nil, 64),
         citizenid = U.clip(p.citizenid, 50),
         department = U.clip(DepartmentAtEnd(p) or 'unknown', 32),
         season_id = seasonId,
-        participants = Int(team, 1, 127),
-        departments_n = Int(nDepts, 1, 127),
+        participants = CP.Int(team, 1, 127),
+        departments_n = CP.Int(nDepts, 1, 127),
         tier = TierName(payTier) or 'standard',
         modifier = U.clip(run.modifier, 20),
         state = result,
         end_reason = U.clip(endReason, 24),
-        points_base = Int(points.P, -32768, 32767),
-        bonus_points = Int(SumPoints(points.bonuses, false), -32768, 32767),
-        penalty_points = Int(SumPoints(points.penalties, true), -32768, 32767),
-        final_points = Int(points.final, 0, 32767),
-        cash_base = Int(cash.B, 0, 2147483647),
+        points_base = CP.Int(points.P, -32768, 32767),
+        bonus_points = CP.Int(SumPoints(points.bonuses, false), -32768, 32767),
+        penalty_points = CP.Int(SumPoints(points.penalties, true), -32768, 32767),
+        final_points = CP.Int(points.final, 0, 32767),
+        cash_base = CP.Int(cash.B, 0, 2147483647),
         cash_multiplier = math.floor(U.clamp(cash.mTier * cash.mMod, 0, 99.99) * 100 + 0.5) / 100,
         cash_paid = 0,
         cash_status = status,
-        duration_s = Int(duration, 0, 32767),
+        duration_s = CP.Int(duration, 0, 32767),
         breakdown = okJ and breakdownJson or nil,
         flagged = flag and 1 or 0,
         flag_reason = flag and U.clip(tostring(flag.reason or 'flagged'), 64) or nil,
-        location_index = run.locationIndex and Int(run.locationIndex, -128, 127) or nil,
+        location_index = run.locationIndex and CP.Int(run.locationIndex, -128, 127) or nil,
         medal = MedalOf(run, p),
         mission_call_id = run.missionCall and tonumber(run.missionCall.id) and math.floor(tonumber(run.missionCall.id))
             or nil,
-        response_s = ResponseS(run, p) and Int(ResponseS(run, p), 0, 32767) or nil,
+        response_s = ResponseS(run, p) and CP.Int(ResponseS(run, p), 0, 32767) or nil,
     }
     local stats = StatsOf(run, p)
-    for _, k in ipairs(STAT_KEYS) do row[k] = Int(stats[k], 0, 32767) end
+    for _, k in ipairs(STAT_KEYS) do row[k] = CP.Int(stats[k], 0, 32767) end
     -- suspects detained in a live case (the live_catches Rank by tab); never on the result card
-    row.live_catches = Int(p.stats and p.stats.live_catches, 0, 32767)
+    row.live_catches = CP.Int(p.stats and p.stats.live_catches, 0, 32767)
     local rowId = InsertRow(row)
     p.rowId = rowId
     if not rowId then return nil, rr end
@@ -4993,11 +4986,6 @@ do
         return v:sub(1, max or 64)
     end
 
-    local function Int(v)
-        local n = tonumber(v)
-        return n and math.tointeger(math.floor(n)) or nil
-    end
-
     local function Coord(v)
         if not IsVec(v) then return nil end
         local x, y, z = U.xyz(v)
@@ -5008,7 +4996,7 @@ do
     -- The marker of §5.44 from what a block returned, or nil when it is not one.
     local function Norm(m)
         if type(m) ~= 'table' or not KINDS[m.kind] then return nil end
-        local netId = Int(m.netId)
+        local netId = CP.Floor(m.netId)
         if netId and netId <= 0 then netId = nil end
         local out = {
             kind = m.kind,
@@ -5016,7 +5004,7 @@ do
             label = Str(m.label, 120),
             key = Str(m.key) or (netId and tostring(netId)) or nil,
             netId = netId,
-            number = Int(m.number),
+            number = CP.Floor(m.number),
             route = (m.route == false or m.route == 'block') and m.route or nil,
         }
         if m.kind == 'targets' then
@@ -5024,7 +5012,7 @@ do
             out.targets = {}
             for _, t in ipairs(type(m.targets) == 'table' and m.targets or {}) do
                 if #out.targets >= MAX_TARGETS then break end
-                local tn = type(t) == 'table' and Int(t.netId) or nil
+                local tn = type(t) == 'table' and CP.Floor(t.netId) or nil
                 if tn and tn <= 0 then tn = nil end
                 local c = type(t) == 'table' and (Coord(t.coords) or Coord(t)) or nil
                 -- beyond: this target takes the line first while the officer is farther than that (escort's truck)
@@ -5033,14 +5021,14 @@ do
                     out.targets[#out.targets + 1] = {
                         key = Str(t.key) or (tn and tostring(tn)) or nil,
                         netId = tn,
-                        index = Int(t.index),
+                        index = CP.Floor(t.index),
                         x = c and c.x,
                         y = c and c.y,
                         z = c and c.z,
                         look = Str(t.look),
                         label = Str(t.label, 120),
                         variant = Str(t.variant),
-                        number = Int(t.number),
+                        number = CP.Floor(t.number),
                         beyond = far and far > 0 and math.floor(far * 10 + 0.5) / 10 or nil,
                     }
                 end

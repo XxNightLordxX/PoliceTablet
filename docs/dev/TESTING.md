@@ -595,9 +595,10 @@ Until these gaps are closed, look for them in review.
   function returns; a spec never sets the metatable of `_G` (`H.strictGlobals`, `H.onUndefinedGlobal`).
   `lint-fivem` rule FX12 flags `== true` / `~= true` on such an answer (directly or through the local it went in).
 - **A file listed twice in fxmanifest runs twice.** FXServer runs every entry (a file named by itself and matched
-  again by a glob loads twice; fxmanifest lists every file once, tests/module_layout_spec.lua checks it). Such a file starts with its load guard
-  (`if CP.X and CP.X._installed then return end`), as storage and adminkit do; tests/adminkit_spec.lua expands the
-  manifest the way FXServer does (`H.manifestScripts`) and fails on a repeated file without one.
+  again by a glob loads twice). fxmanifest lists every file once; only storage keeps a load guard, because
+  the harness boots it before the manifest's list;
+  tests/module_layout_spec.lua checks the list and tests/adminkit_spec.lua expands the manifest the way FXServer
+  does (`H.manifestScripts`) and fails on a repeated file.
 - **FXServer's debug library is five functions.** getinfo, getmetatable, setmetatable, getupvalue and traceback
   only: no `debug.sethook`, so text cannot be run under a step or memory budget. Never run text that comes from a
   file an admin can edit or from the Admin UI; read it as data (mission files: `CP.U.parseMissionFile`). The

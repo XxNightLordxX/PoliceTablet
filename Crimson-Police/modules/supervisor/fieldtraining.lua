@@ -32,20 +32,16 @@ function FT.enabled() return select(2, CP.Recognition('fieldTraining')) end
 local Cid = CP.cidOf
 
 -- A whole number, or nil when v is no finite number (CP.Int would read it as 0).
-local function Int(v)
-    local n = CP.Num(v)
-    return n and math.floor(n) or nil
-end
 
 local function IsAdmin(src) return CP.Access and CP.Access.isAdmin and CP.Access.isAdmin(src) == true end
 
 -- The lowest Qbox grade of a trainer in a department (Config.Recognition.fieldTraining.trainerGrades, else its
 -- supervisorGrade).
 function FT.trainerGrade(dept)
-    local g = type(Cfg().trainerGrades) == 'table' and Int(Cfg().trainerGrades[dept]) or nil
+    local g = type(Cfg().trainerGrades) == 'table' and CP.Floor(Cfg().trainerGrades[dept]) or nil
     if g then return g end
     local d = type(Config.Departments) == 'table' and Config.Departments[dept] or nil
-    return type(d) == 'table' and Int(d.supervisorGrade) or 0
+    return type(d) == 'table' and CP.Floor(d.supervisorGrade) or 0
 end
 
 -- The sign-off tasks in a fixed order: { { type, need, label } } (a mission type with a count above 0).
@@ -53,7 +49,7 @@ function FT.tasks()
     local out = {}
     local types = type(Config.MissionTypes) == 'table' and Config.MissionTypes or {}
     for key, n in pairs(type(Cfg().tasks) == 'table' and Cfg().tasks or {}) do
-        local need = Int(n)
+        local need = CP.Floor(n)
         if type(key) == 'string' and need and need > 0 then
             local mt = types[key]
             out[#out + 1] = { type = key, need = need, label = type(mt) == 'table' and mt.label or key }
@@ -78,12 +74,12 @@ local function TaskLabel(missionType)
     return type(mt) == 'table' and mt.label or missionType
 end
 
-local function RookiesMax() return math.max(1, Int(Cfg().rookiesPerTrainer) or 2) end
+local function RookiesMax() return math.max(1, CP.Floor(Cfg().rookiesPerTrainer) or 2) end
 
 local BONUS_MAX = 1000
 
 -- Points the trainer gets per signed task (Config.Recognition.fieldTraining.trainerBonus, 0 to 1000; 0 = none).
-function FT.trainerBonus() return math.max(0, math.min(BONUS_MAX, Int(Cfg().trainerBonus) or 0)) end
+function FT.trainerBonus() return math.max(0, math.min(BONUS_MAX, CP.Floor(Cfg().trainerBonus) or 0)) end
 
 -- The mission types of the ride-along rule (Config.Recognition.fieldTraining.requireTrainerFor): { [type] = true }.
 -- A list of type keys; a { tactical = true } map is read the same way.
@@ -198,11 +194,11 @@ function FT.view(cid, name, record)
     local tasks, signed = {}, 0
     for _, t in ipairs(FT.tasks()) do
         local st = type(record.tasks[t.type]) == 'table' and record.tasks[t.type] or {}
-        local runs = math.min(t.need, Int(st.runs) or 0)
+        local runs = math.min(t.need, CP.Floor(st.runs) or 0)
         local s = st.signedAt
                 and {
                     by = st.signedName or st.signedBy,
-                    at = Int(st.signedAt),
+                    at = CP.Floor(st.signedAt),
                     note = st.note,
                 }
             or nil
@@ -220,9 +216,9 @@ function FT.view(cid, name, record)
         rookie = { citizenid = cid, name = name or cid },
         trainer = { citizenid = record.trainer, name = record.trainerName or record.trainer },
         department = record.dept,
-        pairedAt = Int(record.at),
+        pairedAt = CP.Floor(record.at),
         pairedBy = record.byName or record.by,
-        doneAt = Int(record.doneAt),
+        doneAt = CP.Floor(record.doneAt),
         signed = signed,
         total = #tasks,
         tasks = tasks,
@@ -255,8 +251,8 @@ function FT.onRowSettled(run, p, _, row)
         local rec = r and r.record
         if not Active(rec) or not TrainerFinished(run, p, rec.trainer) then return false end
         local st = type(rec.tasks[run.missionType]) == 'table' and rec.tasks[run.missionType] or {}
-        if st.signedAt or (Int(st.runs) or 0) >= need then return false end
-        st.runs = (Int(st.runs) or 0) + 1
+        if st.signedAt or (CP.Floor(st.runs) or 0) >= need then return false end
+        st.runs = (CP.Floor(st.runs) or 0) + 1
         rec.tasks[run.missionType] = st
         if not WriteRecord(cid, rec) then return false end
         CP.log(TAG, '%s: %s run %d of %d with trainer %s', cid, run.missionType, st.runs, need, rec.trainer)
@@ -349,7 +345,7 @@ local function Pair(ctx)
         if not r then return false, 'err.unknown_officer' end
         local dept = DeptOf(rookie, r)
         if tOfficer.department ~= dept then return false, 'err.other_department' end
-        if (Int(tOfficer.gradeLevel) or 0) < FT.trainerGrade(dept) then return false, 'err.fto_trainer_grade' end
+        if (CP.Floor(tOfficer.gradeLevel) or 0) < FT.trainerGrade(dept) then return false, 'err.fto_trainer_grade' end
         if Active(r.record) then return false, 'err.fto_already_paired' end
         local tRow = ReadRow(trainer)
         if tRow and Active(tRow.record) then return false, 'err.fto_trainer_in_training' end
@@ -455,7 +451,7 @@ function FT.signOff(src, payload)
         if rec.trainer ~= officer.citizenid then return false, 'err.fto_not_trainer' end
         local st = type(rec.tasks[task]) == 'table' and rec.tasks[task] or {}
         if st.signedAt then return false, 'err.fto_task_signed' end
-        if (Int(st.runs) or 0) < need then return false, 'err.fto_task_not_ready' end
+        if (CP.Floor(st.runs) or 0) < need then return false, 'err.fto_task_not_ready' end
         st.signedBy, st.signedName, st.signedAt = officer.citizenid, U.clip(officer.name, NAME_MAX), os.time()
         st.note = note
         rec.tasks[task] = st
@@ -513,7 +509,7 @@ local function Trainers(dept)
     local min = FT.trainerGrade(dept)
     for _, s in ipairs(GetPlayers and GetPlayers() or {}) do
         local o = CP.Access.getOfficer(tonumber(s))
-        if o and o.department == dept and (Int(o.gradeLevel) or 0) >= min then
+        if o and o.department == dept and (CP.Floor(o.gradeLevel) or 0) >= min then
             out[#out + 1] = { citizenid = o.citizenid, name = o.name, rank = o.rank }
         end
     end

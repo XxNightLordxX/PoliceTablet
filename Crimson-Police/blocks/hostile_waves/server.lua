@@ -132,7 +132,6 @@ end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
 local function InRange(v, r, scale)
     scale = scale or 1
     return IsNum(v) and type(r) == 'table' and v >= r[1] * scale - 1e-9 and v <= r[2] * scale + 1e-9
@@ -440,7 +439,7 @@ local function Validate(obj, mission, location)
         return Bad('block.hostile_waves.invalid.range', { field = 'waves', min = c.waves[1], max = c.waves[2] })
     end
     for _, n in ipairs(o.waves) do
-        if not IsInt(n) or not InRange(n, c.perWave) then
+        if not CP.IsInt(n) or not InRange(n, c.perWave) then
             return Bad('block.hostile_waves.invalid.range',
                 { field = 'perWave', min = c.perWave[1], max = c.perWave[2] })
         end
@@ -475,7 +474,7 @@ local function Validate(obj, mission, location)
     if o.spawnSets ~= nil then
         local ss = o.spawnSets
         if type(ss) ~= 'table' or type(ss.keys) ~= 'table' or #ss.keys < 1 or #ss.keys > c.spawnSets[2]
-            or not IsInt(ss.use) or not InRange(ss.use, c.spawnSetsUsed) or ss.use > #ss.keys
+            or not CP.IsInt(ss.use) or not InRange(ss.use, c.spawnSetsUsed) or ss.use > #ss.keys
             or type(ss.intel) ~= 'boolean' then
             return Bad('block.hostile_waves.invalid.spawn_sets')
         end

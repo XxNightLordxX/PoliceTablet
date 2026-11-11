@@ -139,8 +139,6 @@ local function Now() return GetGameTimer() end
 -- ============================================================================
 
 local function IsNum(v) return type(v) == 'number' and v == v end
-local function IsInt(v) return IsNum(v) and math.floor(v) == v end
-local function Int(v) return math.max(0, math.floor((tonumber(v) or 0) + 0.5)) end
 local function InRange(v, r)
     return IsNum(v) and type(r) == 'table' and v >= r[1] - 1e-9 and v <= r[2] + 1e-9
 end
@@ -342,7 +340,7 @@ end
 
 local function ArmedCount(obj)
     local o = Defaults(U.deepcopy(obj))
-    return Int(o.ambush.waves) * Int(o.ambush.carsPerWave) * Int(o.ambush.perCar)
+    return CP.Count(o.ambush.waves) * CP.Count(o.ambush.carsPerWave) * CP.Count(o.ambush.perCar)
 end
 
 local function RequiredPoints(obj)
@@ -379,7 +377,7 @@ local function CheckLocation(o, loc, li, strict)
         return Bad('block.escort.invalid.stops', { location = li, max = c.stops[2] })
     end
     for _, s in ipairs(route.stopList) do
-        if not IsInt(s.at) or s.at < 2 or s.at >= #pts then
+        if not CP.IsInt(s.at) or s.at < 2 or s.at >= #pts then
             return Bad('block.escort.invalid.stops', { location = li, max = c.stops[2] })
         end
         local wait = s.wait == nil and c.stopWait[3] or s.wait
@@ -458,7 +456,7 @@ local function Validate(obj, mission, location)
     local a = o.ambush
     for _, f in ipairs({ { 'waves', c.ambushWaves }, { 'carsPerWave', c.carsPerWave }, { 'perCar', c.perCar } }) do
         local v = a[f[1]]
-        if not IsInt(v) then
+        if not CP.IsInt(v) then
             return Bad('block.escort.invalid.range', { field = 'ambush.' .. f[1], min = f[2][1], max = f[2][2] })
         end
         ok, why = range('ambush.' .. f[1], v, f[2])
@@ -523,7 +521,7 @@ local function PlanWaves(ctx, st)
     if st.planned then return end
     st.planned = true
     local pts = PointList(ctx.location, ctx.obj.ambushPoints)
-    local n = Int(ctx.obj.ambush.waves)
+    local n = CP.Count(ctx.obj.ambush.waves)
     if #pts == 0 and #st.points >= 3 then
         -- no ambush points at this location: spread them over the middle of the route
         for i = 1, n do
@@ -998,7 +996,7 @@ local function SpawnWave(ctx, st, w)
         end
         if not ok then return false end
     end
-    local perCar = math.min(4, math.max(1, Int(ctx.obj.ambush.perCar)))
+    local perCar = math.min(4, math.max(1, CP.Count(ctx.obj.ambush.perCar)))
     while #w.cars < w.want do
         if not (ctx.canSpawn(perCar + 1, false) and ctx.canSpawn(perCar, true)) then return false end
         local c = #w.cars + 1
@@ -1124,7 +1122,7 @@ local function TriggerWaves(ctx, st, c)
         if not w.triggered and not w.dropped then
             if U.dist(c, w.point) <= AMBUSH_TRIGGER or tr.wp > w.wp + 1 then
                 w.triggered = true
-                w.want = Int(ctx.obj.ambush.carsPerWave)
+                w.want = CP.Count(ctx.obj.ambush.carsPerWave)
                 st.dirty = true
                 Message(ctx, 'block.escort.msg_ambush', nil, 'warning')
             end
@@ -1495,9 +1493,9 @@ end
 
 local function Rescale(ctx)
     local st = StateOf(ctx)
-    local total = Int(ctx.obj.ambush.waves)
-    local cars = Int(ctx.obj.ambush.carsPerWave)
-    local perCar = math.min(4, math.max(1, Int(ctx.obj.ambush.perCar)))
+    local total = CP.Count(ctx.obj.ambush.waves)
+    local cars = CP.Count(ctx.obj.ambush.carsPerWave)
+    local perCar = math.min(4, math.max(1, CP.Count(ctx.obj.ambush.perCar)))
     local triggered = 0
     for _, w in ipairs(st.waves) do
         if w.triggered then triggered = triggered + 1 end
