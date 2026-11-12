@@ -1,6 +1,6 @@
-// The Officer UI with fewer screens (UI5) against the browser mocks (node walk.mjs, a gate step).
+// The Officer UI with fewer screens against the browser mocks (node walk.mjs, a gate step).
 
-// The Officer UI with fewer screens (UI5) against the browser mocks (node walk.mjs, a gate step).
+// The Officer UI with fewer screens against the browser mocks (node walk.mjs, a gate step).
 // The sidebar has one Me screen (Profile & History, Leaderboard and Department Challenge as its tabs) in place of three,
 // every old link opens its tab, Home shows the status, the next goal and one big button, and the run bar links to
 // Mission Board, Dispatch and Unit.

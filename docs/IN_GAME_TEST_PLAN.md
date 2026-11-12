@@ -9,7 +9,7 @@ you do and, after the arrow, what you should see. When a line does not match, lo
 
 - A **test server**, not the live one, on the shipped `config/config.lua` (Debug on, database off, so everything is
   saved in the `saves` folder), with your normal scripts running.
-- One **admin** account (from `Config.Admins`), two **officers** on duty (one SAST, one FIB is best) and one
+- One **admin** account (a Qbox admin while `Config.QboxAdmins = true`, or a player with the `crimsonpolice.admin` ace), two **officers** on duty (one SAST, one FIB is best) and one
   **supervisor** (a grade at or above the department's `supervisorGrade`). One person with two characters works too,
   but the unit run needs two players.
 - Keep the server console and `resmon` (F8 console: `resmon 1`) open. Write down the numbers you see: they are the
@@ -20,7 +20,7 @@ you do and, after the arrow, what you should see. When a line does not match, lo
 ### Start the resource (5 min)
 
 - [ ] Start the server, or `ensure Crimson-Police` -> the console shows the storage line, the saves folder at the
-  newest version, `missions loaded: 19 built-in, 0 custom, 0 rejected` and the `Start-up check` line. Yellow or red
+  newest version, `missions loaded: 19 built-in (0 edited), 0 custom, 0 rejected` and the `Start-up check` line. Yellow or red
   lines each name their fix (README 3.4 and 8.3).
 - [ ] `CrimsonPoliceAdmin check` in the console -> every check listed again, the same counts as at start.
 

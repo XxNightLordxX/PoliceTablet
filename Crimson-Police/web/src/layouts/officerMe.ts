@@ -1,6 +1,6 @@
-// The Officer UI with fewer screens (UI5): the Me screen's tabs, Home's next step and the run bar's quick links.
+// The Officer UI with fewer screens: the Me screen's tabs, Home's next step and the run bar's quick links.
 
-// The Officer UI with fewer screens (UI5): the Me screen's tabs, Home's next step and the run bar's quick links.
+// The Officer UI with fewer screens: the Me screen's tabs, Home's next step and the run bar's quick links.
 // The Me screen holds Profile & History, Leaderboard and Department Challenge as tabs of one screen; Home's next step
 // is the officer's status, his next goal and one big button; the run bar links to Mission Board, Dispatch and Unit
 // while on a run. A link to a Me tab is navigate('me', { meTab }); an officer's public profile is

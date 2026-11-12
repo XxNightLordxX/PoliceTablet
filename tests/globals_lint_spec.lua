@@ -1,4 +1,4 @@
--- Globals lint (skill check K20): no server or shared script names a local, loop variable or parameter source
+-- Globals lint: no server or shared script names a local, loop variable or parameter source
 -- (the event global; RegisterCommand's own signature aside), and no script writes the global _ or source.
 
 local H = dofile('tests/harness.lua')

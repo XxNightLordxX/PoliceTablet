@@ -395,7 +395,8 @@ local function Invariants(label, uuid, d, kind)
         local gap = d.out - d.back - d.credited
         local c = r and r.cash or {}
         local step = c.restPaid == 'paying' and c.restPaidStep or c.again == 'paying' and c.againStep or c.step
-        local said = r and (step == 'withdrawing' or step == 'withdrawn' or step == 'adding' or step == 'review')
+        local said = r
+            and (step == 'withdrawing' or step == 'withdrawn' or step == 'adding' or step == 'review' or step == 'refunding')
             and Listed(r.id) ~= nil
         H.ok(gap == 0 or (gap > 0 and said), (
             '%s: the department paid what reached her, or the row says it paid and waits for an admin (paid %d, got '

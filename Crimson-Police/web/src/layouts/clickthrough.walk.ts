@@ -1,6 +1,6 @@
-// What the browser click-through (tools/clickthrough.mjs, WF5F) found, against the browser mocks (node walk.mjs).
+// What the browser click-through (tools/clickthrough.mjs) found, against the browser mocks (node walk.mjs).
 
-// What the browser click-through (tools/clickthrough.mjs, WF5F) found, against the browser mocks (node walk.mjs).
+// What the browser click-through (tools/clickthrough.mjs) found, against the browser mocks (node walk.mjs).
 // An officer with no badges and no options (Lua sends an empty list as {}) opens in Admin -> Officers without the
 // error card; every officer the Running now lists name opens; the sidebar scrolls when its list is taller than the
 // screen (the Admin UI's groups on a 900 px high screen). It sits in layouts/ so it runs after the builder walks: its

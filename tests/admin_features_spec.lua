@@ -1,7 +1,6 @@
--- Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
+-- Admin UI split by play: the Settings sections fold into NPC missions, Player vs police and Police teamwork.
 
--- Admin UI split by play (the owner: "ensure the admin panel separates npc stuff and player player stuff
--- and cop cop stuff and every feature is able to be turned on and off etc edited"): the Settings sections fold into
+-- Admin UI split by play: the Settings sections fold into
 -- NPC missions, Player vs police and Police teamwork, and Settings -> Features lists every feature switch with its
 -- section and the setting it writes.
 

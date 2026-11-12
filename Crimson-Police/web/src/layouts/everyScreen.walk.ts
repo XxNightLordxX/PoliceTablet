@@ -1,6 +1,6 @@
-// Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step; WF4).
+// Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step).
 
-// Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step; WF4).
+// Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step).
 // Each UI's session (Officer, Supervisor, Admin) shows every screen of its registry, each screen renders inside the
 // providers App.tsx gives it (the locale, the session, the options and the navigation) with its title text in the
 // locale, and every request a screen's source sends has a browser mock that answers it. The criminal tablet renders

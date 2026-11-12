@@ -1,7 +1,7 @@
--- WF5E: the generic example config on the real server, with its first-start setup.
+-- The generic example config on the real server, with its first-start setup.
 
--- WF5E: the generic example config on the real server, with its first-start setup (the owner: "do extensive workflow
--- testing on everything"). The world of tests/workflows_full_spec.lua booted on config/examples/generic.lua copied over
+-- The generic example config on the real server, with its first-start setup. The world of
+-- tests/workflows_full_spec.lua booted on config/examples/generic.lua copied over
 -- config.lua (CP_WF_CONFIG): a city sold the resource, its departments qbx_core's own police jobs (police, bcso, sasp,
 -- supervising from grade 3), every other script 'auto', Home on the First-start setup, a fresh saves folder.
 --   1. The first start: the setup shows to the admin (and to nobody else), what it found (the departments, the Qbox

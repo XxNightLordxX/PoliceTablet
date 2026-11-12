@@ -1,6 +1,6 @@
--- Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
+-- Config.RealPlayers: real players as suspects are one config section with two modes, liveCrime and volunteer
 
--- Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
+-- Config.RealPlayers: real players as suspects are one config section with two modes, liveCrime and volunteer
 -- (each with its own switch and every option it had), the rules both share at its top (who can be a suspect, proof,
 -- conduct, then the staff, antiFarm and surrender blocks) and the criminal tablet. One block per old feature,
 -- driven through the new section and the shared helpers (CP.RealPlayers, CP.RealPlayersTakePart,

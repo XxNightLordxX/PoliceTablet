@@ -9,6 +9,18 @@ CP.Locale = CP.Locale or {}
 
 local strings = {}
 
+-- The plural form suffixes CP.Ln and the NUI's tn() read (key_<form>).
+local PLURAL_FORMS = { 'zero', 'one', 'two', 'few', 'many', 'other' }
+local FORM_OF = {}
+for _, f in ipairs(PLURAL_FORMS) do FORM_OF[f] = true end
+
+-- The base key of a plural form key ('admin.audit.total_one' -> 'admin.audit.total'), or nil.
+local function BaseOf(k)
+    local base, form = tostring(k):match('^(.+)_(%a+)$')
+    if base and FORM_OF[form] then return base end
+    return nil
+end
+
 local function LoadLocale(code)
     local raw = LoadResourceFile(GetCurrentResourceName(), ('locales/%s.json'):format(code))
     if not raw or raw == '' then return nil end
@@ -22,10 +34,14 @@ do
     local code = (Config and Config.Locale) or 'en'
     strings = LoadLocale(code) or {}
     if code ~= 'en' then
-        -- Missing keys fall back to English.
+        -- Missing keys fall back to English. An English plural form (key_one, key_other) is left out when the
+        -- translation has the base key itself (one written before the forms): its own text stays.
+        local own = {}
+        for k in pairs(strings) do own[k] = true end
         local en = LoadLocale('en') or {}
         for k, v in pairs(en) do
-            if strings[k] == nil then strings[k] = v end
+            local base = BaseOf(k)
+            if strings[k] == nil and not (base and own[base]) then strings[k] = v end
         end
     end
 end
@@ -72,7 +88,10 @@ function CP.Ln(key, n, vars)
     local lang = Label('locale.lang') or strings['locale.lang'] or 'en'
     local rule = PLURAL[lang] or PLURAL.en
     local form = key .. '_' .. rule(n)
-    if Label(form) or strings[form] then return CP.L(form, all) end
+    if Label(form) then return CP.L(form, all) end
+    -- a Settings -> Names rename of the key itself (from before the forms) wins over the file's forms
+    if Label(key) and not Label(key .. '_other') then return CP.L(key, all) end
+    if strings[form] then return CP.L(form, all) end
     if Label(key .. '_other') or strings[key .. '_other'] then return CP.L(key .. '_other', all) end
     return CP.L(key, all)
 end
@@ -95,6 +114,16 @@ function CP.Locale.all()
     for k, v in pairs(strings) do out[k] = v end
     for k, v in pairs(labels) do
         if type(k) == 'string' and type(v) == 'string' and v ~= '' then out[k] = v end
+    end
+    -- a renamed key that has plural forms in the file: the forms nobody renamed are left out, so the NUI's tn()
+    -- shows the rename (as CP.Ln does) instead of the file's English forms
+    for k in pairs(labels) do
+        if type(k) == 'string' and Label(k) and not BaseOf(k) then
+            for _, f in ipairs(PLURAL_FORMS) do
+                local fk = k .. '_' .. f
+                if out[fk] ~= nil and not Label(fk) then out[fk] = nil end
+            end
+        end
     end
     return out
 end

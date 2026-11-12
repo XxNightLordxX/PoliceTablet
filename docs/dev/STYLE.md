@@ -247,7 +247,7 @@ These are the jobs it does around the formatters:
 
 ### Config files
 
-- `Config = {}` comes first and `Config.Debug = false` is the first key. Each section gets a banner.
+- `Config = {}` comes first and `Config.Debug` is the first key. Each section gets a banner.
   Scalars carry aligned trailing comments that give the unit or the options. Comment out an unwanted
   entry rather than deleting it.
   > NP config.lua: `MaxActiveCalls = 3,         -- max NPC calls active at once`

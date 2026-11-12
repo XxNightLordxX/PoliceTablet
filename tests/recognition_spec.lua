@@ -1,6 +1,6 @@
--- Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
+-- Config.Recognition: XP levels, the auto badges, the weekly board badges, commendations and the field training
 
--- Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
+-- Config.Recognition: XP levels, the auto badges, the weekly board badges, commendations and the field training
 -- badge are one config section, each part with its own rules. One block per old feature, driven through the new
 -- section: what the shipped config gives is what the server gave before, and each part's switch turns only that part
 -- off. Plain stubs, no database.

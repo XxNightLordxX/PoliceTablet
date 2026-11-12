@@ -1,6 +1,6 @@
--- One way to do each thing (BK1): the switches that only chose between an old and a new layout of the same screens
+-- One way to do each thing: the switches that only chose between an old and a new layout of the same screens
 
--- One way to do each thing (BK1): the switches that only chose between an old and a new layout of the same screens
+-- One way to do each thing: the switches that only chose between an old and a new layout of the same screens
 -- are gone, the better layout is the only one, and every real choice stays a setting. Each removed key is in the
 -- owner guide's "Baked in" table with the place its capability now lives; each kept key is still a setting. A row
 -- saved in game under a removed key is skipped quietly at start (no console line, no Problems line), and an imported

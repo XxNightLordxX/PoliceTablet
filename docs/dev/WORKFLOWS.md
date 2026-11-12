@@ -20,7 +20,7 @@ the one difference checked is that a payout gets no bank history entry without a
 more for each kind on its own: the owner's four scripts installed, only that one `Config.Integrations` kind set to
 `none` in Settings (the other three keep the owner's script), with the same results.
 
-**Every officer action.** `tests/workflows_officer_spec.lua` (WF5A) drives every workflow and every action an officer
+**Every officer action.** `tests/workflows_officer_spec.lua` drives every workflow and every action an officer
 can take on the same world as the full walk (the owner's scripts running), booted on the shipped config: first with
 the shipped config, then with the switches on, a restart and a drop and reconnect in the middle of each part, and
 every refusal an officer can meet (no permission, wrong department, a cap reached, a feature off, the maintenance
@@ -29,7 +29,7 @@ from the Mission Board and played to its result card there; checkpoint routes, i
 worked with their real evidence, the other blocks finish through their own completion after their minimum time (the
 block specs drive each of their steps).
 
-**Every supervisor action.** `tests/workflows_supervisor_spec.lua` (WF5B) drives every workflow and every action a
+**Every supervisor action.** `tests/workflows_supervisor_spec.lua` drives every workflow and every action a
 supervisor can take on the same world, with a second SAST supervisor and a SAST cadet added: the Department screen's
 Today and Officers tabs, every action of an officer's panel (commend and revoke, Give points, Mission ban, Clear
 cooldown), every Mission control set inside the admin's limits and refused outside them, the happy hour, the Review
@@ -38,7 +38,7 @@ department scoping and the self rule, two supervisors at once and the maintenanc
 config first where it is on, then with the switches on, with a restart and a drop and reconnect in the middle and
 every refusal a supervisor meets. Its sections are named "supervisor (n)" below.
 
-**Every admin action.** `tests/workflows_admin_spec.lua` (WF5C) drives every workflow of the Admin UI's groups on
+**Every admin action.** `tests/workflows_admin_spec.lua` drives every workflow of the Admin UI's groups on
 the same world, with a second admin (a Qbox admin, Config.QboxAdmins), a SAST cadet and a sheriff's deputy added:
 opening the Admin UI, Home with its queues and shortcuts and the officer search; People (an officer's page, his
 suspension and run controls, departments added, renamed, turned off and on and deleted, desks, permissions and extra
@@ -50,7 +50,7 @@ problems, the first-start setup, backups and restore) and the maintenance lock a
 shipped config first, then with the switches on, with a restart and a drop and reconnect in the middle and every
 refusal an admin screen meets. Its sections are named "admin (n)" below.
 
-**Every real-player action.** `tests/workflows_realplayers_spec.lua` (WF5D) drives every workflow of live crimes and
+**Every real-player action.** `tests/workflows_realplayers_spec.lua` drives every workflow of live crimes and
 volunteer suspects on the same world (the owner's sc-police sends the cuffs and the jail), with two crew members and
 two volunteers added: the shipped config first (a reported crime, `/crimsonheat`, the criminal tablet and the staff
 screen change nothing), then the switches on through Settings, a live crime from the LIVE call to the pay, the caps,
@@ -59,7 +59,7 @@ screen change nothing), then the switches on through Settings, a live crime from
 Each part has a restart and a drop and reconnect in the middle and every refusal a player meets. Its sections are
 named "realplayers (n)" below.
 
-**Every system workflow.** `tests/workflows_system_spec.lua` (WF5E) drives what the resource does on its own on the
+**Every system workflow.** `tests/workflows_system_spec.lua` drives what the resource does on its own on the
 same world: (1) a fresh install (an empty saves folder, the real migrations runner builds every table at start, a run
 played and paid, a restart applies nothing twice); (2) every `Config.Integrations` kind with each adapter (dispatch:
 sc-dispatch, ps-dispatch, none; ambulance: sc-ambulance, qbx_ambulancejob with and without EMS on duty and with
@@ -77,15 +77,15 @@ from its browser-mock session (Officer, Supervisor, and Admin with every admin p
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
 locale), checks that every request a screen sends has a mock that answers it, and renders each criminal tablet screen.
 
-**Every click in a browser.** `tools/clickthrough.mjs` (WF5F; the opt-in gate step `clickthrough`, nightly in CI,
+**Every click in a browser.** `tools/clickthrough.mjs` (the opt-in gate step `clickthrough`, nightly in CI,
 docs/dev/TESTING.md) opens the four tablets on the built UI in its browser mock mode and clicks every
-screen, tab and button, checking each dialog a button opens. It found three defects, fixed in WF5F: (1) the sidebar
+screen, tab and button, checking each dialog a button opens. It found three defects, all fixed: (1) the sidebar
 did not scroll, so on a 900 or 1080 px high screen the Admin UI's lower groups (Money, Review, System) could not be
 reached; it now scrolls; (2) Admin -> Officers crashed on an officer with no badges (Lua sends an empty list as {});
 (3) the Running now mocks named officers the Officers mocks did not have. `layouts/clickthrough.walk.ts` keeps (1) to (3)
 checked in the gate.
 
-**A random soak across every workflow.** `tests/soak_spec.lua` (WF6A) runs a seeded random driver on the same world
+**A random soak across every workflow.** `tests/soak_spec.lua` runs a seeded random driver on the same world
 with 12 officers in three departments (SAST, FIB and a BCSO the admin adds in Departments), 2 supervisors, 1 admin
 and 2 civilians. For hours of game time it picks random valid and invalid actions of every role: accept, work the
 objective, abandon, units (invite, answer, leave, kick, promote, disband, cancel), mission calls (post, claim,
@@ -101,13 +101,13 @@ entity outlives its run by two minutes; no error line and no Lua error; and a wr
 feature off or the maintenance lock never lets an action succeed. On a failure it prints the seed and shrinks the
 action list to the shortest one that still fails (child runs replay it). The normal suite runs one seed for about
 two simulated hours; `CP_SOAK=1 CP_SOAK_SEEDS=1-24 CP_SOAK_HOURS=6` runs many, and `CP_SOAK_STORAGE=database` runs
-it on MariaDB. WF6A ran 24 seeds for 6 simulated hours each in files mode (77,202 actions, 2,923 runs) and 6
+it on MariaDB. A run of 24 seeds for 6 simulated hours each in files mode (77,202 actions, 2,923 runs) and 6
 seeds for 4 hours on MariaDB: every invariant held, and no defect of the resource was found. What it did find were
 gaps in the test world (ox_inventory's item hook, Qbox's GetMetadata and the city's own players, users,
 player_vehicles and mdt_dispatch tables were missing there, so those adapters printed error lines the other world
 specs hid): the soak fills them in for itself.
 
-**Every workflow on MariaDB, and under load.** WF6B ran every workflow and end-to-end spec on MariaDB (database on) as
+**Every workflow on MariaDB, and under load.** Every workflow and end-to-end spec runs on MariaDB (database on) as
 well as on the saves folder: `CP_WF_STORAGE=database lua5.4 tests/run.lua tests/<spec>.lua` runs the worlds of
 `tests/workflows_full_spec.lua` (full, none and none_*, officer, supervisor, admin, realplayers, system_generic, soak)
 and `workflows_e2e`, `live_fto_e2e` and `realsuspects_e2e` there (`e2e`, `admin_control_e2e` and `system_db` already run
@@ -124,7 +124,7 @@ row, every queued payment paid exactly once, the deadlines and the join window e
 and the harness tick time (CPU ms per step: p95 within 25 ms, p99 within 100 ms, the worst step within 500 ms). Measured
 on both stores: p95 about 2 ms, the worst step 60 to 250 ms (a garbage collection on a busy machine).
 
-**Every writing action sent twice at the same moment.** `tests/race_spec.lua` (WF6C, in all three suites) runs on the
+**Every writing action sent twice at the same moment.** `tests/race_spec.lua` (in all three suites) runs on the
 same world with a second SAST supervisor and a second admin. Each action that writes (money, points, caps, bans,
 grants, settings, review decisions, restores, mission calls, accepts, units, item rewards, notices, the guided tours)
 is sent by two players, or twice by one (a double click), at the same moment with the harness's yield control on
@@ -171,18 +171,18 @@ cases whose name holds the text, and `CP_RACE_CUTS=n` cuts at more queries.
 | Give points, Mission ban, Clear cooldown (caps, limits) | supervisor (3), full (8) | yes (the day's counts kept) | the supervisor, the barred officer | owner stack only | Pass |
 | Happy hour | full (7), supervisor (4, 9) | yes | the supervisor who started it | yes | Pass |
 | Type of the Day | full (7) | yes | the supervisor after his pick | yes | Pass |
-| Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5), supervisor (4, 9) | yes | the supervisor; the partner on the pushed run | yes | Pass (after fix WF5B-1) |
+| Mission controls, push, "+ minutes" | full (8, 8B), workflows_e2e (5), supervisor (4, 9) | yes | the supervisor; the partner on the pushed run | yes | Pass (after a fix, in its section below) |
 | Calls and department notices | supervisor (6), full (6, 8) | yes | the supervisor who posted | owner stack only | Pass |
 | Extra grants for non-supervisors | supervisor (8), full (1) | yes | - | owner stack only | Pass |
 | Two supervisors at once, maintenance lock | supervisor (9, 10) | - | - | owner stack only | Pass |
 | Supervisor actions and awards | full (8), workflows_e2e (5) | yes | the barred officer (the ban stays) | yes | Pass |
-| Review, void, dispute | workflows_e2e (6), supervisor (5), admin (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after fix WF5B-2) |
+| Review, void, dispute | workflows_e2e (6), supervisor (5), admin (5) | full (9), supervisor (5) | the reviewer with the queue open; the officer while his dispute is decided | corrections, full (9) | Pass (after a fix, in its section below) |
 | Mission Builder | full (11), admin_control_e2e (2), admin (3) | yes | the supervisor or the admin in his test run | yes | Pass |
-| Field training | live_fto_e2e (4, 5), officer (9), supervisor (7) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass (after fix WF5B-3) |
-| Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7), realplayers (6, 7, 10) | yes | the volunteer and the partner | off (needs a police script), realplayers (11) | Pass (after fix WF5D-2) |
-| Volunteer strikes, block, Clear strikes | realplayers (9) | yes (the strike and the block kept) | - | off, realplayers (11) | Pass (after fix WF5D-1) |
+| Field training | live_fto_e2e (4, 5), officer (9), supervisor (7) | yes | the rookie mid-run, the trainer before sign-off | owner stack only | Pass (after a fix, in its section below) |
+| Volunteer by the criminal tablet | realsuspects_e2e (3, 5-7), realplayers (6, 7, 10) | yes | the volunteer and the partner | off (needs a police script), realplayers (11) | Pass (after a fix, in its section below) |
+| Volunteer strikes, block, Clear strikes | realplayers (9) | yes (the strike and the block kept) | - | off, realplayers (11) | Pass (after a fix, in its section below) |
 | Volunteer pay, voidWithRun off and on | realplayers (7-9), feature_rewards | yes | - | off, realplayers (11) | Pass |
-| Real suspects staff screen, exclude, suspend, pair block | realplayers (3, 10B) | yes | - | off, realplayers (11) | Pass (after fix WF5D-3) |
+| Real suspects staff screen, exclude, suspend, pair block | realplayers (3, 10B) | yes | - | off, realplayers (11) | Pass (after a fix, in its section below) |
 | Settings, Features, Rewards, grant | full (1), admin (6) | yes | the admin half way through | yes (Other scripts set to none) | Pass |
 | Corrections | full (9), admin_control_e2e (1), admin (5) | yes | the officer offline for the void and restore | yes | Pass |
 | Backups and restore, the maintenance lock | full (10), admin_control_e2e (4), admin (7) | yes | the admin before the restart (the lock holds) | yes | Pass |
@@ -192,11 +192,11 @@ cases whose name holds the text, and `CP_RACE_CUTS=n` cuts at more queries.
 | Departments and desks | admin (2) | yes | the admin before the restart | owner stack only | Pass |
 | Permissions and extra grants | admin (2), supervisor (8) | yes | the granted officer | owner stack only | Pass |
 | Mission and location switches, mission files reload | admin (3) | yes | - | owner stack only | Pass |
-| Map markers and extra parts, their rules | admin (3) | yes | - | owner stack only | Pass (after fix WF5C-1) |
+| Map markers and extra parts, their rules | admin (3) | yes | - | owner stack only | Pass (after a fix, in its section below) |
 | Testing tools | admin (3) | yes | - | owner stack only | Pass |
 | Pay rates, Adjust all | admin (4), e2e | yes | - | owner stack only | Pass |
 | Payments: Pay now, Mark paid, Cancel, Retry all | admin (4) | yes | the officer while her payment waits | owner stack only | Pass |
-| Money tools (ENABLE), department funds | admin (4) | yes | - | owner stack only | Pass (after fix WF5C-2) |
+| Money tools (ENABLE), department funds | admin (4) | yes | - | owner stack only | Pass (after a fix, in its section below) |
 | Item rewards for admins | admin (4) | yes | the officer with rewards waiting | owner stack only | Pass |
 | Restrictions, audit log and export | admin (5) | yes | - | owner stack only | Pass |
 | Presets, storage panel, jobs, problems, first-start setup | admin (6) | yes | the admin with the setup open | owner stack only | Pass |
@@ -207,12 +207,12 @@ cases whose name holds the text, and `CP_RACE_CUTS=n` cuts at more queries.
 | Clean-up and daily backup jobs | system (4), system_db (4) | yes (before the reset) | the admin before the reset | owner stack only | Pass |
 | Idle check | system (5) | yes | - | owner stack only | Pass |
 | Guided tours: done, replay, `/crimsonhelp`, the admin's reset, the Setup checklist | training_spec, setup_spec, tours.walk.ts, soak | soak | soak | owner stack only | Pass |
-| Random actions of every role across every workflow, with the invariants checked after each (WF6A) | soak (24 seeds x 6 h; MariaDB 6 seeds x 4 h) | yes (random) | yes (random players) | owner stack only | Pass |
-| Every workflow and end-to-end spec on MariaDB (database on), compared with the saves folder (WF6B) | the worlds and e2e specs with `CP_WF_STORAGE=database` | yes (each spec's own) | yes (each spec's own) | none, none_* | Pass (same results on both stores) |
-| Load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, a backup and a storage copy (WF6B) | load (MariaDB, saves folder, shadow) | yes (with payments waiting) | yes (mid-run, 20 officers offline) | owner stack only | Pass |
-| Every writing action sent twice at the same moment by two players or a double click (43 cases), interleaved query by query (WF6C) | race (saves folder in each suite; MariaDB with `CP_WF_STORAGE=database`) | yes (after each of up to 5 queries of the first copy) | yes (the first sender, in the middle) | owner stack only | Pass (after fixes WF6C-1 to WF6C-4) |
+| Random actions of every role across every workflow, with the invariants checked after each | soak (24 seeds x 6 h; MariaDB 6 seeds x 4 h) | yes (random) | yes (random players) | owner stack only | Pass |
+| Every workflow and end-to-end spec on MariaDB (database on), compared with the saves folder | the worlds and e2e specs with `CP_WF_STORAGE=database` | yes (each spec's own) | yes (each spec's own) | none, none_* | Pass (same results on both stores) |
+| Load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, a backup and a storage copy | load (MariaDB, saves folder, shadow) | yes (with payments waiting) | yes (mid-run, 20 officers offline) | owner stack only | Pass |
+| Every writing action sent twice at the same moment by two players or a double click (43 cases), interleaved query by query | race (saves folder in each suite; MariaDB with `CP_WF_STORAGE=database`) | yes (after each of up to 5 queries of the first copy) | yes (the first sender, in the middle) | owner stack only | Pass (after fixes, in its section below) |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
-| Every screen, tab, button and dialog clicked in a real browser (79 screens and tabs of the four tablets) | tools/clickthrough.mjs (npm run clickthrough, WF5F), clickthrough.walk.ts | - | - | - | Pass (after fixes WF5F-1 to WF5F-3) |
+| Every screen, tab, button and dialog clicked in a real browser (79 screens and tabs of the four tablets) | tools/clickthrough.mjs (npm run clickthrough), clickthrough.walk.ts | - | - | - | Pass (after fixes, in its section below) |
 
 "soak" = tests/soak_spec.lua, "load" = tests/load_spec.lua, "race" = tests/race_spec.lua, "system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
 tests/workflows_system_generic_spec.lua, "admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
@@ -493,9 +493,9 @@ the second supervisor then refused for the change wait; his **drop** and a **res
 neither the screen nor a change; a control the admin switched off refused; the master switch off (its controls
 refused, the server-wide ones still set); a department's grade rule (SAST from grade 4: refused at grade 3, FIB not
 bound, allowed once promoted); the Type of the Day once a day; the same request sent twice saves and audits once; the
-other department keeps its own value. Result: **Pass (after fix WF5B-1)**.
+other department keeps its own value. Result: **Pass (after the fix below)**.
 
-Fix WF5B-1: a control saved as false (the no-repeat rule switched off) showed as not changed (no "changed by", no
+Fix: a control saved as false (the no-repeat rule switched off) showed as not changed (no "changed by", no
 Reset) because the screen's saved value read `row.value or nil`; it now carries the saved false.
 
 Steps: Posting, paging, pushing or withdrawing a mission call, Recall and "+ minutes" on Live Missions were answered
@@ -547,9 +547,9 @@ pushed at once, paid once, his approve of the same row refused); voided; Undo an
 supervisor, the admin's Undo restores it, Undo switched off refused; the department's second Void: the first is
 taken and waits, the same supervisor cannot be the second, a **restart**, the other supervisor's Void voids it; the
 review power off; his own flagged run never in his queue and approved by the other supervisor. Result: **Pass (after
-fix WF5B-2)**.
+the fix below)**.
 
-Fix WF5B-2: the first Void waiting for a second supervisor lived in memory only, so a restart forgot it (the queue no
+Fix: the first Void waiting for a second supervisor lived in memory only, so a restart forgot it (the queue no
 longer said who voided first and the next Void became a first Void again). The start now reads the waiting first
 Voids back from the audit log (voidPending rows that are still the newest entry of their row, the last 90 days).
 
@@ -616,9 +616,9 @@ paired, twice refused, the Training tab lists it (not for an officer); a sign-of
 **restart** keeps it; the unit's accept of a type with no mission for two (the leader told why after Ready); a run
 together, a sign-off by someone else and of a type that is no task refused, the trainer signs off, twice refused;
 unpair (an officer refused, twice refused); the feature off; an officer with the extra grant pairs. Result: **Pass
-(after fix WF5B-3)**.
+(after the fix below)**.
 
-Fix WF5B-3: when a unit's accept failed after everyone answered Ready (no mission left for the unit, a member barred
+Fix: when a unit's accept failed after everyone answered Ready (no mission left for the unit, a member barred
 or on a call meanwhile, the lock), the leader was never told: his Accept had already answered "ready check sent".
 He now gets the reason as a toast (a mission call claim keeps its own messages).
 
@@ -639,7 +639,7 @@ Steps: Every criminal tablet action (save roles, renew, stop, the pop-up answer)
 answers with the fresh view in one request, and the free Give up runs out on its own on the page (no polling). Stop
 keeps its second click (it ends the volunteer time); the other buttons are one click.
 
-### Every real-player action (WF5D)
+### Every real-player action
 
 How it works: with live crimes on, Crimson-Contracts' reported crime is a LIVE card on Dispatch; a unit claims it,
 holds the scene, backup joins by its pop-up, suspects are detained, booked or talked down, and End case writes each
@@ -683,17 +683,17 @@ Restrictions, kept by a **restart**, a supervisor cannot lift, the admin lifts e
 stay on but both modes are off, Settings -> Features says why for each, no LIVE call, GetAvailablePolice nil, the
 volunteer list empties, `/crimsonheat` refused, the criminal tablet still opens and says volunteers are off, its Get
 on the list refused, no Real suspect badge, the staff screen off; sc-police again and everything is back. Result:
-**Pass (after fixes WF5D-1, WF5D-2 and WF5D-3)**.
+**Pass (after the fixes below)**.
 
-Fix WF5D-1: after a restart, a volunteer's criminal tablet History showed none of his saved strikes until he got on
+Fix: after a restart, a volunteer's criminal tablet History showed none of his saved strikes until he got on
 the list again (the strikes were read back under his licence, but the History looked them up only by the key he had
 volunteered under in memory). It now finds them by the online player's licence.
 
-Fix WF5D-2: with the police script set to `none` (or one that sends no cuff and jail facts) the criminal tablet still
+Fix: with the police script set to `none` (or one that sends no cuff and jail facts) the criminal tablet still
 said volunteers were on, and Get on the list answered "not available". It now says "Volunteer suspects are off on this
 server right now", the same as when the switch is off.
 
-Fix WF5D-3: with the police script set to `none`, the GetAvailablePolice export still counted officers although live
+Fix: with the police script set to `none`, the GetAvailablePolice export still counted officers although live
 crimes were held off; it now answers nil, as documented for live crimes off, so a crime script counts police its own
 way.
 
@@ -758,7 +758,7 @@ admin:getStorage allows one read in 5 seconds, so that second read could be refu
 reply carries the fresh Storage view (2 requests -> 1, never refused, a pure speed-up). The typed REPLACE, SWITCH and
 USE stay (risky).
 
-### Every admin action (WF5C)
+### Every admin action
 
 How it works: the Admin UI (`/CrimsonPoliceAdmin`) opens for the AdminAce admins and, with Config.QboxAdmins, the
 Qbox admins; who is an admin comes only from config.lua. Every change is an admin action with its own guards (the
@@ -799,13 +799,13 @@ applied again changes nothing, a city's own preset); the storage panel and Switc
 the admin's **drop**, finished with a preset. (7) A backup, RESTORE: the maintenance lock refuses every admin change
 (settings, a mission switch, pay, a suspension, points, a desk, a preset, a job, a backup, a test, the Builder) while
 every screen still reads and no run starts, the admin **drops**, a **restart** ends the lock. Result: **Pass (after
-fixes WF5C-1 and WF5C-2)**.
+the fixes below)**.
 
-Fix WF5C-1: Settings -> Config.Markers.rules took a rule for a part, department or mission type that does not exist
+Fix: Settings -> Config.Markers.rules took a rule for a part, department or mission type that does not exist
 (a typo such as `partnr` or `patrl`), and that part then silently never showed for anyone. The rule is now refused
 with a message naming what to fix.
 
-Fix WF5C-2: an action on one officer that must never touch the admin's own characters (Pay by hand, giving points
+Fix: an action on one officer that must never touch the admin's own characters (Pay by hand, giving points
 and the other strict ones) answered a citizenid nobody has (a typo) with "This player's licence can't be found". It
 now says "No officer with that citizen ID has used Crimson-Police yet. Check the ID and try again."; an officer whose
 licence is really unknown keeps the licence message.

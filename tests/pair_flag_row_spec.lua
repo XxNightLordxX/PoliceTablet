@@ -1,4 +1,4 @@
--- Z9: a flag raised after a participant's row was stored (rs_pair_repeat comes from the run:ended hook, after every
+-- A flag raised after a participant's row was stored (rs_pair_repeat comes from the run:ended hook, after every
 -- row settled) flags the stored row too: it reaches the Review Queue, cash not paid yet is held, paid cash stays
 -- paid, the counted XP and the pending item rewards wait for the review.
 

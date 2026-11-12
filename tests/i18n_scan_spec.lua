@@ -116,6 +116,34 @@ if type(CP.Ln) == 'function' then
     Config.Labels = { ['admin.audit.total_one'] = 'One row' }
     H.eq(CP.Ln('admin.audit.total', 1), 'One row', 'a Settings -> Names rename of a form wins')
     Config.Labels = nil
+
+    -- H8: a translated locale from before the plural forms (only the base key) keeps its own text: the English
+    -- _one/_other forms are not merged over it; English fills only keys it does not have
+    local realLoad = LoadResourceFile
+    _G.LoadResourceFile = function(res, path)
+        if path == 'locales/xx.json' then
+            return '{"locale.lang": "en", "admin.audit.total": "X {n}", "access.health.all_ok": "Tout va bien"}'
+        end
+        return realLoad(res, path)
+    end
+    Config.Locale = 'xx'
+    H.load('shared/locale.lua')
+    H.eq(CP.Ln('admin.audit.total', 3), 'X 3', 'H8: an older translation of a plural key keeps its text (other)')
+    H.eq(CP.Ln('admin.audit.total', 1), 'X 1', 'H8: ...and for one')
+    H.eq(CP.Locale.all()['admin.audit.total_other'], nil, 'H8: the NUI gets no English form over it either')
+    H.eq(CP.L('access.health.all_ok'), 'Tout va bien', 'H8: its other texts are its own')
+    H.eq(CP.Ln('admin.setup.finish', 2, { n = 2 }) ~= 'admin.setup.finish', true, 'H8: a key it lacks is English')
+    H.ok(CP.Locale.all()['admin.setup.finish_other'] ~= nil, 'H8: with its English forms')
+    -- a Settings -> Names rename of the base key (from before the forms) wins over the English forms
+    Config.Locale = 'en'
+    _G.LoadResourceFile = realLoad
+    H.load('shared/locale.lua')
+    Config.Labels = { ['admin.audit.total'] = 'Rows: {n}' }
+    H.eq(CP.Ln('admin.audit.total', 3), 'Rows: 3', 'H8: a rename of the base key wins over the forms')
+    H.eq(CP.Locale.all()['admin.audit.total_other'], nil, 'H8: and the NUI gets the rename, not the English form')
+    Config.Labels = { ['admin.audit.total'] = 'Rows: {n}', ['admin.audit.total_one'] = 'One row' }
+    H.eq(CP.Ln('admin.audit.total', 1), 'One row', 'H8: a renamed form still wins for its count')
+    Config.Labels = nil
 end
 
 return H

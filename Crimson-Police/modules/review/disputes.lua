@@ -207,11 +207,13 @@ function D.eligible(row, citizenid, nowTs)
     local kind = D.kindOf(row)
     if not kind then return false, 'err.not_disputable' end
     -- the window stands still while the officer is suspended (row.suspended_ts, the end of his last suspension) and
-    -- while a maintenance lock holds (CP.Maintenance.windowEnd): he gets all of it afterwards
+    -- while a maintenance lock holds (CP.Maintenance.windowEnd): he gets all of it afterwards. Only a suspension that
+    -- started while the window was open holds it (row.suspended_from_ts): a later one never reopens a closed window.
     local now = nowTs or os.time()
     local start = Num(row.created_ts, 0)
     local susp = Num(row.suspended_ts, 0)
-    if susp > start then start = math.min(susp, now) end
+    local from = Num(row.suspended_from_ts, 0)
+    if susp > start and from > 0 and from <= start + WindowSeconds() then start = math.min(susp, now) end
     local ends = start + WindowSeconds()
     if CP.Maintenance and CP.Maintenance.windowEnd then
         local ok, e = pcall(CP.Maintenance.windowEnd, start, WindowSeconds())
@@ -396,7 +398,8 @@ end
 
 local ROW_SQL = [[SELECT id, run_uuid, citizenid, department, mission_type, mission_id, state, flagged, voided,
   cash_status, UNIX_TIMESTAMP(created_at) AS created_ts,
-  (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts
+  (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts,
+  (SELECT UNIX_TIMESTAMP(o.suspended_from) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_from_ts
   FROM cp_mission_runs r WHERE id = ?]]
 
 local function RunDepartments(runUuid)

@@ -1,6 +1,6 @@
--- Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
+-- Full workflow testing, with a restart and a drop in each.
 
--- Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
+-- Full workflow testing, with a restart and a drop in each.
 -- Every workflow the other end-to-end specs leave out, driven start to finish on the REAL server side of
 -- Crimson-Police (every server file loaded as in game, database off: the saves folder, as shipped), every switch on
 -- through the Admin UI's own Settings, and a `restart Crimson-Police` and a player drop and reconnect in the middle of

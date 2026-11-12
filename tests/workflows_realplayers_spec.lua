@@ -1,6 +1,6 @@
--- WF5D: real players and the criminal tablet, extensively (the owner: "do extensive workflow testing on everything").
+-- Real players and the criminal tablet, extensively.
 
--- WF5D: real players and the criminal tablet, extensively (the owner: "do extensive workflow testing on everything").
+-- Real players and the criminal tablet, extensively.
 -- Every workflow and action of a live crime and of a volunteer suspect, driven start to finish on the REAL server side
 -- of Crimson-Police: the world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the
 -- owner's scripts running with sc-police for the cuffs and the jail, database off: the saves folder, as shipped),

@@ -1,6 +1,6 @@
--- WF6A: a seeded random action soak across every workflow (the owner: "do extensive workflow testing on everything").
+-- A seeded random action soak across every workflow.
 
--- WF6A: a seeded random action soak across every workflow (the owner: "do extensive workflow testing on everything").
+-- A seeded random action soak across every workflow.
 -- A random driver on the world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the
 -- owner's scripts running, database off: the saves folder, as shipped) with 12 officers in 3 departments (SAST, FIB and
 -- a BCSO the admin adds in Departments), 2 supervisors, 1 admin and 2 civilians. For many simulated hours it picks

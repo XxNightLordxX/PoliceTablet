@@ -230,22 +230,20 @@ result. On a good install the console shows lines like these (the order can diff
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
-[crimson-police] Crimson-Police saves folder at version 18
-[crimson-police] missions loaded: 19 built-in, 0 custom, 0 rejected
+[crimson-police] Crimson-Police saves folder at version 19
+[crimson-police] missions loaded: 19 built-in (0 edited), 0 custom, 0 rejected
 [crimson-police] Start-up check: all 18 checks passed. Type CrimsonPoliceAdmin check in the server console to see them
 ```
 
 - With the database on, the first line reads `storage: MySQL/MariaDB through oxmysql`, the "first start" line is
-  not there, and the version line reads `Crimson-Police database at version 18`. On a database made by txAdmin's
+  not there, and the version line reads `Crimson-Police database at version 19`. On a database made by txAdmin's
   recipe, the first start also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
   (once)` line per table.
 - The `applied migration` lines only show on the first start and after an update. A migration is Crimson-Police
   creating or upgrading its own tables.
 - The number of checks on the last line depends on your setup.
-- The copy you downloaded has `Config.Debug = true`, so you also see many extra lines that start with
-  `[crimson-police:`. They are normal while you test.
-  Before go-live, set `Config.Debug = false` in `config/config.lua` for a quiet console (see
-  [5.1](#51-the-two-switches-at-the-top-debug-and-storage)).
+- The copy you downloaded has `Config.Debug = true`, so you also see many extra `[crimson-police:` lines. They are
+  normal while you test ([5.1](#51-the-two-switches-at-the-top-debug-and-storage) says when to turn it off).
 
 **If something needs fixing**, you see yellow or red lines instead, one per problem, each with the fix. Then the
 last line reads:
@@ -257,7 +255,7 @@ last line reads:
 For example, on a stock Qbox server (no `sast` and no `fib` job) you get this line, and the same line for FIB:
 
 ```
-[crimson-police:confighealth] departments: SAST: Qbox has no job named sast, so nobody can use this department. Add the job to qbx_core/shared/jobs.lua, or put your own police job name in jobs = { } of Config.Departments.sast in config/config.lua
+[crimson-police:confighealth] departments: SAST: Qbox has no job named sast, so nobody can use this department. Add the job to qbx_core/shared/jobs.lua, or put your own police job name in the department's jobs in Admin UI → Departments (or Config.Departments.sast in config/config.lua)
 ```
 
 Fix what the lines say, then restart Crimson-Police (`ensure Crimson-Police` or `restart Crimson-Police` in the

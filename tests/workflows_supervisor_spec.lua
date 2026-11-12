@@ -1,6 +1,6 @@
--- WF5B: every supervisor workflow, extensively (the owner: "do extensive workflow testing on everything").
+-- Every supervisor workflow, extensively.
 
--- WF5B: every supervisor workflow, extensively (the owner: "do extensive workflow testing on everything").
+-- Every supervisor workflow, extensively.
 -- Every workflow and every action a supervisor can take, driven start to finish on the REAL server side of
 -- Crimson-Police: the world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the
 -- owner's scripts running, database off: the saves folder, as shipped), booted on the shipped config with no

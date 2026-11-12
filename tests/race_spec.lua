@@ -1,8 +1,6 @@
--- WF6C: every action that writes, sent twice at the same moment (the owner: "do extensive workflow testing on
--- everything").
+-- Every action that writes, sent twice at the same moment.
 
--- WF6C: every action that writes, sent twice at the same moment (the owner: "do extensive workflow testing on
--- everything").
+-- Every action that writes, sent twice at the same moment.
 -- The world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the owner's scripts
 -- running, the saves folder; CP_WF_STORAGE=database runs it on MariaDB) with a second SAST supervisor (8) and a second
 -- admin (9). Every action that writes (money, points, caps, bans, grants, settings, review decisions, restores, runs,

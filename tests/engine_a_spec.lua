@@ -1500,6 +1500,11 @@ do
     rs.cooldowns.CIDA = { types = { patrol = T0 + 60 }, missions = {} }
     ok, data = Act('server:acceptType', 1, 'patrol')
     H.eq(data, 'err.type_cooldown', 'type cooldown')
+    -- H8: cooldown rows that could not be read (the database down) put every type and mission on cooldown (H4,
+    -- draw.lua UNREADABLE_CD): fail closed
+    rs.cooldowns.CIDA = { types = {}, missions = {}, unreadable = true }
+    ok, data = Act('server:acceptType', 1, 'patrol')
+    H.eq(data, 'err.type_cooldown', 'H8: unreadable cooldown rows refuse the accept')
     rs.cooldowns.CIDA = nil
     rs.busy.patrol = true
     ok, data = Act('server:acceptType', 1, 'patrol')

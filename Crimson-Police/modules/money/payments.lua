@@ -774,7 +774,8 @@ Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
                 return ('paying:%s'):format(i.step or 'unknown')
             end, function(i)
                 return ('%d%s%s'):format(i.amount or 0, i.withdraw and ':withdraw' or '', i.resume and ':resume' or '')
-            end)
+            end),
+            { checked = p.checked == true }
         )
         if not ok then return false, data end
         Touched(ctx, cid)

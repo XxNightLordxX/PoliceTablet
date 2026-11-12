@@ -81,7 +81,8 @@ for _, rel in ipairs({ 'Crimson-Police/config/config.lua', 'Crimson-Police/confi
     H.ok(#file > 1000 and not Has(spec, head), 'docs/dev/SPEC.md copies no part of ' .. rel)
     H.ok(Has(spec, '(../../' .. rel .. ')'), 'docs/dev/SPEC.md links ' .. rel)
 end
-H.ok(#spec < 250000, ('SPEC stays small (%d bytes)'):format(#spec))
+local SPEC_MAX = 250000
+H.ok(#spec < SPEC_MAX, ('SPEC stays small (%d bytes)'):format(#spec))
 do
     local SPEC_FOREIGN = {
         Roster = true,
@@ -192,34 +193,47 @@ for _, rel in ipairs(files) do
     end
 end
 
--- no build history: no step or plan ids in the documents' prose (the in-game checklist keeps its step tags, which
--- tests/realsuspects_docs_spec.lua reads; Crimson-Arena's rule numbers C1..C27 are rules, not steps, and (F7) is a key)
+-- no build history: no step or plan id anywhere in a document but the CHANGELOG. An id is a whole word made of a
+-- step prefix and a number (WF5B, SALE3, H3, V22b). The prefixes are those of the build's step subjects (and of git
+-- log, when it is there). Not ids: F<n> is a key (F7, F8, the F10 panel), FX<nn> a lint rule (FX01-FX12), C<n> a
+-- Crimson-Arena rule (C1-C27) and P1-P3 a call priority.
 local STEP = {}
-for kind in ('K L M N O P V RP T AP F G H Z LP OP R WF S VC DOC TR'):gmatch('%S+') do STEP[kind] = true end
+for kind in
+    ([[A AP B BK BL BOOT DOC FIN FM FX G H K L LOC LP M MG MOD N O OP P PLAN Q R RP S SALE T TR UI V VC WF WP
+    X Z]]):gmatch('%S+')
+do
+    STEP[kind] = true
+end
+for _, subject in ipairs(Lines('git -C "' .. REPO .. '" log --format=%s 2>/dev/null')) do
+    local kind = subject:match('^(%u+)%d+')
+    if kind and kind ~= 'C' and kind ~= 'F' then STEP[kind] = true end
+end
+local NOT_STEP = { P1 = true, P2 = true, P3 = true }
+local function StepIds(s)
+    local hits = {}
+    for kind, num, suffix in s:gmatch('%f[%w](%u+)(%d+)([%u%l]?)%f[^%w]') do
+        local id = kind .. num .. suffix
+        if STEP[kind] and not NOT_STEP[kind .. num] and not (kind == 'FX' and #num == 2) then hits[#hits + 1] = id end
+    end
+    -- the build's name is build history too
+    for word in s:gmatch('[Pp]arity%-plus') do hits[#hits + 1] = word end
+    return hits
+end
+H.eq(table.concat(StepIds('(WF5A) WF5F-1 (MG3) (FM5, FIN4) SALE3: (UI6) H3 added VC1 V14\'s V22b'), ' '),
+    'WF5A WF5F MG3 FM5 FIN4 SALE3 UI6 H3 VC1 V14 V22b', 'the step id scan finds every form of a step id')
+H.eq(table.concat(StepIds('F7 (F8) the F10 panel FX01-FX12 C9 Tactical P1 utf8mb4 MB4 fx10_loops.lua'), ' '), '',
+    'the step id scan leaves keys, lint rules, Arena rules and priorities alone')
 for _, rel in ipairs(files) do
-    if rel:match('%.md$') and not rel:match('IN_GAME_CHECKLIST%.md$') then
-        local s = (ReadRepo(rel:gsub('^%./', '')) or ''):gsub('every step V11%-V27', '')
-        local hits = {}
-        for word, id in s:gmatch('(%a+) (%u+%d+)') do
-            if (word == 'step' or word == 'Step' or word == 'steps' or word == 'PLAN') and STEP[id:match('^%u+')] then
-                hits[#hits + 1] = word .. ' ' .. id
-            end
-        end
-        for id in s:gmatch('%((%u+%d+%l?)[%),]') do
-            local kind = id:match('^%u+')
-            if STEP[kind] and kind ~= 'F' then hits[#hits + 1] = '(' .. id .. ')' end
-        end
-        -- the work packages and the build's name are build history too
-        for id in s:gmatch('%f[%w](WP%d+)%f[%W]') do hits[#hits + 1] = id end
-        for word in s:gmatch('[Pp]arity%-plus') do hits[#hits + 1] = word end
-        H.eq(table.concat(hits, ', '), '', rel:gsub('^%./', '') .. ': no step or plan ids in its prose')
+    if rel:match('%.md$') and not rel:match('CHANGELOG%.md$') then
+        local hits = StepIds(ReadRepo(rel:gsub('^%./', '')) or '')
+        H.eq(table.concat(hits, ', '), '', rel:gsub('^%./', '') .. ': no step or plan ids in it')
     end
 end
 
 -- no build history in the resource's code comments either: no step or plan ids, review notes or design file names
 -- (the migrations and the SPEC-copied config/blocks.lua are left as they are; (F7) is a key)
-local CODE_STEP = { FX = true }
-for kind in pairs(STEP) do CODE_STEP[kind] = true end
+local CODE_STEP = {}
+for kind in ('K L M N O P V RP T AP F G H Z LP OP R WF S VC DOC TR FX'):gmatch('%S+') do CODE_STEP[kind] = true end
 local codeHits = {}
 for _, rel in ipairs(files) do
     local path = rel:gsub('^%./', '')
@@ -306,6 +320,223 @@ for _, l in ipairs({
     H.eq(table.concat(bad, ' '), '', l[2] .. ': every link to ' .. l[4] .. ' lands on a heading')
 end
 
+-- ============================================================================
+--                                EVERY DOCUMENT
+-- ============================================================================
+-- LINKS, ANCHORS, FILE:LINE REFERENCES, THE README ORDER.
+
+-- the lines of a document outside its ``` fences, with their line numbers
+local function Prose(doc)
+    local out, fence, n = {}, false, 0
+    for ln in (doc .. '\n'):gmatch('(.-)\n') do
+        n = n + 1
+        if ln:match('^%s*```') then
+            fence = not fence
+        elseif not fence then
+            out[#out + 1] = { n = n, text = ln }
+        end
+    end
+    return out
+end
+
+-- a path relative to the repository: '..' and '.' resolved; nil when it climbs out of the repository
+local function Norm(path)
+    local parts = {}
+    for seg in path:gmatch('[^/]+') do
+        if seg == '..' then
+            if #parts == 0 then return nil end
+            parts[#parts] = nil
+        elseif seg ~= '.' then
+            parts[#parts + 1] = seg
+        end
+    end
+    return table.concat(parts, '/')
+end
+
+-- every tracked file, and every folder that holds one
+local trackedFiles, trackedDirs = {}, { [''] = true }
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files')) do
+    trackedFiles[path] = true
+    local dir = path
+    while true do
+        dir = dir:match('^(.+)/[^/]+$')
+        if not dir then break end
+        trackedDirs[dir] = true
+    end
+end
+local function Exists(path) return path ~= nil and (trackedFiles[path] or trackedDirs[path]) and true or false end
+
+-- the anchors of a document, as GitHub makes them (a repeated heading gets -1, -2, ...)
+local function Anchors(doc)
+    local out, count = {}, {}
+    for _, l in ipairs(Prose(doc)) do
+        local text = l.text:match('^#+ (.+)$')
+        if text then
+            local slug = Slug((text:gsub('%[([^%]]*)%]%b()', '%1')))
+            if count[slug] then
+                count[slug] = count[slug] + 1
+                out[slug .. '-' .. count[slug]] = true
+            else
+                count[slug] = 0
+                out[slug] = true
+            end
+        end
+    end
+    return out
+end
+
+local mdFiles = Lines('git -C "' .. REPO .. '" ls-files "*.md"')
+H.ok(#mdFiles >= 15, ('git lists the documents (%d)'):format(#mdFiles))
+local anchorsOf = {}
+local function AnchorsOf(path)
+    if anchorsOf[path] == nil then anchorsOf[path] = Anchors(ReadRepo(path) or '') end
+    return anchorsOf[path]
+end
+local linksChecked, brokenLinks = 0, {}
+for _, rel in ipairs(mdFiles) do
+    local dir = rel:match('^(.+)/[^/]+$')
+    for _, l in ipairs(Prose(ReadRepo(rel) or '')) do
+        for target in l.text:gmatch('%]%(([^)%s]+)%)') do
+            if not target:match('^%a[%w+.-]*:') then
+                linksChecked = linksChecked + 1
+                local path, anchor = target:match('^([^#]*)#?(.*)$')
+                local dest = path == '' and rel or Norm((dir and dir .. '/' or '') .. path:gsub('/$', ''))
+                local where = rel .. ':' .. l.n .. ' ' .. target
+                if not Exists(dest) then
+                    brokenLinks[#brokenLinks + 1] = where .. ' (no such file)'
+                elseif anchor ~= '' and dest:match('%.md$') and not AnchorsOf(dest)[anchor] then
+                    brokenLinks[#brokenLinks + 1] = where .. ' (no such heading)'
+                end
+            end
+        end
+    end
+end
+H.ok(linksChecked > 300, ('the documents\' links are read (%d)'):format(linksChecked))
+H.eq(table.concat(brokenLinks, '; '), '', 'every relative link of every document lands on a file and its heading')
+
+-- a path:line or path:first-last reference names a line the file has. A reference into another resource (its line or
+-- its section names that resource) or a made-up example is left alone; one into this repository must resolve.
+local FOREIGN_REF = {
+    'qbx_',
+    'sc-',
+    'ox_',
+    'oxmysql',
+    'Renewed',
+    'ps-',
+    'Crimson-Arena',
+    'rimson-Contracts',
+    'rimson-contracts',
+    'identifier.',
+    'ref/',
+    'src/',
+    'lb-',
+    'npwd',
+    'qs-',
+}
+local EXAMPLE_REF = { 'night_beat.lua', 'zz_demo_spec.lua', 'modules/foo' }
+local function Mentions(s, list)
+    for _, needle in ipairs(list) do
+        if Has(s, needle) then return true end
+    end
+    return false
+end
+local lineCount = {}
+local function LinesOf(path)
+    if not lineCount[path] then
+        local n = 0
+        for _ in ((ReadRepo(path) or '') .. '\n'):gmatch('[^\n]*\n') do n = n + 1 end
+        lineCount[path] = n - 1
+    end
+    return lineCount[path]
+end
+local OWN_PREFIX = { 'Crimson-Police/', 'tests/', 'tools/', 'docs/', '.github/' }
+local function LineRefs(rel, doc)
+    local bad, checked, heads = {}, 0, {}
+    for _, l in ipairs(Prose(doc)) do
+        local hashes = l.text:match('^(#+) ')
+        if hashes then
+            for k = #hashes, 9 do heads[k] = nil end
+            heads[#hashes] = l.text
+        end
+        local context = l.text
+        for k = 1, 9 do context = context .. ' ' .. (heads[k] or '') end
+        for path, a, b in l.text:gmatch('([%w_%./%-]+%.%a+):(%d+)%-?(%d*)') do
+            path = path:gsub('^%./', '')
+            local found
+            for _, base in ipairs({ '', 'Crimson-Police/', 'Crimson-Police/modules/' }) do
+                local p = Norm(base .. path)
+                if p and trackedFiles[p] then
+                    found = p
+                    break
+                end
+            end
+            local own = false
+            for _, prefix in ipairs(OWN_PREFIX) do
+                if path:sub(1, #prefix) == prefix then own = true end
+            end
+            local foreign = not own and (Mentions(context, FOREIGN_REF) or Mentions(context, EXAMPLE_REF))
+            local last = math.max(tonumber(a), tonumber(b) or 0)
+            if found and (own or path:find('/', 1, true) or not foreign) then
+                checked = checked + 1
+                if last > LinesOf(found) then
+                    bad[#bad + 1] = ('%s:%d %s:%s (%s has %d lines)'):format(rel, l.n, path, a, found, LinesOf(found))
+                end
+            elseif not found and not foreign then
+                bad[#bad + 1] = ('%s:%d %s (no such file here, and no other resource named)'):format(rel, l.n, path)
+            end
+        end
+    end
+    return bad, checked
+end
+do
+    local probe = 'x\n`tests/docs_spec.lua:999999` and `modules/runs/gone.lua:3`\n### sc-dispatch\n`client/main.lua:9`\n'
+    local bad = LineRefs('probe', probe)
+    H.eq(#bad, 2, 'the file:line scan fails a line past the end and a file that is not there, not another resource')
+    local refBad, refChecked = {}, 0
+    for _, rel in ipairs(mdFiles) do
+        local b, n = LineRefs(rel, ReadRepo(rel) or '')
+        refChecked = refChecked + n
+        for _, x in ipairs(b) do refBad[#refBad + 1] = x end
+    end
+    H.ok(refChecked >= 1, ('the file:line references into this repository are read (%d)'):format(refChecked))
+    H.eq(table.concat(refBad, '; '), '', 'every file:line reference of the documents names a line its file has')
+end
+
+-- the README's nine parts, in this order (the contents and the other documents link them by number)
+do
+    local want = {
+        'What Crimson-Police is',
+        'What you need',
+        'Install in 5 minutes',
+        'Admins, supervisors and permissions',
+        'Debug, storage and what ships off',
+        'All commands and keys',
+        'Admin UI tour',
+        'Troubleshooting',
+        'More documents',
+    }
+    local got = {}
+    for _, l in ipairs(Prose(readme)) do
+        local num, title = l.text:match('^## (%d+)%. (.+)$')
+        if num then got[#got + 1] = num .. '. ' .. title end
+    end
+    local expect = {}
+    for i, title in ipairs(want) do expect[i] = i .. '. ' .. title end
+    H.eq(table.concat(got, ' | '), table.concat(expect, ' | '), 'README parts 1-9 come in their order')
+    local wrong, prev, part = {}, 0, 0
+    for _, l in ipairs(Prose(readme)) do
+        local num = l.text:match('^## (%d+)%. ')
+        if num then part, prev = tonumber(num), 0 end
+        local a, b = l.text:match('^### (%d+)%.(%d+) ')
+        if a then
+            a, b = tonumber(a), tonumber(b)
+            if a ~= part or b ~= prev + 1 then wrong[#wrong + 1] = a .. '.' .. b end
+            prev = b
+        end
+    end
+    H.eq(table.concat(wrong, ' '), '', 'README: every n.m sits under part n, numbered 1, 2, 3, ...')
+end
+
 -- 6.1 lists every command Crimson-Police registers, and nothing else
 local commands = readme:match('\n### 6%.1 Commands\n(.-)\n### 6%.2') or ''
 local registered = {
@@ -348,7 +579,7 @@ local FOREIGN = {
     DispatcherMode = true,
     ArenaIntegration = true,
 }
-local owner = { 'README.md', 'docs/OWNER_GUIDE.md', 'Crimson-Police/README.md' }
+local owner = { 'README.md', 'docs/OWNER_GUIDE.md', 'Crimson-Police/README.md', 'docs/IN_GAME_TEST_PLAN.md' }
 for _, rel in ipairs(files) do
     if rel:match('^%./Crimson%-Police/.+/README%.md$') then owner[#owner + 1] = rel:gsub('^%./', '') end
 end
@@ -685,6 +916,123 @@ do
     table.sort(loose)
     H.ok(#scripts > 10 and #ignored >= 4 and #files > 100, 'H2: the manifest script and escrow_ignore lists are read')
     H.eq(table.concat(loose, ', '), '', 'H2: every .lua file the manifest does not load is in escrow_ignore')
+end
+
+-- ============================================================================
+--             THE OWNER'S CONSOLE LINES, CHECKLIST AND TEST FACTS
+-- ============================================================================
+
+-- the console examples quote the mission load line as missions.lua prints it
+do
+    local missions = ReadRepo('Crimson-Police/modules/missions/missions.lua') or ''
+    local fmt = missions:match('%[crimson%-police%] missions loaded: ([^\']+)\'') or ''
+    H.ok(fmt:find('%d', 1, true) ~= nil, 'missions.lua prints the mission load line')
+    local pat = '^missions loaded: ' .. fmt:gsub('%%d', '\1'):gsub('%p', '%%%0'):gsub('\1', '[%%dN]+')
+    for _, rel in ipairs({ 'README.md', 'docs/IN_GAME_TEST_PLAN.md', 'docs/OWNER_GUIDE.md' }) do
+        local n = 0
+        for line in (ReadRepo(rel) or ''):gmatch('missions loaded:[^\n`]*') do
+            n = n + 1
+            H.ok(line:match(pat) ~= nil, rel .. ' quotes the mission load line as printed: ' .. line)
+        end
+        H.ok(n > 0, rel .. ' shows the mission load line')
+    end
+end
+
+-- README 3.4's example warning is the start-up check's own text for a missing SAST job
+do
+    local parts = ReadRepo('Crimson-Police/locales/parts/access.json') or ''
+    local text = parts:match('\n  "health%.dept%.no_job": "(.-)",?\n') or ''
+    H.ok(#text > 50, 'the department job warning is in locales/parts/access.json')
+    local line = text:gsub('{dept}', 'SAST'):gsub('{job}', 'sast'):gsub('{key}', 'sast')
+    H.ok(Has(readme, '[crimson-police:confighealth] departments: ' .. line .. '\n'),
+        'README 3.4 shows the department job warning as the console prints it')
+end
+
+local checklist = ReadRepo('docs/IN_GAME_CHECKLIST.md') or ''
+
+-- the checklist names the supervisor grade the config ships
+H.ok(Has(
+    checklist:match('\n## Before you start\n(.-)\n## ') or '',
+    ('(grade %d as shipped'):format(Cfg.Departments.sast.supervisorGrade)
+), 'the checklist names the shipped SAST supervisor grade ' .. tostring(Cfg.Departments.sast.supervisorGrade))
+
+-- the checklist opens with a first hour in game: 12 to 18 checks, each saying what you should see
+do
+    H.eq(checklist:match('\n## ([^\n]+)'), 'First hour in game', 'the checklist starts with its first hour in game')
+    local first = checklist:match('\n## First hour in game\n(.-)\n## ') or ''
+    local items = {}
+    for ln in (first .. '\n'):gmatch('(.-)\n') do
+        if ln:match('^%- %[ %] ') then
+            items[#items + 1] = ln
+        elseif ln:match('^  %S') and #items > 0 then
+            items[#items] = items[#items] .. ' ' .. ln
+        end
+    end
+    H.ok(#items >= 12 and #items <= 18, ('the first hour has about 15 checks (%d)'):format(#items))
+    local blind = {}
+    for _, item in ipairs(items) do
+        if not item:find('->', 1, true) then blind[#blind + 1] = item:sub(7, 50) end
+    end
+    H.eq(table.concat(blind, '; '), '', 'every first-hour check says what you should see')
+    H.ok(Has(first, '(IN_GAME_TEST_PLAN.md)'), 'the first hour links the full test plan')
+end
+
+-- TESTING states the gate as tools/check_all.sh runs it
+do
+    local testing = ReadRepo('docs/dev/TESTING.md') or ''
+    local gate = ReadRepo('tools/check_all.sh') or ''
+    local listed = Lines('cd "' .. REPO .. '" && bash tools/check_all.sh --list')
+    local rows = {}
+    for step in (testing:match('\n## The checks\n(.-)\n%*%*') or ''):gmatch('\n| `([%w%-]+)` |') do
+        rows[#rows + 1] = step
+    end
+    H.ok(#listed >= 10 and Has(gate, '--list'), ('check_all.sh lists its steps (%d)'):format(#listed))
+    H.eq(table.concat(rows, ' '), table.concat(listed, ' '), 'TESTING lists the gate steps in the order they run')
+    local nightly = ReadRepo('.github/workflows/nightly.yml') or ''
+    local named = {}
+    for step in (nightly:match('bash tools/check_all%.sh ([%w%- ]+)\n') or ''):gmatch('%S+') do
+        named[#named + 1] = '`' .. step .. '`'
+    end
+    H.ok(#named >= 1, 'nightly.yml names its opt-in steps')
+    H.ok(Has(testing, '`.github/workflows/nightly.yml` runs ' .. table.concat(named, ' and ') .. ' every night'),
+        'TESTING names the steps nightly.yml runs: ' .. table.concat(named, ' and '))
+    H.ok(Has(testing, ('the SPEC stays under %d bytes'):format(SPEC_MAX)), 'TESTING gives the SPEC size the test uses')
+end
+
+-- STYLE gives the config's first key without a value the shipped config does not have
+do
+    local style = ReadRepo('docs/dev/STYLE.md') or ''
+    local said = style:match('`Config%.Debug = (%a+)` is the first key')
+    H.ok(said == nil or said == tostring(Cfg.Debug), 'STYLE: the first config key as shipped')
+    H.ok(Has(style, '`Config.Debug` is the first key'), 'STYLE names Config.Debug as the first key')
+end
+
+-- ARCHITECTURE names only settings that exist (Config.X and the keys of other resources left out)
+do
+    local OTHER = {
+        Roster = true,
+        Police = true,
+        DispatchIntegration = true,
+        Integrations = true,
+        ArenaIntegration = true,
+        Prison = true,
+        DispatchJobs = true,
+        PoliceJobs = true,
+        Dispatch = true,
+        DispatcherMode = true,
+    }
+    local bad, seen, n = {}, {}, 0
+    for path, after in arch:gmatch('%f[%w]Config%.([%w_%.]+)(.?)') do
+        path = path:gsub('%.+$', '')
+        local top = path:match('^[%w_]+')
+        if not seen[path] and not OTHER[top] and after ~= '*' and after ~= '<' and after ~= '{' and top ~= 'X' then
+            seen[path] = true
+            n = n + 1
+            if Node(Cfg, path) == nil then bad[#bad + 1] = path end
+        end
+    end
+    H.ok(n > 150, ('ARCHITECTURE names the settings (%d)'):format(n))
+    H.eq(table.concat(bad, ', '), '', 'every Config key ARCHITECTURE names exists in config.lua as shipped')
 end
 
 return H

@@ -1,6 +1,6 @@
--- WF5C: every admin workflow, extensively (the owner: "do extensive workflow testing on everything").
+-- Every admin workflow, extensively.
 
--- WF5C: every admin workflow, extensively (the owner: "do extensive workflow testing on everything").
+-- Every admin workflow, extensively.
 -- Every workflow and every action of the Admin UI's groups, driven start to finish on the REAL server side of
 -- Crimson-Police: the world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the
 -- owner's scripts running, database off: the saves folder, as shipped), booted on the shipped config with no section

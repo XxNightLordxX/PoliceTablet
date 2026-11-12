@@ -620,7 +620,7 @@ Everything else works as shipped. These are the ones owners change most:
 | Setting | What it does |
 |---|---|
 | `Config.Rewards` | Item rewards, off by default (see [3.3](#33-item-rewards)) |
-| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted) and while a maintenance lock (a storage copy or a restore) holds, also across restarts; held cash and items of a voided run are forfeited only after it |
+| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted; only a suspension that started while the window was still open counts, so a later one never reopens an old run) and while a maintenance lock (a storage copy or a restore) holds, also across restarts; held cash and items of a voided run are forfeited only after it |
 
 **System**
 
@@ -845,7 +845,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.AdminUi.settingsView` | Settings opens in Simple; **All settings** is one click away | Admin UI → Settings |
 | `Config.AdminUi.homeForms` | the Home shortcuts hold their quick forms; **Open** opens the full screen | Admin UI → Home |
 | `Config.AdminUi.markersScreen` | the **Map markers** screen is shown | Admin UI → NPC missions → Map markers ([3.13](#313-map-markers-every-part-of-a-mission)) |
-| `Config.AdminUi.needsAttention` | Home's **Live now** queues and **Alerts** (UI3: one dashboard) | Admin UI → Home |
+| `Config.AdminUi.needsAttention` | Home's **Live now** queues and **Alerts** (one dashboard) | Admin UI → Home |
 | `Config.AdminUi.oneRequest` | Payments made and Leaderboards open with one request each | Admin UI → Money → Payments, Leaderboards |
 | `Config.AdminUi.windowRows` | long lists draw only the rows in view | every tablet UI |
 | `Config.AdminUi.foldAdvanced` | settings-heavy dialogs and Mission controls fold the rare options under **More** | Admin UI dialogs, Supervisor UI → Department → Controls |
@@ -2078,9 +2078,11 @@ What you can do from a row (the buttons show only where they make sense):
 - **Resolve** a payment stuck half way ("paying", after a crash or a Qbox error). It shows what Renewed-Banking
   recorded for that transaction id, and where the payment stopped (Crimson-Police now saves each step: claimed, the
   department paid, the officer got it). Then **Mark paid** (no money moves) or **Pay again** (see below). "Not found"
-  in the bank history proves nothing, so look at the officer's balance too. When a money call was cut or failed half
-  way and the balance does not show whether it went through, the step says so and Pay again is refused: check both
-  bank histories, then Mark paid or pay by hand. When Qbox or Renewed-Banking fails but the balance shows the money
+  in the bank history proves nothing, so look at the officer's balance too. When the department withdrawal, or the
+  department's refund, was cut or failed half way and the balance does not show whether it went through, the step
+  says so and Pay again is refused: check both bank histories, then Mark paid or pay by hand. When only the officer's
+  deposit was cut or failed half way, Pay again stays offered: tick that his history shows the money never arrived
+  and it deposits only (the department, which already paid, is not charged again). When Qbox or Renewed-Banking fails but the balance shows the money
   arrived (or did not move at all), the payment finishes (or goes back to pending) by itself.
 - **Resolve** on a paid or capped row marked **Check**: a money tool left half way. Pay the rest: **Mark the rest
   paid** or **Release** (the department gets back what it paid). A clawback: **It was taken** or **It was not
