@@ -85,6 +85,45 @@ reached; it now scrolls; (2) Admin -> Officers crashed on an officer with no bad
 (3) the Running now mocks named officers the Officers mocks did not have. `layouts/clickthrough.walk.ts` keeps (1) to (3)
 checked in the gate.
 
+**A random soak across every workflow.** `tests/soak_spec.lua` (WF6A) runs a seeded random driver on the same world
+with 12 officers in three departments (SAST, FIB and a BCSO the admin adds in Departments), 2 supervisors, 1 admin
+and 2 civilians. For hours of game time it picks random valid and invalid actions of every role: accept, work the
+objective, abandon, units (invite, answer, leave, kick, promote, disband, cancel), mission calls (post, claim,
+decline), Give points, commend, Mission ban, Clear cooldown, happy hour, the Review Queue, disputes, manual cash and
+Add funds, Settings changes, presets, restarts, drops and reconnects, duty toggles, the hourly, daily and weekly
+resets, the maintenance lock, the guided tours (done, `/crimsonhelp`, the admin's reset, the Setup checklist on Home)
+and opening each tablet. Even seeds turn every switch on first; odd seeds keep the shipped config. After every action
+it checks: no player on two runs; every run ends once per player (one runEnded, one ledger row), and at the end
+every run has ended (a restart ends the runs it stops, as documented in runs.lua); the cash each character got
+equals the cash_paid of his paid and capped rows; no negative XP, pay or funding; the supervisors' per-day caps, the
+unit size and the completions an hour are never passed; every CP.Lock key and the maintenance lock are released; no
+entity outlives its run by two minutes; no error line and no Lua error; and a wrong role, another department, a
+feature off or the maintenance lock never lets an action succeed. On a failure it prints the seed and shrinks the
+action list to the shortest one that still fails (child runs replay it). The normal suite runs one seed for about
+two simulated hours; `CP_SOAK=1 CP_SOAK_SEEDS=1-24 CP_SOAK_HOURS=6` runs many, and `CP_SOAK_STORAGE=database` runs
+it on MariaDB. WF6A ran 24 seeds for 6 simulated hours each in files mode (77,202 actions, 2,923 runs) and 6
+seeds for 4 hours on MariaDB: every invariant held, and no defect of the resource was found. What it did find were
+gaps in the test world (ox_inventory's item hook, Qbox's GetMetadata and the city's own players, users,
+player_vehicles and mdt_dispatch tables were missing there, so those adapters printed error lines the other world
+specs hid): the soak fills them in for itself.
+
+**Every workflow on MariaDB, and under load.** WF6B ran every workflow and end-to-end spec on MariaDB (database on) as
+well as on the saves folder: `CP_WF_STORAGE=database lua5.4 tests/run.lua tests/<spec>.lua` runs the worlds of
+`tests/workflows_full_spec.lua` (full, none and none_*, officer, supervisor, admin, realplayers, system_generic, soak)
+and `workflows_e2e`, `live_fto_e2e` and `realsuspects_e2e` there (`e2e`, `admin_control_e2e` and `system_db` already run
+on MariaDB in the database suite). Every one passed with the same results as on the saves folder; on MariaDB the full
+world's storage copy goes the other way (the database into the saves folder, Replace). The only differences were in the
+specs themselves (they expected the saves folder, and read TINYINT 0 where oxmysql gives false), fixed there; no defect
+of the resource was found. `tests/load_spec.lua` (in all three suites) then loads the same world: 48 officers in three
+departments, 12 runs at once on the shipped config (the 13th refused) and 16 with every switch on (the 17th refused),
+4 cross-department operations (one started by its join window's end), a drop and reconnect mid-run, two start
+deadlines, a backup during the 16 runs, 200 queued payments (Qbox refusing some officers' pay, the admin's manual cash
+to officers who are offline) with a storage copy and a backup while they wait, then the logins and a restart paying
+them. It checks: one ledger row per run and participant (none lost, none doubled), the backup and the copy hold every
+row, every queued payment paid exactly once, the deadlines and the join window end on time (within 3 s), no error line,
+and the harness tick time (CPU ms per step: p95 within 25 ms, p99 within 100 ms, the worst step within 500 ms). Measured
+on both stores: p95 about 2 ms, the worst step 60 to 250 ms (a garbage collection on a busy machine).
+
 | Workflow | Spec | Restart | Drop and reconnect | No scripts | Result |
 | --- | --- | --- | --- | --- | --- |
 | Duty and the tablet: command, key, desk, item | officer (1, 2b) | yes (the item kept) | the officer after the item setting | owner stack only | Pass |
@@ -145,10 +184,14 @@ checked in the gate.
 | Restart and maintenance locks in money and storage actions | system (3), system_db (3) | yes (paying, pending, cut restore, switch) | the paid officer during each lock | owner stack only | Pass |
 | Clean-up and daily backup jobs | system (4), system_db (4) | yes (before the reset) | the admin before the reset | owner stack only | Pass |
 | Idle check | system (5) | yes | - | owner stack only | Pass |
+| Guided tours: done, replay, `/crimsonhelp`, the admin's reset, the Setup checklist | training_spec, setup_spec, tours.walk.ts, soak | soak | soak | owner stack only | Pass |
+| Random actions of every role across every workflow, with the invariants checked after each (WF6A) | soak (24 seeds x 6 h; MariaDB 6 seeds x 4 h) | yes (random) | yes (random players) | owner stack only | Pass |
+| Every workflow and end-to-end spec on MariaDB (database on), compared with the saves folder (WF6B) | the worlds and e2e specs with `CP_WF_STORAGE=database` | yes (each spec's own) | yes (each spec's own) | none, none_* | Pass (same results on both stores) |
+| Load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, a backup and a storage copy (WF6B) | load (MariaDB, saves folder, shadow) | yes (with payments waiting) | yes (mid-run, 20 officers offline) | owner stack only | Pass |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
 | Every screen, tab, button and dialog clicked in a real browser (79 screens and tabs of the four tablets) | tools/clickthrough.mjs (npm run clickthrough, WF5F), clickthrough.walk.ts | - | - | - | Pass (after fixes WF5F-1 to WF5F-3) |
 
-"system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
+"soak" = tests/soak_spec.lua, "load" = tests/load_spec.lua, "system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
 tests/workflows_system_generic_spec.lua, "admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
 = tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
 with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's

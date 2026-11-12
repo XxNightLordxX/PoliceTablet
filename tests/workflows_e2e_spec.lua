@@ -11,9 +11,11 @@
 -- 6. Review, void and dispute.
 
 local H = dofile('tests/harness.lua')
-H.useFiles()
+-- WF6B: CP_WF_STORAGE=database (with lua5.4 tests/run.lua's default MariaDB mode) runs it on MariaDB, database on
+local ON_DB = os.getenv('CP_WF_STORAGE') == 'database' and H.storage == 'database'
+if not ON_DB then H.useFiles() end
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_wf_e2e'
-H.resetSaves()
+if ON_DB then H.resetDatabase() else H.resetSaves() end
 H.boot({ side = 'server', realLocale = true })
 H.time = os.time({ year = 2026, month = 9, day = 23, hour = 14, min = 0, sec = 0 })
 local U = CP.U
@@ -508,7 +510,8 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, ON_DB,
+        ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Rewards.enabled, false, 'shipped: item rewards off')
     H.eq(Config.FeatureRewards.supAward.enabled, false, 'shipped: Give points pays no money')
     H.eq(Config.MissionControls.controls.awardPoints.on, false, 'shipped: Give points is off')

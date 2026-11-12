@@ -105,7 +105,8 @@ local function AfterWait() H.time = H.time + (tonumber(Config.MissionControls.ch
 -- TODAY AND OFFICERS (SHIPPED CONFIG FIRST).
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, W.ON_DB,
+        W.ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Debug, true, 'shipped: Debug on')
     H.eq(Config.Permissions.supervisor.missionControls, false, 'shipped: the Mission controls master switch off')
     H.eq(Config.MissionControls.selfExempt, true, 'shipped: the self rule on')
