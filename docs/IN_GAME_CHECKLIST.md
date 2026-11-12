@@ -515,6 +515,14 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   `Config.Training.enabled = false` in Settings: no tour, no **?** button, no Tours lists. (TR1)
 - [ ] resmon while a tour shows and while none does: no change while none runs (the tour looks for its element only
   while a step shows). (TR1)
+- [ ] A new character's first mission run: a tip card at the top of the HUD explains the HUD, then the GPS line (on
+  the way to the start), then the objectives once they show, each outlining its part and closing after 12 s. The game
+  keeps full control (no mouse, no keys taken). Open the tablet over the HUD: the tip waits and comes back. (TR2)
+- [ ] The run ends: the result card's tip shows. On the next run no tip shows, also on another PC. My options ->
+  Tours -> First mission run tips -> Start says "Shows on your next mission run" and the next run shows every tip
+  again; `/crimsonhelp run` does the same with a message. `Config.Training.autoStart.run = false`: no tips. (TR2)
+- [ ] HUD on the left (My options -> HUD side), small and large HUD sizes, 720p: the tip stays in the HUD column and
+  the column still fits the screen. (TR2)
 
 ## Every workflow end to end
 

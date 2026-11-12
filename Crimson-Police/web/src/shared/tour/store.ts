@@ -16,6 +16,8 @@ export interface TrainingView {
     versions?: Partial<Record<TourId, number>>;
     // an admin with the First-start setup still on Home: the Admin tour waits for the setup's last page
     setupPending?: boolean;
+    // Config.Training.hintSeconds: how long each tip of the first mission run shows
+    hintSeconds?: number;
 }
 
 export interface TourRun {
@@ -30,11 +32,16 @@ interface TourState {
     run: TourRun | null;
     // asked for, waiting for its tablet to show (dropped after ASK_TTL_MS)
     asked: { tour: TourId; at: number } | null;
+    // the run tips were asked for again (a Tours list, /crimsonhelp run): they show on the next run, or now
+    hintsAgain: boolean;
+    // the run tips now: shown = the tips shown since the last finish (kept while the HUD column remounts), again =
+    // every tip, as asked for
+    hints: { again: boolean; shown: string[] };
 }
 
 const ASK_TTL_MS = 10000;
 
-let state: TourState = { view: null, run: null, asked: null };
+let state: TourState = { view: null, run: null, asked: null, hintsAgain: false, hints: { again: false, shown: [] } };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<TourState>): void {
@@ -65,6 +72,11 @@ function versionsOf(v: unknown): Partial<Record<TourId, number>> {
     return out;
 }
 
+// Config.Training.hintSeconds as the server sends it: 4-60 s, 12 when missing.
+export function hintSecondsOf(v: unknown): number {
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(60, Math.max(4, Math.floor(v))) : 12;
+}
+
 export function normalizeTraining(raw: unknown): TrainingView | null {
     if (!raw || typeof raw !== 'object') return null;
     const r = raw as Record<string, unknown>;
@@ -79,6 +91,7 @@ export function normalizeTraining(raw: unknown): TrainingView | null {
         seen: versionsOf(r.seen),
         versions: versionsOf(r.versions),
         setupPending: r.setupPending === true,
+        hintSeconds: hintSecondsOf(r.hintSeconds),
     };
 }
 
@@ -98,10 +111,34 @@ export function autoTourFor(tablet: TourTablet, view: TrainingView | null): Tour
     return null;
 }
 
-// Ask for a tour from the start (it runs once its tablet shows). Ignored while tours are off.
+// Ask for a tour from the start (it runs once its tablet shows; the run tips on the next run, or now during one).
+// Ignored while tours are off.
 export function askTour(tour: TourId): void {
     if (state.view && !state.view.enabled) return;
+    if (TOURS[tour].tablet === 'hud') {
+        set({ hintsAgain: true });
+        return;
+    }
     set({ asked: { tour, at: Date.now() } });
+}
+
+// The run tips asked for again start showing: every tip, from the first.
+export function takeHintsAgain(): boolean {
+    if (!state.hintsAgain) return false;
+    set({ hintsAgain: false, hints: { again: true, shown: [] } });
+    return true;
+}
+
+// A run tip closed after its time.
+export function hintShown(id: string): void {
+    if (state.hints.shown.includes(id)) return;
+    set({ hints: { ...state.hints, shown: [...state.hints.shown, id] } });
+}
+
+// The run tips are finished: saved, and none shows again until asked for.
+export function finishHints(): void {
+    set({ hints: { again: false, shown: [] } });
+    saveTour('run');
 }
 
 // The asked tour for this tablet, if one is waiting (and still fresh); it is taken off the queue.
@@ -135,8 +172,12 @@ export function endRun(save: boolean): void {
     const r = state.run;
     if (!r) return;
     set({ run: null });
-    if (!save) return;
-    const version = tourVersion(TOURS[r.tour]);
-    if (state.view) set({ view: { ...state.view, seen: { ...state.view.seen, [r.tour]: version } } });
-    void action('server:training:done', { tour: r.tour, version });
+    if (save) saveTour(r.tour);
+}
+
+// The tour is finished in its version now: kept on the server, so it does not start by itself again.
+export function saveTour(tour: TourId): void {
+    const version = tourVersion(TOURS[tour]);
+    if (state.view) set({ view: { ...state.view, seen: { ...state.view.seen, [tour]: version } } });
+    void action('server:training:done', { tour, version });
 }

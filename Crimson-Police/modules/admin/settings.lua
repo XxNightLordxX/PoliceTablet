@@ -693,6 +693,7 @@ local RANGES = {
     ['AdminUi.pageSize'] = { 0, 200 },
     ['AdminUi.reviewBatchDays'] = { 0, 365 },
     ['Tablet.pauseGuardMs'] = { 0, 1000 },
+    ['Training.hintSeconds'] = { 4, 60 },
     ['Departments.*.logo.opacity'] = { 0, 0.25 },
     ['Departments.*.logo.size'] = { 0.05, 1 },
     ['Departments.*.supervisorGrade'] = { 0, 100 },

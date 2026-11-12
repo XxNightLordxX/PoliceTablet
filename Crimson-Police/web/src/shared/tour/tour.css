@@ -156,3 +156,40 @@
 .crim-help {
     color: var(--cp-text);
 }
+
+/* The tips of the first mission run (shared/tour/RunHints.tsx): a card at the top of the HUD column, no focus and
+   no clicks; the part of the HUD it talks about gets an outline. */
+.cp-hint {
+    margin-bottom: var(--cp-space-2);
+    padding: 10px var(--cp-space-3);
+    border: 1px solid var(--cp-accent, #e63946);
+    border-radius: 12px;
+    background: rgba(var(--cp-bg-rgb, 22, 26, 29), 0.94);
+    color: var(--cp-text, #f5f3f4);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+.cp-hint__title {
+    display: block;
+    margin: 2px 0 var(--cp-space-1);
+    font-size: 15px;
+}
+
+.cp-hint__body {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.cp-hint__auto {
+    margin: 6px 0 0;
+    color: var(--cp-muted, #b1a7a6);
+    font-size: 12px;
+}
+
+.cp-hint-glow {
+    outline: 2px solid var(--cp-accent, #e63946);
+    outline-offset: -2px;
+    border-radius: 12px;
+}

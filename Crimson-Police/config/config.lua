@@ -253,6 +253,7 @@ Config.Training = {
         supervisor = true,           -- the Supervisor UI: Today, the Officers panel, Controls, Review, Calls
         admin = true,                -- the Admin UI: Home, the search, the groups, the gear, presets, money tools
         criminal = true,             -- the criminal tablet: opting in, jobs, saying yes, the rules and strikes
+        run = true,                  -- the first mission run: tips beside the HUD, the GPS line and the result card
     },
     -- true = the tour card offers Skip and Don't show again; false = only Back and Next (Escape still closes it,
     -- and the tour starts again on the next open until it is finished)
@@ -264,6 +265,9 @@ Config.Training = {
     -- scripts, money tools, presets, Debug off for go-live), each line ticked from the server's real state; false =
     -- no checklist card
     setupChecklist = true,
+    -- Seconds each tip of the first mission run stays beside the HUD (4 to 60). The tips need no click and take no
+    -- control from the game; the next one shows once its part of the HUD is there
+    hintSeconds = 12,
 }
 
 -- ============================================================================

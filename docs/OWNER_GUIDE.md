@@ -2235,15 +2235,21 @@ always ends the tour.
 - **Admin tour**: Home, the Setup checklist, the search box (Ctrl+K), the groups of the sidebar, the gear, Settings ->
   Presets, Money, and Settings -> Features where the money tools wait behind the typed word ENABLE.
 - **Criminal tablet tour**: opting in, the jobs, saying yes first, the rules and strikes.
+- **First mission run tips**: during an officer's first run, a small card at the top of the HUD explains the HUD, the
+  objectives, the GPS line (the route to the start or the objective pointer) and, when the run ends, the result card.
+  The part it talks about gets an outline. There is no mouse during a run, so the tips need no click and take no
+  control: each closes by itself after `Config.Training.hintSeconds` (12 s) and the next one waits until its part of
+  the HUD shows. They are saved once the result card's tip showed.
 
 A finished tour (or **Don't show again**) is saved for that character on the server (table `cp_tours`), so it shows
 once, on every PC. **Skip** or Escape only ends it for now: it starts again on the next open. When an update adds
 steps to a tour, a player who finished it sees only the new steps.
 
 **Replay a tour** any time: the **?** button in the header of every tablet, **My options -> Tours** (the Officer
-tour, and the Supervisor tour for a supervisor), **Admin UI -> Settings -> Tours**, or the command **/crimsonhelp**
-(it opens the tablet of your role and starts its tour; `/crimsonhelp officer`, `supervisor`, `admin` or `criminal`
-names one of yours). An admin can make every tour show again for one character: Admin UI -> **Officers** -> the
+tour, the Supervisor tour for a supervisor and the first run tips), **Admin UI -> Settings -> Tours**, or the command
+**/crimsonhelp** (it opens the tablet of your role and starts its tour; `/crimsonhelp officer`, `supervisor`, `admin`,
+`criminal` or `run` names one of yours). The first run tips have no tablet: started again, they show on your next
+mission run (or at once during one). An admin can make every tour show again for one character: Admin UI -> **Officers** -> the
 officer -> **Reset tours** (with a reason, in the audit log).
 
 The **First-start setup** (`Config.AdminUi.setupScreen`) ends with **Show me around the Admin UI when I finish**
@@ -2270,6 +2276,8 @@ Settings (`Config.Training`, in the Tablet and commands section of Settings):
 |---|---|---|
 | `Config.Training.enabled` | `true` | `false` = no tours at all: none starts, no **?** button, no Tours lists |
 | `Config.Training.autoStart.officer` / `.supervisor` / `.admin` / `.criminal` | `true` | `false` = that tour never starts by itself (the **?** still plays it) |
+| `Config.Training.autoStart.run` | `true` | `false` = no tips on the first mission run (My options -> Tours still queues them) |
+| `Config.Training.hintSeconds` | `12` | Seconds each first run tip stays beside the HUD (4 to 60) |
 | `Config.Training.allowSkip` | `true` | `false` = the card offers only Back and Next (Escape still ends it; it starts again next time) |
 | `Config.Training.command` | `'crimsonhelp'` | The command name; `''` = none. Restart to change it |
 | `Config.Training.setupChecklist` | `true` | `false` = no Setup checklist on Admin UI -> Home |

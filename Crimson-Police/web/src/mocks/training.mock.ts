@@ -1,6 +1,9 @@
 // Browser mocks of the guided tours (modules/access/training.lua): training:get and server:training:done. Every tour
+
+// Browser mocks of the guided tours (modules/access/training.lua): training:get and server:training:done. Every tour
 // counts as finished, so none starts by itself (the '?' button and the Tours lists still start one); ?tours=new
-// starts each tablet's tour on its first open, ?tours=off turns them off (Config.Training.enabled = false).
+// starts each tablet's tour on its first open (and the run tips on the first HUD), ?tours=off turns them off
+// (Config.Training.enabled = false).
 
 import { registerMock } from '../shared/nui';
 import { TOURS, tourVersion, type TourId } from '../shared/tour/tours';
@@ -14,9 +17,10 @@ const seen: Partial<Record<TourId, number>> = MODE === 'new' ? {} : { ...version
 
 registerMock('request', 'training:get', () => ({
     enabled: MODE !== 'off',
-    autoStart: { officer: true, supervisor: true, admin: true, criminal: true },
+    autoStart: { officer: true, supervisor: true, admin: true, criminal: true, run: true },
     allowSkip: true,
     checklist: true,
+    hintSeconds: 12,
     seen: { ...seen },
     versions,
     setupPending: false,

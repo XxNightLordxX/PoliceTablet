@@ -122,7 +122,7 @@ function RouteLine({ route }: { route: NonNullable<HudState['route']> }) {
 function TargetLine({ target }: { target: NonNullable<HudState['target']> }) {
     const formatDistance = useFormatDistance();
     return (
-        <div className="cp-hud__route is-target">
+        <div className="cp-hud__route is-target" data-tour="hud-route">
             <Icon name="navigation" size={15} />
             <div className="cp-hud__route-text">
                 <strong>{target.label}</strong>
@@ -202,6 +202,7 @@ export function Hud({ hud }: { hud: HudState }) {
                 compact && 'is-compact',
             )}
             aria-label={hud.missionLabel}
+            data-tour="hud"
         >
             {hud.test ? (
                 <div className="cp-hud__test">
@@ -243,10 +244,14 @@ export function Hud({ hud }: { hud: HudState }) {
 
                 <ContactCard contact={(hud as HudState & { contact?: HudContact | false | null }).contact} />
 
-                {showRoute && hud.route ? <RouteLine route={hud.route} /> : null}
+                {showRoute && hud.route ? (
+                    <div data-tour="hud-route">
+                        <RouteLine route={hud.route} />
+                    </div>
+                ) : null}
 
                 {objectives.length ? (
-                    <div className="cp-hud__objectives">
+                    <div className="cp-hud__objectives" data-tour="hud-objectives">
                         <div className="cp-hud__section-head">
                             <span>{t('hud.objectives')}</span>
                             <span className="cp-num">

@@ -475,11 +475,12 @@ function KeysCard() {
 //                                    SCREEN
 // ============================================================================
 
-// Tours (Config.Training): the Officer tour, and the Supervisor tour for a supervisor (it opens the Supervisor UI).
+// Tours (Config.Training): the Officer tour, the Supervisor tour for a supervisor (it opens the Supervisor UI) and
+// the first run tips (they show beside the HUD on the next mission run).
 function MyTours() {
     const session = useSession();
     const { switchUi } = useTablet();
-    const tours: TourId[] = session.roles.supervisor ? ['officer', 'supervisor'] : ['officer'];
+    const tours: TourId[] = session.roles.supervisor ? ['officer', 'supervisor', 'run'] : ['officer', 'run'];
     return (
         <ToursCard
             tours={tours}

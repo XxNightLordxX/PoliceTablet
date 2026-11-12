@@ -7,16 +7,22 @@
 // modules/access/training.lua (CP.Training.TOURS) carries the same number (shared/tour/tours.walk.ts checks both and
 // that every target exists in the sources). Add a step with the next version: only the new steps show to a
 // character who finished the tour before.
+// The 'run' tour is the tips of the first mission run: it runs beside the mission HUD without the NUI focus
+// (shared/tour/RunHints.tsx), so its steps have no screen and no click; each waits for its part of the HUD ('when').
 
 import type { ScreenKey, ScreenParams } from '../navigation';
 import type { Session } from '../types';
 import type { CrimScreen } from '../../types/criminal';
 
-export type TourId = 'officer' | 'supervisor' | 'admin' | 'criminal';
-export const TOUR_IDS: TourId[] = ['officer', 'supervisor', 'admin', 'criminal'];
+export type TourId = 'officer' | 'supervisor' | 'admin' | 'criminal' | 'run';
+export const TOUR_IDS: TourId[] = ['officer', 'supervisor', 'admin', 'criminal', 'run'];
 
-// The tablet a tour runs in (the criminal tablet has no session).
-export type TourTablet = 'officer' | 'supervisor' | 'admin' | 'criminal';
+// The tablet a tour runs in (the criminal tablet has no session; 'hud' = beside the mission HUD, no focus).
+export type TourTablet = 'officer' | 'supervisor' | 'admin' | 'criminal' | 'hud';
+
+// What a run tip waits for: the HUD shown, its objective list, its GPS line (the route to the start or the objective pointer), the
+// result card.
+export type HintWhen = 'hud' | 'objectives' | 'gps' | 'result';
 
 // What a step's needs() may look at: the session, the screens of the open UI, the Supervisor Department tabs and
 // whether Admin UI -> Home shows the Setup checklist.
@@ -38,6 +44,8 @@ export interface TourStep {
     crim?: CrimScreen;
     // 'click': the step moves on by itself once the officer clicks the element (Next still works)
     waitFor?: 'click';
+    // a run tip: it shows once this part of the HUD is on screen
+    when?: HintWhen;
     // the tour version that added the step (1 when left out)
     since?: number;
     // shown only when this is true (a screen or tab the player may not see is left out)
@@ -127,6 +135,16 @@ export const TOURS: Record<TourId, TourDef> = {
             { id: 'rules', target: 'screen-crim_rules', crim: 'rules' },
             { id: 'strikes', target: 'screen-crim_history', crim: 'history' },
             { id: 'help', target: 'tour-help' },
+        ],
+    },
+    run: {
+        id: 'run',
+        tablet: 'hud',
+        steps: [
+            { id: 'hud', target: 'hud', when: 'hud' },
+            { id: 'objectives', target: 'hud-objectives', when: 'objectives' },
+            { id: 'gps', target: 'hud-route', when: 'gps' },
+            { id: 'result', target: 'result-card', when: 'result' },
         ],
     },
 };

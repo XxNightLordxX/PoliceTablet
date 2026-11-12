@@ -27,7 +27,7 @@ import { SessionContext, type SessionContextValue } from './shared/session';
 import { applyAppearance, DEFAULT_THEME, mergeAppearance } from './shared/theme';
 import { normalizeHud, normalizeResult, normalizeSession } from './shared/data';
 import { pushNotification, setToastTime, subscribeToasts, toast, toastMs } from './shared/toast';
-import { TourHost } from './shared/tour';
+import { RunHints, TourHost } from './shared/tour';
 import type {
     HudState,
     Notification,
@@ -382,6 +382,10 @@ export default function App() {
                                 onError={releaseTestFocus}
                             >
                                 <HudColumn scale={hudScale} overUi={uiOpen}>
+                                    {/* the tips of the first mission run (Config.Training.autoStart.run) */}
+                                    <QuietBoundary name="run tips" resetKey={hud?.runId ?? ''}>
+                                        <RunHints hud={showHud ? hud : null} result={!!result} />
+                                    </QuietBoundary>
                                     {showHud && hud ? (
                                         <QuietBoundary name="hud" resetKey={hud.runId} onError={releaseTestFocus}>
                                             <Hud hud={hud} />

@@ -37,7 +37,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/modules/access/client/access.lua`: CP.Access (client): the latest officer and department the server sent.
 - `Crimson-Police/modules/access/client/options.lua`: CP.Options (client): the officer options as this PC sees them.
 - `Crimson-Police/modules/access/client/tablet.lua`: CP.Tablet (client): the NUI.
-- `Crimson-Police/modules/access/client/training.lua`: CP.Training (client): /crimsonhelp (Config.Training.command, modules/access/training.lua) lands here with the tour of the player's role.
+- `Crimson-Police/modules/access/client/training.lua`: CP.Training (client): /crimsonhelp (Config.Training.command, modules/access/training.lua) lands here with the tour
 - `Crimson-Police/modules/access/options.lua`: CP.Options (server): each character's officer options (My options), saved sparse in cp_officers.options (JSON: only the keys that differ from the default).
 - `Crimson-Police/modules/access/permissions.lua`: CP.Permissions: the one place that decides whether a role may do an action.
 - `Crimson-Police/modules/access/tablet.lua`: CP.Tablet (server): sessions for the three UIs, toasts, live pushes, the Admin UI opener and the department logo checks.
@@ -412,10 +412,12 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/shared/session.tsx`: The open UI's session (ARCHITECTURE §9.2) and tablet controls.
 - `Crimson-Police/web/src/shared/theme.ts`: Department theming (SPEC "Departments & tablet theming").
 - `Crimson-Police/web/src/shared/toast.ts`: The Crimson-Police toast bus.
+- `Crimson-Police/web/src/shared/tour/RunHints.tsx`: The tips of the first mission run (Config.Training: autoStart.run, hintSeconds): a small card at the top of the
 - `Crimson-Police/web/src/shared/tour/TourButtons.tsx`: The ways back into a tour: the '?' button in each tablet's header (that tablet's tour from the start) and the Tours card (My options, Admin UI -> Settings): every tour the player may take, whether he finished it, and Start.
 - `Crimson-Police/web/src/shared/tour/TourHost.tsx`: Runs the guided tours (Config.Training) over whichever tablet is open: it reads the player's training view when a
-- `Crimson-Police/web/src/shared/tour/index.ts`: Src/shared/tour · the guided tours (Config.Training): the engine (TourHost), the step lists (tours), the shared state (store) and the ways back into a tour (the '?' button and the Tours card).
+- `Crimson-Police/web/src/shared/tour/index.ts`: Src/shared/tour · the guided tours (Config.Training): the engine (TourHost), the step lists (tours), the tips of the first mission run beside the HUD (RunHints), the shared state (store) and the ways back into a tour (the '?' button and the Tours card).
 - `Crimson-Police/web/src/shared/tour/place.ts`: Where the tour card goes: under the element it points at, else above, else to its right or left, always inside the window (MARGIN from each edge).
+- `Crimson-Police/web/src/shared/tour/runHints.ts`: The tips of the first mission run (the 'run' tour of Config.Training): which tips show this time, which one is next for what is on screen now (the HUD, its objectives, its GPS line, the result card) and when they are finished.
 - `Crimson-Police/web/src/shared/tour/store.ts`: The tour state shared by the whole NUI: the player's training view (training:get: Config.Training and the tours he finished), the tour running now and a tour asked for (the '?' button, a Tours list, /crimsonhelp, the end of the First-start setup).
 - `Crimson-Police/web/src/shared/tour/tours.ts`: The guided tours (Config.Training): one step list per tablet.
 - `Crimson-Police/web/src/shared/tour/tours.walk.ts`: The guided tours (Config.Training) against the browser mocks (node walk.mjs, a gate step): every step's

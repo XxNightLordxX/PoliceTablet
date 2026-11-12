@@ -354,6 +354,11 @@ do
     H.ok(Check('Training.command', '') and not Check('Training.command', 'two words'), 'command: a name or none')
     H.eq(E('Training.setupChecklist').default, true, 'setupChecklist ships true')
     H.ok((E('Training.setupChecklist').desc or ''):find('Setup checklist', 1, true) ~= nil, 'setupChecklist: described')
+    H.eq(E('Training.autoStart.run').default, true, 'autoStart.run ships true')
+    H.ok((E('Training.autoStart.run').desc or ''):find('first mission run', 1, true) ~= nil, 'autoStart.run: described')
+    H.eq(E('Training.hintSeconds').default, 12, 'hintSeconds ships 12')
+    H.ok((E('Training.hintSeconds').desc or ''):find('need no click', 1, true) ~= nil, 'hintSeconds: described')
+    H.ok(Check('Training.hintSeconds', 4) and not Check('Training.hintSeconds', 3), 'hintSeconds: 4 to 60')
     H.eq(E('MissionControls.restrictionsTab').default, true, 'restrictionsTab ships true')
     H.ok((E('MissionControls.restrictionsTab').desc or ''):find('Restrictions tab', 1, true) ~= nil,
         'restrictionsTab: described')

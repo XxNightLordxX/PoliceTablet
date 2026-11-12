@@ -1,7 +1,8 @@
 -- CP.Training (server): the guided tours of the tablets (Config.Training). The tablet holds the steps
 
 -- CP.Training (server): the guided tours of the tablets (Config.Training). The tablet holds the steps
--- (web/src/shared/tour/tours.ts); the server keeps which tour each character finished, and in which version, in
+-- (web/src/shared/tour/tours.ts) and the tips of the first mission run (the 'run' tour, beside the HUD without the
+-- NUI focus); the server keeps which tour each character finished, and in which version, in
 -- cp_tours (one row per citizenid: JSON {"<tour>": <version>}), answers the /crimsonhelp command with the tour of the
 -- player's role and lets an admin reset a character's tours (Admin UI -> Officers).
 
@@ -13,10 +14,11 @@ local TAG = 'training'
 -- Every tour and its version now: the highest 'since' of its steps in web/src/shared/tour/tours.ts (a walk checks
 -- that both say the same). A step added later gets the next version, and only the new steps show to a character
 -- who finished an older one.
-Tr.TOURS = { officer = 1, supervisor = 1, admin = 1, criminal = 1 }
-Tr.ORDER = { 'officer', 'supervisor', 'admin', 'criminal' }
+Tr.TOURS = { officer = 1, supervisor = 1, admin = 1, criminal = 1, run = 1 }
+Tr.ORDER = { 'officer', 'supervisor', 'admin', 'criminal', 'run' }
 
 local COMMAND_GAP_MS = 2000      -- one /crimsonhelp per player this often
+local HINT_SECONDS = { 4, 60 }   -- Config.Training.hintSeconds: what the tips of the first run may use (12 shipped)
 
 local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
 
@@ -25,7 +27,14 @@ local function Cfg() return type(Config.Training) == 'table' and Config.Training
 -- Config.Training.enabled (shipped true).
 function Tr.enabled() return Cfg().enabled ~= false end
 
--- What the tablets need: { enabled, autoStart = { [tour] = bool }, allowSkip, checklist }.
+-- How long each tip of the first mission run shows (Config.Training.hintSeconds, 4-60 s; 12 when unset).
+function Tr.hintSeconds()
+    local v = tonumber(Cfg().hintSeconds)
+    if not v then return 12 end
+    return math.floor(math.max(HINT_SECONDS[1], math.min(HINT_SECONDS[2], v)))
+end
+
+-- What the tablets need: { enabled, autoStart = { [tour] = bool }, allowSkip, checklist, hintSeconds }.
 function Tr.config()
     local cfg = Cfg()
     local auto = type(cfg.autoStart) == 'table' and cfg.autoStart or {}
@@ -36,6 +45,7 @@ function Tr.config()
         autoStart = out,
         allowSkip = cfg.allowSkip ~= false,
         checklist = cfg.setupChecklist ~= false,
+        hintSeconds = Tr.hintSeconds(),
     }
 end
 
@@ -118,7 +128,7 @@ end
 -- ============================================================================
 
 -- The tours this player may take now: officer (on duty), supervisor (Supervisor UI), admin, criminal (the criminal
--- tablet), as a set.
+-- tablet) and run (the tips of the first mission run, any officer), as a set.
 function Tr.allowed(src)
     local out = {}
     local okA, admin = Call('Access', 'isAdmin', src)
@@ -126,6 +136,7 @@ function Tr.allowed(src)
     local okO, officer = Call('Access', 'getOfficer', src)
     if okO and type(officer) == 'table' then
         out.officer = true
+        out.run = true
         -- as the tablet session: the job grade, or an admin's extra grant of a supervisor power
         local okP, actions = Call('Permissions', 'actionsFor', src)
         local granted = not admin and okP and type(actions) == 'table' and #actions > 0
@@ -138,7 +149,7 @@ function Tr.allowed(src)
 end
 
 -- The tour /crimsonhelp opens: the asked one when the player may take it, else the one of his role (a supervisor's,
--- an officer's, an admin's, then the criminal tablet's). tour | nil, errKey.
+-- an officer's, an admin's, then the criminal tablet's; the run tips only by name). tour | nil, errKey.
 function Tr.roleTour(src, asked)
     if not Tr.enabled() then return nil, 'err.training_off' end
     local allowed = Tr.allowed(src)
@@ -209,6 +220,8 @@ local function OnCommand(src, args)
         CP.Tablet.notify(src, 'error', err)
         return
     end
+    -- the run tips have no tablet: they show beside the HUD on the next mission run (or now, during one)
+    if tour == 'run' then CP.Tablet.notify(src, 'info', 'tour.ui.run_next') end
     if tour == 'admin' then
         local okO, opened = Call('Tablet', 'openAdmin', src)
         if not (okO and opened) then return end

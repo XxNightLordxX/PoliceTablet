@@ -16,7 +16,8 @@ The first version for sale.
   supervisor grades, desks, storage, the scripts found and a preset. Every answer is a normal setting. Skippable.
 - **Guided tours** (`Config.Training`): each tablet shows a new character around on first open (Officer, Supervisor,
   Admin UI, criminal tablet), saved per character; the **?** in every header, the Tours lists and `/crimsonhelp`
-  replay them. Admin UI -> Home's **Setup checklist** ticks off what a new city still has to do.
+  replay them. Admin UI -> Home's **Setup checklist** ticks off what a new city still has to do. The first mission
+  run shows short tips beside the HUD (the HUD, objectives, the GPS line, the result card) with no clicks needed.
 - **Escrow-friendly layout:** `config/`, `locales/` and `missions/builtin/` stay readable and editable
   (`escrow_ignore` in `fxmanifest.lua`); custom missions are files written in game; `web/dist` ships built.
 - NPC missions (18 plus a Weekly Boss), mission calls, police actions and custody, the Mission Builder, units and
