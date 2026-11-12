@@ -25,9 +25,11 @@ What to update with each change is at the end, in "Working on the code".
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
 | `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 15 min |
 | `race-all` | opt-in: `CP_RACE_CUTS=all lua5.4 tests/run.lua --jobs=1 race`, `tests/race_spec.lua` cut after every query of every case instead of 5 spread over it | 6 min |
+| `db-check` | opt-in: `tools/db_check.sh`, "Real database check" below | 10 min |
 
-**Opt-in steps.** `clickthrough` and `race-all` print `SKIP` (and count as skipped) unless they are named
-(`tools/check_all.sh clickthrough race-all`) or turned on (`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`).
+**Opt-in steps.** `clickthrough`, `race-all` and `db-check` print `SKIP` (and count as skipped) unless they are
+named (`tools/check_all.sh clickthrough race-all db-check`) or turned on (`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`,
+`CP_DB_CHECK=1`).
 `.github/workflows/nightly.yml` runs both every night and on request. `clickthrough` serves the built web UI in its
 browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright, pinned in `Crimson-Police/web`'s
 devDependencies; `npx playwright install chromium` once): the Officer, Supervisor, Admin and criminal tablets, every
@@ -444,6 +446,48 @@ added after the award row, money a 'paying' row waits on) is in the case's `lag`
 - `build`: `web/dist is stale: N files differ from a fresh build`, then the files (`Only in ...`, `Files ...
   differ`). Run `cd Crimson-Police/web && npm run build` and commit `web/dist`. The fresh build is kept in the
   logs folder. A build of the same sources is byte-identical, so a difference is never noise.
+
+## Real database check
+
+`suite-db` runs every spec on one utf8mb4 database that `H.resetDatabase` makes, each migration applied once.
+`tools/db_check.sh` checks what that cannot: the migrations and the SQL on the kinds of database owners really have.
+It makes a throwaway MariaDB server of its own (`mariadb-install-db` on a new temporary data folder, `mariadbd`
+with a socket under `/tmp/cpdb.*` and no TCP port, stopped and deleted on exit), so it never touches the local
+server, `cp_test_*` or `cp_boot`. It needs `mariadb-server`, `lua5.4` and `lua-cjson`; as root it runs `mariadbd
+--user=root`. A socket path holds at most 107 bytes, which is why the socket does not live under `TMPDIR`.
+
+```
+tools/db_check.sh                                 # every check (about 10 minutes, most of it the specs)
+tools/db_check.sh --quick                         # without the specs (about 15 s)
+tools/db_check.sh --out tools/db_check_result.txt # the report kept in the repository; commit it with the change
+```
+
+`tools/db_check.lua` does the checks and prints one `PASS`, `FAIL` or `INFO` line each, then `SUMMARY`:
+
+- **The migrations, four times.** A utf8mb4 database, a latin1 one (MariaDB's own default), a utf8mb3 one
+  (txAdmin's recipe deployer) and a latin1 one on a server whose `default_storage_engine` is MyISAM. Each runs the
+  real `modules/system/migrations.lua` through a mysql-client stand-in for oxmysql: a first start, then
+  `cp_schema_migrations` emptied and every file applied again (only the runner's own "already there" errors
+  allowed), then a start that must change nothing. Then, from `information_schema`: every cp_ table InnoDB and
+  utf8mb4, every text column utf8mb4, every JSON column `utf8mb4_bin` with its `json_valid` check, an emoji saved and
+  read back, `cp_mission_runs_archive` with the same columns as `cp_mission_runs`, and the same tables and
+  collations as the utf8mb4 database.
+- **Every query PREPAREs**, with the default `sql_mode` and with `ONLY_FULL_GROUP_BY` added: each complete SQL
+  string literal in `Crimson-Police/**/*.lua` (not `memsql.lua`), and, without `--quick`, each distinct statement
+  the resource sent in eleven specs (`CP_SQL_LOG`, run against this server through `MYSQL_UNIX_PORT`). A statement on
+  another resource's table (`players`, `player_vehicles`, Renewed-Banking's) is counted, not failed.
+- **Every "insert once" target has a unique key** the insert fills: each `INSERT IGNORE`, `ON DUPLICATE KEY
+  UPDATE` and `REPLACE INTO` on a cp_ table.
+- **No column name needs quoting**: each cp_ column used unquoted in a prepared `SELECT ... WHERE ... ORDER BY`.
+- **Writes round-trip**: INT at its limit and its sum, a value past INT and DECIMAL(4,2) refused (strict mode,
+  nothing cut), NULLs and a JSON null read as SQL NULL, a DATETIME at 2147483647, a 280-emoji bio, a 255-emoji audit
+  reason, a 5 MB JSON with emoji, text that is not JSON refused.
+- **INFO lines**: the warnings each start printed, how many literals are built from parts (only the spec capture
+  sees those), and the server's time zone as the start-up probe reads it.
+
+Run it after a change to `sql/migrations/`, the migrations runner or any SQL, and keep its report:
+`tools/db_check_result.txt` is the last full run. A FAIL line names the database kind or the `file:line` and
+MariaDB's message.
 
 ## Real server boot test
 

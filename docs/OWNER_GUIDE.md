@@ -1318,7 +1318,12 @@ Good to know:
   is bigger, widen or move it. Four `Fort Zancudo` circles cover the military base; no built-in mission uses it
   (Drug Lab Raid's old Zancudo River cabin is now the Davis Quartz site office).
 - **Server time zone**: daily and weekly resets and the Weekly Boss days use the server machine's clock. Set the
-  machine's time zone to your community's.
+  machine's time zone to your community's. MariaDB's own time zone is separate: if it uses daylight saving (it
+  follows the machine unless told otherwise), a time saved in the hour the clocks go back reads back an hour early,
+  so a suspension, lock or cooldown ending in that hour ends an hour early, and the start prints a warning about it.
+  To avoid it, add `default-time-zone = '+00:00'` under `[mysqld]` in the MariaDB config and restart MariaDB. Do it
+  before the first start if you can: times saved before the change move once by your zone's offset (a few hours).
+  The resets keep following the machine's clock either way.
 
 ### 4.1 Locations and other scripts
 
@@ -2574,6 +2579,9 @@ The console lines about storage, config.lua, missions, payments and webhooks, af
 | `The database server is <version>. Crimson-Police needs MariaDB 10.3 or newer ...` followed by `How to fix it: update the database server to MariaDB 10.9 or newer ...` | The database server is too old: it has no JSON_VALUE, or reads it differently, and every payment uses it. Nothing was touched. Update to MariaDB 10.9 or newer (Qbox's minimum; your host may offer it), or set `Config.Database.enabled = false` to save to files. Then `ensure Crimson-Police` |
 | `the database server is MySQL <version>. Qbox does not support MySQL ...` | A warning: Crimson-Police starts, but Qbox is made for MariaDB, and on MySQL, once an officer has a cooldown clear, cap raise or extra boss attempt, the next one is refused, and a storage copy to the saves folder can reuse a deleted run's id. Move to MariaDB when you can |
 | `cp_<table> is utf8mb3_general_ci: switching it to utf8mb4 (once), so names and reasons with emoji are kept` | Normal, once per table, on a database made by txAdmin's recipe (its `utf8` character set can't hold emoji): on the first start with the database on, or in a `storage copy files-to-database`. A big `cp_mission_runs` can take a while; let it finish |
+| `cp_<table> is MyISAM: switching it to InnoDB (once), so its writes are crash safe` | Normal, once per table, on a database server whose default storage engine is MyISAM (MariaDB's default has been InnoDB since 10.2). Payments rely on InnoDB's transactions; let it finish |
+| `cp_<table> could not be switched to InnoDB, so its writes are not crash safe: ...` | Give the database user the ALTER right (the line's "How to fix it" says which), then restart |
+| `the database server's time zone uses daylight saving, so a time saved in the hour the clocks go back reads back an hour early ...` | A warning: Crimson-Police starts. See "Server time zone" in [4](#4-settings-to-check-in-your-other-resources) for the one line to add to the MariaDB config |
 | `cp_<table> could not be switched to utf8mb4, so names and reasons with emoji cannot be saved in it: ...` | Give the database user the ALTER right (the line's "How to fix it" says which), then restart. Until then a name or reason with an emoji in that table is not saved |
 | `still waiting for the database after 30 seconds: oxmysql has not connected` | Check the oxmysql lines above it and `set mysql_connection_string` in server.cfg (user name, password, host, database name). Or set `Config.Database.enabled = false` |
 | `first start with the database off: the saves folder ... is empty` | Normal on a new install |

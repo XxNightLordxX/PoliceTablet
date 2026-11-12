@@ -18,6 +18,8 @@
   three storage modes, tsc and the web build). `tools/setup_test_env.sh` checks and installs what it needs.
   `tools/boot_smoke.sh` boots a real FXServer with Crimson-Police and says PASS or FAIL (needs your license key in
   `CP_FX_LICENSE_KEY`; docs/dev/TESTING.md, "Real server boot test").
+  `tools/db_check.sh` runs the migrations and every query on a throwaway MariaDB server of its own (docs/dev/TESTING.md,
+  "Real database check").
   `.github/workflows/ci.yml` runs the same on GitHub.
 - **Text** lives in `Crimson-Police/locales/parts/<part>.json`. `python3 tools/check_contracts.py --merge` builds
   `locales/en.json` from them.

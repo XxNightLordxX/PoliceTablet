@@ -222,7 +222,13 @@ end
 -- (10.2 answers the text 'null'); Qbox itself asks for MariaDB 10.9 or newer and does not support MySQL. An older
 -- server would fail half way through a payment, so the start fails before any table is touched. MySQL starts with
 -- a warning. A server that does not answer at all is left to the migrations, which name the usual errors.
-local PROBE = [[SELECT VERSION() AS v, JSON_VALUE('{"a":"b"}', '$.a') AS a, JSON_VALUE('{"a":null}', '$.a') IS NULL AS n]]
+-- d: the seconds between two noons half a year apart in the session time zone. cp_ times are DATETIME, written with
+-- FROM_UNIXTIME and read with UNIX_TIMESTAMP in that zone, so in a zone with daylight saving the repeated hour of the
+-- autumn change reads back an hour early (a suspension or a cooldown ending in it ends an hour early). The start
+-- goes on, with one warning that says how to set the server to UTC.
+local PROBE = [[SELECT VERSION() AS v, JSON_VALUE('{"a":"b"}', '$.a') AS a, JSON_VALUE('{"a":null}', '$.a') IS NULL AS n,
+    UNIX_TIMESTAMP('2026-07-01 12:00:00') - UNIX_TIMESTAMP('2026-01-01 12:00:00') AS d]]
+local HALF_YEAR = 181 * 86400   -- d in a zone without daylight saving
 
 local function ServerName(v) return v:lower():find('mariadb', 1, true) and v or ('MySQL ' .. v) end
 
@@ -253,6 +259,11 @@ local function CheckServer()
             'the database server is MySQL %s. Qbox does not support MySQL (it asks for MariaDB 10.9 or newer), and Crimson-Police is made and tested for MariaDB. It starts, but on MySQL, once an officer has a cooldown clear, cap raise or extra boss attempt, the next one is refused, and a storage copy to the saves folder can hand out a deleted run\'s id again. Move to MariaDB when you can.',
             version)
     end
+    local d = row and tonumber(row.d)
+    if d and d ~= HALF_YEAR then
+        CP.warn(TAG,
+            'the database server\'s time zone uses daylight saving, so a time saved in the hour the clocks go back reads back an hour early (a suspension, lock or cooldown ending then ends an hour early). To avoid it, add default-time-zone = \'+00:00\' under [mysqld] in the MariaDB config and restart MariaDB, best before the first start: times saved before the change move once by the zone\'s offset (docs/OWNER_GUIDE.md section 4, "Server time zone").')
+    end
     return true
 end
 CP.Migrations._checkServer = CheckServer
@@ -263,14 +274,15 @@ CP.Migrations._checkServer = CheckServer
 -- that is not utf8mb4 is switched, once (a table a later migration makes is switched on the start that makes it).
 -- CONVERT gives the JSON columns the table's collation; they go back to utf8mb4_bin, as a utf8mb4 database makes
 -- them (on MariaDB JSON is LONGTEXT, and no other cp_ column is). Only Crimson-Police's own tables are touched. A
--- table that cannot be switched (no ALTER right) is named in a warning, and the start goes on as before.
+-- table that cannot be switched (no ALTER right) is named in a warning, and the start goes on as before. A cp_ table
+-- that is not InnoDB (a server whose default_storage_engine is MyISAM) is switched to InnoDB first, the same way.
 -- The storage copy to the database runs it too (admin/server.lua StorageCopy): an owner on the saves folder copies
 -- into a txAdmin database whose cp_ tables the copy itself makes. query (optional): the database's query function,
 -- MySQL.query.await by default; the copy passes oxmysql's, as in files mode MySQL is the saves folder engine.
 local function Utf8mb4Tables(query)
     query = query or MySQL.query.await
     local ok, cols = pcall(query, [[SELECT c.table_name AS t, c.column_name AS c, c.data_type AS d,
-        c.collation_name AS k, c.is_nullable AS n, b.table_collation AS tk
+        c.collation_name AS k, c.is_nullable AS n, b.table_collation AS tk, b.engine AS e
         FROM information_schema.columns c
         INNER JOIN information_schema.tables b ON b.table_schema = c.table_schema AND b.table_name = c.table_name
         WHERE c.table_schema = DATABASE() AND b.table_type = 'BASE TABLE'
@@ -283,7 +295,12 @@ local function Utf8mb4Tables(query)
             local t = todo[name]
             if not t then
                 local collation = tostring(r.tk or '')
-                t = { collation = collation, convert = collation:sub(1, 7) ~= 'utf8mb4', json = {} }
+                t = {
+                    collation = collation,
+                    convert = collation:sub(1, 7) ~= 'utf8mb4',
+                    json = {},
+                    engine = r.e ~= nil and tostring(r.e) or nil,
+                }
                 todo[name] = t
                 order[#order + 1] = name
             end
@@ -300,6 +317,18 @@ local function Utf8mb4Tables(query)
     end
     for _, name in ipairs(order) do
         local t = todo[name]
+        -- a server whose default_storage_engine is MyISAM made the table without transactions or crash safety
+        -- (the payment steps rely on both): it goes to InnoDB first, once
+        if t.engine and t.engine ~= '' and t.engine:lower() ~= 'innodb' then
+            print(('[crimson-police] %s is %s: switching it to InnoDB (once), so its writes are crash safe'):format(
+                name, t.engine))
+            local okE, errE = pcall(query, ('ALTER TABLE `%s` ENGINE=InnoDB'):format(name))
+            if not okE then
+                local hint = DatabaseHint(errE)
+                CP.warn(TAG, '%s could not be switched to InnoDB, so its writes are not crash safe: %s%s', name,
+                    tostring(errE), hint and (' How to fix it: ' .. hint) or '')
+            end
+        end
         local okC, errC = true, nil
         if t.convert then
             print(

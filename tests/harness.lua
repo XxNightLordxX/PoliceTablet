@@ -1250,14 +1250,15 @@ local function BadUtf8(sql, params)
     return false
 end
 
--- The migrations runner's statements for the database server itself (its version check, the utf8mb4 tables): it only
--- sends them with the database on, and the saves folder engine has no server version or character sets. Shadow mode
--- runs them on MariaDB alone (a skip, listed).
+-- The migrations runner's statements for the database server itself (its version check, the utf8mb4 and InnoDB
+-- tables): it only sends them with the database on, and the saves folder engine has no server version, character
+-- sets or storage engines. Shadow mode runs them on MariaDB alone (a skip, listed).
 local function ServerOnly(sql)
     local s = sql:upper()
     return s:find('^%s*SELECT%s+VERSION%(%)') ~= nil or s:find('CONVERT%s+TO%s+CHARACTER%s+SET') ~= nil
         or (s:find('INFORMATION_SCHEMA.', 1, true) ~= nil and s:find('COLLATION', 1, true) ~= nil)
         or s:find('^%s*ALTER%s+TABLE%s+`CP_[%w_]+`%s+MODIFY%s+`[%w_]+`%s+JSON') ~= nil
+        or s:find('^%s*ALTER%s+TABLE%s+`CP_[%w_]+`%s+ENGINE%s*=') ~= nil
 end
 
 -- One statement on the twin and on the engine (in that order, same pinned second); the twin's answer.

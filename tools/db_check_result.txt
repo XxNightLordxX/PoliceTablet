@@ -1,0 +1,76 @@
+tools/db_check.sh on 10.11.14-MariaDB-0ubuntu0.24.04.1 (at b5990f4-dirty)
+PASS  spec workflows_full (390 assertions passed, statements captured)
+PASS  spec workflows_admin (423 assertions passed, statements captured)
+PASS  spec workflows_supervisor (486 assertions passed, statements captured)
+PASS  spec workflows_officer (678 assertions passed, statements captured)
+PASS  spec admin_control_e2e (69 assertions passed, statements captured)
+PASS  spec e2e_spec (698 assertions passed, statements captured)
+PASS  spec admin_lists (17 assertions passed, statements captured)
+PASS  spec admin_economy (251 assertions passed, statements captured)
+PASS  spec workflows_system_db (213 assertions passed, statements captured)
+PASS  spec storage_copy (882 assertions passed, statements captured)
+PASS  spec realsuspects_e2e (170 assertions passed, statements captured)
+PASS  utf8mb4: first start                         18 of 18 files applied, 0 errors
+PASS  utf8mb4: every file applied a second time    18 of 18 files re-run, 0 errors
+PASS  utf8mb4: next start changes nothing          0 applied, 0 switched, 0 warnings
+INFO  utf8mb4: warnings at start                   none
+PASS  utf8mb4: every cp_ table InnoDB              30 of 30 tables
+PASS  utf8mb4: every cp_ table utf8mb4             30 of 30 tables
+PASS  utf8mb4: every text column utf8mb4           343 columns
+PASS  utf8mb4: JSON columns utf8mb4_bin, json_valid kept 20 JSON columns, 20 json_valid checks
+PASS  utf8mb4: emoji saved and read back           cp_audit.reason
+PASS  utf8mb4: archive columns = cp_mission_runs columns 48 columns, same order and types
+PASS  latin1: first start                          18 of 18 files applied, 0 errors
+PASS  latin1: every file applied a second time     18 of 18 files re-run, 0 errors
+PASS  latin1: next start changes nothing           0 applied, 0 switched, 0 warnings
+INFO  latin1: warnings at start                    none
+PASS  latin1: every cp_ table InnoDB               30 of 30 tables
+PASS  latin1: every cp_ table utf8mb4              30 of 30 tables
+PASS  latin1: every text column utf8mb4            343 columns
+PASS  latin1: JSON columns utf8mb4_bin, json_valid kept 20 JSON columns, 20 json_valid checks
+PASS  latin1: emoji saved and read back            cp_audit.reason
+PASS  latin1: archive columns = cp_mission_runs columns 48 columns, same order and types
+PASS  latin1: same tables and collations as utf8mb4 30 tables
+PASS  utf8mb3: first start                         18 of 18 files applied, 0 errors
+PASS  utf8mb3: every file applied a second time    18 of 18 files re-run, 0 errors
+PASS  utf8mb3: next start changes nothing          0 applied, 0 switched, 0 warnings
+INFO  utf8mb3: warnings at start                   none
+PASS  utf8mb3: every cp_ table InnoDB              30 of 30 tables
+PASS  utf8mb3: every cp_ table utf8mb4             30 of 30 tables
+PASS  utf8mb3: every text column utf8mb4           343 columns
+PASS  utf8mb3: JSON columns utf8mb4_bin, json_valid kept 20 JSON columns, 20 json_valid checks
+PASS  utf8mb3: emoji saved and read back           cp_audit.reason
+PASS  utf8mb3: archive columns = cp_mission_runs columns 48 columns, same order and types
+PASS  utf8mb3: same tables and collations as utf8mb4 30 tables
+PASS  latin1 MyISAM-default: first start           18 of 18 files applied, 0 errors
+PASS  latin1 MyISAM-default: every file applied a second time 18 of 18 files re-run, 0 errors
+PASS  latin1 MyISAM-default: next start changes nothing 0 applied, 0 switched, 0 warnings
+INFO  latin1 MyISAM-default: warnings at start     none
+PASS  latin1 MyISAM-default: every cp_ table InnoDB 30 of 30 tables
+PASS  latin1 MyISAM-default: every cp_ table utf8mb4 30 of 30 tables
+PASS  latin1 MyISAM-default: every text column utf8mb4 343 columns
+PASS  latin1 MyISAM-default: JSON columns utf8mb4_bin, json_valid kept 20 JSON columns, 20 json_valid checks
+PASS  latin1 MyISAM-default: emoji saved and read back cp_audit.reason
+PASS  latin1 MyISAM-default: archive columns = cp_mission_runs columns 48 columns, same order and types
+PASS  latin1 MyISAM-default: same tables and collations as utf8mb4 30 tables
+INFO  code literals                                588 SQL literals in Crimson-Police, 152 built from parts (checked through the runtime capture)
+PASS  code literals PREPARE (default sql_mode)     430 statements: 420 prepared, 10 on other resources' tables (bank_accounts_new, employee_incidents, mdt_dispatch, player_transactions, player_vehicles, players, users)
+PASS  code literals PREPARE (+ONLY_FULL_GROUP_BY)  430 statements: 420 prepared, 10 on other resources' tables (bank_accounts_new, employee_incidents, mdt_dispatch, player_transactions, player_vehicles, players, users)
+PASS  runtime capture                              679 distinct statements the specs sent (6 log files)
+PASS  runtime statements PREPARE (default sql_mode) 679 statements: 671 prepared, 8 on other resources' tables (bank_accounts_new, mdt_dispatch, player_transactions, player_vehicles, players, users)
+PASS  runtime statements PREPARE (+ONLY_FULL_GROUP_BY) 679 statements: 671 prepared, 8 on other resources' tables (bank_accounts_new, mdt_dispatch, player_transactions, player_vehicles, players, users)
+PASS  insert-once targets have a unique key        49 distinct targets
+PASS  column names need no quoting                 343 columns used unquoted
+PASS  write: INT 2147483647 kept, sums past INT    read back as written
+PASS  write: INT 2147483648 refused, not cut (strict) error 1264, nothing written
+PASS  write: DECIMAL(4,2) 100 refused (strict)     error 1264, nothing written
+PASS  write: NULLs and JSON null read as SQL NULL  read back as written
+PASS  write: DATETIME at 2147483647 round-trips (UTC) read back as written
+PASS  write: 280-emoji bio (1120 bytes) kept       read back as written
+PASS  write: 255-emoji audit reason kept           read back as written
+PASS  write: 5 MB JSON with emoji kept             read back as written
+PASS  write: text that is not JSON refused         error 4025, nothing written
+INFO  server time zone                             SYSTEM (system UTC): the start-up probe reads 15638400, no daylight saving: no warning
+
+SUMMARY PASS: 55 checks, 55 passed, 0 failed
+db_check: PASS

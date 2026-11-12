@@ -85,10 +85,11 @@ do
     end
 end
 
--- the opt-in steps (clickthrough, race-all) come last, after the steps every run has
+-- the opt-in steps (clickthrough, race-all, db-check) come last, after the steps every run has
 do
     local ok, out = Shell(('%s timeout 60 bash tools/check_all.sh --list'):format(CLEAN_ENV))
-    H.ok(ok and out:find('\nbuild\nclickthrough\nrace%-all\n$') ~= nil, 'the opt-in steps are listed last: ' .. out)
+    H.ok(ok and out:find('\nbuild\nclickthrough\nrace%-all\ndb%-check\n$') ~= nil,
+        'the opt-in steps are listed last: ' .. out)
 end
 
 return H
