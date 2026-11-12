@@ -463,4 +463,3 @@ strings do not count.
 | `web/src/shared/tour/TourHost.tsx` | 2 | 0 | the step's element looked for every 200 ms while a tour step shows; a one-shot after a waited click |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |
-| `web/src/shared/NoticesCard.tsx` | 1 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |

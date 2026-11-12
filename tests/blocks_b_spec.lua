@@ -2736,6 +2736,13 @@ do
     local opt = targets[71] and targets[71][1]
     H.ok(opt and opt.name == 'crimson-police:cut_restraints', 'pr: Cut restraints target on the restrained hostage')
     H.eq(opt and opt.canInteract(71), true, 'pr: target usable while current')
+    -- H6: ox_target restarts mid-run (its entity options are wiped): the loop adds Cut restraints again
+    targets[71] = nil
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    Steps(1)
+    opt = targets[71] and targets[71][1]
+    H.ok(opt and opt.name == 'crimson-police:cut_restraints',
+        'h6 pr: Cut restraints is back after an ox_target restart')
     opt.onSelect()
     H.eq(#ReportsOf(pc, 'free_start'), 1, 'pr: free_start reported')
     H.eq(progress.active, true, 'pr: progress bar running')
@@ -2881,6 +2888,12 @@ do
     FAc.update(rc, { peds = {}, mode = 'door', knocked = false })
     H.eq(#zones, firstZone + 1, 'fa restart: a new Knock and announce zone after the restart')
     H.eq(zones[#zones].options[1].canInteract(), true, 'fa restart: the knock can be used again')
+    -- H6: ox_target restarts before the knock (its zones are wiped): the door gets its zone again
+    local fz = #zones
+    removedZones[fz] = true
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    H.eq(#zones, fz + 1, 'h6 fa: after an ox_target restart the door has its Knock and announce zone again')
+    H.eq(zones[#zones].options[1].name, 'crimson-police:knock', 'h6 fa: with the knock option')
     zones[#zones].options[1].onSelect()
     Steps(4)
     H.eq(#ReportsOf(rc, 'knock'), 1, 'fa restart: the knock is reported again')

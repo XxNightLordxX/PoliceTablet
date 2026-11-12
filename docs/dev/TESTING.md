@@ -15,6 +15,7 @@ What to update with each change is at the end, in "Working on the code".
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
 | `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
+| `lint-i18n` | `python3 tools/check_i18n.py`: the translation scanner, English joined to a translated text (J), a plural built in place (P), a count string with no `_one` / `_other` forms (S), known hits in `tools/i18n_baseline.txt` ("Translation scanner" below) | 1 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/dev/STYLE.md) | 75 s |
 | `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
 | `suite-files` | `lua5.4 tests/run.lua --storage=files`: the same specs with the database off (saves folder) | 94 s |
@@ -375,6 +376,23 @@ lint-lua: 1 new warnings, 44 in the baseline, 0 stale baseline lines (45 luachec
   tables: `CP.Moeny` is `check_contracts.py`'s (module calls) or a spec's to catch.
 - `stale:` a baseline line no warning matches any more: delete it. `--all` prints the accepted warnings too,
   `--update-baseline` prints a line for every warning.
+
+### Translation scanner
+
+```
+NEW J Crimson-Police/modules/foo/client/foo.lua:12: local s = CP.L('foo.title') .. ' minutes left'
+120 hits, 119 in the baseline, 1 new, 0 stale
+```
+
+- `J`: English joined to `t()` / `CP.L()` with `+` or `..` (a literal with letters; `' · '` and `' '` between two
+  whole sentences pass): make it one key with a placeholder. `P`: a count compared with 1 picking between translated
+  texts: use `tn(key, n)` / `CP.Ln(key, n)` with `key_one` / `key_other` in `locales/parts`. `S`: a value like
+  `{n} entries` with no forms: add `_one` / `_other` and read it with `tn` / `CP.Ln`.
+- `tools/i18n_baseline.txt` holds the hits of 2026-11-12 (`<rule> <file> <code>`, compared without whitespace), so
+  only new ones fail; a fixed hit leaves a `STALE` line to delete. `--write-baseline` rewrites it (keep the header).
+  `--files A B` scans only those files without the baseline (`tests/i18n_scan_spec.lua` proves each rule on
+  samples).
+- `check_contracts.py` also checks that every `tn('key')` / `CP.Ln('key')` has `key_other` or `key`.
 
 ### Capability inventory
 

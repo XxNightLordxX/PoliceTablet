@@ -2917,23 +2917,30 @@ do -- search_area: a clue check still running when the objective stops is cancel
     H.step(FAR_PASS)
     H.eq(#CL.zones, 4, 'search client: a new zone once the clue appeared')
     H.eq(CL.zones[4].options[1].canInteract(), true, 'search client: once it is there it can be checked')
+    -- H6: ox_target restarts mid-run (its zones are wiped): the pending clue gets its zone again
+    CL.removed[4] = true
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    H.eq(#CL.zones, 5, 'h6 search client: after an ox_target restart the clue has its zone again')
+    H.eq(CL.zones[5].options[1].name, 'crimson-police:check_clue', 'h6 search client: with the Check clue option')
+    H.step(FAR_PASS)
+    H.eq(#CL.zones, 5, 'h6 search client: and only one')
     -- K13: a clue check whose animation fails to load (ox_lib raises) leaves the clue checkable
     local plainBar = lib.progressBar
     lib.progressBar = function() error('streaming timeout', 0) end
     local before = #CL.reports
-    local okClue = pcall(CL.zones[4].options[1].onSelect)
+    local okClue = pcall(CL.zones[5].options[1].onSelect)
     lib.progressBar = plainBar
-    H.ok(okClue and CL.zones[4].options[1].canInteract() == true, 'k13 search client: the clue can be checked again')
+    H.ok(okClue and CL.zones[5].options[1].canInteract() == true, 'k13 search client: the clue can be checked again')
     H.ok(#CL.reports == before + 1 and CL.reports[before + 1].type == 'clue_start',
         'k13 search client: the failed check reports no clue')
     -- start checking, then the objective stops mid-progress
     local reports = #CL.reports
-    CL.zones[4].options[1].onSelect()
+    CL.zones[5].options[1].onSelect()
     H.eq(CL.reports[reports + 1] and CL.reports[reports + 1].type, 'clue_start', 'search client: clue_start reported')
     H.eq(CL.progress.active, true, 'search client: progress bar running')
     SC.stop(cctx)
     H.eq(CL.progress.cancels, 1, 'search client: stop cancels the running clue check')
-    H.ok(CL.removed[4] == true, 'search client: zones removed at stop')
+    H.ok(CL.removed[5] == true, 'search client: zones removed at stop')
     for _ = 1, 50 do H.step(100) end
     H.eq(#CL.reports, reports + 1, 'search client: no clue report after the objective stopped')
 end

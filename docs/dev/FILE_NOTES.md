@@ -420,6 +420,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/web/src/shared/openOn.ts`: The screen an 'open' without a screen of its own lands on: the officer option openOn, saved with the
 - `Crimson-Police/web/src/shared/openOn.walk.ts`: My options -> Dispatch and Opening the tablet against the browser mocks (node walk.mjs, a gate step): the screen an open lands on (openOn), the remembered filters' list and a claim sent without the dialog.
 - `Crimson-Police/web/src/shared/options.ts`: The officer options (CP.OptionDefs) as the open UI and the HUD see them.
+- `Crimson-Police/web/src/shared/plural.walk.ts`: Plural forms (shared/i18n.tsx tn, the NUI twin of CP.Ln in shared/locale.lua): key_one / key_other by the locale's plural rule, then key_other, then the plain key, so '1 entries' cannot happen (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/shared/replyView.ts`: An action whose reply carries the screen's fresh view applies it at once, so the screen needs no second request after the action.
 - `Crimson-Police/web/src/shared/replyView.walk.ts`: Smoother workflows against the browser mocks (node walk.mjs, a gate step): replies that carry the fresh view (Review Queue, Dispatch, Admin Backups) and the remembered supervisor dialog values.
 - `Crimson-Police/web/src/shared/replyViewFx1.walk.ts`: Replies that carry the fresh view, against the browser mocks (node walk.mjs, a gate step): the supervisor and admin actions whose replies carry the screen's fresh view (Mission calls, Live Missions, Clear cooldown, the activity dialog, Reset all, Admin System -> Storage), so the screen needs no second request.
@@ -581,6 +582,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/harness.lua`: A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
 - `tests/hostile_waves_director_spec.lua`: hostile_waves through the spawn director (Config.Spawning) on the real engine, the real block and the built-in mission files: wave 1 once an officer is near, every wave away from the officers, the rest waits.
 - `tests/hostile_waves_stage_spec.lua`: The raids' crew staged ahead (hostile_waves stage = true) on the real engine, the real blocks and the real
+- `tests/i18n_scan_spec.lua`: The translation scanner (tools/check_i18n.py, the gate's lint-i18n step) and the plural helpers it points to: English joined to a translated text, a plural built in place and a count string without plural forms are found; whole sentences, ' · ' joins and tn() / CP.Ln() pass; the shipped code has no hit outside tools/i18n_baseline.txt.
 - `tests/identity_spec.lua`: Identity: one player's characters under license: AND license2:, as Qbox really stores them. qbx_core main (1.24.0)
 - `tests/int_core_spec.lua`: Integration of the core group (integrations, access, permissions, tablet) with
 - `tests/int_duplicates_spec.lua`: Every built-in mission can be duplicated into a custom mission that passes the Mission Builder guardrails and can be published after its test.
@@ -723,6 +725,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tools/capability_inventory.lua`: The capability inventory: every command, event, callback, NUI callback, export, admin action, setting, feature and Config key Crimson-Police has, one sorted line each (dev tooling, not shipped).
 - `tools/check_all.sh`: Every check of the repository in one command, in order, with a PASS/FAIL summary.
 - `tools/check_contracts.py`: Static cross-checks for Crimson-Police: CP calls, net events, NUI names and locale keys (dev tooling, not shipped).
+- `tools/check_i18n.py`: Translation scanner for Crimson-Police (dev tooling, not shipped). Run by tools/check_all.sh as lint-i18n.
 - `tools/clickthrough.mjs`: The click-through of every tablet in a real browser (Playwright, the built web UI in its mock mode).
 - `tools/gen_collation.py`: Prints the utf8mb4_general_ci tables of modules/system/memsql.lua from a running MariaDB.
 - `tools/gen_foreign_sites.py`: Writes tests/fixtures/foreign_sites.lua, the fixed world places of other scripts.

@@ -1384,3 +1384,14 @@ AddEventHandler('onResourceStop', function(res)
     StopProp()
     RemoveDeskZones()
 end)
+
+-- ox_target restarted or started late: its zones are gone, so forget the old ids and build the desks again.
+AddEventHandler('onClientResourceStop', function(res)
+    if res == 'ox_target' then state.deskZones = nil end
+end)
+
+AddEventHandler('onClientResourceStart', function(res)
+    if res ~= 'ox_target' then return end
+    RemoveDeskZones()   -- ids are already gone; this deletes the props so they are not spawned twice
+    CreateDeskZones()
+end)

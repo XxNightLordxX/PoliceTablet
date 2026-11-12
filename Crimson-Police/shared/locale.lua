@@ -57,6 +57,26 @@ function CP.L(key, vars)
     return Interpolate(s, vars)
 end
 
+-- Plural forms: CP.Ln('key', n, vars) reads 'key_<form>' ('one' or 'other' by the rule of the locale's 'locale.lang',
+-- English when it has no rule here), then 'key_other', then 'key' itself, so a key without forms keeps its text.
+-- {n} is the count unless vars give one. The NUI does the same with tn() (web/src/shared/i18n.tsx).
+local PLURAL = {
+    en = function(n) return n == 1 and 'one' or 'other' end,
+    fr = function(n) return (n == 0 or n == 1) and 'one' or 'other' end,
+}
+
+function CP.Ln(key, n, vars)
+    n = tonumber(n) or 0
+    local all = { n = n }
+    for k, v in pairs(vars or {}) do all[k] = v end
+    local lang = Label('locale.lang') or strings['locale.lang'] or 'en'
+    local rule = PLURAL[lang] or PLURAL.en
+    local form = key .. '_' .. rule(n)
+    if Label(form) or strings[form] then return CP.L(form, all) end
+    if Label(key .. '_other') or strings[key .. '_other'] then return CP.L(key .. '_other', all) end
+    return CP.L(key, all)
+end
+
 function CP.Locale.has(key)
     return Label(key) ~= nil or strings[key] ~= nil
 end

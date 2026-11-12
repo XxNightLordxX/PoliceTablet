@@ -161,6 +161,8 @@ names the change it came with.
 - [ ] Department shows Today at a glance over the tabs: On duty matches the department's officers on duty, Runs going matches Live Missions (a click opens it), Waiting for review matches the Department badge (amber while above 0, a click opens Review), Your controls used today goes up after a Give points (a click opens Controls). An officer granted only field training sees no tiles. Officers -> click an officer: one side panel from the right with his runs and commendations and the buttons Give points, Mission ban (Lift for your own ban), Clear cooldown, Commend and Field training as you may use them; each opens its form in the panel and the toast, the audit row and the limits are as before; no button on your own row. Field training: a rookie in training shows his progress and End training, an officer not in training gets Pair trainer, a trainer gets a rookie. (UI4)
 - [ ] Mission controls and Review Queue show their name, subtitle and one help line; each Mission controls group card has its own line under the title. (H4)
 - [ ] Mission controls: Department notices shows Post a notice, Running now (n) and History; End asks for a second click. Department Report: Field training shows Pairings (n). (H4)
+- [ ] Department notices with two running: click End on A, End on B, End on A again; A stays armed ("click again") for the full 3 seconds and the next click ends it. (H6)
+- [ ] Admin UI: with exactly one entry, Audit shows "1 entry"; with one change the Setup wizard says "Finish (1 change)"; one problem line on Settings / Permissions reads "1 line needs a look"; a mission with one load warning says "1 warning". (H6)
 - [ ] Department -> Controls shows each control's admin limits (and today's use where it has a day count) on its row, and the Give points / Mission ban card below; give 10 points to an officer: the Give points row is up by 10; a control the admin switches off leaves the list. (H4, MG3)
 - [ ] Mission ban: sergeant A bans a SAST trooper for 24 h; sergeant B (a higher grade than the trooper) tries a 1 h ban on him: refused with "already has a mission ban from another supervisor", and B still has no Lift; A may change his own ban; an admin may replace or lift it. (X11)
 - [ ] Give points: a supervisor at 90 of 100 today double-clicks Give points 50 on two officers at once: one is given, the other says "Please wait a moment" or is refused by the daily limit; never 190 in a day. (X11)
@@ -483,6 +485,11 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Relog with My options set: the tablet look and text size apply before the tablet is opened. (O5)
 - [ ] Open the Admin UI the first time after a restart: Home shows within a moment, the sidebar at once; every other
   screen opens as before, and every screen looks as it did (colours, spacing, buttons).
+- [ ] On duty at a mission desk, `restart ox_target`: within a moment the desk offers "Open Crimson-Police" again,
+  with one laptop prop (not two). (H6)
+- [ ] On a Warrant Service (door), a search, an interact-point, a skill-check, a hostage or a coroner objective,
+  `restart ox_target` mid-objective: Knock and announce, Check clue, the points, the devices, Cut restraints and the
+  scene options come back and the objective can be finished. (H6)
 
 ## Objectives and recognition (FIN3)
 

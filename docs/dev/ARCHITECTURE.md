@@ -818,7 +818,8 @@ Client:
   `amb@code_human_in_bus_passenger_idles@female@tablet@base` (flag 49), re-applied every second while open.
 - Mission desks: one ox_target box zone per desk (`crimson-police:desk`), created once, shown only to an on-duty
   officer of an allowed department with the tablet closed outside Crimson-Arena (display only: the server decides),
-  with an optional local laptop prop.
+  with an optional local laptop prop. ox_target stopping forgets the zone ids; ox_target starting (a restart, or a
+  late start) builds the desks again, the props once.
 - Down (`isdead` / `inlaststand`, or a dead ped, `playerDown()`).
 - Every `open` carries `seq`; once the NUI said at `ready` that it confirms (`{ acks = true }`), an open not confirmed
   with `opened { seq }` within 6 s closes the tablet and releases the focus.
@@ -2899,8 +2900,10 @@ Rules for blocks:
 - ox_target options: `exports.ox_target:addLocalEntity(entity, options)` / `addSphereZone` /
   `addBoxZone` — only participants' clients register them, so non-participants never see them.
   Remove them in `stop` (`removeLocalEntity`, `removeZone`).
-- `CP.BlockKit` (`blocks/_kit/client.lua`, before every block client): `states(fresh, cleanup)` (`of`, `find`,
-  `drop`; resource-stop cleanup), `onStop`, `entity`, `bag`, `vec3`, `point`, `text`, `progress(opts, what)` (a
+- `CP.BlockKit` (`blocks/_kit/client.lua`, before every block client): `states(fresh, cleanup, retarget)` (`of`,
+  `find`, `drop`; resource-stop cleanup; `retarget(S)` runs for every started state when ox_target starts again and
+  adds the block's zones and entity options anew), `target(what, fn)` (an ox_target add that never raises: a failed
+  add stores nothing, so the next sync tries again), `onStop`, `entity`, `bag`, `vec3`, `point`, `text`, `progress(opts, what)` (a
   `lib.progressBar` that never raises), `cancelProgress` and `markers(ctx, S, { range, far, keep, draw })`, one marker loop per run.
 - Skill checks: `lib.skillCheck({ 'easy', 'medium' }, { 'w', 'a', 's', 'd' })`.
 - Evidence sent with `ctx.report({ type = 'checkpoint', index = 3, netId = n, ... })`; the engine adds
@@ -3849,6 +3852,11 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   built on the server may be sent as a `CP.Lt(key, vars)` token (§2); it resolves in the server language. There is no per-player language (no column, preference, list or picker).
 - The UI reads the same strings via `t(key, vars)`: the client sends them once with the reply to `ready` (the
   `theme` message) and again as `locale` after a `Config.Labels` change. Sessions carry no locale.
+- Counts: `tn(key, n, vars)` (web) and `CP.Ln(key, n, vars)` (Lua) read `key_one` / `key_other` (and `_few`,
+  `_many`, ... in the NUI, by `Intl.PluralRules` of the locale's `locale.lang`, `en` today), then `key_other`, then
+  `key`, so a key without forms keeps its text; `{n}` is the count unless vars give one. Never build a plural with
+  `n === 1 ? t(a) : t(b)` or join English to a translated text: `tools/check_i18n.py` (gate step `lint-i18n`)
+  fails on new ones.
 
 ## 11. Verification (every change must pass)
 `tools/check_all.sh` runs every check below in one command; `docs/dev/TESTING.md` covers the set-up and how to read a
@@ -4029,7 +4037,8 @@ Bridge API (`shared/nui.ts`), all resolving (never rejecting) to `{ ok, data?, e
 Session and navigation: `useSession()` (the Session), `useCan()` → `can('forceRecall')`, `useTablet()` → `{ close,
 switchUi, refreshSession, ui }`, `useNavigate()`, `useNavigation()`.
 
-Text: `t(key, vars)` (module level, also fine in components) replaces `{var}`; unknown keys render the key.
+Text: `t(key, vars)` (module level, also fine in components) replaces `{var}`; unknown keys render the key. A count
+goes through `tn(key, n, vars)` (key_one / key_other, §10).
 
 Formatting (`shared/format.ts`): `formatMoney(1040)` → `$1,040`, `formatNumber`, `formatMultiplier` (`×1.30`),
 `formatDuration` (`8:02`), `formatDistance`, `formatPercent`, `formatDateTime`.

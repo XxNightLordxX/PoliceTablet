@@ -95,6 +95,11 @@ async function steps(): Promise<void> {
         ok(!src.includes('kit/Pager') && !src.includes('admin-kit-pager'), `${path}: the shared Pager`);
         ok(!src.includes('components/ScreenStatus') || path.endsWith('index.ts'), `${path}: the shared ScreenStatus`);
         ok(!/setTimeout\(\(\) => set\w+\(false\), 3000\)/.test(src), `${path}: two clicks through ConfirmButton`);
+        // H6: any hand-rolled disarm timer (any setter form, 3 s or an *ARM_MS) outside ConfirmButton and the
+        // documented Abandon press (officer/screens/abandonPress.ts)
+        const ownArm = /setTimeout\(\s*\(\)\s*=>\s*set\w+\([^;]*\),\s*(?:3000|\w*ARM_MS)\s*\)/;
+        if (!path.endsWith('/components/Button.tsx') && !path.endsWith('/screens/ActiveMission.tsx'))
+            ok(!ownArm.test(src), `${path}: no own two-click timer (use ConfirmButton)`);
     }
     ok(screens >= 45, `the screens use <Screen> (${screens})`);
 

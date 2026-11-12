@@ -1345,6 +1345,28 @@ do
     H.eq(ZoneCount(), 2, 'back after the arena, once')
     H.eq(PropCount(), 1, 'with the prop')
 
+    -- ox_target restarts: its zones are wiped, the desks are built again (H6)
+    for k in pairs(target.zones) do target.zones[k] = nil end
+    local realTargetState = GetResourceState
+    _G.GetResourceState = function(name)
+        if name == 'ox_target' then return 'stopped' end
+        return realTargetState(name)
+    end
+    for _, fn in ipairs(H.handlers.onClientResourceStop or {}) do fn('ox_target') end
+    _G.GetResourceState = realTargetState
+    for _, fn in ipairs(H.handlers.onClientResourceStart or {}) do fn('ox_target') end
+    H.eq(ZoneCount(), 2, 'desk zones come back after ox_target restarts')
+    H.eq(PropCount(), 1, 'the props are not spawned twice')
+    for _, fn in ipairs(H.handlers.onClientResourceStart or {}) do fn('some_other_resource') end
+    H.eq(ZoneCount(), 2, 'another resource start adds none')
+
+    -- ox_target started late (was down when the desks were first built)
+    for _, fn in ipairs(H.handlers.onResourceStop or {}) do fn('Crimson-Police') end
+    H.eq(ZoneCount(), 0, 'no desk zones while ox_target is missing')
+    for _, fn in ipairs(H.handlers.onClientResourceStart or {}) do fn('ox_target') end
+    H.eq(ZoneCount(), 2, 'desk zones appear once ox_target starts')
+    H.eq(PropCount(), 1, 'with one prop')
+
     -- resource stop
     for _, fn in ipairs(H.handlers.onResourceStop or {}) do fn('Crimson-Police') end
     H.eq(ZoneCount(), 0, 'the resource stop removes the zones')

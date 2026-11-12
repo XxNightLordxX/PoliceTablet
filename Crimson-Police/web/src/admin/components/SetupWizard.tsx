@@ -20,7 +20,7 @@ import {
 } from '../../shared/components';
 import { formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { t, tn } from '../../shared/i18n';
 import { toast } from '../../shared/toast';
 import { askTour, useTourState } from '../../shared/tour';
 import type { SetupReply, SetupView } from '../../types/admin_system';
@@ -296,7 +296,9 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
                                 disabled={busy}
                                 onClick={() => void send(finishPayload(data, answers))}
                             >
-                                {t('admin.setup.finish', { n: formatNumber(changeCount(data, answers)) })}
+                                {tn('admin.setup.finish', changeCount(data, answers), {
+                                    n: formatNumber(changeCount(data, answers)),
+                                })}
                             </Button>
                         ) : (
                             <Button

@@ -11,6 +11,7 @@ import {
     Button,
     Card,
     Checkbox,
+    ConfirmButton,
     ConfirmDialog,
     EmptyState,
     Field,
@@ -42,7 +43,6 @@ export function NoticesCard({ kind }: { kind: NoticeKind }) {
     const [days, setDays] = useState<number | null>(3);
     const [departments, setDepartments] = useState<string[]>([]);
     const [reason, setReason] = useState('');
-    const [ending, setEnding] = useState<number | null>(null);
     const [endAsk, setEndAsk] = useState<Notice | null>(null);
     if (!data) return null;
     const running = asArray(data.running);
@@ -84,20 +84,6 @@ export function NoticesCard({ kind }: { kind: NoticeKind }) {
     const endNow = async (id: number, why?: string) => {
         await run('server:notice:end', { id, reason: why }, { requestId: false, success: 'sup.notices.ended' });
         void refetch();
-    };
-    const end = (n: Notice) => {
-        // a reason-asking kind confirms in a dialog, the other takes two clicks
-        if (data.reason) {
-            setEndAsk(n);
-            return;
-        }
-        if (ending !== n.id) {
-            setEnding(n.id);
-            window.setTimeout(() => setEnding(cur => (cur === n.id ? null : cur)), 3000);
-            return;
-        }
-        setEnding(null);
-        void endNow(n.id);
     };
     const where = (n: Notice) => (n.departments?.length ? n.departments.join(', ') : t('notices.everyone'));
 
@@ -189,15 +175,29 @@ export function NoticesCard({ kind }: { kind: NoticeKind }) {
                                     {t('sup.notices.until', { date: fmtDateTime(n.expiresAt) })}
                                     {kind === 'staff' ? ` · ${where(n)}` : ''}
                                 </span>
-                                <Button
-                                    size="sm"
-                                    variant={ending === n.id ? 'danger' : 'ghost'}
-                                    icon="trash"
-                                    disabled={busy}
-                                    onClick={() => end(n)}
-                                >
-                                    {ending === n.id ? t('sup.notices.end_confirm') : t('sup.notices.end')}
-                                </Button>
+                                {/* a reason-asking kind confirms in a dialog, the other takes two clicks */}
+                                {data.reason ? (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        icon="trash"
+                                        disabled={busy}
+                                        onClick={() => setEndAsk(n)}
+                                    >
+                                        {t('sup.notices.end')}
+                                    </Button>
+                                ) : (
+                                    <ConfirmButton
+                                        size="sm"
+                                        variant="ghost"
+                                        armedVariant="danger"
+                                        icon="trash"
+                                        disabled={busy}
+                                        label={t('sup.notices.end')}
+                                        confirmLabel={t('sup.notices.end_confirm')}
+                                        onConfirm={() => void endNow(n.id)}
+                                    />
+                                )}
                             </li>
                         ))}
                     </ul>

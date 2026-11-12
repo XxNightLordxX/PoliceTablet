@@ -20,10 +20,10 @@ local ANIMS = {
 
 local Kit = CP.BlockKit
 local EntityFor, ToVec3 = Kit.entity, Kit.vec3
-local Cleanup
+local Cleanup, Retarget
 local states = Kit.states(function() return { bodies = {}, targets = {}, alive = true } end, function(S)
     Cleanup(S)
-end)
+end, function(S) Retarget(S) end)
 local S_of = states.of
 
 -- ============================================================================
@@ -70,31 +70,34 @@ local function AddBodyOptions(S, b)
     local ent = EntityFor(b.netId)
     if not ent or S.targets[ent] then return end
     local ctx = S.ctx
-    S.targets[ent] = { TAG_OPTION, BAG_OPTION }
-    exports.ox_target:addLocalEntity(ent, {
-        {
-            name = TAG_OPTION,
-            label = (ctx.obj.tag or {}).label or CP.L('block.process_scene.tag'),
-            icon = 'fas fa-camera',
-            distance = REACH,
-            canInteract = function()
-                local i = Info(S, b.netId)
-                return S.alive and S.current and not S.busy and i ~= nil and not i.tagged
-            end,
-            onSelect = function() CreateThread(function() Step(S, 'tag', b.netId) end) end,
-        },
-        {
-            name = BAG_OPTION,
-            label = (ctx.obj.bag or {}).label or CP.L('block.process_scene.bag'),
-            icon = 'fas fa-bag-shopping',
-            distance = REACH,
-            canInteract = function()
-                local i = Info(S, b.netId)
-                return S.alive and S.current and not S.busy and i ~= nil and i.tagged and not i.bagged
-            end,
-            onSelect = function() CreateThread(function() Step(S, 'bag', b.netId) end) end,
-        },
-    })
+    local ok = Kit.target(BLOCK, function()
+        exports.ox_target:addLocalEntity(ent, {
+            {
+                name = TAG_OPTION,
+                label = (ctx.obj.tag or {}).label or CP.L('block.process_scene.tag'),
+                icon = 'fas fa-camera',
+                distance = REACH,
+                canInteract = function()
+                    local i = Info(S, b.netId)
+                    return S.alive and S.current and not S.busy and i ~= nil and not i.tagged
+                end,
+                onSelect = function() CreateThread(function() Step(S, 'tag', b.netId) end) end,
+            },
+            {
+                name = BAG_OPTION,
+                label = (ctx.obj.bag or {}).label or CP.L('block.process_scene.bag'),
+                icon = 'fas fa-bag-shopping',
+                distance = REACH,
+                canInteract = function()
+                    local i = Info(S, b.netId)
+                    return S.alive and S.current and not S.busy and i ~= nil and i.tagged and not i.bagged
+                end,
+                onSelect = function() CreateThread(function() Step(S, 'bag', b.netId) end) end,
+            },
+        })
+    end)
+    -- ox_target down: the next snapshot adds them
+    if ok then S.targets[ent] = { TAG_OPTION, BAG_OPTION } end
 end
 
 local function ReleaseOption(S)
@@ -118,18 +121,32 @@ local function AddRelease(S)
     if S.van and S.van.netId and S.van.status == 'parked' then
         local ent = EntityFor(S.van.netId)
         if ent and not S.targets[ent] then
-            S.targets[ent] = { CORONER_OPTION }
-            exports.ox_target:addLocalEntity(ent, { ReleaseOption(S) })
+            local ok = Kit.target(BLOCK, function() exports.ox_target:addLocalEntity(ent, { ReleaseOption(S) }) end)
+            if ok then S.targets[ent] = { CORONER_OPTION } end
         end
     elseif (not S.coroner or (S.van and S.van.status == 'gone')) and S.scene and not S.zone then
-        S.zone = exports.ox_target:addSphereZone({
-            coords = S.scene,
-            radius = 2.0,
-            debug = false,
-            name = 'crimson-police:coroner:' .. S.key,
-            options = { ReleaseOption(S) },
-        })
+        local ok, id = Kit.target(BLOCK, function()
+            return exports.ox_target:addSphereZone({
+                coords = S.scene,
+                radius = 2.0,
+                debug = false,
+                name = 'crimson-police:coroner:' .. S.key,
+                options = { ReleaseOption(S) },
+            })
+        end)
+        if ok then S.zone = id end
     end
+end
+
+-- ox_target restarted: its zones and entity options are gone, so the bookkeeping is forgotten and added again.
+function Retarget(S)
+    S.targets = {}
+    S.zone = nil
+    if not S.current then return end
+    for _, b in ipairs(S.bodies) do
+        if not b.bagged then AddBodyOptions(S, b) end
+    end
+    AddRelease(S)
 end
 
 local function MarkerLoop(S)

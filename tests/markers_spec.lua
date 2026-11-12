@@ -1095,6 +1095,15 @@ do
     local okSel = opt and pcall(opt.onSelect)
     lib.progressBar = savedBar
     H.ok(okSel and opt.canInteract() == true, 'k13 ps: a Release whose animation fails to load can be tried again')
+    -- H6: ox_target restarts mid-run (its zones are wiped): the Release zone at the scene comes back, once
+    local adds = 0
+    zone = nil
+    H.exportsMock.ox_target.addSphereZone = function(o) zone = o; adds = adds + 1; return 3 end
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    H.ok(adds == 1 and zone ~= nil and zone.options[1].name == 'crimson-police:coroner',
+        'h6 ps: the Release zone is back after an ox_target restart')
+    PSc.update(kctx, { bodies = { { netId = 0, tagged = true, bagged = true } }, scene = scene, coroner = false })
+    H.eq(adds, 1, 'h6 ps: the next snapshot adds no second one')
     PSc.stop(kctx)
 end
 

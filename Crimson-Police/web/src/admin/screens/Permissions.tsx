@@ -24,7 +24,7 @@ import {
 } from '../../shared/components';
 import { asArray } from '../../shared/data';
 import { useAction, useRequest } from '../../shared/hooks';
-import { hasKey, t } from '../../shared/i18n';
+import { hasKey, t, tn } from '../../shared/i18n';
 import { useNavigate } from '../../shared/navigation';
 import type { ConfigHealthItem } from '../../shared/types';
 import { copyLine } from '../components/copyText';
@@ -62,7 +62,7 @@ function ConfigHealthCard() {
             subtitle={
                 data
                     ? problems > 0
-                        ? t('access.health.problems', { n: problems })
+                        ? tn('access.health.problems', problems)
                         : t('access.health.all_ok')
                     : t('access.health.subtitle')
             }

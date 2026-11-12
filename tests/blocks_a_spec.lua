@@ -2431,6 +2431,27 @@ do
     ic.state.transient = nil
     Steps(16) -- 1.6 s: one far pass of the marker loop (MARKER_FAR_MS 1.5 s)
     H.ok(tostring(LastLine(ic)):find('tablet', 1, true) ~= nil, 'log hint on the HUD: ' .. tostring(LastLine(ic)))
+    -- H6: ox_target restarts mid-run (its zones are wiped): every open door gets its zone again
+    for id = 1, #zones do removedZones[id] = true end
+    local zr = #zones
+    TriggerEvent('onClientResourceStop', 'ox_target')
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    H.eq(#zones - zr, 3, 'h6 ip: after an ox_target restart the three open doors have their zones again')
+    H.eq(zones[#zones].options[1].label, 'Check door', 'h6 ip: with the mission label')
+    TriggerEvent('onClientResourceStart', 'another-resource')
+    H.eq(#zones - zr, 3, 'h6 ip: another resource starting adds none')
+    -- a snapshot while ox_target is down never raises; the zone comes with the next sync
+    local keepAdd = H.exportsMock.ox_target.addSphereZone
+    H.exportsMock.ox_target.addSphereZone = function()
+        error('No such export addSphereZone in resource ox_target', 0)
+    end
+    snap = CP.U.deepcopy(snap)
+    snap.points[1].status = 'pending'
+    local okDown = pcall(IPc.update, ic, snap)
+    H.ok(okDown and #zones - zr == 3, 'h6 ip: a snapshot while ox_target is down does not raise and stores no zone')
+    H.exportsMock.ox_target.addSphereZone = keepAdd
+    IPc.update(ic, CP.U.deepcopy(snap))
+    H.eq(#zones - zr, 4, 'h6 ip: the next snapshot adds the missing zone')
     IPc.hostChanged(ic, false)
     IPc.stop(ic)
     local allRemoved = true
@@ -2508,9 +2529,15 @@ do
     H.eq(explosions[1].damage, 0.0, 'explosion damage scale 0')
     SCc.update(kc, { kind = 'explode', target = 1, coords = { x = 10.0, y = 0.0, z = 0.0 }, by = 7, effect = true })
     H.eq(#explosions, 1, 'other participants do not add an explosion')
+    -- H6: ox_target restarts mid-run: the armed device gets its zone again
+    removedZones[zbase + 1] = true   -- wiped with ox_target
+    local zk = #zones
+    TriggerEvent('onClientResourceStart', 'ox_target')
+    H.eq(#zones - zk, 1, 'h6 sc: after an ox_target restart the armed device has its zone again')
+    H.eq(zones[#zones].options[1].label, 'Defuse device', 'h6 sc: with its option')
     SCc.hostChanged(kc, false)
     SCc.stop(kc)
-    H.ok(removedZones[zbase + 1] and removedZones[zbase + 2], 'stop removes the defuse zones')
+    H.ok(removedZones[zbase + 1] and removedZones[zbase + 2] and removedZones[#zones], 'stop removes the defuse zones')
 
     -- K13: ox_lib's lib.requestAnimDict raises on a streaming timeout. The defuse goes on without the kneel and the
     -- device can be worked again; a setback's Ventilate bar stops when the objective ends.

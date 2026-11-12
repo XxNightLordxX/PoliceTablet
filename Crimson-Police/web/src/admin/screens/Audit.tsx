@@ -28,7 +28,7 @@ import {
 import { asArray } from '../../shared/data';
 import { formatDateTime, formatNumber } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { hasKey, t } from '../../shared/i18n';
+import { hasKey, t, tn } from '../../shared/i18n';
 import { EXPORT_TIMEOUT_MS, request } from '../../shared/nui';
 import { toast } from '../../shared/toast';
 import type { AuditExport, AuditFilters, AuditPage, AuditRow } from '../../types/oversight';
@@ -446,7 +446,7 @@ export default function AdminAudit() {
 
             <div className="oversight-aud-pager">
                 <span className="oversight-aud-soft cp-num">
-                    {t('admin.audit.total', { n: formatNumber(data?.total ?? 0) })}
+                    {tn('admin.audit.total', data?.total ?? 0, { n: formatNumber(data?.total ?? 0) })}
                 </span>
                 <div className="oversight-aud-pager__nav">
                     {loading && data ? <Spinner size={14} /> : null}

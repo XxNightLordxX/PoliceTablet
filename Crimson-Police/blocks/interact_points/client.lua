@@ -48,10 +48,14 @@ local ANIMS = {
 }
 
 local Kit = CP.BlockKit
-local Cleanup
+local Cleanup, SyncZones
 -- one state per run and objective across every hook call (the engine may hand each hook a fresh ctx.state)
 local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st)
     Cleanup(st.ctx, st)
+end, function(st)
+    -- ox_target restarted: its zones are gone, so the ids are forgotten and every open point gets its zone again
+    st.zones = {}
+    if st.data then SyncZones(st.ctx, st) end
 end)
 local StateOf = states.of
 
@@ -299,32 +303,36 @@ local function AddZone(ctx, st, n, kind, p)
     end
     local wantStatus = (kind == 'main') and 'pending' or 'followup'
     local name = ZoneName(ctx, n, kind .. (st.data and st.data.solo and ':solo' or ''))
-    local id = exports.ox_target:addSphereZone({
-        coords = Kit.point(p.coords),
-        radius = tonumber(target.radius) or 1.5,
-        debug = false,
-        drawSprite = true,
-        name = name,
-        options = {
-            {
-                name = name,
-                label = label,
-                icon = target.icon,
-                distance = TARGET_DISTANCE,
-                canInteract = function()
-                    local cur = PointOf(st, n)
-                    return st.alive == true and not st.busy and cur ~= nil and cur.status == wantStatus
-                end,
-                onSelect = function()
-                    CreateThread(function() Interact(ctx, st, n, kind, duration, barLabel) end)
-                end,
+    local ok, id = Kit.target(BLOCK, function()
+        return exports.ox_target:addSphereZone({
+            coords = Kit.point(p.coords),
+            radius = tonumber(target.radius) or 1.5,
+            debug = false,
+            drawSprite = true,
+            name = name,
+            options = {
+                {
+                    name = name,
+                    label = label,
+                    icon = target.icon,
+                    distance = TARGET_DISTANCE,
+                    canInteract = function()
+                        local cur = PointOf(st, n)
+                        return st.alive == true and not st.busy and cur ~= nil and cur.status == wantStatus
+                    end,
+                    onSelect = function()
+                        CreateThread(function() Interact(ctx, st, n, kind, duration, barLabel) end)
+                    end,
+                },
             },
-        },
-    })
+        })
+    end)
+    -- ox_target is down: the next sync (or its restart) adds it
+    if not ok then return end
     st.zones[n] = { id = id, kind = kind, solo = st.data and st.data.solo == true }
 end
 
-local function SyncZones(ctx, st)
+function SyncZones(ctx, st)
     local pts = (st.data and st.data.points) or {}
     local solo = st.data and st.data.solo == true
     for n, p in ipairs(pts) do
