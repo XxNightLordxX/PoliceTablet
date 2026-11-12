@@ -747,8 +747,9 @@ Who is an officer, of which department, with which role.
   longer qualifies (a different active job, or one outside every department, is job_change).
 - S `onLost(fn(src, endReason))` — fired on qbx duty/job events and from `suspend()` for a player whose last known job
   (seeded on start, load, getOfficer, recheck and every qbx event) was a department job.
-- S `isSuspended(citizenid) -> bool, untilTs`; `suspend(citizenid, days, actorSrc, reason, opts) -> ok, errKey` (0
-  days lifts; whole days 0-3650 or `opts.untilTs`; a player actor needs `can(actorSrc, 'suspend')`, console/anticheat
+- S `isSuspended(citizenid) -> bool, untilTs` (15 s cache; a failed refresh keeps a suspension the cache knew); `suspend(citizenid, days, actorSrc, reason, opts) -> ok, errKey` (0
+  days lifts, writing `suspended_until = NOW()` so the end is kept for the dispute window; whole days 0-3650 or
+  `opts.untilTs`; a player actor needs `can(actorSrc, 'suspend')`, console/anticheat
   skip it; the end is capped at 2147483647 because MariaDB's `FROM_UNIXTIME` gives NULL beyond; `err.internal` when it
   cannot be stored; the caller writes the audit; the online officer gets a toast).
 - S `refreshOfficerRow(src)` — upserts `cp_officers` callsign, rank_label, display_name, department and license (never
@@ -995,8 +996,10 @@ Files: `modules/runs/runs.lua`, `modules/runs/client/runs.lua`, `locales/parts/e
   `IsOnMission(src)`), `isParticipant(run, src)`, `activeSrcs(run)`, `host(run)`.
 - `capsOk(missionType) -> ok, errKey` (`Config.Limits.maxConcurrentRuns` / `maxConcurrentTactical`; `weekly_boss`
   counts as Tactical; operations and tests never count).
-- `cooldowns(citizenid) -> { types = { [type] = untilTs }, missions = { [id] = untilTs } }`, `onCooldown(citizenid,
-  missionType, missionId) -> bool, untilTs`, `clearCooldowns(citizenid, scope, key)`.
+- `cooldowns(citizenid) -> { types = { [type] = untilTs }, missions = { [id] = untilTs }, unreadable? }`,
+  `onCooldown(citizenid, missionType, missionId) -> bool, untilTs`, `clearCooldowns(citizenid, scope, key)`. When the
+  rows cannot be read (or a concurrent rebuild's wait ran out) `unreadable = true`: `onCooldown` answers `true, nil`
+  and draw.lua reads every type and mission as on cooldown for 60 s (fail closed).
 - `completionsLastHour(citizenid)` (completed rows of the last 3600 s, no `manual_award`/`goal`),
   `completionsToday(citizenid, missionType|nil, raw)` (completed rows since `CP.Schedule.dayStart`, no manual_award,
   goal or operation rows; the day count without a type and not `raw` takes off today's extra runs,
@@ -1023,7 +1026,9 @@ Files: `modules/runs/runs.lua`, `modules/runs/client/runs.lua`, `locales/parts/e
   RunResult.people only for rows settled after the run ended).
 - `decide(run, src, entry) -> bool` — `entry = { contact, kind, choice, verdict = 'best'|'ok'|'wrong'|'critical',
   bonusId, points, truthKey, bestChoice, facts, factLog, discoverable, knownAt, failKey, netId }`.
-- Timer: `adjustTimer(run, seconds)` (negative = time off), `pauseTimer(run, paused)`, `remaining(run)` (nil before In
+- Timer: `adjustTimer(run, seconds)` (negative = time off), `pauseTimer(run, paused, who)` (`who` the holder, default
+  `'test'` (the test controls), `'checkpoint'` for the checkpoint route's hold: paused while any holder holds,
+  `run.timer.holds`), `remaining(run)` (nil before In
   progress), `addTime(run, seconds, maxTotal)` (§5.39: only while the timer runs, total in `run.timeAdded`,
   `run.timeLimit` unchanged so `fast_finish` uses the original limit), `pauseFastClock(run)` (once; the time limit
   grows by 60 s + 20 s per held body).
@@ -1137,7 +1142,8 @@ the director is off.
 
 #### Cooldowns
 Kept in memory per citizenid, rebuilt from rows of the last `max(abandonCooldown, largest mission cooldown)` seconds
-on the first `cooldowns()` call and on player load.
+on the first `cooldowns()` call and on player load. A reclassify writes `breakdown.cooldownAt` (the time its
+cooldowns start), and the rebuild also reads older rows whose `cooldownAt` is inside that window, counted from it.
 
 #### Hooks (CP.Hooks, shared/init.lua, both sides)
 Listeners run in the caller's thread, in the order added, each in pcall.
@@ -1341,7 +1347,8 @@ Units live in memory only (a restart drops them, as it drops runs).
   `cooldownLeft()`, `eligible(def)` (published and enabled, `departments` empty, `maxOfficers >= 2`, never the boss).
 - `launch(src, missionId)` — `Config.CrossDept.enabled ~= false`, no active operation, the cooldown over (counted from
   the last persisted `created_at`; an admin may skip it with `{ skipCooldown = true, reason }`, audited
-  `opLaunchSkipCooldown`), an eligible mission, not during maintenance.
+  `opLaunchSkipCooldown`), an eligible mission, not during maintenance. When the start cannot read `cp_operations`
+  (the stale-row cancel and the last `created_at`) nothing launches (`err.op_not_ready`) and the tick reads it again.
 - Joining: `join(src, opId)` re-checks the state after the checks that may yield, so two joins never pass the cap
   together.
 - `invite` / `respondInvite` / `cancelInvite` (`Config.CrossDept.invites`): the unit actions with `{ team =
@@ -1386,7 +1393,8 @@ Points, streaks, XP and badges.
 - XP = lifetime points of counted rows, manual_award and goal rows included; idempotent per row (`breakdown.xpCounted`
   set by a conditional UPDATE before adding, removed before taking back).
 - Hooks `onRowCounted(citizenid, row)` (completed/failed, not flagged → XP, streak for completed, badges),
-  `onRowApproved(rowId)`, `onRowVoided(rowId)`.
+  `onRowApproved(rowId)`, `onRowVoided(rowId)`. An approved run (held for review) whose day is before the stored last
+  day walks every counted day again and keeps that when it is longer (the later stored last day stays).
 - `badges(citizenid) -> { id, label, earnedAt, earnedTs }` — counted over live and archived completed, unflagged,
   unvoided rows: `iron_wheels` (no_vehicle_damage), `sharpshooter` (gang_shootout with no_participant_downed),
   `road_warrior` (patrol rows), `partner_in_crime` (2+ participants), `joint_task_force` (2+ departments),
@@ -1417,6 +1425,10 @@ Points, streaks, XP and badges.
 - `release(rowId)` (the caller cleared `flagged` first; never a voided row), `forfeit(rowId)` (voided held/pending
   only; fires `row:forfeited`).
 - Maintenance: `pay` and `payPending` do nothing while `CP.Maintenance.active()`.
+- Forfeiture of voided held/pending rows (and the item rewards' own job, §5.52) when the dispute window ended with
+  no open dispute: the window starts at `CP.Money.DISPUTE_START_SQL` (the row's `created_at`, or the end of the
+  officer's suspension when later; `NOW()` while suspended) and ends at `CP.Money.disputeEnd(start)`; each UPDATE
+  checks again that the start did not move later.
 - `range(missionType, members) -> min, max` (pool from `CP.Draw.pool`; max includes `modifierCash` when
   `modifierChance > 0`, never for the boss; empty pool → the type payout), `earnedThisWeek(citizenid)`,
   `stuckPayments()`, `amountOf(row)`, `txnOf(row)`, `rowBusy(rowId, citizenid)`, `paymentsHeld()`,
@@ -1437,7 +1449,9 @@ Points, streaks, XP and badges.
 
 ### 5.20a CP.Money — modules/money/engine.lua (S; one money engine)
 Every payment (mission cash, §5.52, §5.40) is written (`writeRow`), handed to CP.Cash (`settle`) and deposited
-(`deposit`) here; `seasonId()`, `department(key)`.
+(`deposit`) here; `seasonId()`, `department(key)`. `DISPUTE_START_SQL` (an SQL expression over a run row `r`) and
+`disputeEnd(startTs)` (`Config.Disputes.windowHours` on, plus `CP.Maintenance.windowEnd`'s hold) are the one dispute
+window rule of both forfeiture jobs.
 
 ### 5.21 CP.Payouts — modules/money/payouts.lua (S)
 - `typePayout(type) -> amount, adminLocked`, `missionPayout(missionId)`, `baseFor(mission) -> B`, `sourceFor(mission)
@@ -1509,7 +1523,9 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
 `?oversight=edge|empty`).
 - `server:dispute { rowId, reason }` → `{ disputeId, goesTo, kind }` — own rows only (on duty), flagged, voided or
   failed (kind priority in that order), within `Config.Disputes.windowHours` from `created_at`, never award rows, 3
-  filings a minute.
+  filings a minute. The window stands still while the officer is suspended (it starts again at the end of his last
+  suspension, `row.suspended_ts`; a lift writes `suspended_until = NOW()`) and while a maintenance lock holds
+  (`CP.Maintenance.windowEnd`); `eligible` and both forfeiture jobs use the same rule.
 - `forSupervisor(src)`, `forAdmin()` (both read by the one Review queue, §5.26a), `forOfficer(citizenid, goesTo?,
   viewerSrc?)`.
 - `handle(src, disputeId, decision, reason, awardPoints)` — claim first (`status = 'open'`), then apply.
@@ -1894,7 +1910,7 @@ English only: a profile has no language.
 | `server:sup\|admin:reviewAvatar` | `{ citizenid, decision = 'approve'\|'reject', reason, what? = 'avatar'\|'bio' }` | reviewProfiles, own department (admins any), never your own, reason required, a claim UPDATE; audited reviewAvatar / reviewBio |
 | `server:sup\|admin:clearProfile` | `{ citizenid, what, reason }` | same; audited clearBio / clearAvatar |
 | `server:sup\|admin:handleReport` | `{ id, decision = 'clear'\|'dismiss', reason }` | same, on the report's department; clear also clears the content; final once handled |
-| `server:sup\|admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin; kind from `Config.Recognition.commendations.kinds`; never yourself; supervisors own department unless `crossDepartment`, `perSupervisorPerDay`; `sameKindCooldownDays`; a run must be the recipient's and not the issuer's. Zero points: only cp_commendations and the audit row are written; toast, Home news, optional board webhook |
+| `server:sup\|admin:commend` | `{ citizenid, kind, citation, runUuid? }` → `{ id }` | issueCommendation / openAdmin; kind from `Config.Recognition.commendations.kinds`; never yourself; supervisors own department unless `crossDepartment`, `perSupervisorPerDay`; `sameKindCooldownDays`; a run must be the recipient's and not the issuer's. Zero points: only cp_commendations and the audit row are written; toast, Home news, optional board webhook (named like `LB.publicName`: a hidden officer by callsign or `leaderboard.hidden_name`, never the real name or the citizenid) |
 | `server:sup\|admin:revokeCommendation` | `{ id, reason }` | the issuer or any admin; audited |
 | callback `sup:getProfileQueue` | `{ department? }` → ProfileQueueItem[] | reviewProfiles; reports show the live content, never the reporter |
 | callback `admin:getOfficerProfile` | `{ citizenid }` → the staff profile with realName, pending values, every commendation, open reports | openAdmin |
@@ -2092,6 +2108,11 @@ while one is held is refused), `finish(kind)`, `active() -> kind, info | nil`, `
 `askRestart(kind)` (the work is done: `view().restart = true` and one console line "Restart Crimson-Police now from
 txAdmin or the server console"; Crimson-Police never restarts itself), `mark(kind, fields)` (merges fields into the
 held lock's info and pushes: a restore that stopped part way sets `failed` and `automatic`, shown in the view).
+The hold of the dispute window: `cp_storage_meta` keeps `holdFrom` while a lock is held (a start that takes the lock
+again keeps it) and `holdLast` (`from:to`) of the last one that ended (`finish`, or `settleHold()` at the first start
+that takes no lock, called by `CP.Sysadmin` after the start-up locks). `hold() -> { from, to } | nil` (to = now
+while held), `windowEnd(startTs, windowS)`: the end moved on by the part of the last hold from the window's start
+on, when that hold began before the window ended. Only one hold is kept, so a restart never counts it twice.
 
 ### 5.38 CP.Corrections — modules/review/corrections (S)
 An admin's corrections to officers' records, all through `CP.AdminKit` (§5.37) and the admin-only keys of §5.3.
@@ -2308,7 +2329,9 @@ The anti-farm core both features share.
 - Caps: `pairOk(officerCid, suspectCid) -> ok, reason, until` (`blocked`, `pair_cooldown` (a scored case within
   `pairCooldownHours`), `suspect_cooldown` (any case within `suspectCooldownMinutes`); `gone` rows never count),
   `suspectDayCount(cid)` (`maxCatchesPerSuspectDay`), `officerDayCount(cid, kind?)`, `excluded(cid)`,
-  `suspended(cid)`, and the admin writers `block`, `exclude`, `suspend` (0 < days ≤ 3650).
+  `suspended(cid)`, and the admin writers `block`, `exclude`, `suspend` (0 < days ≤ 3650) and `lift(kind, officer,
+  suspect)`: each writes its `cp_pvp_pairs` row (or deletes it) before memory changes, in the caller's thread, and
+  answers `false, 'internal'` when that write fails (the caller then audits nothing).
 - Pair repeat: `checkPairFlags(run)` after recordPairs: the pair's cases within `pairFlag.days` reach `pairFlag.count`
   and a second sign exists (a detain within `fastCatchSeconds`, a never-armed suspect who moved under 30 m after
   contact, or a case under 180 s) → flag `rs_pair_repeat` on that officer.
@@ -2550,7 +2573,9 @@ admin switched them on and only inside the admin's bounds.
   missionControls`) and the control's `on` are true and it has not expired, clamped into today's bounds.
 - `canChange(src, key, dept) -> ok, errKey, role, dept` — admins any department (`err.control_off` while off).
 - `set(src, key, value, reason, opts?)` — the only write: `canChange`, a reason, the value inside the bounds
-  (`err.control_value`, never clamped), for a supervisor `Config.MissionControls.changeWait` (`err.control_wait`),
+  (`err.control_value`, never clamped), for a supervisor `Config.MissionControls.changeWait` (`err.control_wait`; the
+  last set or reset is read once a start from the `cp_audit` rows `missionControlSet`/`missionControlReset` of the
+  last changeWait, so a reset holds the wait across a restart; while that read fails the whole wait applies),
   then upsert, audit `missionControlSet` (target `dept:key`), hook `deptControls:changed { dept, key }`, push
   `missionControls` to that department's supervisors (all for `'*'`) and admins.
 - `view(src)` (each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved,
@@ -2686,7 +2711,9 @@ Each is one server file with no client half; its Net names are in §8.3 / §8.4 
   `register` / `registerCash` / `registerPoints` (the control rows). Hooks: `deptControls:changed`, `settings:changed`.
   Loop: 30 s, armed only while a happy hour runs (LOOPS.md).
 - `CP.MissionBan` — modules/supervisor/missionban.lua: a supervisor's temporary mission ban (`cp_officers.mission_ban`,
-  012). `MB.get(cid, now)`, `first(officers, now)` (the accept checks of draw and runs), `view(cid)`, `perDay()`,
+  012). `MB.get(cid, now)` (while the store cannot be read: `{ until = now + 60, unreadable = true }` for everyone,
+  so a ban never lifts by a failed read; set, lift and extend refuse it with `err.internal`, `view` shows nothing),
+  `first(officers, now)` (the accept checks of draw and runs), `view(cid)`, `perDay()`,
   `usedToday(src)`, `supView(src, cid)`, `clearCache()`; action `server:sup:missionBan`; restriction kind `missionBan`.
   No loop (one load at start).
 - `CP.Restrictions` — modules/supervisor/restrictions.lua: the one restrictions list over `CP.RestrictionKinds` (§2).

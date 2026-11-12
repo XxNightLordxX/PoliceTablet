@@ -300,19 +300,13 @@ local STREAK_DAYS_SQL = [[SELECT UNIX_TIMESTAMP(created_at) AS ts FROM %s
     WHERE citizenid = ? AND state = 'completed' AND voided = 0 AND flagged = 0
       AND mission_type NOT IN ('manual_award', 'goal')]]
 
--- The streak re-derived from the officer's counted completed runs (live and archived), with the same Advance and
--- grace rules as a run: { old = { days, multiplier }, new = { days, multiplier } } | nil, errKey.
-function Scoring.recalcStreak(citizenid)
-    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
-    CP.Db()
-    local row, ok = ReadOfficer(citizenid)
-    if not ok then return nil, 'err.internal' end
-    if not row then return nil, 'err.unknown_officer' end
-    local before = Scoring.streak(citizenid)
+-- The streak walked again over every counted completed day (live and archived rows): a state, or nil when a read
+-- failed.
+local function RebuiltStreak(citizenid)
     local keys, seen = {}, {}
     for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
         local okQ, rows = pcall(MySQL.query.await, STREAK_DAYS_SQL:format(tbl), { citizenid })
-        if not okQ then return nil, 'err.internal' end
+        if not okQ then return nil end
         for _, r in ipairs(rows or {}) do
             local key = DayKey(math.floor(CP.U.num(r.ts)))
             if not seen[key] then
@@ -324,6 +318,35 @@ function Scoring.recalcStreak(citizenid)
     table.sort(keys)
     local st = { days = 0, last = nil, graceWeek = nil, graceUsed = 0 }
     for _, key in ipairs(keys) do st = Advance(st, key) end
+    return st
+end
+
+-- An approved run's day (a run held for review): a day after the stored last one advances the streak as a run does.
+-- A day before it (a later run counted while this one was held) walks every counted day again and keeps that when it
+-- is longer; the stored last day stays when it is later (a day forgiven by forgiveStreakDays).
+local function ApplyApprovedDay(citizenid, key)
+    local row, ok = ReadOfficer(citizenid)
+    if not ok then return end
+    local st = StreakState(row)
+    if not (st.last and (DaysBetween(st.last, key) or 0) < 0) then return ApplyStreakDay(citizenid, key) end
+    local re = RebuiltStreak(citizenid)
+    if not (re and re.last and re.days > st.days) then return end
+    if st.last > re.last then re.last = st.last end
+    StoreStreak(citizenid, re)
+    CP.log(TAG, 'streak of %s: %d day(s) (last %s) after an approved run', citizenid, re.days, re.last)
+end
+
+-- The streak re-derived from the officer's counted completed runs (live and archived), with the same Advance and
+-- grace rules as a run: { old = { days, multiplier }, new = { days, multiplier } } | nil, errKey.
+function Scoring.recalcStreak(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
+    CP.Db()
+    local row, ok = ReadOfficer(citizenid)
+    if not ok then return nil, 'err.internal' end
+    if not row then return nil, 'err.unknown_officer' end
+    local before = Scoring.streak(citizenid)
+    local st = RebuiltStreak(citizenid)
+    if not st then return nil, 'err.internal' end
     if st.last then
         if not StoreStreak(citizenid, st) then return nil, 'err.internal' end
     else
@@ -1298,7 +1321,7 @@ function Scoring.onRowApproved(rowId)
     if ClaimXp(rowId) and pts ~= 0 then AddXp(row.citizenid, pts, pts < 0) end
     if CP.Hooks and CP.Hooks.fire then CP.Hooks.fire('row:approved', rowId) end
     if NOT_RUNS[row.mission_type] or row.state ~= 'completed' then return end
-    ApplyStreakDay(row.citizenid, DayKey(tonumber(row.created_ts) or Now()))
+    ApplyApprovedDay(row.citizenid, DayKey(tonumber(row.created_ts) or Now()))
     CheckBadges(row.citizenid, false)
     if CP.Goals and CP.Goals.onRunCompleted then CP.Goals.onRunCompleted(row.citizenid) end
 end

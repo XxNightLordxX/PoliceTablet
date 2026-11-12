@@ -869,6 +869,21 @@ H.sql(
     { T - 600, T - 500 })
 O._init()
 H.eq(O.cooldownLeft(), 1200, 'cooldown from the last created_at')
+-- a start that cannot read cp_operations launches nothing (the cooldown is in it) and reads it again on the tick
+do
+    O._reset()
+    local realU = MySQL.update.await
+    MySQL.update.await = function(sql, ...)
+        if tostring(sql):find('UPDATE cp_operations SET status', 1, true) then error('db down') end
+        return realU(sql, ...)
+    end
+    O._init()
+    local _, errL = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+    H.eq(errL, 'err.op_not_ready', 'cp_operations unreadable at start: no launch (' .. tostring(errL) .. ')')
+    MySQL.update.await = realU
+    O._tick()
+    H.eq(O.cooldownLeft(), 1200, 'read again on the tick: the stored cooldown applies')
+end
 ok, data = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
 H.eq(data, 'err.op_cooldown', 'launch refused during the cooldown')
 res = Cb('sup:getOperation', 1)

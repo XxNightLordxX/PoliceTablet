@@ -504,6 +504,18 @@ H.near(Runs.remaining(A), 419, 0.2, 'paused timer does not run')
 Runs.pauseTimer(A, false)
 local th = LastEvent('crimson-police:client:hud', 1).args[2]
 H.eq(th.timer.paused, false, 'timer HUD patch')
+-- two holders (the checkpoint route's hold and the test controls' Pause): releasing one never resumes the other's
+Runs.pauseTimer(A, true, 'checkpoint')
+Runs.pauseTimer(A, true)
+Runs.pauseTimer(A, false, 'checkpoint')
+H.eq(A.timer.paused, true, 'checkpoint 1 crossed while the test Pause holds: still paused')
+Runs.pauseTimer(A, false)
+H.eq(A.timer.paused, false, 'the test Resume starts it')
+Runs.pauseTimer(A, true, 'checkpoint')
+Runs.pauseTimer(A, false)
+H.eq(A.timer.paused, true, 'a test Resume during the checkpoint hold keeps it held')
+Runs.pauseTimer(A, false, 'checkpoint')
+H.eq(A.timer.paused, false, 'until checkpoint 1')
 
 -- entities
 local ped, pedNet = Runs.spawnPed(A, {
@@ -894,6 +906,31 @@ H.ok(Runs.reclassify('CIT7', 'ext-run', 'real_call_cancelled'), 'reclassify from
 H.eq(RowsOf('ext-run')[1].end_reason, 'real_call_cancelled', 'external row updated')
 H.ok((Runs.cooldowns('CIT7').types.tactical or 0) > os.time(), 'cooldown for the external row')
 H.eq(Runs.reclassify('CIT7', 'no-row', 'real_call_cancelled'), false, 'no row -> false')
+
+do
+    -- a reclassify starts the cooldowns now, also after a rebuild: the free abandon was 20 h ago (outside the window)
+    MySQL.insert.await(
+        'INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, state, end_reason, points_base, breakdown, created_at) VALUES (?, \'tactical\', \'test_mission\', \'RCL06\', \'sast\', \'abandoned\', \'real_call\', 200, ?, FROM_UNIXTIME(?))',
+        { 'old-rc', '{"endReason":"real_call"}', os.time() - 20 * 3600 })
+    H.ok(Runs.reclassify('RCL06', 'old-rc', 'real_call_cancelled'), 'reclassify a 20 h old free abandon')
+    H.ok(Runs.onCooldown('RCL06', 'tactical', 'test_mission'), 'on cooldown from now')
+    Runs._forgetOfficer('RCL06')   -- a restart or an idle cache drop
+    local rcOn, rcUntil = Runs.onCooldown('RCL06', 'tactical', 'test_mission')
+    H.ok(rcOn and (rcUntil or 0) > os.time(), 'still on cooldown after the rebuild from the rows')
+
+    -- the rows cannot be read: on cooldown (never off), and back to the real answer once they read
+    Runs._forgetOfficer('RCL06')
+    local realRunsQ = MySQL.query.await
+    MySQL.query.await = function(sql, ...)
+        if tostring(sql):find('FROM cp_mission_runs', 1, true) then error('db timeout') end
+        return realRunsQ(sql, ...)
+    end
+    H.eq((Runs.onCooldown('RCL10', 'tactical', 'test_mission')), true, 'unreadable rows: on cooldown')
+    H.eq(Runs.cooldowns('RCL10').unreadable, true, 'and marked unreadable')
+    MySQL.query.await = realRunsQ
+    H.eq((Runs.onCooldown('RCL10', 'tactical', 'test_mission')), false, 'read again: an officer with no rows is free')
+    H.ok(Runs.onCooldown('RCL06', 'tactical', 'test_mission'), 'and a real cooldown is still there')
+end
 
 -- ============================================================================
 --                                  SCENARIO B

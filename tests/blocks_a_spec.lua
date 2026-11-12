@@ -80,11 +80,12 @@ end
 local serverSpeeds = {}   -- server GetEntitySpeed (OneSync copy of the entity)
 _G.GetEntitySpeed = function(ent) return serverSpeeds[ent] or 0.0 end
 
-local timerAdjust, timerPause = {}, {}
+local timerAdjust, timerPause, pauseWho = {}, {}, {}
 CP.Runs = {
     adjustTimer = function(run, seconds) timerAdjust[#timerAdjust + 1] = seconds end,
-    pauseTimer = function(run, paused)
+    pauseTimer = function(run, paused, who)
         timerPause[#timerPause + 1] = paused
+        pauseWho[#pauseWho + 1] = who
         run.timer = run.timer or {}
         run.timer.paused = paused
     end,
@@ -712,7 +713,7 @@ do -- EVOC: "the timer starts at the first checkpoint": the run timer is held un
     CR.restart(c4)
     H.eq(timerPause[#timerPause], true, 'restart holds the timer again until checkpoint 1')
 
-    -- not held: a later objective, timerStart = 'start', or a timer somebody else paused
+    -- not held: a later objective or timerStart = 'start'; a timer the test controls paused is held under its own name
     local loc = ctx.location
     timerPause = {}
     local c5 = FakeCtx({
@@ -736,7 +737,11 @@ do -- EVOC: "the timer starts at the first checkpoint": the run timer is held un
     CR.start(c7)
     At(1, c7.state.points[1])
     CR.onEvent(c7, 1, { type = 'checkpoint', index = 1 })
-    H.eq(#timerPause, 0, 'a timer paused by the test controls is left alone')
+    H.ok(
+        #timerPause == 2 and timerPause[1] == true and timerPause[2] == false and pauseWho[1] == 'checkpoint'
+            and pauseWho[2] == 'checkpoint',
+        'a timer paused by the test controls is still held, as the checkpoint\'s own hold'
+    )
 end
 
 do -- undriveable

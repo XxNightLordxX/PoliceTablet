@@ -1339,6 +1339,34 @@ local rF2 = InsertRun({ final = 250, flagged = true, status = 'held' })
 CP.Scoring.onRowApproved(rF2)
 H.eq(H.sql('SELECT xp FROM cp_officers WHERE citizenid = \'CPOFF001\'')[1].xp, 350, 'still flagged: nothing counted')
 
+-- a run held for review keeps its streak day when it is approved after a later run counted (grace 1 a week)
+do
+    local T0, D = H.time, 86400            -- Mon 2026-09-21
+    Config.Scoring.streakGraceDays = 1
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'STRK0001\', \'sast\')')
+    for _, d in ipairs({ -5, -4, -3 }) do  -- Wed, Thu, Fri counted
+        H.time = T0 + d * D
+        local id = InsertRun({ cid = 'STRK0001', final = 10, created = H.time })
+        CP.Scoring.onRowCounted('STRK0001',
+            { id = id, state = 'completed', mission_type = 'tactical', final_points = 10 })
+    end
+    local held = {}
+    for _, d in ipairs({ -2, -1 }) do        -- Sat and Sun held for review
+        held[#held + 1] = InsertRun(
+            { cid = 'STRK0001', final = 10, flagged = true, status = 'held', created = T0 + d * D })
+    end
+    H.time = T0                              -- Mon counted while they are held: the gap of two breaks the streak
+    local idM = InsertRun({ cid = 'STRK0001', final = 10, created = T0 })
+    CP.Scoring.onRowCounted('STRK0001', { id = idM, state = 'completed', mission_type = 'tactical', final_points = 10 })
+    H.eq(CP.Scoring.streak('STRK0001').days, 1, 'held days missing: the streak restarted')
+    for _, id in ipairs(held) do
+        H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ?', { id })
+        CP.Scoring.onRowApproved(id)
+    end
+    H.eq(CP.Scoring.streak('STRK0001').days, 6, 'both approved: the streak is what it would have been with no hold')
+    H.time = T0
+end
+
 -- XP levels
 -- one ladder: the numbered level (Config.Recognition.levelCurve) and its Config.Recognition.levels band
 local lv = CP.Scoring.xpLevel(0)

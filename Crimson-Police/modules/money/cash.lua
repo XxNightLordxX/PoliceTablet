@@ -713,17 +713,25 @@ function Cash.forfeit(rowId)
     return done
 end
 
+local WINDOW_START_SQL = CP.Money.DISPUTE_START_SQL
+
 -- Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. Row by row, each
--- claimed by its own UPDATE, so row:forfeited (held item rewards) fires once per row that changed.
+-- claimed by its own UPDATE, so row:forfeited (held item rewards) fires once per row that changed. The UPDATE
+-- checks again that the window did not start later meanwhile (a suspension).
 local function ForfeitRows()
     local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
-    local cutoff = Now() - math.floor(hours * 3600)
-    local ok, rows = pcall(MySQL.query.await, [[
-        SELECT r.id FROM cp_mission_runs r
-        WHERE r.voided = 1 AND r.cash_status IN ('held', 'pending') AND r.created_at < FROM_UNIXTIME(?)
+    local now = Now()
+    local cutoff = now - math.floor(hours * 3600)
+    local ok, rows = pcall(
+        MySQL.query.await,
+        ([[
+        SELECT r.id, UNIX_TIMESTAMP(%s) AS start_ts FROM cp_mission_runs r
+        WHERE r.voided = 1 AND r.cash_status IN ('held', 'pending') AND %s < FROM_UNIXTIME(?)
           AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
         ORDER BY r.id
-    ]], { cutoff })
+    ]]):format(WINDOW_START_SQL, WINDOW_START_SQL),
+        { cutoff }
+    )
     if not ok then
         CP.err(TAG, 'forfeiture job failed: %s', tostring(rows))
         return 0
@@ -731,13 +739,21 @@ local function ForfeitRows()
     local n = 0
     for _, row in ipairs(rows or {}) do
         local id = ToId(row.id)
-        local okU, changed = pcall(MySQL.update.await, [[
-            UPDATE cp_mission_runs r
-            SET r.cash_status = 'forfeited',
-                r.breakdown = IF(r.breakdown IS NULL, NULL, JSON_SET(r.breakdown, '$.cash.status', 'forfeited'))
-            WHERE r.id = ? AND r.voided = 1 AND r.cash_status IN ('held', 'pending')
-              AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
-        ]], { id })
+        local startTs = math.floor(Num(row.start_ts, 0))
+        local okU, changed = true, 0
+        if CP.Money.disputeEnd(startTs) < now then
+            okU, changed = pcall(
+                MySQL.update.await,
+                ([[
+                UPDATE cp_mission_runs r
+                SET r.cash_status = 'forfeited',
+                    r.breakdown = IF(r.breakdown IS NULL, NULL, JSON_SET(r.breakdown, '$.cash.status', 'forfeited'))
+                WHERE r.id = ? AND r.voided = 1 AND r.cash_status IN ('held', 'pending') AND %s <= FROM_UNIXTIME(?)
+                  AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
+            ]]):format(WINDOW_START_SQL),
+                { id, startTs }
+            )
+        end
         if not okU then
             CP.err(TAG, 'forfeiture of row %s failed: %s', tostring(id), tostring(changed))
         elseif (tonumber(changed) or 0) > 0 then

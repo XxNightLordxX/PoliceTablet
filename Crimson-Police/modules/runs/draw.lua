@@ -225,9 +225,17 @@ local function CapsOk(missionType)
 end
 
 -- unit: the officers the cooldowns are read for (the supervisors' cooldown changes and their self rule), nil = alone.
+-- Rows that could not be read (cd.unreadable): every type and mission reads as on cooldown for a minute.
+local UNREADABLE_CD = {
+    __index = function() return os.time() + 60 end,
+}
+
 local function CooldownsOf(citizenid, unit)
     if CP.Runs and CP.Runs.cooldowns then
         local _, cd = Safe(CP.Runs.cooldowns, citizenid, unit and { officer = unit } or nil)
+        if type(cd) == 'table' and cd.unreadable then
+            return { types = setmetatable({}, UNREADABLE_CD), missions = setmetatable({}, UNREADABLE_CD) }
+        end
         if type(cd) == 'table' then
             cd.types = type(cd.types) == 'table' and cd.types or {}
             cd.missions = type(cd.missions) == 'table' and cd.missions or {}

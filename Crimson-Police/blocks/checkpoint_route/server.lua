@@ -304,14 +304,9 @@ end
 local function HoldTimer(ctx, st, on)
     if (st.timerHeld == true) == (on == true) then return end
     if type(CP.Runs) ~= 'table' or type(CP.Runs.pauseTimer) ~= 'function' then return end
-    if on then
-        local timer = ctx.run and ctx.run.timer
-        if type(timer) == 'table' and timer.paused then
-            return
-        end -- paused by somebody else (test controls)
-    end
     st.timerHeld = on == true
-    CP.Runs.pauseTimer(ctx.run, on == true)
+    -- its own holder: the test controls' Pause and Resume keep theirs (CP.Runs.pauseTimer)
+    CP.Runs.pauseTimer(ctx.run, on == true, 'checkpoint')
 end
 
 -- ============================================================================

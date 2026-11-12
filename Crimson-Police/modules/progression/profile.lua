@@ -733,7 +733,14 @@ CommendChecked = function(src, role, cfg, cid, kind, runUuid, citation, issuer, 
     Notify(cid, 'success', 'profile.commend.received', { kind = KindLabel(kind) })
     PushProfile(cid)
     if cfg.announce == true and Has('Admin', 'webhook') then
-        local name = (U.truthy(target.hide_name) and NonEmpty(target.callsign)) or NonEmpty(target.display_name) or cid
+        -- The board is public: the same name rule as LB.publicName, never the real name of a hidden officer and
+        -- never the citizenid.
+        local name
+        if U.truthy(target.hide_name) then
+            name = NonEmpty(target.callsign) or CP.L('leaderboard.hidden_name')
+        else
+            name = NonEmpty(target.display_name) or NonEmpty(target.callsign) or CP.L('common.unknown')
+        end
         Call('Admin', 'webhook', 'board', CP.L('profile.commend.webhook_title', { kind = KindLabel(kind) }),
             CP.L('profile.commend.webhook_desc', { name = name, citation = citation }))
     end

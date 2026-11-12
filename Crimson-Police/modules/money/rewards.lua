@@ -744,26 +744,36 @@ end
 -- CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending. A row voided after its
 -- cash was paid (or one that carried none) is forfeited here, on the same rule: its dispute window closed and no
 -- dispute is open. Each row is claimed by its own UPDATE, which checks the rule again.
+-- The window starts and ends as for the cash (CP.Money.DISPUTE_START_SQL, CP.Money.disputeEnd: held while the
+-- officer is suspended or a maintenance lock stands it still).
 local function ForfeitRows()
     local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
-    local cutoff = Now() - math.floor(hours * 3600)
-    local rows = Query([[
-        SELECT DISTINCT i.row_id FROM cp_item_rewards i
+    local now = Now()
+    local cutoff = now - math.floor(hours * 3600)
+    local startSql = CP.Money.DISPUTE_START_SQL
+    local rows = Query(
+        ([[
+        SELECT DISTINCT i.row_id, UNIX_TIMESTAMP(%s) AS start_ts FROM cp_item_rewards i
         JOIN cp_mission_runs r ON r.id = i.row_id
-        WHERE i.status IN ('held', 'pending') AND r.voided = 1 AND r.created_at < FROM_UNIXTIME(?)
+        WHERE i.status IN ('held', 'pending') AND r.voided = 1 AND %s < FROM_UNIXTIME(?)
           AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = r.id AND d.status = 'open')
         ORDER BY i.row_id
-    ]], { cutoff })
-    local function forfeitRow(rowId)
+    ]]):format(startSql, startSql),
+        { cutoff }
+    )
+    local function forfeitRow(rowId, startTs)
         local cids = Query([[
             SELECT DISTINCT citizenid FROM cp_item_rewards WHERE row_id = ? AND status IN ('held', 'pending')
         ]], { rowId })
-        local changed = Update([[
+        local changed = Update(
+            ([[
             UPDATE cp_item_rewards SET status = 'forfeited'
             WHERE row_id = ? AND status IN ('held', 'pending')
-              AND EXISTS (SELECT 1 FROM cp_mission_runs r WHERE r.id = ? AND r.voided = 1)
+              AND EXISTS (SELECT 1 FROM cp_mission_runs r WHERE r.id = ? AND r.voided = 1 AND %s <= FROM_UNIXTIME(?))
               AND NOT EXISTS (SELECT 1 FROM cp_disputes d WHERE d.run_id = ? AND d.status = 'open')
-        ]], { rowId, rowId, rowId })
+        ]]):format(startSql),
+            { rowId, rowId, startTs, rowId }
+        )
         if not changed or changed < 1 then return false end
         CP.log(TAG, 'row %d: %d item reward(s) of a voided run forfeited', rowId, changed)
         for _, c in ipairs(cids or {}) do Push(c.citizenid) end
@@ -773,7 +783,8 @@ local function ForfeitRows()
     local n = 0
     for _, r in ipairs(rows or {}) do
         local rowId = ToId(r.row_id)
-        if rowId and forfeitRow(rowId) then n = n + 1 end
+        local startTs = math.floor(Num(r.start_ts, 0))
+        if rowId and CP.Money.disputeEnd(startTs) < now and forfeitRow(rowId, startTs) then n = n + 1 end
     end
     return n
 end

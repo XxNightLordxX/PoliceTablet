@@ -1607,5 +1607,66 @@ do
     Reset()
 end
 
+-- ============================================================================
+--                     17. THE DISPUTE WINDOW STANDS STILL
+-- ============================================================================
+-- SUSPENSION, MAINTENANCE LOCK.
+
+do
+    Reset()
+    H.load('modules/review/disputes.lua')
+    local D = CP.Disputes
+    H.sql('DELETE FROM cp_mission_runs')
+    H.sql('DELETE FROM cp_disputes')
+    local T0, HR = H.time, 3600
+    local function Eligible(id, cid, at)
+        local r = H.sql(
+            [[SELECT citizenid, mission_type, state, flagged, voided, UNIX_TIMESTAMP(created_at) AS created_ts,
+            (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts
+            FROM cp_mission_runs r WHERE id = ?]], { id })[1]
+        return (D.eligible(r, cid, at))
+    end
+    local function Forfeit() return Async(function() return Cash._forfeitureJob() end) end
+
+    -- voided, then suspended for 7 days at once (the third void): 49 h on, still held, and the whole window after
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'HOLD0001\', \'sast\')')
+    local v = Row({ cid = 'HOLD0001', status = 'held', owed = 50, voided = true })
+    H.ok(Async(function() return CP.Access.suspend('HOLD0001', 7, 0, 'auto') end), 'suspended for 7 days')
+    H.time = T0 + 49 * HR
+    Forfeit()
+    H.eq(RowOf(v).cash_status, 'held', 'suspended: the voided row is not forfeited when the 48 h end')
+    H.time = T0 + 72 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0001', 0, 0, 'lifted') end), 'lifted on day 3')
+    H.eq(Eligible(v, 'HOLD0001', T0 + 72 * HR + 47 * HR), true, 'a dispute may be filed until 48 h after the lift')
+    H.eq(Eligible(v, 'HOLD0001', T0 + 72 * HR + 49 * HR), false, 'and not after')
+    H.time = T0 + 72 * HR + 47 * HR
+    Forfeit()
+    H.eq(RowOf(v).cash_status, 'held', 'still held inside the window after the lift')
+    H.time = T0 + 72 * HR + 49 * HR
+    Forfeit()
+    H.eq(RowOf(v).cash_status, 'forfeited', 'forfeited once that window ends')
+
+    -- a maintenance lock 40 h after the void, ended by a restart at 50 h: the 8 h left come after it
+    H.time = T0 + 200 * HR
+    local T1 = H.time
+    local w = Row({ status = 'held', owed = 50, voided = true })
+    H.time = T1 + 40 * HR
+    Maint.begin('restore', { by = 'test' })
+    H.time = T1 + 50 * HR
+    Kit._reset()          -- the restart: nothing in memory
+    Maint.settleHold()    -- the start took no lock
+    Forfeit()
+    H.eq(RowOf(w).cash_status, 'held', 'the lock held the window: not forfeited at the restart')
+    H.eq(Eligible(w, 'OFF00007', T1 + 57 * HR), true, 'a dispute may be filed until 58 h (the 10 h lock added)')
+    Kit._reset()          -- a second restart adds nothing
+    Maint.settleHold()
+    H.eq(Eligible(w, 'OFF00007', T1 + 57 * HR), true, 'a second restart keeps the same end')
+    H.eq(Eligible(w, 'OFF00007', T1 + 59 * HR), false, 'and extends nothing')
+    H.time = T1 + 59 * HR
+    Forfeit()
+    H.eq(RowOf(w).cash_status, 'forfeited', 'forfeited after the moved end')
+    H.time = T0
+end
+
 _G.print = realPrint
 return H

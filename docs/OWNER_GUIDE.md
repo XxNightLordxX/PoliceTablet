@@ -620,7 +620,7 @@ Everything else works as shipped. These are the ones owners change most:
 | Setting | What it does |
 |---|---|
 | `Config.Rewards` | Item rewards, off by default (see [3.3](#33-item-rewards)) |
-| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
+| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted) and while a maintenance lock (a storage copy or a restore) holds, also across restarts; held cash and items of a voided run are forfeited only after it |
 
 **System**
 
@@ -1061,7 +1061,7 @@ Five optional webhooks, set as convars in `server.cfg` (the block in [README
 
 | Convar | What it posts |
 |---|---|
-| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Recognition.commendations.announce = true`) |
+| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Recognition.commendations.announce = true`; an officer who hid his name is shown by callsign, or as hidden) |
 | `cp_webhook_audit` | Payout changes and admin actions |
 | `cp_webhook_flags` | Flagged runs, voids and disputes |
 | `cp_webhook_builder` | Mission Builder: publish, archive, rollback, edit-lock breaks, file edits and test results |

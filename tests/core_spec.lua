@@ -771,8 +771,9 @@ do
     H.eq(select(2, A.suspend('CPT00009', 1, 1, 'supervisor tries')), 'err.no_permission', 'supervisors cannot suspend')
     H.eq(A.suspend('CPT00009', 0, 5, 'lifted by admin'), true, 'admin lifts it')
     H.eq(A.isSuspended('CPT00009'), false, 'lifted')
-    H.eq(H.sql('SELECT suspended_until FROM cp_officers WHERE citizenid = ?', { 'CPT00009' })[1].suspended_until, nil,
-        'suspended_until cleared')
+    H.eq(tonumber(
+        H.sql('SELECT UNIX_TIMESTAMP(suspended_until) AS t FROM cp_officers WHERE citizenid = ?', { 'CPT00009' })[1].t
+    ), os.time(), 'suspended_until set to the lift time (kept for the dispute window)')
     H.ok(A.getOfficer(9) ~= nil, 'officer again')
     H.eq(LastEvent('crimson-police:client:notify').args[1].key, 'access.unsuspended_notice', 'lift notice')
     H.eq(A.suspend('NOBODY01', 3, 0, 'offline'), true, 'suspend an unknown citizenid (row created)')

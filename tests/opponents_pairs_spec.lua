@@ -567,6 +567,27 @@ do
         H.ok(l.suspect ~= E, 'a lifted row is not among the running ones')
     end
 
+    -- the ledger cannot be written: nothing counts in memory (a restart would undo it), and a lift keeps the row
+    local realIns, realUpd = MySQL.insert.await, MySQL.update.await
+    MySQL.insert.await = function(sql, ...)
+        if tostring(sql):find('cp_pvp_pairs', 1, true) then error('db down') end
+        return realIns(sql, ...)
+    end
+    local okF, errF = Opp.block(A, E, 2)
+    H.ok(okF == false and errF == 'internal' and (Opp.pairOk(A, E)) == true,
+        'a block that could not be saved is refused and not applied (' .. tostring(errF) .. ')')
+    MySQL.insert.await = realIns
+    H.ok(Opp.exclude(E, 4), 'an exclusion saved')
+    MySQL.update.await = function(sql, ...)
+        if tostring(sql):find('cp_pvp_pairs', 1, true) then error('db down') end
+        return realUpd(sql, ...)
+    end
+    local okLf, errLf = Opp.lift('exclude', nil, E)
+    H.ok(okLf == false and errLf == 'internal' and Opp.excluded(E),
+        'a lift that could not delete the row lifts nothing')
+    MySQL.update.await = realUpd
+    H.ok(Opp.lift('exclude', nil, E) and not Opp.excluded(E), 'and lifts once the ledger is writable')
+
     Opp = Restart(false)
     H.eq((Opp.pairOk(A, E)), true, 'a lifted block does not come back after a restart')
     H.ok(not Opp.excluded(E), 'nor a lifted exclusion')

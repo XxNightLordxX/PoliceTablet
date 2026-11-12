@@ -537,4 +537,37 @@ do
     H.sql('UPDATE cp_officers SET hide_name = 0 WHERE citizenid = ?', { 'S1' })
 end
 
+do
+    -- H5: the public board post for a commendation never names a hidden officer or shows a citizenid. hide_name with
+    -- a NULL callsign is reachable through setHideName (NULLIF) and the 'NO CALLSIGN' normalisation.
+    Later(DAY)
+    H.sql([[INSERT INTO cp_officers (citizenid, display_name, callsign, department, xp, hide_name)
+        VALUES ('HN1', 'John Doe', NULL, 'sast', 0, 1)]])
+    H.sql([[INSERT INTO cp_officers (citizenid, display_name, callsign, department, xp, hide_name)
+        VALUES ('HN2', NULL, NULL, 'sast', 0, 1)]])
+    H.sql([[INSERT INTO cp_officers (citizenid, display_name, callsign, department, xp, hide_name)
+        VALUES ('HN3', NULL, NULL, 'sast', 0, 0)]])
+    local rc = CP.Recognition('commendations')
+    local oldAnnounce, oldHook = rc.announce, CP.Admin.webhook
+    rc.announce = true
+    local descs = {}
+    CP.Admin.webhook = function(_, _, desc) descs[#descs + 1] = tostring(desc); return true end
+    local good = 'Pulled two people out of a burning car.'
+    for _, cid in ipairs({ 'HN1', 'HN2', 'HN3' }) do
+        local ok = Act('server:sup:commend', 21, { citizenid = cid, kind = 'valor', citation = good })
+        H.eq(ok, true, 'commend ' .. cid)
+        Later(10)
+    end
+    H.eq(#descs, 3, 'one board post per commendation')
+    for i, d in ipairs(descs) do
+        H.ok(not d:find('John Doe', 1, true), 'post ' .. i .. ' does not name the hidden officer')
+        H.ok(not d:find('HN%d'), 'post ' .. i .. ' shows no citizenid')
+        H.ok(d:find(good, 1, true) ~= nil, 'post ' .. i .. ' keeps the citation')
+    end
+    H.ok(descs[1]:find(CP.L('leaderboard.hidden_name'), 1, true) ~= nil,
+        'a hidden officer without a callsign is the hidden name')
+    H.ok(descs[3]:find(CP.L('common.unknown'), 1, true) ~= nil, 'a shown officer with no name or callsign is unknown')
+    rc.announce, CP.Admin.webhook = oldAnnounce, oldHook
+end
+
 return H

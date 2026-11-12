@@ -285,4 +285,44 @@ do
     Config.AdminUi.restrictionsExtend = true
     H.eq(Config.AdminUi.restrictionsExtend, true, 'restrictionsExtend ships true')
 end
+
+-- ============================================================================
+--                      UNREADABLE STORES HOLD, NEVER LIFT
+-- ============================================================================
+
+do
+    -- the ban store cannot be read: every officer reads as banned for a minute, and nothing is listed or saved
+    MB.clearCache()
+    local realQ = MySQL.query.await
+    MySQL.query.await = function(sql, ...)
+        if tostring(sql):find('mission_ban IS NOT NULL', 1, true) then error('db down') end
+        return realQ(sql, ...)
+    end
+    local now = os.time()
+    local b = MB.get('OFF00009', now)
+    H.ok(type(b) == 'table' and b.unreadable == true and b['until'] > now,
+        'ban store unreadable: the officer reads as banned')
+    local who = MB.first({ { citizenid = 'OFF00007', src = 7 } }, now)
+    H.ok(who ~= nil, 'and MB.first finds him')
+    H.eq(MB.view('OFF00009', now), nil, 'his screens show no made-up ban')
+    MySQL.query.await = realQ
+    MB.clearCache()
+    H.eq(MB.get('NOBAN001', now), nil, 'the store reads again: an officer with no ban is free')
+
+    -- a suspension the cache knew is kept through a failed refresh of the officer row
+    H.sql('UPDATE cp_officers SET suspended_until = FROM_UNIXTIME(?) WHERE citizenid = ?', { now + 86400, 'OFF00008' })
+    H.time = H.time + 60
+    local s1, u1 = CP.Access.isSuspended('OFF00008')
+    H.ok(s1 == true and u1 == now + 86400, 'suspended (read from the row)')
+    local realS = MySQL.single.await
+    MySQL.single.await = function(sql, ...)
+        if tostring(sql):find('suspended_until', 1, true) then error('db down') end
+        return realS(sql, ...)
+    end
+    H.time = H.time + 20
+    local s2, u2 = CP.Access.isSuspended('OFF00008')
+    H.ok(s2 == true and u2 == now + 86400, 'the row cannot be read: still suspended (' .. tostring(s2) .. ')')
+    H.eq((CP.Access.isSuspended('NOSUSP01')), false, 'an officer with no known suspension is not blocked by it')
+    MySQL.single.await = realS
+end
 return H

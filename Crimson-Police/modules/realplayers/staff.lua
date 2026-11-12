@@ -397,7 +397,10 @@ local function Days(v)
 end
 
 local function Answer(ok, untilOrErr)
-    if not ok then return false, untilOrErr == 'invalid_days' and 'err.rs_invalid_days' or 'err.invalid_citizenid' end
+    if not ok then
+        if untilOrErr == 'internal' then return false, 'err.internal' end
+        return false, untilOrErr == 'invalid_days' and 'err.rs_invalid_days' or 'err.invalid_citizenid'
+    end
     return true, untilOrErr
 end
 
@@ -602,7 +605,10 @@ local function RsLift(kind)
         local officer, suspect = RowCids(kind, p)
         if not (officer or suspect) then return false, 'err.invalid_citizenid' end
         local ok, res = Opp.lift(kind, officer, suspect)
-        if not ok then return false, res == 'invalid_citizenid' and 'err.invalid_citizenid' or 'err.rs_no_row' end
+        if not ok then
+            if res == 'internal' then return false, 'err.internal' end
+            return false, res == 'invalid_citizenid' and 'err.invalid_citizenid' or 'err.rs_no_row'
+        end
         ctx.audit('rsLift', officer or suspect, nil, ('%s lifted early%s (it ran until %d)'):format(kind,
             (officer and suspect) and (', suspect ' .. suspect) or '', res))
         CP.log(TAG, 'admin %s lifted the %s of %s early', tostring(ctx.actor), kind, tostring(officer or suspect))
