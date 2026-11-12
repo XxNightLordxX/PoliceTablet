@@ -141,13 +141,15 @@ client_scripts {
 }
 
 -- FiveM asset escrow: everything a city edits stays readable (README "What you can edit"): the config files and the
--- generic starting config, the locale texts and the built-in missions. Custom missions are files written in game,
--- and web/dist ships built.
+-- generic starting config, the locale texts, the built-in missions, the missions made in game and the ox_inventory
+-- item snippet an owner pastes (items/). web/dist ships built.
 escrow_ignore {
     'config/*.lua',
     'config/examples/*.lua',
     'locales/*',
     'missions/builtin/*',
+    'missions/custom/**',
+    'items/*.lua',
 }
 
 ui_page 'web/dist/index.html'

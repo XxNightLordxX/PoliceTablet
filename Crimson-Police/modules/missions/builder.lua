@@ -4247,6 +4247,8 @@ CP.Net.action('server:builder:validate', function(src, payload)
         def, serr = B.sanitize(payload.definition, row.id)
         if not def then return false, serr end
     else
+        -- the stored draft, under the same rule as builder:get: someone else's never-published draft stays hidden
+        if not VisibleTo(row, actor, perms) then return false, 'err.builder_unknown_mission' end
         def = U.deepcopy(CurrentDef(row) or {})
         def._file = nil
         def._carry = nil

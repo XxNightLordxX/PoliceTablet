@@ -152,6 +152,7 @@
   "payments.export_title": "Payments (CSV)",
   "payments.retry_pending": "Retry all pending",
   "payments.retry_pending_done": "{n} pending payments paid",
+  "payments.retry_pending_confirm": "Click again to pay all pending",
   "payments.retry_unfunded_all": "Retry every unfunded payment",
   "payments.held": "Payments are held by the maintenance lock. They are paid after the restart.",
   "payments.done": "Done",

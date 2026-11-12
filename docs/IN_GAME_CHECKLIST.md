@@ -945,3 +945,12 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   players_only accept at the same moment does not take him. (Z14)
 - [ ] Deep sweep (Z14): Settings help for Cash.dailyCap says feature rewards count too; with suspect pay on, the
   volunteer consent says a fair case is paid. (Z14)
+- [ ] Bug sweep (H2): plan a season end (Admin UI -> Boards -> Seasons) with a next season name, stop the server
+  across the date's reset hour and start it again: a few seconds after start the season has ended and the next one
+  runs. (H2)
+- [ ] Bug sweep (H2): Admin UI -> Money -> Payments -> Retry all pending: the first click only turns the button into
+  "Click again to pay all pending"; the second click pays. (H2)
+- [ ] Bug sweep (H2): change your look (Edit profile -> Look) with the tablet open, then switch "Use my tablet look on
+  the HUD" off and on: the HUD and toasts use the new look, not the old one. (H2)
+- [ ] Bug sweep (H2): a second supervisor (no builderEditAny) cannot see or check another supervisor's unpublished
+  Mission Builder draft. (H2)

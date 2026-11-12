@@ -1032,6 +1032,7 @@ H.exportsMock.ox_inventory = {
 }
 
 local sessionCalls = {}
+local sessionPrefs = nil
 lib.callback.await = function(name, _, args)
     if name ~= 'crimson-police:getSession' then return { ok = true, data = {} } end
     sessionCalls[#sessionCalls + 1] = args
@@ -1042,6 +1043,7 @@ lib.callback.await = function(name, _, args)
             roles = { officer = true, supervisor = true, admin = false },
             officer = { citizenid = 'ACC1', name = 'A', department = 'sast', departmentShort = 'SAST' },
             theme = { primary = '#1f4e8c' },
+            prefs = sessionPrefs,
             actions = {},
             config = {},
             access = { via = args.via, desk = args.desk },
@@ -1259,6 +1261,34 @@ do
     H.advance(3000, 100)
     H.eq(#H.findEvents('crimson-police:server:mcWatch'), 0, 'and sends no server:mcWatch after a close')
     H.eq(#H.findEvents('crimson-police:server:tabletClosed'), 1, 'only the tablet\'s own close')
+
+    -- H2: the NUI's own getSession (its refreshSession after a look change, push 'profile') updates the session Lua
+    -- keeps, so the next theme message (a hudLook or textSize change) carries the new look, not the old one
+    local function LastTheme()
+        for i = #nui, 1, -1 do if nui[i].type == 'theme' then return nui[i] end end
+        return nil
+    end
+    sessionPrefs = { appearance = 'dark', accent = 'blue' }
+    CT.open('officer')
+    H.advance(200, 50)
+    sessionPrefs = { appearance = 'light', accent = 'red' }
+    local refreshed
+    nuiCb.request({ name = 'getSession', args = { ui = 'officer' } }, function(r) refreshed = r end)
+    H.advance(200, 50)
+    H.ok(refreshed and refreshed.ok, 'the NUI\'s getSession is answered')
+    CP.Hooks.fire('options:changed', 'hudLook')
+    local theme = LastTheme()
+    H.eq(theme and theme.prefs and theme.prefs.appearance, 'light', 'the theme after a hudLook change: the new look')
+    H.eq(theme and theme.prefs and theme.prefs.accent, 'red', '...and the new accent')
+    -- a getSession for another UI than the open one changes nothing
+    sessionPrefs = { appearance = 'dark', accent = 'green' }
+    nuiCb.request({ name = 'getSession', args = { ui = 'supervisor' } }, function() end)
+    H.advance(200, 50)
+    CP.Hooks.fire('options:changed', 'hudLook')
+    theme = LastTheme()
+    H.eq(theme and theme.prefs and theme.prefs.accent, 'red', 'a getSession for another UI keeps the open one\'s look')
+    sessionPrefs = nil
+    Close()
 
     -- requireItem: the item leaves the inventory while the tablet is open
     Config.Tablet.access.requireItem = true

@@ -104,8 +104,8 @@ as the reason), so you change any of it later in **Settings** or **Departments**
   `config.lua` stays as it is.
 - **What a city edits (left out of FiveM asset escrow by `escrow_ignore` in `fxmanifest.lua`):** `config/` (every
   `.lua` file there and in `config/examples/`), `locales/` (every text), `missions/builtin/` (the built-in missions,
-  readable and editable) and `missions/custom/` (the missions made in game). `web/dist` ships built. Everything
-  else is the resource's code.
+  readable and editable), `missions/custom/` (the missions made in game) and `items/` (the ox_inventory item
+  snippet you paste). `web/dist` ships built. Everything else is the resource's code.
 - **Nothing private ships:** no secrets (Discord webhooks are server.cfg convars), no paths of this server, and the
   live crimes of the private contracts script stay off (`Config.RealPlayers.liveCrime.enabled = false`). No
   third-party code is copied in; each coordinate taken from a Qbox script names its source on its line

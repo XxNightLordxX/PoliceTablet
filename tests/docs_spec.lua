@@ -663,4 +663,44 @@ H.ok(foreignNet >= 7 and keyNames >= 5,
 H.eq(table.concat(unlistedNet, ', '), '', 'H1: ARCHITECTURE §8.2 names every client-sendable event of another resource')
 H.eq(table.concat(unlistedKeys, ', '), '', 'H1: ARCHITECTURE §8.3 Key mappings names every key mapping')
 
+-- H2: FiveM asset escrow encrypts every .lua file escrow_ignore does not list. A .lua file the manifest does not load
+-- as a script is one a city reads or pastes (a mission, the ox_inventory item snippet), so escrow_ignore must cover it.
+do
+    local manifest = ReadRepo('Crimson-Police/fxmanifest.lua') or ''
+    local function Block(name)
+        local body = manifest:match('\n' .. name .. '%s*{(.-)\n}')
+        local pats = {}
+        for g in (body or ''):gsub('%-%-[^\n]*', ''):gmatch('\'([^\']+)\'') do
+            if g:sub(1, 1) ~= '@' then
+                local lp = '^'
+                    .. g:gsub('[%.%-%+%?%(%)%[%]%^%$%%]', '%%%0')
+                        :gsub('%*%*', '\1')
+                        :gsub('%*', '[^/]*')
+                        :gsub('\1', '.*')
+                    .. '$'
+                pats[#pats + 1] = lp
+            end
+        end
+        return pats
+    end
+    local function Any(pats, f)
+        for _, lp in ipairs(pats) do if f:match(lp) then return true end end
+        return false
+    end
+    local scripts = {}
+    for _, b in ipairs({ 'shared_scripts', 'server_scripts', 'client_scripts' }) do
+        for _, lp in ipairs(Block(b)) do scripts[#scripts + 1] = lp end
+    end
+    local ignored = Block('escrow_ignore')
+    local files = Lines(
+        'cd "' .. H.root .. '" && find . -name "*.lua" -not -path "./web/node_modules/*" | sed "s|^./||"')
+    local loose = {}
+    for _, f in ipairs(files) do
+        if f ~= 'fxmanifest.lua' and not Any(scripts, f) and not Any(ignored, f) then loose[#loose + 1] = f end
+    end
+    table.sort(loose)
+    H.ok(#scripts > 10 and #ignored >= 4 and #files > 100, 'H2: the manifest script and escrow_ignore lists are read')
+    H.eq(table.concat(loose, ', '), '', 'H2: every .lua file the manifest does not load is in escrow_ignore')
+end
+
 return H

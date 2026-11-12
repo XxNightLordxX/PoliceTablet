@@ -219,4 +219,19 @@ local again, why = CP.FeatureRewards.pay('surrender', 'MN_OFFICER1', { key = 'mn
 H.ok(again == nil and why == 'duplicate', 'the same case pays once')
 Config.FeatureRewards.surrender.enabled = false
 
+-- H2: a completed run row whose breakdown is NULL (or JSON that does not decode) is still paid: CP.Cash reads the
+-- breakdown as {} instead of raising, which used to send the row back to pending on every try
+local nullId = MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid,
+  department, participants, departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points,
+  final_points, cash_base, cash_multiplier, cash_paid, cash_status, duration_s, breakdown, flagged, voided, created_at)
+  VALUES ('mn-nullbd-1', 'patrol', 'some_mission', 'MN_OFFICER1', 'lspd', 1, 1, 'standard', 'completed', 'completed',
+  0, 0, 0, 0, 300, 1.00, 0, 'none', 0, NULL, 0, 0, FROM_UNIXTIME(?))]], { CP.now() })
+local depNull, undoNull = Spy('deposit')
+H.eq(CP.Cash.pay(nullId), 'paid', 'a run row with a NULL breakdown is paid')
+undoNull()
+H.eq(#depNull, 1, 'with exactly one deposit')
+H.eq(depNull[1] and depNull[1][4], 300, 'of the row\'s cash')
+local nullRow = H.sql('SELECT cash_status FROM cp_mission_runs WHERE id = ?', { nullId })[1]
+H.eq(nullRow and nullRow.cash_status, 'paid', 'and the row says paid')
+
 return H

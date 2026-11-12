@@ -5404,6 +5404,7 @@
   "payments.resolve.type_deposit": "deposit",
   "payments.resolve.type_withdraw": "withdrawal",
   "payments.retry_pending": "Retry all pending",
+  "payments.retry_pending_confirm": "Click again to pay all pending",
   "payments.retry_pending_done": "{n} pending payments paid",
   "payments.retry_unfunded_all": "Retry every unfunded payment",
   "payments.rows": "{n} rows",

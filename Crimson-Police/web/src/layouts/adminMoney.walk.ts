@@ -4,6 +4,7 @@
 
 import '../mocks/admin_economy.mock';
 import '../mocks/oversight.mock';
+import paymentsSrc from '../admin/screens/Payments.tsx?raw';
 import { t } from '../shared/i18n';
 import { request } from '../shared/nui';
 import type { Session } from '../shared/types';
@@ -71,6 +72,15 @@ async function steps(): Promise<void> {
     ok(two.ok && two.data && two.data.totals === undefined, 'without withTotals: no totals');
     const one = await request<PaymentsView>('admin:getPayments', { page: 1, size: 25, withTotals: true });
     ok(one.ok && one.data?.totals?.byStatus, 'withTotals: the totals come with the list');
+
+    // H2: Retry all pending pays every online officer's pending money, so it takes two clicks (a ConfirmButton): the
+    // first click only arms it, and nothing else on the screen calls it
+    const calls = paymentsSrc.match(/retryPending\(\)/g) ?? [];
+    ok(
+        /<ConfirmButton(?:(?!\/>)[\s\S])*onConfirm=\{\(\) => void retryPending\(\)\}/.test(paymentsSrc) &&
+            calls.length === 1,
+        'Payments: Retry all pending runs only from the second click of a ConfirmButton',
+    );
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

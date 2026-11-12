@@ -388,7 +388,7 @@ end
 
 -- The claimed part of payRow (row is 'paying'). progress.moved = true right before the first call that can move money.
 PayClaimed = function(row, rowId, cid, src, progress)
-    local bd = CP.U.jsonField(row.breakdown)
+    local bd = CP.U.jsonField(row.breakdown) or {}
     local amount = AmountOf(row, bd)
     local capped = false
     local cap = math.floor(Num(Config.Cash and Config.Cash.dailyCap, 0))

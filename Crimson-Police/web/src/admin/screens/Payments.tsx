@@ -7,6 +7,7 @@ import {
     Button,
     Card,
     Checkbox,
+    ConfirmButton,
     ConfirmDialog,
     Dialog,
     EmptyState,
@@ -635,9 +636,15 @@ export default function AdminPayments() {
             className="payments-admin"
             actions={
                 <span className="payments-admin__actions">
-                    <Button size="sm" icon="refresh" onClick={() => void retryPending()} loading={busy}>
-                        {t('payments.retry_pending')}
-                    </Button>
+                    <ConfirmButton
+                        size="sm"
+                        icon="refresh"
+                        variant="secondary"
+                        loading={busy}
+                        label={t('payments.retry_pending')}
+                        confirmLabel={t('payments.retry_pending_confirm')}
+                        onConfirm={() => void retryPending()}
+                    />
                     {data?.switches.manualCash ? (
                         <Button size="sm" variant="danger" icon="dollar" onClick={() => setManual(true)}>
                             {t('payments.manual.open')}

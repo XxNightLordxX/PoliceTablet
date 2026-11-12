@@ -1933,7 +1933,8 @@ shows on Home), `'toast'` (a toast too) or `'sound'` (a toast with the notice to
 option mutes it). An admin may end any running notice (with a reason); a supervisor ends his department's own.
 
 **Seasons** gains **Season tools**: **Rename**, **Plan the end** (the first daily reset on or after the date ends the
-season and can start the next one by name; admins get a reminder a day and an hour before), **Reopen** the season
+season and can start the next one by name, also when the server was off at that reset: it ends at the next start;
+admins get a reminder a day and an hour before), **Reopen** the season
 that just ended (within 24 hours; type its name) with **Undo reopen**, **Next week's bounty**, and each department's
 contributors. Ending a season shows the champion, trophies and top 10 first and asks you to type the season's name.
 Click a season to see its bounty weeks (**Recount** a closed week) and its champion (**Recount champion**, up to 14
