@@ -504,6 +504,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/board_types_spec.lua`: Mission Board controls: types switches mission types or single missions off for a department (its officers see the type locked, other departments still take it; a unit with a member of that department is refused), featuredType recommends one type to a department's officers.
 - `tests/boards_metrics_spec.lua`: Leaderboard metrics, levels and avatars on rows, the service record, stat goals and the new bounties.
 - `tests/boards_spec.lua`: The boards slice: CP.Leaderboard (modules/progression/leaderboard) and CP.Challenge
+- `tests/boot_smoke_spec.lua`: The real server boot test (tools/boot_smoke.sh) reads a console log the way it should: real FXServer logs pass or fail for the right reason, keys are masked and the server.cfg it writes holds no secret.
 - `tests/builder_client_spec.lua`: The builder_client slice: modules/missions/client/builder.lua (CP.Builder, client side).
 - `tests/builder_points_spec.lua`: The point list under the location map (Mission Builder, Locations step): web/src/builder/pointList.ts, bundled with esbuild and run in node.
 - `tests/builder_server_spec.lua`: Modules/builder/server.lua (slice builder_server).

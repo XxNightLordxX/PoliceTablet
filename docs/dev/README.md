@@ -16,6 +16,8 @@
   components) is §12 of `docs/dev/ARCHITECTURE.md`.
 - **Every check in one command**: `bash tools/check_all.sh` (syntax, contracts, lint, style, the test suites in all
   three storage modes, tsc and the web build). `tools/setup_test_env.sh` checks and installs what it needs.
+  `tools/boot_smoke.sh` boots a real FXServer with Crimson-Police and says PASS or FAIL (needs your license key in
+  `CP_FX_LICENSE_KEY`; docs/dev/TESTING.md, "Real server boot test").
   `.github/workflows/ci.yml` runs the same on GitHub.
 - **Text** lives in `Crimson-Police/locales/parts/<part>.json`. `python3 tools/check_contracts.py --merge` builds
   `locales/en.json` from them.
