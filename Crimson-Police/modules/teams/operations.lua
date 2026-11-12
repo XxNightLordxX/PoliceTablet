@@ -91,10 +91,11 @@ local TICK_IDLE_MS = 10000       -- no operation (scaled by Config.Performance.l
 local RUN_MISSING_GRACE = 60     -- seconds a running operation's run may be missing before it counts as ended
 local ACTIVE = { joining = true, running = true, waiting = true }
 
-local op = nil                   -- the active operation (status joining | running | waiting)
-local lastLaunchAt = nil         -- os.time() of the last launch (MAX(cp_operations.created_at))
+local op = nil                  -- the active operation (status joining | running | waiting)
+local lastLaunchAt = nil        -- os.time() of the last launch (MAX(cp_operations.created_at))
 local ready = false
-local busy = false               -- a launch / start / cancel is being processed
+local initFailed = false        -- the start could not read cp_operations: Ops._tick runs Ops._init again
+local busy = false              -- a launch / start / cancel is being processed
 local dbQueue, dbWorker = {}, false
 
 -- ============================================================================
@@ -1656,6 +1657,10 @@ end)
 -- ============================================================================
 
 function Ops._tick()
+    if initFailed then
+        Ops._init()
+        if not ready then return end
+    end
     local cur = op
     if not cur then return end
     local now = os.time()
@@ -1804,8 +1809,14 @@ function Ops._init()
         local ts = MySQL.scalar.await('SELECT UNIX_TIMESTAMP(MAX(created_at)) AS last_ts FROM cp_operations')
         lastLaunchAt = tonumber(ts)
     end)
-    if not ok then CP.err(TAG, 'could not read cp_operations: %s', tostring(err)) end
-    ready = true
+    if not ok then
+        -- no launch until it reads (the launch cooldown and the stale rows are in it): the tick tries again
+        if not initFailed then CP.err(TAG, 'could not read cp_operations: %s', tostring(err)) end
+        initFailed, ready = true, false
+        return
+    end
+    if initFailed then CP.log(TAG, 'cp_operations read again: launches open') end
+    initFailed, ready = false, true
 end
 
 CreateThread(function()

@@ -21,10 +21,11 @@ local CHOICE_MAX = 16           -- names in a choice control's list (difficulty'
 local SCOPES = { between = true, run = true }
 local WATCHED = { 'MissionControls', 'Permissions.supervisor.missionControls', 'Departments' }
 
-local defs = {}           -- key -> { kind, scope, master, serverWide, integer, configValue, check, clamp, relaxes, ... }
-local order = {}          -- the registered keys in the order they were registered
-local cache = {}          -- department -> { [key] = row } (rows of cp_dept_controls, decoded)
-local lastChange = {}     -- 'department|key' -> os.time() of the last set or reset (a reset leaves no row behind)
+local defs = {}                 -- key -> { kind, scope, master, serverWide, integer, configValue, check, clamp, relaxes, ... }
+local order = {}                -- the registered keys in the order they were registered
+local cache = {}                -- department -> { [key] = row } (rows of cp_dept_controls, decoded)
+local lastChange = {}           -- 'department|key' -> os.time() of the last set or reset (a reset leaves no row behind)
+local changesSeeded = false     -- lastChange holds the audit's sets and resets of the last changeWait (read once a start)
 
 -- ============================================================================
 --                                SMALL HELPERS
@@ -599,10 +600,38 @@ local function ActorOf(n)
     return type(info) == 'table' and info.citizenid or ('src:%d'):format(n)
 end
 
--- Seconds until the control may change again in that department (0 = now).
+-- After a start, lastChange is filled once from the audit (missionControlSet / missionControlReset of the last
+-- changeWait), so a reset (which leaves no row) still holds the wait across a restart. false when it cannot be read.
+local function SeedChanges(wait)
+    if changesSeeded then return true end
+    CP.Db()
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT target, UNIX_TIMESTAMP(MAX(created_at)) AS t FROM cp_audit
+        WHERE action IN ('missionControlSet', 'missionControlReset') AND created_at >= NOW() - INTERVAL ? SECOND
+        GROUP BY target
+    ]], { wait })
+    if not ok then
+        CP.err(TAG, 'reading the last control changes failed: %s', tostring(rows))
+        return false
+    end
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local dept, key = tostring(r.target or ''):match('^(.-):([^:]+)$')
+        local t = tonumber(r.t)
+        if dept and t then
+            local k = dept .. '|' .. key
+            if t > (lastChange[k] or 0) then lastChange[k] = t end
+        end
+    end
+    changesSeeded = true
+    return true
+end
+
+-- Seconds until the control may change again in that department (0 = now; the whole wait while the last changes
+-- cannot be read).
 local function WaitLeft(dept, key, row)
     local wait = ChangeWait()
     if wait <= 0 then return 0 end
+    if not SeedChanges(wait) then return wait end
     local last = lastChange[dept .. '|' .. key] or 0
     if row and row.at and row.at > last then last = row.at end
     return math.max(0, last + wait - os.time())
@@ -1071,5 +1100,5 @@ end
 
 -- Test hooks (not part of the contract).
 DC._reset = function()
-    cache, lastChange = {}, {}
+    cache, lastChange, changesSeeded = {}, {}, false
 end

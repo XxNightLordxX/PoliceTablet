@@ -297,6 +297,11 @@ do
     ok = Act('server:sup:resetMissionControl', 2, { key = 't_wait', reason = 'back to normal' })
     H.eq(ok, true, 'a supervisor resets his department')
     H.eq(#H.sql('SELECT department FROM cp_dept_controls WHERE department = \'sast\''), 0, 'the row is gone')
+    -- a restart right after the reset (no row, nothing in memory): the wait is read back from the audit
+    DC._reset()
+    ok, err = SupSet(3, 't_wait', 400)
+    H.ok(ok == false and err == 'err.control_wait',
+        'after a restart the reset still holds the change wait: ' .. tostring(err))
     H.eq(DC.get('fib', 't_wait'), 800, 'FIB keeps its change')
     ok = Act('server:admin:resetMissionControl', 1, { department = 'fib', key = 't_wait', reason = 'done' })
     H.eq(ok, true, 'an admin resets any department')

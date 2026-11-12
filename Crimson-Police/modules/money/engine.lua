@@ -38,6 +38,24 @@ local Num = CP.Num
 --                                SHARED LOOKUPS
 -- ============================================================================
 
+-- Where the dispute window of a voided run row r starts (the cash and item reward forfeiture): its creation, or the
+-- end of the officer's suspension when that came later (NOW() while he is still suspended: a suspended officer cannot
+-- file a dispute, so the window stands still and he gets all of it once the suspension ends; a lift keeps its time
+-- in suspended_until). The same rule as CP.Disputes.eligible.
+Money.DISPUTE_START_SQL = [[GREATEST(r.created_at, LEAST(COALESCE((SELECT o.suspended_until FROM cp_officers o
+    WHERE o.citizenid = r.citizenid), r.created_at), NOW()))]]
+
+-- The end of a dispute window that starts at startTs: Config.Disputes.windowHours on, moved on by the time a
+-- maintenance lock stood it still (CP.Maintenance.windowEnd).
+function Money.disputeEnd(startTs)
+    local w = math.floor(math.max(0, Num(Config.Disputes and Config.Disputes.windowHours, 48)) * 3600)
+    if CP.Maintenance and CP.Maintenance.windowEnd then
+        local ok, e = pcall(CP.Maintenance.windowEnd, startTs, w)
+        if ok and tonumber(e) then return tonumber(e) end
+    end
+    return startTs + w
+end
+
 -- The id of the current Department Challenge season, or nil (none running, or no challenge module).
 ---@return integer|nil
 function Money.seasonId()

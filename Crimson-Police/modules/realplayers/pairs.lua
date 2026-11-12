@@ -156,43 +156,49 @@ end
 local INSERT = 'INSERT INTO cp_pvp_pairs (kind, run_uuid, officer_citizenid, officer_license, suspect_citizenid, '
     .. 'suspect_license, outcome, scored, until_at, created_at) VALUES '
 
--- One statement per MAX_ROWS_PER_INSERT rows, in a thread (never in a tick). A missing value is written as NULL in
--- the statement: a parameter list never has holes.
+-- One statement per MAX_ROWS_PER_INSERT rows. A missing value is written as NULL in the statement: a parameter list
+-- never has holes. -> true | false (the database is not ready or a statement failed; logged).
+local function InsertNow(rows)
+    if not DbReady() then return false end
+    local all = true
+    for first = 1, #rows, MAX_ROWS_PER_INSERT do
+        local tuples, params = {}, {}
+        for i = first, math.min(#rows, first + MAX_ROWS_PER_INSERT - 1) do
+            local r = rows[i]
+            local marks = {}
+            local function put(v, mark)
+                if v == nil then
+                    marks[#marks + 1] = 'NULL'
+                else
+                    marks[#marks + 1] = mark or '?'
+                    params[#params + 1] = v
+                end
+            end
+            put(r.kind)
+            put(r.run)
+            put(r.officer or '')
+            put(r.officerLicense)
+            put(r.suspect or '')
+            put(r.suspectLicense)
+            put(r.outcome)
+            put(r.scored and 1 or 0)
+            put(r.untilAt, 'FROM_UNIXTIME(?)')
+            put(r.at, 'FROM_UNIXTIME(?)')
+            tuples[#tuples + 1] = '(' .. table.concat(marks, ', ') .. ')'
+        end
+        local ok, err = pcall(MySQL.insert.await, INSERT .. table.concat(tuples, ', '), params)
+        if not ok then
+            all = false
+            CP.errEvery(TAG, 'insert', 'writing %d pair ledger row(s) failed: %s', #tuples, tostring(err))
+        end
+    end
+    return all
+end
+
+-- The case and duty_off rows: in a thread (never in a tick).
 local function Insert(rows)
     if #rows == 0 then return end
-    CreateThread(function()
-        if not DbReady() then return end
-        for first = 1, #rows, MAX_ROWS_PER_INSERT do
-            local tuples, params = {}, {}
-            for i = first, math.min(#rows, first + MAX_ROWS_PER_INSERT - 1) do
-                local r = rows[i]
-                local marks = {}
-                local function put(v, mark)
-                    if v == nil then
-                        marks[#marks + 1] = 'NULL'
-                    else
-                        marks[#marks + 1] = mark or '?'
-                        params[#params + 1] = v
-                    end
-                end
-                put(r.kind)
-                put(r.run)
-                put(r.officer or '')
-                put(r.officerLicense)
-                put(r.suspect or '')
-                put(r.suspectLicense)
-                put(r.outcome)
-                put(r.scored and 1 or 0)
-                put(r.untilAt, 'FROM_UNIXTIME(?)')
-                put(r.at, 'FROM_UNIXTIME(?)')
-                tuples[#tuples + 1] = '(' .. table.concat(marks, ', ') .. ')'
-            end
-            local ok, err = pcall(MySQL.insert.await, INSERT .. table.concat(tuples, ', '), params)
-            if not ok then
-                CP.errEvery(TAG, 'insert', 'writing %d pair ledger row(s) failed: %s', #tuples, tostring(err))
-            end
-        end
-    end)
+    CreateThread(function() InsertNow(rows) end)
 end
 
 local function Scored(v) return v == true or v == 1 or v == '1' end
@@ -669,10 +675,18 @@ local function Days(days)
     return math.max(60, math.floor(days * DAY_S))
 end
 
+-- Written before it counts (the callers are net actions, in a thread): until | nil when the row was not saved, so a
+-- restart never undoes what the admin was told and the audit says.
 local function AdminRow(kind, officer, suspect, seconds)
     local now = os.time()
     local untilAt = now + seconds
-    Insert({ { kind = kind, officer = officer, suspect = suspect, scored = false, untilAt = untilAt, at = now } })
+    if
+        not InsertNow({
+            { kind = kind, officer = officer, suspect = suspect, scored = false, untilAt = untilAt, at = now },
+        })
+    then
+        return nil
+    end
     return untilAt
 end
 
@@ -684,6 +698,7 @@ function Opp.block(officerCid, suspectCid, days)
     local seconds = Days(days)
     if not seconds then return false, 'invalid_days' end
     local untilAt = AdminRow('block', officerCid, suspectCid, seconds)
+    if not untilAt then return false, 'internal' end
     Later(blocks, officerCid .. '|' .. suspectCid, untilAt)
     return true, untilAt
 end
@@ -693,6 +708,7 @@ function Opp.exclude(cid, days)
     local seconds = Days(days)
     if not seconds then return false, 'invalid_days' end
     local untilAt = AdminRow('exclude', '', cid, seconds)
+    if not untilAt then return false, 'internal' end
     Later(excludes, cid, untilAt)
     return true, untilAt
 end
@@ -702,6 +718,7 @@ function Opp.suspend(officerCid, days)
     local seconds = Days(days)
     if not seconds then return false, 'invalid_days' end
     local untilAt = AdminRow('suspend', officerCid, '', seconds)
+    if not untilAt then return false, 'internal' end
     Later(suspends, officerCid, untilAt)
     return true, untilAt
 end
@@ -731,12 +748,14 @@ function Opp.lift(kind, officer, suspect)
     end
     local untilAt = map[key]
     if not untilAt or untilAt <= os.time() then return false, 'no_row' end
+    -- the saved rows go first (the caller is a net action, in a thread): a failed delete lifts nothing
+    if not DbReady() then return false, 'internal' end
+    local ok, err = pcall(MySQL.update.await, LIFT_SQL[kind], params)
+    if not ok then
+        CP.errEvery(TAG, 'lift', 'lifting a %s in the pair ledger failed: %s', kind, tostring(err))
+        return false, 'internal'
+    end
     map[key] = nil
-    CreateThread(function()
-        if not DbReady() then return end
-        local ok, err = pcall(MySQL.update.await, LIFT_SQL[kind], params)
-        if not ok then CP.errEvery(TAG, 'lift', 'lifting a %s in the pair ledger failed: %s', kind, tostring(err)) end
-    end)
     return true, untilAt
 end
 

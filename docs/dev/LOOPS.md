@@ -399,7 +399,7 @@ strings do not count.
 | `modules/npc/client/npccombat.lua` | 1 | 0 | damage re-apply while the run is live |
 | `modules/teams/operations.lua` | 4 | 1 | operations, adaptive; one-shots |
 | `modules/realplayers/conduct.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/realplayers/pairs.lua` | 4 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/pairs.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/proof.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/saved.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |

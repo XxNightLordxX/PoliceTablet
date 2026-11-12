@@ -971,3 +971,19 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   she logs in again the reward is paid once. (H3)
 - [ ] Money safety (H3): take back a two-item reward when only one is still in the inventory: the reply says one is
   left and Admin UI -> Audit shows a second Item taken back row "partial:-1". (H3)
+- [ ] Timers and holds (H4): void a run of an officer, then suspend him for 7 days (Admin UI -> Officers). Two days
+  later his held cash and items are still held (Admin UI -> Money -> Payments). Lift the suspension: he can file a
+  dispute on that run for 48 h from the lift. (H4)
+- [ ] Timers and holds (H4): start a backup restore that fails (or a storage copy) 40 h after a void and restart
+  10 h later: the voided row is not forfeited at the start, and its officer can still dispute it for the 8 h he had
+  left. (H4)
+- [ ] Timers and holds (H4): Admin UI -> Live -> reclassify a free real-call abandon from many hours ago, then restart:
+  the officer's mission and type cooldowns from the reclassify are still on the board. (H4)
+- [ ] Timers and holds (H4): a supervisor resets a Mission control, the server restarts within 5 minutes: setting or
+  resetting the same control at once is refused with the change wait. (H4)
+- [ ] Timers and holds (H4): two runs flagged on Saturday and Sunday, a run counted on Monday, then both approved: the
+  officer's streak on the Home screen counts every day, as if nothing was held. (H4)
+- [ ] Timers and holds (H4): a medal EVOC test run with "timer starts at checkpoint 1": press Pause in the test
+  controls, then cross checkpoint 1: the timer stays paused until you press Resume. (H4)
+- [ ] Timers and holds (H4): Admin UI -> Restrictions: extend a real-suspect pair block, then restart: it keeps the
+  new end. With the database stopped the extend is refused ("Something went wrong") and nothing is audited. (H4)

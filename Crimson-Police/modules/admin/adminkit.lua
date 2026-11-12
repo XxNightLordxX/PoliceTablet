@@ -963,11 +963,94 @@ local function MaintPush()
     CP.Hooks.fire('maintenance:changed', MaintView())
 end
 
+-- THE HOLD OF THE DISPUTE WINDOW. While a lock is held nobody can file a dispute and the forfeiture waits, so the
+-- window of a voided row stands still. cp_storage_meta keeps it across restarts (a copy or restore never replaces
+-- that table): holdFrom while a lock is held (kept, not moved, when a start takes the lock again), holdLast
+-- 'from:to' the last one that ended (Maint.finish, or the first start that took no lock). Only one is open at a time,
+-- so a restart never counts it twice.
+local META_HOLD_FROM, META_HOLD_LAST = 'holdFrom', 'holdLast'
+local hold = nil   -- { from, to (nil while open) } | false (none) | nil (not read yet)
+
+local function MetaGet(key)
+    local ok, v = pcall(MySQL.scalar.await, 'SELECT meta_value FROM cp_storage_meta WHERE meta_key = ?', { key })
+    if not ok then return nil, false end
+    return v, true
+end
+
+local function MetaSet(key, value)
+    if value == nil then
+        return (pcall(MySQL.update.await, 'DELETE FROM cp_storage_meta WHERE meta_key = ?', { key }))
+    end
+    return (
+        pcall(MySQL.update.await, [[INSERT INTO cp_storage_meta (meta_key, meta_value, updated_at)
+        VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value), updated_at = VALUES(updated_at)]],
+            { key, value })
+    )
+end
+
+local function ReadHold()
+    local from, ok1 = MetaGet(META_HOLD_FROM)
+    local last, ok2 = MetaGet(META_HOLD_LAST)
+    if not (ok1 and ok2) then return nil end
+    from = tonumber(from)
+    if from then return { from = from } end
+    local a, b = tostring(last or ''):match('^(%d+):(%d+)$')
+    if a then return { from = tonumber(a), to = tonumber(b) } end
+    return false
+end
+
+local function HoldOpen(since)
+    local h = ReadHold()
+    if h and not h.to then
+        hold = h
+        return
+    end
+    if MetaSet(META_HOLD_FROM, tostring(since)) then hold = { from = since } end
+end
+
+local function HoldClose(now)
+    local h = ReadHold()
+    if h == nil then return end
+    if h and not h.to then
+        if not MetaSet(META_HOLD_LAST, ('%d:%d'):format(h.from, now)) then return end
+        MetaSet(META_HOLD_FROM, nil)
+        h = { from = h.from, to = now }
+    end
+    hold = h
+end
+
+-- At start, after the start-up locks: a hold left open by the last run that no lock took again ended at this start.
+function Maint.settleHold()
+    if maintenance then
+        HoldOpen(maintenance.since)
+        return
+    end
+    HoldClose(os.time())
+end
+
+-- The last hold: { from, to } (to = now while a lock is held) | nil.
+function Maint.hold()
+    if hold == nil then hold = ReadHold() end
+    if not hold then return nil end
+    return { from = hold.from, to = hold.to or os.time() }
+end
+
+-- The end of a window of windowS seconds from startTs, moved on by the time the last hold stood it still (the part
+-- of the hold from the window's start on, when the hold began before the window ended).
+function Maint.windowEnd(startTs, windowS)
+    local e = startTs + windowS
+    local h = Maint.hold()
+    if h and h.from < e and h.to > startTs then e = e + (h.to - math.max(h.from, startTs)) end
+    return e
+end
+
 -- ok | false, errKey. info = { by = actor, restart = bool, ... } (shown to admins).
 function Maint.begin(kind, info)
     if not MAINT_KINDS[kind] then return false, 'err.invalid_payload' end
     if maintenance and maintenance.kind ~= kind then return false, 'err.maintenance' end
+    local fresh = maintenance == nil
     maintenance = { kind = kind, info = type(info) == 'table' and info or {}, since = os.time() }
+    if fresh then HoldOpen(maintenance.since) end
     CP.warn(TAG, 'maintenance lock on (%s): new runs, claims, tests, operations and payments wait', kind)
     MaintPush()
     return true
@@ -978,6 +1061,7 @@ function Maint.finish(kind)
     if kind ~= nil and maintenance.kind ~= kind then return false, 'err.maintenance' end
     CP.warn(TAG, 'maintenance lock off (%s)', maintenance.kind)
     maintenance = nil
+    HoldClose(os.time())
     MaintPush()
     return true
 end
@@ -1022,6 +1106,6 @@ end)
 
 -- Test hooks (not part of the contract).
 Kit._reset = function()
-    previews, previewOrder, busy, maintenance = {}, {}, nil, nil
+    previews, previewOrder, busy, maintenance, hold = {}, {}, nil, nil, nil
 end
 Kit._jobKinds = function() return jobKinds end

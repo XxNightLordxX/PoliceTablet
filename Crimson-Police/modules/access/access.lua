@@ -394,7 +394,11 @@ function A.isSuspended(citizenid)
     local now = os.time()
     local c = suspensionCache[citizenid]
     if not c or now - c.at >= SUSPENSION_TTL then
-        if not ReadOfficerState(citizenid, now) then return false, nil end
+        if not ReadOfficerState(citizenid, now) then
+            -- an unreadable row keeps a suspension the cache already knew (it never lifts one by failing)
+            if c and c.untilTs and c.untilTs > now then return true, c.untilTs end
+            return false, nil
+        end
         c = suspensionCache[citizenid]
     end
     if c.untilTs and c.untilTs > now then return true, c.untilTs end
@@ -734,7 +738,7 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
     CP.Migrations.ready()
     local now = os.time()
     if d == 0 then
-        local ok, err = pcall(MySQL.update.await, 'UPDATE cp_officers SET suspended_until = NULL WHERE citizenid = ?',
+        local ok, err = pcall(MySQL.update.await, 'UPDATE cp_officers SET suspended_until = NOW() WHERE citizenid = ?',
             { citizenid })
         if not ok then
             CP.err(TAG, 'lifting the suspension of %s failed: %s', citizenid, tostring(err))

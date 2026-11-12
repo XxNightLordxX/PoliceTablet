@@ -725,6 +725,16 @@ do
     H.eq(st[rowPaid], 'forfeited', 'voided after its cash was paid: forfeited when the dispute window closed')
     H.eq(st[rowOpen], 'held', 'an open dispute keeps it held')
     H.eq(st[rowNew], 'held', 'inside the dispute window: still held')
+    -- the officer is suspended (he cannot file a dispute): the window stands still, the rewards stay held
+    local rowSusp = RunRow('REV-SUSP', 'CID4', { voided = 1, cash = 'paid', at = H.time - 3 * DAY })
+    Settle('REV-SUSP', 'CID4', { rowId = rowSusp })
+    CP.Hooks.fire('row:voided', rowSusp)
+    H.sql(
+        'INSERT INTO cp_officers (citizenid, department, suspended_until) VALUES (\'CID4\', \'sast\', FROM_UNIXTIME(?))',
+        { H.time + DAY })
+    R._forfeitureJob()
+    H.eq(H.sql('SELECT status FROM cp_item_rewards WHERE row_id = ?', { rowSusp })[1].status, 'held',
+        'a voided row of a suspended officer: held while he is suspended')
     H.eq(R._forfeitureJob(), 0, 'a second run changes nothing')
     H.sql('UPDATE cp_disputes SET status = \'rejected\'')
     H.eq(R._forfeitureJob(), 1, 'the dispute closed: that row is forfeited too')

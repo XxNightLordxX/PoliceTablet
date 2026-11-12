@@ -641,10 +641,15 @@ function Runs.addTime(run, seconds, maxTotal)
     return true, run.timeAdded
 end
 
-function Runs.pauseTimer(run, paused)
+-- who: the holder ('test' when nil: the test controls' Pause; 'checkpoint': the checkpoint route's hold until
+-- checkpoint 1). The timer stays paused while any holder holds it, so one releasing never resumes another's pause.
+function Runs.pauseTimer(run, paused, who)
     if type(run) ~= 'table' or not run.timer or run.state == 'ended' then return end
     SyncTimer(run)
-    run.timer.paused = paused == true
+    local holds = run.timer.holds or {}
+    run.timer.holds = holds
+    holds[type(who) == 'string' and who or 'test'] = paused == true or nil
+    run.timer.paused = next(holds) ~= nil
     run.timer.lastTick = GetGameTimer()
     if run.timer.running then SendTimer(run) end
 end
@@ -2453,12 +2458,15 @@ local function LoadCooldowns(citizenid)
     end
     c.loading = true
     CP.Db()
+    -- breakdown.cooldownAt: when a reclassify started the cooldowns (Runs.reclassify), later than the row itself
+    local window = RebuildWindow()
     local ok, rows = pcall(MySQL.query.await, [[
-        SELECT mission_type, mission_id, end_reason, UNIX_TIMESTAMP(created_at) AS created_ts
+        SELECT mission_type, mission_id, end_reason, UNIX_TIMESTAMP(created_at) AS created_ts,
+               JSON_EXTRACT(breakdown, '$.cooldownAt') AS cooldown_at
         FROM cp_mission_runs
-        WHERE citizenid = ? AND created_at >= NOW() - INTERVAL ? SECOND
+        WHERE citizenid = ? AND (created_at >= NOW() - INTERVAL ? SECOND OR JSON_EXTRACT(breakdown, '$.cooldownAt') >= ?)
           AND mission_type NOT IN ('manual_award', 'goal')
-    ]], { citizenid, RebuildWindow() })
+    ]], { citizenid, window, os.time() - window })
     c.loading = false
     if not ok then
         CP.err(TAG, 'cooldown rebuild for %s failed: %s', tostring(citizenid), tostring(rows))
@@ -2471,7 +2479,7 @@ local function LoadCooldowns(citizenid)
     local byType = type(clears.type) == 'table' and clears.type or {}
     local byMission = type(clears.mission) == 'table' and clears.mission or {}
     for _, row in ipairs(rows or {}) do
-        local ts = U.num(row.created_ts)
+        local ts = math.max(U.num(row.created_ts), math.floor(U.num(row.cooldown_at)))
         local reason = row.end_reason
         if MISSION_COOLDOWN[reason] and ts > all and ts > Num(byMission[row.mission_id], 0) then
             local e = c.missions[row.mission_id]
@@ -2495,10 +2503,13 @@ end
 -- { types = { [type] = until }, missions = { [id] = until } } of one character, worked out now: the supervisors'
 -- cooldown changes (Mission controls) read for opts.officer (an officer, a unit's members; default the character
 -- itself), so the self rule holds for him and any unit he is in.
+-- out.unreadable = true when the rows could not be read: Runs.onCooldown then answers on cooldown, and the board
+-- and accept (draw.lua) treat every type and mission as on cooldown for a minute.
 function Runs.cooldowns(citizenid, opts)
     local out = { types = {}, missions = {} }
     if type(citizenid) ~= 'string' or citizenid == '' then return out end
     local c = LoadCooldowns(citizenid)
+    if not c.loaded then out.unreadable = true end
     local reader = type(opts) == 'table' and opts.officer or nil
     if type(reader) ~= 'table' then reader = { citizenid = citizenid } end
     local now = os.time()
@@ -2526,6 +2537,7 @@ function Runs.cooldownScale(missionType, reader) return Cd.scale(missionType, re
 
 function Runs.onCooldown(citizenid, missionType, missionId, opts)
     local cd = Runs.cooldowns(citizenid, opts)
+    if cd.unreadable then return true, nil end
     local untilTs = nil
     local t = missionType and cd.types[missionType]
     local m = missionId and cd.missions[missionId]
@@ -4619,9 +4631,10 @@ function Runs.reclassify(citizenid, runId, newEndReason)
     local ok, n = pcall(
         MySQL.update.await,
         [[
-        UPDATE cp_mission_runs SET end_reason = ?, state = ?, breakdown = JSON_SET(breakdown, '$.endReason', ?)
+        UPDATE cp_mission_runs SET end_reason = ?, state = ?,
+            breakdown = JSON_SET(COALESCE(breakdown, '{}'), '$.endReason', ?, '$.cooldownAt', ?)
         WHERE run_uuid = ? AND citizenid = ? AND end_reason IN ]] .. from.sql,
-        { newEndReason, RESULT[newEndReason], newEndReason, runId, citizenid }
+        { newEndReason, RESULT[newEndReason], newEndReason, os.time(), runId, citizenid }
     )
     if not ok then
         CP.err(TAG, 'reclassify %s/%s failed: %s', citizenid, runId, tostring(n))

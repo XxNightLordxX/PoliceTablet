@@ -390,6 +390,14 @@ do
     H.ok(ok == false and e == 'err.rs_no_row', 'nothing running: nothing to extend')
     ok, e = Act(RA, { op = 'extend', kind = 'exclusion', citizenid = 'CRIM0002', hours = 3650 * 24 + 1 })
     H.ok(ok == false and e == 'err.restriction_hours', 'never past 3650 days')
+    -- the ledger row could not be saved: refused as a fault, and nothing audited
+    local realExclude = Opp.exclude
+    Opp.exclude = function() return false, 'internal' end
+    nAudit = #audits
+    ok, e = Act(RA, { op = 'extend', kind = 'exclusion', citizenid = 'CRIM0002', hours = 24 })
+    H.ok(ok == false and e == 'err.internal' and #audits == nAudit,
+        'a failed save: err.internal, no audit (' .. tostring(e) .. ')')
+    Opp.exclude = realExclude
     Opp.adminRows = nil
     Config.RealPlayers.liveCrime.enabled = false
 

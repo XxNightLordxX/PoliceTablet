@@ -45,6 +45,12 @@ function MB.perDay() return math.max(0, math.floor(Num(McCfg().missionBanPerDay,
 --                                  THE STORE
 -- ============================================================================
 
+-- While the store cannot be read every officer reads as banned for a minute (a ban in force never lifts by a
+-- failed read): MB.get answers { until = now + 60, unreadable = true }, read again on the next lookup.
+local UNREADABLE = {
+    __index = function() return { ['until'] = os.time() + 60, unreadable = true } end,
+}
+
 -- Every saved ban, read once (after the migrations) and then kept in memory.
 local function Load()
     if Bans then return Bans end
@@ -53,7 +59,7 @@ local function Load()
         'SELECT citizenid, mission_ban FROM cp_officers WHERE mission_ban IS NOT NULL')
     if not ok then
         CP.err(TAG, 'reading the mission bans failed: %s', tostring(rows))
-        return {}
+        return setmetatable({}, UNREADABLE)
     end
     local out = {}
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do
@@ -98,7 +104,7 @@ end
 -- What the officer's screens show: { until, by (the name), reason, mine } or nil.
 function MB.view(citizenid, now)
     local ban = MB.get(citizenid, now)
-    if not ban then return nil end
+    if not ban or ban.unreadable then return nil end
     return { ['until'] = math.floor(Num(ban['until'], 0)), by = ban.name, reason = ban.reason }
 end
 
@@ -194,7 +200,7 @@ function MB.supView(src, citizenid)
     local actor = select(2, Call('Qbx', 'getInfo', n))
     actor = type(actor) == 'table' and actor.citizenid or nil
     local canLift = nil
-    if ban then canLift = admin or ban.by == actor end
+    if ban and not ban.unreadable then canLift = admin or ban.by == actor end
     return {
         min = lo,
         max = hi,
@@ -243,6 +249,7 @@ Kit.supAction('server:sup:missionBan', 'missionControls', function(ctx)
     end
     local now = os.time()
     local old = MB.get(cid, now)
+    if old and old.unreadable then return false, 'err.internal' end
     -- a ban in force belongs to its setter: another supervisor may not replace it (and so own and lift it)
     if sup and old and old.by ~= ctx.actor then return false, 'err.mission_ban_exists' end
     local name
@@ -283,6 +290,7 @@ local function Lift(ctx, adminOnly)
     if not cid then return false, 'err.invalid_payload' end
     local ban = MB.get(cid)
     if not ban then return false, 'err.mission_ban_none' end
+    if ban.unreadable then return false, 'err.internal' end
     if not adminOnly and ctx.role == 'supervisor' and ban.by ~= ctx.actor then
         return false, 'err.mission_ban_not_yours'
     end
@@ -305,6 +313,7 @@ local function Extend(ctx, p, hours)
     local now = os.time()
     local ban = MB.get(cid, now)
     if not ban then return false, 'err.mission_ban_none' end
+    if ban.unreadable then return false, 'err.internal' end
     local newBan = U.copy(ban)
     newBan['until'] = math.min(math.floor(Num(ban['until'], now)) + hours * 3600, now + HOURS_MAX * 3600)
     local okS, errS = Save(cid, newBan)

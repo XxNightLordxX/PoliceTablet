@@ -620,7 +620,7 @@ Everything else works as shipped. These are the ones owners change most:
 | Setting | What it does |
 |---|---|
 | `Config.Rewards` | Item rewards, off by default (see [3.3](#33-item-rewards)) |
-| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours) |
+| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted) and while a maintenance lock (a storage copy or a restore) holds, also across restarts; held cash and items of a voided run are forfeited only after it |
 
 **System**
 

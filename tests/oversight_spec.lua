@@ -663,8 +663,9 @@ H.eq(tonumber(
 ), 7, 'suspension audited')
 H.eq(LastNotify(6).key, 'access.suspended_notice', 'the online officer is told')
 Command(0, 'suspend', 'OFF00006', '0')
-H.eq(H.sql('SELECT suspended_until FROM cp_officers WHERE citizenid = \'OFF00006\'')[1].suspended_until, nil,
-    '0 days lifts it')
+H.eq(
+    tonumber(H.sql('SELECT UNIX_TIMESTAMP(suspended_until) AS t FROM cp_officers WHERE citizenid = \'OFF00006\'')[1].t),
+    os.time(), '0 days lifts it (the end is now)')
 H.eq(H.sql('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'unsuspend\' AND target = \'OFF00006\'')[1].n, 1,
     'lift audited')
 Command(0, 'suspend', 'OFF00006', 'x')

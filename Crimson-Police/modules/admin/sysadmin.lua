@@ -2535,6 +2535,7 @@ end
 function Sys._boot()
     CP.Db()
     StartLocks()
+    Maint.settleHold()
 end
 
 -- The migrations runner calls this once the store is up and before any module that waits for it goes on, so the cash
@@ -2543,6 +2544,7 @@ local locksAtStart = false   -- the runner took them: the start-up thread below 
 function Sys.startLocks()
     locksAtStart = true
     StartLocks()
+    Maint.settleHold()
 end
 
 CreateThread(function()
