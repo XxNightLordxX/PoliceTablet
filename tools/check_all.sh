@@ -24,6 +24,9 @@
 #                 screens in Chromium (about 15 minutes); SKIP unless named or CP_CLICKTHROUGH=1
 #   race-all      (opt-in) CP_RACE_CUTS=all lua5.4 tests/run.lua race: the race spec's crash cuts after every
 #                 query of every case, not 5 spread over it; SKIP unless named or CP_RACE_ALL=1
+#   db-check      (opt-in) tools/db_check.sh: the migrations and every query on a throwaway MariaDB server of its
+#                 own (four kinds of database, each file twice, PREPARE, round-trip writes; about 10 minutes);
+#                 SKIP unless named or CP_DB_CHECK=1
 #
 # The suites run 2 specs at a time (CP_TEST_JOBS=N changes it for all three, 1 = one after another).
 #
@@ -52,12 +55,12 @@ for f in tools/lint_*.py tools/check_*.py; do
     LINT_SCRIPT[$name]=$f
     ALL_STEPS+=("lint-$name")
 done
-ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build clickthrough race-all)
+ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build clickthrough race-all db-check)
 # the long steps that run only when named or turned on (their run_<step> prints SKIP otherwise)
-OPT_IN=" clickthrough race-all "
+OPT_IN=" clickthrough race-all db-check "
 
 usage() {
-    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 VERBOSE=0
@@ -289,6 +292,20 @@ run_race-all() {
 detail_race-all() {
     grep -m1 -E '^SKIP: ' "$1" && return 0
     detail_suite "$1"
+}
+
+# The real database check (docs/dev/TESTING.md "Real database check"): its own throwaway MariaDB server, never the
+# local one the suites use.
+run_db-check() {
+    opted_in db-check CP_DB_CHECK || { echo "SKIP: opt-in (tools/check_all.sh db-check, or CP_DB_CHECK=1)"; return 0; }
+    bash tools/db_check.sh
+}
+detail_db-check() {
+    grep -m1 -E '^SKIP: ' "$1" && return 0
+    local sum
+    sum=$(grep -E '^SUMMARY ' "$1" | tail -1 | sed 's/^SUMMARY [A-Z]*: //')
+    grep -E '^db_check: |^missing command|did not start|install-db failed' "$1" | tail -1 | sed "s/\$/${sum:+ ($sum)}/" |
+        cut -c1-80
 }
 
 # One step, called by the loop below under `timeout` (tools/check_all.sh --step-body=<step>): its output and exit

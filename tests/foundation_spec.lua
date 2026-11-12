@@ -489,6 +489,29 @@ if not H.skipIn('files', mariaOnly) and not H.skipIn('shadow', mariaOnly) then
         for _, c in ipairs(JsonCols(fdb)) do if c.t == 'cp_settings' then after = c.k end end
         H.ok(Switched(mended) == 0 and after == 'utf8mb4_bin',
             'JSON columns left case-insensitive go back to utf8mb4_bin')
+        -- a server whose default_storage_engine is MyISAM (H9): its cp_ tables have no transactions or crash safety,
+        -- which the payment steps rely on. The next start switches them to InnoDB, once, with one line each.
+        local function Engine(name)
+            local row = H.sql(
+                ('SELECT engine AS e FROM information_schema.tables WHERE table_schema = \'%s\' AND table_name = \'%s\''):format(
+                    fdb, name))[1]
+            return row and tostring(row.e)
+        end
+        On(function() H.sql('ALTER TABLE cp_audit ENGINE=MyISAM') end)()
+        H.eq(Engine('cp_audit'), 'MyISAM', 'cp_audit made MyISAM, as a MyISAM-default server makes it')
+        local engined = Runner(impl, nil, DB_STORAGE)
+        local engineLines = 0
+        for _, l in ipairs(engined.lines) do
+            if l:find('cp_audit is MyISAM: switching it to InnoDB', 1, true) then engineLines = engineLines + 1 end
+        end
+        H.eq(Engine('cp_audit'), 'InnoDB', 'the next start switches a MyISAM cp_ table to InnoDB')
+        H.ok(engineLines == 1 and #engined.warns + #engined.errs == 0, 'with one line and no warning')
+        local engineAgain = Runner(impl, nil, DB_STORAGE)
+        local again2 = 0
+        for _, l in ipairs(engineAgain.lines) do
+            if l:find('switching it to InnoDB', 1, true) then again2 = again2 + 1 end
+        end
+        H.eq(again2, 0, 'and the start after it switches nothing')
         -- files mode never asks: the saves folder engine has no server or character sets
         local asked = {}
         local spy = {

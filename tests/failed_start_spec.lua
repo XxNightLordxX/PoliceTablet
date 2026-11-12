@@ -226,7 +226,7 @@ do
             sent[#sent + 1] = sql
             if Contains(sql, 'JSON_VALUE(') then
                 if type(probe) == 'string' then error(OxError(sql, probe), 0) end
-                return { { v = version, a = probe.a, n = probe.n } }
+                return { { v = version, a = probe.a, n = probe.n, d = probe.d } }
             end
             if Contains(sql, 'SELECT VERSION()') then return { { v = version } } end
             return answer(sql, ...)
@@ -274,6 +274,23 @@ do
     -- the MariaDB Qbox recommends: no line at all
     local m123 = Server('12.3.3-MariaDB-ubu2404', { a = 'b', n = 1 })
     H.ok(m123.M.isReady() and #m123.warns == 0 and #m123.errs == 0, 'MariaDB 12.3: it starts, nothing said')
+
+    -- the server's time zone (H9): cp_ times are DATETIME in the session zone, so in a zone with daylight saving the
+    -- hour the clocks go back reads back an hour early. The probe's d (two noons half a year apart, in seconds) is
+    -- 15638400 without daylight saving; America/New_York answered 15634800 on MariaDB 10.11.
+    local dst = Server('10.11.14-MariaDB', { a = 'b', n = 1, d = 15634800 })
+    H.ok(dst.M.isReady() and #dst.errs == 0, 'a daylight-saving time zone: it still starts')
+    H.ok(
+        #dst.warns == 1 and Contains(dst.warns[1], 'time zone uses daylight saving')
+            and Contains(dst.warns[1], 'default-time-zone = \'+00:00\''),
+        'with one warning that says how to set MariaDB to UTC: ' .. tostring(dst.warns[1])
+    )
+    local utc = Server('10.11.14-MariaDB', { a = 'b', n = 1, d = 15638400 })
+    H.ok(utc.M.isReady() and #utc.warns == 0, 'UTC (or any zone without daylight saving): nothing said')
+    local probeSql = nil
+    for _, sql in ipairs(utc.sent) do if Contains(sql, 'JSON_VALUE(') then probeSql = sql end end
+    H.ok(Contains(probeSql, 'UNIX_TIMESTAMP(\'2026-07-01 12:00:00\') - UNIX_TIMESTAMP(\'2026-01-01 12:00:00\') AS d'),
+        'the probe asks for d in the same statement')
 
     -- a server that does not answer (oxmysql's text holds the probe, JSON_VALUE and all) is left to the migrations,
     -- which name the usual errors

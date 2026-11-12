@@ -1000,3 +1000,9 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Escrow and start-up (H7): on the escrowed (Tebex) build, start the resource: the console shows no "could not
   be read" line, every built-in mission is on the Mission Board, and Admin UI -> System -> Make a backup lists every
   cp_ table. (H7)
+- [ ] Real database (H9): start the server with MariaDB set to a time zone with daylight saving (the machine's zone,
+  if it has one): the console shows one warning that names default-time-zone = '+00:00', and Crimson-Police still
+  starts. With MariaDB on UTC there is no such line. (H9)
+- [ ] Real database (H9): on a MariaDB whose cp_ tables are MyISAM (ALTER TABLE cp_audit ENGINE=MyISAM on a test
+  copy), restart: the console says "cp_audit is MyISAM: switching it to InnoDB (once)", and the next restart says
+  nothing. (H9)

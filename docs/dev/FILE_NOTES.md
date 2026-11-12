@@ -728,6 +728,9 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tools/check_contracts.py`: Static cross-checks for Crimson-Police: CP calls, net events, NUI names and locale keys (dev tooling, not shipped).
 - `tools/check_i18n.py`: Translation scanner for Crimson-Police (dev tooling, not shipped). Run by tools/check_all.sh as lint-i18n.
 - `tools/clickthrough.mjs`: The click-through of every tablet in a real browser (Playwright, the built web UI in its mock mode).
+- `tools/db_check.lua`: The checks of tools/db_check.sh: the real migrations runner on four kinds of database, PREPARE of every query, unique keys, column names and round-trip writes (dev tooling, not shipped).
+- `tools/db_check.sh`: The real database check: a throwaway MariaDB server of its own, tools/db_check.lua on it, PASS/FAIL per check (opt-in step db-check).
+- `tools/db_check_result.txt`: The report of the last full tools/db_check.sh run, kept with the change it checked.
 - `tools/gen_collation.py`: Prints the utf8mb4_general_ci tables of modules/system/memsql.lua from a running MariaDB.
 - `tools/gen_foreign_sites.py`: Writes tests/fixtures/foreign_sites.lua, the fixed world places of other scripts.
 - `tools/lint_fivem.py`: FiveM pitfall lint for Crimson-Police (dev tooling, not shipped).
