@@ -39,6 +39,7 @@
 | `docs/dev/ARCHITECTURE.md` | Code structure: module APIs, the run model, the block interface, events, storage, the NUI protocol, the web UI developer guide (§12) |
 | `docs/dev/INTEGRATIONS.md` | Checked facts about the other resources (qbx_core, sc-*, Renewed-Banking ...) and the rules for running alongside Crimson-Arena |
 | `docs/dev/TESTING.md` | How to set up a machine, run the checks and read a failure, CI, and what to update with each change |
+| `docs/IN_GAME_TEST_PLAN.md` | The short in-game test plan: a 60-minute smoke test, then the riskiest changes |
 | `docs/IN_GAME_CHECKLIST.md` | What to check in game, one section per feature |
 | `docs/dev/LOOPS.md` | Every loop and timer: when it runs, its interval and why, and the loop census |
 | `docs/dev/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System) and the end-to-end spec that drives it |
