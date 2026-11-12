@@ -35,6 +35,8 @@
 --       StuckPayment = { id, kind, followUpAmount, runUuid, citizenid, name, missionId, missionLabel, department,
 --       amount, step, createdAt, transId }
 --   CP.Cash.resolveFollowUp(rowId, outcome, audit) -> ok, data | false, errKey   (Admin UI -> Payments -> Resolve)
+--   CP.Cash.againOutcomes(row, bd) -> { againRelease = true } | {}   a Pay again left at its 'withdrawing' or
+--       'refunding' step; CP.Cash.releaseAgain(rowId, audit) -> ok, data | false, errKey releases it (no money moves)
 --   CP.Cash.retryGiveBacks() -> n                      owed clawback give-backs tried again (start, every 10 min)
 --   CP.Cash.earnedThisWeek(citizenid) -> number        cash_paid of paid/capped rows since the week start
 -- All functions except compute and range query the database: call them from a thread.
@@ -1059,7 +1061,8 @@ end
 -- cut or raised with no telling (the department, when it pays, already paid): with opts.checked (the admin ticked
 -- that the officer's history shows it never arrived) only AddMoney runs, else refused. At 'withdrawing' (the
 -- department call cut or raised) and 'refunding' (its refund raised) no telling whether the department paid or got it
--- back: refused (Mark paid after checking both bank histories).
+-- back: refused (Mark paid after checking both bank histories). A Pay again left at those steps of its own is
+-- released by Resolve (Cash.releaseAgain) once the department's history shows it was not charged, or got it back.
 -- A Pay again left at againStep 'withdrawn' (the department paid, the deposit failed) resumes with the deposit only.
 -- Its own transaction id CP-<uuid>-<cid>-r2. The officer must be online.
 local UNKNOWN_STEP = { withdrawing = true, refunding = true }
@@ -1107,6 +1110,40 @@ function Cash.payAgain(rowId, audit, opts)
     return RunLocked(row.citizenid, function()
         return PayAgainLocked(row, bd, rowId, amount, needWithdraw, key)
     end, function() Release(rowId, key) end)
+end
+
+-- What Resolve may do with a Pay again left part way at its own 'withdrawing' or 'refunding' step (the department
+-- call or its refund raised with no telling): { againRelease = true }, else {}. Only a first Pay again ('again'; a
+-- resumed deposit, 'again2', never calls the department) on a row still 'paying'.
+function Cash.againOutcomes(row, bd)
+    local c = CashOf(type(bd) == 'table' and bd or {})
+    if type(row) ~= 'table' or row.cash_status ~= 'paying' then return {} end
+    if c.again ~= 'paying' or c.again2 ~= nil or not UNKNOWN_STEP[c.againStep] then return {} end
+    return { againRelease = true }
+end
+
+-- Release a Pay again left at 'withdrawing' or 'refunding': the admin checked the department's history and its Pay
+-- again withdrawal never went through or was given back. No money moves: the claim and its step are removed (compare
+-- and set on the step), so the row is back where it was before that Pay again (Pay again or Mark paid). audit(info)
+-- first (false = nothing changes). -> ok, data | false, errKey
+function Cash.releaseAgain(rowId, audit)
+    local row, bd = Clean(rowId)
+    if not row then return false, bd end
+    rowId = math.floor(CP.U.num(row.id))
+    if Cash.rowBusy(rowId, row.citizenid) then return false, 'err.payment_in_flight' end
+    if not Cash.againOutcomes(row, bd).againRelease then return false, 'err.payment_step_unknown' end
+    local step = CashOf(bd).againStep   -- 'withdrawing' or 'refunding' (UNKNOWN_STEP), never a value from a player
+    local amount = PayAmountOf(bd) or AmountOf(row, bd)
+    if not Audited(audit, { kind = 'again', outcome = 'againRelease', amount = amount, step = step }) then
+        return false, 'err.audit_failed'
+    end
+    local st, ok = payLock:run(row.citizenid, LOCK_WAIT_MS, function()
+        return Release(rowId, 'again',
+            (' AND cash_status = \'paying\' AND JSON_VALUE(breakdown, \'$.cash.againStep\') = \'%s\''):format(step))
+    end)
+    if st == 'busy' then return false, 'err.payment_in_flight' end
+    if st == 'error' or not ok then return false, 'err.state_changed' end
+    return true, { id = rowId, outcome = 'againRelease', amount = amount }
 end
 
 -- ============================================================================

@@ -565,6 +565,13 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] HUD on the left (My options -> HUD side), small and large HUD sizes, 720p: the tip stays in the HUD column and
   the column still fits the screen.
 
+## Install from the release zip
+
+- [ ] On a fresh test server, unzip `Crimson-Police-<version>.zip` from `python3 tools/build_release.py` and put its
+  `Crimson-Police` folder in `resources/` -> it starts with the storage line and `missions loaded: 19 built-in`;
+  with the database on the `cp_` tables are created, and a backup and an audit export write into `saves/_backups`
+  and `saves/exports` with no folder error.
+
 ## Every workflow end to end
 
 - [ ] Admin only: an officer who sends a setting change gets refused; the admin turns on Volunteers, Volunteers → modes (Investigation: players when available), the criminal tablet (Features), access Granted and Pay volunteer suspects in Settings, each at once, no restart.
@@ -1041,6 +1048,12 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Pay again: with Pay again on, a payment whose officer's deposit failed half way (Payments -> Resolve shows "The
   officer's deposit ...") offers Pay again; tick the box and confirm: he is paid once and the department is not
   charged a second time.
+- [ ] Release Pay again: with Pay again on and `Config.Cash.source = 'society'`, a Pay again whose department refund
+  failed half way shows "Pay again step" under Payments -> Resolve and offers Release Pay again; confirming without
+  the box is refused; with the box ticked no money moves, the row stays Stuck, and Pay again then pays him once.
+- [ ] Disputes and a maintenance lock: void a run, hold a maintenance lock (a restore) from hour 40 to hour 50,
+  suspend the officer at hour 52 and lift it at hour 60: 47 h after the lift his Profile still shows the Dispute
+  button and the run's cash is still held; at 49 h it is gone.
 - [ ] Translations: with a translated locales/<code>.json written before the counted (plural) forms (it has
   'admin.audit.total' but not 'admin.audit.total_one'), Admin UI -> Audit shows the translated total, not the
   English one.

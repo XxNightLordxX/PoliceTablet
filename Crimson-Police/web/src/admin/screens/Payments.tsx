@@ -156,7 +156,9 @@ const FOLLOW_UP_ORDER: FollowUpOutcome[] = [
     'giveBackDone',
 ];
 
-type ResolveMode = 'paid' | 'payAgain' | FollowUpOutcome;
+// 'againRelease': a Pay again left at its own 'withdrawing' or 'refunding' step is released (no money moves) once the
+// admin ticked that the department's history shows it was not charged or got it back
+type ResolveMode = 'paid' | 'payAgain' | 'againRelease' | FollowUpOutcome;
 
 function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClose: () => void; onDone: () => void }) {
     const { data, loading, error } = useRequest<BankingCheck>(
@@ -182,7 +184,9 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                         ? 'payments.resolve.marked'
                         : mode === 'payAgain'
                           ? 'payments.resolve.paid_again'
-                          : 'payments.followup.done',
+                          : mode === 'againRelease'
+                            ? 'payments.resolve.again_released'
+                            : 'payments.followup.done',
             },
         );
         if (res.ok) {
@@ -196,13 +200,17 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
             ? t('payments.resolve.mark_paid')
             : m === 'payAgain'
               ? t('payments.resolve.pay_again')
-              : t(`payments.followup.${m}`);
+              : m === 'againRelease'
+                ? t('payments.resolve.again_release')
+                : t(`payments.followup.${m}`);
     const message = (m: ResolveMode) =>
         m === 'paid'
             ? t('payments.resolve.mark_paid_msg')
             : m === 'payAgain'
               ? t('payments.resolve.pay_again_msg')
-              : t(`payments.followup.${m}_msg`);
+              : m === 'againRelease'
+                ? t('payments.resolve.again_release_msg')
+                : t(`payments.followup.${m}_msg`);
 
     return (
         <>
@@ -249,6 +257,19 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                                         {t('payments.resolve.pay_again')}
                                     </Button>
                                 ) : null}
+                                {data?.againOutcomes?.againRelease !== undefined ? (
+                                    <Button
+                                        variant="secondary"
+                                        icon="undo"
+                                        disabled={data.busy || !data.againOutcomes.againRelease}
+                                        onClick={() => {
+                                            setChecked(false);
+                                            setMode('againRelease');
+                                        }}
+                                    >
+                                        {t('payments.resolve.again_release')}
+                                    </Button>
+                                ) : null}
                             </>
                         )}
                     </>
@@ -278,6 +299,11 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                                 <KeyValue label={t('payments.resolve.step')}>
                                     {t(`payments.step.${data.step ?? 'unknown'}`)}
                                 </KeyValue>
+                                {data.againStep ? (
+                                    <KeyValue label={t('payments.resolve.again_step')}>
+                                        {t(`payments.step.${data.againStep}`)}
+                                    </KeyValue>
+                                ) : null}
                             </>
                         )}
                         <EntryLine label={t('payments.resolve.personal')} e={data.personal} />
@@ -309,6 +335,8 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                                 />
                             ) : null}
                         </>
+                    ) : mode === 'againRelease' ? (
+                        <Checkbox checked={checked} onChange={setChecked} label={t('payments.resolve.again_checked')} />
                     ) : null
                 }
                 typedWord={moves ? String(amount) : undefined}

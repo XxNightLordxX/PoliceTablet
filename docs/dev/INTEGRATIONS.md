@@ -94,7 +94,10 @@ What the other supported scripts have (checked in their server files):
 - **qbx_policejob**: `police:server:EscortPlayer (escortSrc)`, `:JailPlayer (targetSrc, time)`, `:SeizeCash
   (targetSrc)` and `:Impound (plate, fullImpound, price, body, engine, fuel, netId)`, the same order as sc-police.
   Cuffing is the ox_lib callback `police:server:CuffPlayer`, so no cuff fact exists.
-- **qbx_management**: boss menus only; it keeps no money, so it has no banking adapter.
+- **qbx_management**: boss menus only; it keeps no money, so it has no banking adapter. Checked against v1.4.0:
+  its only tables are `player_jobs_activity` and `management_groups`, its exports are the boss and gang menus
+  (`RegisterBossMenu`, `OpenBossMenu`, `Add/RemoveBossMenuItem`, `Add/RemoveGangMenuItem`), and `bankAuth` is only a
+  grade flag a banking script reads. Department money is Renewed-Banking's, through the banking kind.
 
 ## sc-multijob
 

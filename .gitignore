@@ -16,3 +16,5 @@ Crimson-Police/saves/exports/*
 Crimson-Police/missions/custom/test_*/
 # Python bytecode of tools/*.py
 __pycache__/
+# the release (tools/build_release.py): anchored, so new files under Crimson-Police/web/dist are never ignored
+/dist/

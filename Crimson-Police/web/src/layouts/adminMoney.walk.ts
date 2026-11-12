@@ -109,6 +109,25 @@ async function steps(): Promise<void> {
         /const UNKNOWN_STEPS = \['added', 'withdrawing', 'refunding'\];/.test(paymentsSrc),
         'Pay again: only added, withdrawing and refunding disable it',
     );
+    // A Pay again left at its own 'withdrawing' or 'refunding' step: Resolve shows that step and offers Release only
+    // when the server offers it (Pay again on), through the confirm dialog with its own checked box
+    const stuck = await request<BankingCheck>('admin:checkBankingTxn', { rowId: 885 });
+    ok(stuck.ok && stuck.data?.againStep === 'refunding', 'Resolve: the Pay again step is shown');
+    ok(stuck.data?.againOutcomes == null, 'Resolve: no Release of a Pay again while Pay again is off');
+    ok(
+        /data\?\.againOutcomes\?\.againRelease !== undefined/.test(paymentsSrc) &&
+            /disabled=\{data\.busy \|\| !data\.againOutcomes\.againRelease\}/.test(paymentsSrc) &&
+            /mode === 'againRelease' \? \(\s*<Checkbox[\s\S]*?label=\{t\('payments\.resolve\.again_checked'\)\}/.test(
+                paymentsSrc,
+            ),
+        'Release of a Pay again: offered by the server, confirmed with its checked box',
+    );
+    ok(
+        ['again_release', 'again_release_msg', 'again_checked', 'again_step', 'again_released'].every(
+            k => t(`payments.resolve.${k}`) !== `payments.resolve.${k}`,
+        ),
+        'Release of a Pay again has its English texts',
+    );
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

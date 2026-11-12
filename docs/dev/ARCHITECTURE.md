@@ -850,7 +850,11 @@ The mission registry.
 Server:
 - `loadAll()` — waits for `CP.Migrations.ready()` (so built-ins are normalised with the settings changed in game),
   reads `missions/builtin/index.lua` and each built-in with the mission file reader, then `CP.Builder.loadPublished()`
-  (its file sync runs first) and `CP.Builder.loadOverrides()`.
+  (its file sync runs first) and `CP.Builder.loadOverrides()`. In a thread that may yield it hands the server
+  thread back (`Wait(0)`) between missions once it has worked `LOAD_SLICE_MS` (20 ms of `GetGameTimer()`) in one go,
+  so no server tick holds the whole load (a real restart hitched 224 ms on it; `summary.yields` counts the yields).
+  The old missions stay live until the swap at the end, and a `register`, `unregister` or `refreshBuiltin` made
+  while it yields is kept by that swap. A call that cannot yield (main chunk, an export) loads in one go.
 - Edited built-ins (§8.4.2): each override replaces its built-in under the same id (`source = 'builtin'`,
   `overridden`, `overrideVersion`, `baseHash`, `shippedHash`).
 - `reload() -> summary` (`/CrimsonPoliceAdmin reload` and `server:admin:reloadMissions`: `can(src, 'reloadMissions')`,
@@ -1533,8 +1537,9 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   filings a minute. The window stands still while the officer is suspended (it starts again at the end of his last
   suspension, `row.suspended_ts`; a lift writes `suspended_until = NOW()`) and while a maintenance lock holds
   (`CP.Maintenance.windowEnd`); `eligible` and both forfeiture jobs use the same rule. Only a suspension that started
-  inside the window holds it (`cp_officers.suspended_from`, migration 019, `row.suspended_from_ts`): a later one
-  never reopens a closed window. `CP.Access.suspend` writes it on a new suspension; one given while he is suspended or
+  inside the window holds it (`cp_officers.suspended_from`, migration 019, `row.suspended_from_ts`), the window's
+  end moved on by the last maintenance lock as `CP.Maintenance.windowEnd` does it (in `CP.Money.disputeStartSql`
+  too, with the lock's start and end written in as numbers): a later one never reopens a closed window. `CP.Access.suspend` writes it on a new suspension; one given while he is suspended or
   less than a window after the last one ended keeps that start; a lift keeps it. Migration 019 fills it for the
   suspensions given before it: the last `suspend` row of `cp_audit` up to their end, else `NOW()` for one still
   running.
@@ -2799,7 +2804,9 @@ Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11)
 Admin transitions (full admin control, §5.20, §5.40; the money ones ship off behind `Config.Cash.allow*`): `paying` →
 `paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` →
 `withdrawing` → `withdrawn` → `adding` → `added`, or `review` when the raised deposit left no telling, `refunding`
-when a department refund left no telling).
+when a department refund left no telling). A Pay again left at its own `withdrawing` or `refunding` step is
+released by Resolve's `againRelease` (`CP.Cash.releaseAgain`, no money moves, compare and set on that step) once
+the admin ticked that the department was not charged or got it back; the row is `paying` at its own step again.
 
 ---
 
@@ -3450,7 +3457,7 @@ every action.
 | callback `admin:previewRetryUnfunded` | `{ rowId }` or `{ department, since? }` → UnfundedPreview | payments | P |
 | callback `admin:previewCashSource` | `{}` → CashSourcePreview | payments | P |
 | callback `admin:getDepartmentFunds` | `{ department }` → DepartmentFundsView | deptFunds | P |
-| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain', checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount |
+| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, `CP.Cash.againOutcomes`; no money moves): W `allowPayAgain`, `checked` |
 | `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
 | `server:admin:retryPending` | `{ requestId }` | payments | P I |
 | `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total; a department retry (and its preview, `excluded`) leaves out every row of the admin's own characters and runs, and rows whose officer's license is unknown |

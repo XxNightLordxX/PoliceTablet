@@ -2088,7 +2088,10 @@ What you can do from a row (the buttons show only where they make sense):
   paid** or **Release** (the department gets back what it paid). A clawback: **It was taken** or **It was not
   taken**. Giving a clawback back to the department failed: it is tried again at every start and every 10 minutes,
   or press **Retry give-back** (type the amount) or **It arrived**. A Pay again whose department withdrawal went
-  through but the deposit failed can be pressed again: it only deposits. These rows count in the Payments badge.
+  through but the deposit failed can be pressed again: it only deposits. A Pay again whose own department
+  withdrawal, or its refund, was cut half way shows its step under Resolve and offers **Release Pay again**: only
+  when the department's history shows it was not charged for that Pay again, or got it back. Tick that box and
+  confirm: no money moves, and Pay again or Mark paid can be used again. These rows count in the Payments badge.
 - **Pay now** for a pending payment of an officer who is online, and **Retry all pending** for everyone online. These
   use the normal pay flow, so nothing is ever paid twice. Like **Forfeit now** and **Cancel payment**, they write their
   audit row first: if it can't be written, nothing happens.

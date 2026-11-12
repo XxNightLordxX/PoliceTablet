@@ -665,6 +665,11 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
                 and (v.followUp == 'rest' and c.restPaidStep or v.followUp == 'back' and c.backStep or c.giveBack)
             or nil,
         outcomes = v.followUp and CP.Cash.followUpOutcomes(bd) or nil,
+        -- A Pay again left at its own 'withdrawing' or 'refunding' step: that step and the Release it offers (with
+        -- Pay again on)
+        againStep = not v.followUp and c.again == 'paying' and type(c.againStep) == 'string' and c.againStep or nil,
+        againOutcomes = not v.followUp and Switch('allowPayAgain') and CP.Cash.againOutcomes and CP.Cash.againOutcomes(
+            row, bd) or nil,
     }
 end, { rate = 2 })
 
@@ -777,6 +782,19 @@ Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
             end),
             { checked = p.checked == true }
         )
+        if not ok then return false, data end
+        Touched(ctx, cid)
+        return true, data
+    elseif p.outcome == 'againRelease' then
+        -- A Pay again left at 'withdrawing' or 'refunding': released once the admin ticked that the department's
+        -- history shows it was not charged (or got it back). No money moves. Audited first ('paymentResolve', old
+        -- 'again:<step>', new 'againRelease:<amount>').
+        local off = OffSwitch('allowPayAgain')
+        if off then return false, off end
+        if p.checked ~= true then return false, 'err.check_first' end
+        local ok, data = CP.Cash.releaseAgain(id, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
+            return ('again:%s'):format(tostring(i.step or '?'))
+        end, function(i) return ('againRelease:%d'):format(i.amount or 0) end))
         if not ok then return false, data end
         Touched(ctx, cid)
         return true, data

@@ -20,6 +20,8 @@
 #   tsc           cd Crimson-Police/web && npx tsc --noEmit
 #   walk          cd Crimson-Police/web && node walk.mjs: every src/**/*.walk.ts against the browser mocks
 #   build         npm run build in a scratch copy of the web sources; web/dist must equal its output
+#   release       python3 tools/build_release.py --draft into the logs folder: the release builds (every manifest
+#                 file there, the versions agree, no scratch file or secret in what ships)
 #   clickthrough  (opt-in) node tools/clickthrough.mjs: Playwright clicks through every tablet and the in-world
 #                 screens in Chromium (about 15 minutes); SKIP unless named or CP_CLICKTHROUGH=1
 #   race-all      (opt-in) CP_RACE_CUTS=all lua5.4 tests/run.lua race: the race spec's crash cuts after every
@@ -55,12 +57,12 @@ for f in tools/lint_*.py tools/check_*.py; do
     LINT_SCRIPT[$name]=$f
     ALL_STEPS+=("lint-$name")
 done
-ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build clickthrough race-all db-check)
+ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build release clickthrough race-all db-check)
 # the long steps that run only when named or turned on (their run_<step> prints SKIP otherwise)
 OPT_IN=" clickthrough race-all db-check "
 
 usage() {
-    sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 VERBOSE=0
@@ -251,6 +253,16 @@ detail_build() {
     else
         grep -m1 -E 'npm run build failed|missing|no (tsc|vite)' "$1"
     fi
+}
+
+# The release build (docs/dev/TESTING.md "Release build") into the logs folder, never dist/ of the tree. --draft: the
+# gate builds while the CHANGELOG still says "(not released yet)".
+run_release() {
+    need python3 || return 1
+    python3 tools/build_release.py --draft --out "$LOGS/release"
+}
+detail_release() {
+    grep -m1 -E '^release: (PASS|FAIL)' "$1" | sed 's/^release: //' | cut -c1-80
 }
 
 run_lint() {

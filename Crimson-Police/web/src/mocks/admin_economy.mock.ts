@@ -50,6 +50,8 @@ const rows: PaymentRow[] = Array.from({ length: 70 }, (_, i) => {
         step: status === 'paying' ? 'withdrawn' : status === 'paid' ? 'added' : null,
         // One capped row whose rest was left part way, one paid row whose clawback give-back is owed
         restPaid: i === 3 ? 'paying' : null,
+        // One stuck row whose own Pay again was left at 'refunding'
+        again: i === 15 ? 'paying' : null,
         followUp: i === 3 ? 'rest' : i === 9 ? 'giveBack' : null,
         reclaimed: i === 9 ? 50 : 0,
         voided: status === 'held' && i % 2 === 0,
@@ -203,6 +205,8 @@ registerMock('request', 'admin:checkBankingTxn', (args: unknown): BankingCheck =
                 : r.followUp === 'giveBack'
                   ? { giveBack: true, giveBackDone: true }
                   : null,
+        againStep: r.again === 'paying' ? 'refunding' : null,
+        againOutcomes: r.again === 'paying' && MONEY ? { againRelease: true } : null,
     };
 });
 
@@ -215,6 +219,13 @@ registerMock('action', 'server:admin:resolvePayment', (p: { outcome?: string; ch
         return { id: r.id, outcome: p.outcome };
     }
     if (r.status !== 'paying') throw new Error('err.state_changed');
+    if (p.outcome === 'againRelease') {
+        needSwitch();
+        if (!p.checked) throw new Error('err.check_first');
+        if (r.again !== 'paying') throw new Error('err.payment_step_unknown');
+        r.again = null;
+        return { id: r.id, outcome: 'againRelease', amount: r.owed };
+    }
     if (p.outcome === 'payAgain') {
         needSwitch();
         if (!p.checked) throw new Error('err.check_first');
