@@ -3517,7 +3517,7 @@ Every name below is admin-only (supervisors never pass) and audited; `reason` is
 | `server:admin:setDepartmentEnabled` | `{ key, enabled, reason, confirm }` | departmentsAdmin | R, T the short tag when turning off, not while its officers are on a run, never the last |
 | `server:admin:deleteDepartment` | `{ key, reason, confirm }` | departmentsAdmin | R, T the short tag, added in game only, no rows |
 | `server:admin:uploadLogo` | `{ department, uploadId, index, total, data }` → `{ received }` / `{ file, restart, linkRemoved? }` | departmentsAdmin | permission per chunk, one upload per admin, ≤ 1 MB, 60 s, PNG/WebP, 6 pieces a second (the client sends one every `Config.AdminControl.logoChunkGapMs`: FXServer drops a player past 128 KB/s of events); the last piece checks the settings (`logo.file`, and `logo.url` removed when set) before it writes the file |
-| `server:admin:addDeskHere` / `updateDesk` / `removeDesk` | `{ label, size, rotation?, departments?, prop? }` / `{ index, ..., moveHere? }` / `{ index }` | departmentsAdmin | server position, the desk checks |
+| `server:admin:addDeskHere` / `updateDesk` / `removeDesk` | `{ label, size, rotation?, departments?, prop? }` / `{ index, expect?, ..., moveHere? }` / `{ index, expect? }` | departmentsAdmin | server position, the desk checks; `expect = { label, x, y, z }` (what the screen showed at that index; also on `teleportToDesk`): another desk there now is refused with err.desk_changed |
 | `server:admin:teleportToDesk` | `{ index }` | departmentsAdmin | 1 per 5 s |
 | `admin:myPosition` | — → `{ x, y, z, heading }` | openAdmin | server coordinates |
 | `server:admin:teleportTo` | `{ path, index }` | openAdmin | coordinates from the stored setting, 1 per 5 s |

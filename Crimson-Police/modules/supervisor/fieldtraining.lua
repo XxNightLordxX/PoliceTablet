@@ -139,7 +139,10 @@ local function WriteRecord(cid, record)
     return (tonumber(n) or 0) > 0
 end
 
-local Locks = {}  -- { [rookie citizenid] = true }: one read-change-write of a record at a time
+local Locks = {}  -- { [rookie citizenid | PAIR_LOCK] = true }: one read-change-write of a record at a time
+-- every pairing also holds this one key: the trainer's rookie count and his own training state are read and
+-- changed by one pairing at a time (a citizenid never starts with a NUL byte)
+local PAIR_LOCK = '\0pair'
 
 local function WithLock(cid, fn)
     local tries = 0
@@ -331,7 +334,8 @@ local function RookiePermission(src, payload)
 end
 
 -- { rookie, trainer }: both of the same department, the trainer online at or above the trainer grade, the rookie not
--- in training already, the trainer not in training himself and under rookiesPerTrainer.
+-- in training already and training nobody himself, the trainer not in training himself and under rookiesPerTrainer.
+-- Pairings run one at a time (PAIR_LOCK), so two at once never put a trainer over rookiesPerTrainer.
 local function Pair(ctx)
     local rookie, trainer = Cid(ctx.payload.rookie), Cid(ctx.payload.trainer)
     if not rookie or not trainer then return false, 'err.invalid_payload' end
@@ -340,33 +344,40 @@ local function Pair(ctx)
     tSrc = okT and math.tointeger(tonumber(tSrc) or 0) or 0
     local tOfficer = tSrc and tSrc > 0 and CP.Access.getOfficer(tSrc) or nil
     if not tOfficer then return false, 'err.fto_trainer_offline' end
-    return WithLock(rookie, function()
-        local r = ReadRow(rookie)
-        if not r then return false, 'err.unknown_officer' end
-        local dept = DeptOf(rookie, r)
-        if tOfficer.department ~= dept then return false, 'err.other_department' end
-        if (CP.Floor(tOfficer.gradeLevel) or 0) < FT.trainerGrade(dept) then return false, 'err.fto_trainer_grade' end
-        if Active(r.record) then return false, 'err.fto_already_paired' end
-        local tRow = ReadRow(trainer)
-        if tRow and Active(tRow.record) then return false, 'err.fto_trainer_in_training' end
-        local list = RookiesOf(trainer)
-        if not list then return false, 'err.internal' end
-        if #list >= RookiesMax() then return false, 'err.fto_trainer_full' end
-        local _, byInfo = Call('Qbx', 'getInfo', ctx.src)
-        local record = {
-            trainer = trainer,
-            trainerName = U.clip(tOfficer.name, NAME_MAX),
-            dept = dept,
-            by = ctx.actor and tostring(ctx.actor) or 'console',
-            byName = type(byInfo) == 'table' and U.clip(byInfo.name, NAME_MAX) or nil,
-            at = os.time(),
-            tasks = {},
-        }
-        if not ctx.audit('ftoPair', rookie, nil, trainer) then return false, 'err.internal' end
-        if not WriteRecord(rookie, record) then return false, 'err.internal' end
-        CP.notifyCitizen(rookie, 'success', 'fto.toast.paired_rookie', { name = record.trainerName })
-        CP.notifyCitizen(trainer, 'success', 'fto.toast.paired_trainer', { name = r.name or rookie })
-        return true, FT.view(rookie, r.name, record)
+    return WithLock(PAIR_LOCK, function()
+        return WithLock(rookie, function()
+            local r = ReadRow(rookie)
+            if not r then return false, 'err.unknown_officer' end
+            local dept = DeptOf(rookie, r)
+            if tOfficer.department ~= dept then return false, 'err.other_department' end
+            if (CP.Floor(tOfficer.gradeLevel) or 0) < FT.trainerGrade(dept) then
+                return false, 'err.fto_trainer_grade'
+            end
+            if Active(r.record) then return false, 'err.fto_already_paired' end
+            local tRow = ReadRow(trainer)
+            if tRow and Active(tRow.record) then return false, 'err.fto_trainer_in_training' end
+            local own = RookiesOf(rookie)
+            if not own then return false, 'err.internal' end
+            if #own > 0 then return false, 'err.fto_rookie_trains' end
+            local list = RookiesOf(trainer)
+            if not list then return false, 'err.internal' end
+            if #list >= RookiesMax() then return false, 'err.fto_trainer_full' end
+            local _, byInfo = Call('Qbx', 'getInfo', ctx.src)
+            local record = {
+                trainer = trainer,
+                trainerName = U.clip(tOfficer.name, NAME_MAX),
+                dept = dept,
+                by = ctx.actor and tostring(ctx.actor) or 'console',
+                byName = type(byInfo) == 'table' and U.clip(byInfo.name, NAME_MAX) or nil,
+                at = os.time(),
+                tasks = {},
+            }
+            if not ctx.audit('ftoPair', rookie, nil, trainer) then return false, 'err.internal' end
+            if not WriteRecord(rookie, record) then return false, 'err.internal' end
+            CP.notifyCitizen(rookie, 'success', 'fto.toast.paired_rookie', { name = record.trainerName })
+            CP.notifyCitizen(trainer, 'success', 'fto.toast.paired_trainer', { name = r.name or rookie })
+            return true, FT.view(rookie, r.name, record)
+        end)
     end)
 end
 

@@ -1,11 +1,25 @@
 // The criminal tablet against the browser mocks (node walk.mjs, a gate step): the view normalised, the
 // landing screen and badges, joining, a job accepted into Active, giving up, and the refusals as error keys.
 
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import '../mocks/criminal.mock';
+import { mockLocale } from '../mocks/samples';
+import { LocaleProvider } from '../shared/i18n';
+import { CriminalTablet } from './CriminalTablet';
 import { mockCrimJob, mockCrimReset } from '../mocks/criminal.mock';
 import { action, request } from '../shared/nui';
 import type { CrimView } from '../types/criminal';
-import { badgeOf, hoursLeft, landingOf, minutesLeft, normalizeCrimView, outcomeKey, rolesPayload } from './model';
+import {
+    badgeOf,
+    cancelKey,
+    hoursLeft,
+    landingOf,
+    minutesLeft,
+    normalizeCrimView,
+    outcomeKey,
+    rolesPayload,
+} from './model';
 
 const failures: string[] = [];
 let passed = 0;
@@ -71,6 +85,46 @@ async function steps(): Promise<void> {
     r = await act({ what: 'answer', token, yes: true });
     ok(r.view?.active?.phase === 'travel' && r.view.jobs.length === 0, 'Accept: Active, travelling to the meet point');
     ok(landingOf(r.view, null) === 'active' && badgeOf(r.view, 'active') === '!', 'playing: lands on Active');
+    // Home's "Get off the list" while a case runs says what it costs, as Active's Give up does
+    const act0 = r.view?.active;
+    ok(act0 && r.view?.status.listed === true, 'playing: still listed, so Home shows Get off the list');
+    if (act0) {
+        ok(
+            cancelKey({ ...act0, freeCancel: false }, undefined) === 'crimtab.active.cancel_strike',
+            'stop during a case past the free moment: the strike line',
+        );
+        ok(
+            cancelKey({ ...act0, freeCancel: true, graceLeft: 0 }, undefined) === 'crimtab.active.cancel_strike',
+            'the free moment over (graceLeft 0): the strike line',
+        );
+        ok(
+            cancelKey({ ...act0, freeCancel: true, graceLeft: 30 }, undefined) === 'crimtab.active.cancel_free',
+            'still in the free moment: the free line',
+        );
+        ok(
+            cancelKey({ ...act0, freeCancel: true, graceLeft: 30 }, 0) === 'crimtab.active.cancel_strike',
+            'the live countdown wins over the snapshot',
+        );
+        const home = (v: CrimView) => {
+            const tablet = createElement(CriminalTablet, {
+                view: v,
+                screen: 'home',
+                onScreen: () => undefined,
+                onView: () => undefined,
+                onClose: () => undefined,
+            });
+            return renderToString(createElement(LocaleProvider, { locale: mockLocale, children: tablet }));
+        };
+        const strike = home({ ...r.view!, active: { ...act0, freeCancel: false } });
+        ok(
+            strike.includes('crim-stop-case') && strike.includes(mockLocale['crimtab.active.cancel_strike']),
+            'Home during a case past the free moment: the strike line next to Get off the list',
+        );
+        const free = home({ ...r.view!, active: { ...act0, freeCancel: true, graceLeft: 30 } });
+        ok(free.includes(mockLocale['crimtab.active.cancel_free']), 'Home in the free moment: the free line');
+        const idle = home({ ...r.view!, active: null });
+        ok(!idle.includes('crim-stop-case'), 'Home with no case: no case line');
+    }
     r = await act({ what: 'cancel' });
     ok(r.view && !r.view.active, 'give up: no case any more');
     r = await act({ what: 'cancel' });

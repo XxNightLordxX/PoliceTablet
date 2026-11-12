@@ -24,7 +24,7 @@ What to update with each change is at the end, in "Working on the code".
 | `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish, and every screen of every tablet rendered (`everyScreen.walk.ts`); `node walk.mjs <text>` runs only the walks whose path holds that text | 15 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
 | `release` | `python3 tools/build_release.py --draft` into the logs folder: the release builds, "Release build" below | 1 s |
-| `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 15 min |
+| `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 20 min |
 | `race-all` | opt-in: `CP_RACE_CUTS=all lua5.4 tests/run.lua --jobs=1 race`, `tests/race_spec.lua` cut after every query of every case instead of 5 spread over it | 6 min |
 | `db-check` | opt-in: `tools/db_check.sh`, "Real database check" below | 10 min |
 
@@ -37,10 +37,17 @@ browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright, pin
 devDependencies; `npx playwright install chromium` once): the Officer, Supervisor, Admin and criminal tablets, every
 screen, every tab, every button of each screen and each dialog a button opens, then the in-world screens (each
 sample HUD and result card on a 1280x720 screen, the HUD column inside it, each card button clicked). It fails on a
-console error, a crashed screen, a blank screen, a button covered by something else or overlapping another, or text
-that is a locale key. Screenshots go to the folder given as its first argument (in the gate: the logs folder, never
+console error, a crashed screen, a blank screen, a button covered by something else or overlapping another (as far as
+each shows: a button scrolled out of its list does not count), text that is a locale key, a tablet frame outside the
+window, a page that scrolls sideways, cut-off text (a button, heading, table head, tab or menu entry), a dialog that
+Escape and its close button cannot close, or a guided tour that a button starts (Settings > Tours > Start) and that
+shows no card or cannot be skipped (it is skipped after the check, so its card never covers the later screens). It
+also starts the Admin tour, opens Leaderboards > Item rewards > Deliver now over it and checks the dialog's buttons are on top. Then
+every size of `CP_CT_VIEWPORTS` (default `1280x720,1920x1080,3840x2160`; `none` skips them) gets a nav pass (each
+screen of each tablet opened and checked, no button clicks) and the world screens, plus a 390x844 phone for the world
+and the criminal tablet. Screenshots go to the folder given as its first argument (in the gate: the logs folder, never
 the repo); `node tools/clickthrough.mjs <dir> admin` runs one part (`officer`, `supervisor`, `admin`, `crimtab`,
-`world`); `npm run clickthrough` in `Crimson-Police/web` builds first. Run it after a change to a screen or the
+`world`, or `tour` for the tour-under-a-dialog check alone); `npm run clickthrough` in `Crimson-Police/web` builds first. Run it after a change to a screen or the
 layout.
 
 **Time limits.** Every step runs under `timeout`: `CP_STEP_TIMEOUT=<seconds>` (default 1800, the opt-in steps
@@ -228,7 +235,14 @@ lua5.4 tests/run.lua --storage=files storage   # a filter and a storage mode tog
 lua5.4 tests/run.lua --storage=shadow e2e
 lua5.4 tests/run.lua --jobs=4                  # four specs at a time (default 2; --jobs=1 one after another)
 lua5.4 tests/run.lua --fuzz=5                  # tests/shadow/fuzz_*.lua in shadow mode, seeds 1..5
+CP_FUZZ_SEED=7 lua5.4 tests/run.lua fuzz_net   # tests/fuzz_net_spec.lua with another seed
 ```
+
+`tests/fuzz_net_spec.lua` (in every suite run) sends forged calls on the `workflows_full_spec` world: the run events
+from the real participant with the real run id, then every registered server event and callback from random server
+ids with random arguments (wrong types, NaN, inf, huge and negative numbers, 70 kB strings, other players'
+citizenids, reused request ids). It fails on a raise, an `err.internal` reply, an error line, any money or item given,
+or a NaN or inf in an active run. `--fuzz` stays the SQL fuzzers.
 
 Always go through `tests/run.lua`: it checks the environment, builds the run database, runs each spec in
 a fresh `lua5.4` child with `LC_ALL=C` and `TZ=UTC`, and cleans up. With more than one job each spec gets
@@ -255,6 +269,8 @@ Variables for one run:
 | `E2E_VERBOSE=1` | print the resource's console output in `e2e`, `storage` and `storage_copy` specs |
 | `CP_STORAGE_RUNS=n`, `CP_COPY_RUNS=n` | size of the storage timing specs (default 50000 and 1203 runs) |
 | `FUZZ_SEED=n`, `FUZZ_N=n` | the fuzz scripts' seed and statement count |
+| `CP_FUZZ_SEED=n`, `CP_FUZZ_PER=n` | `tests/fuzz_net_spec.lua`: its seed (default 1) and rounds over every event and callback (default 5, about 1 s) |
+| `CP_DEFER_THREADS=1` | the harness queues `CreateThread` threads to the next `H.step`, as FXServer's scheduler does, instead of running them at once (`Citizen.CreateThreadNow` still runs at once; `H.deferThreads = true` before `H.boot` does the same for one spec). Opt-in and not in the gate ("What the gate does not catch yet" below) |
 | `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
 | `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (docs/dev/WORKFLOWS.md) |
 | `CP_LOAD_TRACE=1` | `tests/load_spec.lua` prints each harness step over 30 ms as a REPORT line |
@@ -859,6 +875,13 @@ Until these gaps are closed, look for them in review.
   the login pay. A flagged run then its approve, the daily and weekly resets, the other start-up catch-ups and the
   bulk jobs are cut only at the hand-picked points of workflows_system_spec and adminkit_spec; `Restore a backup` is
   not cut by race_spec (workflows_system_spec (3) cuts it once).
+- **Threads that start at once.** By default the harness runs a new `CreateThread` thread at once, up to its first
+  `Wait`; FXServer queues it for the next scheduler tick (only `Citizen.CreateThreadNow`, which event handlers run in,
+  starts at once). Code that relies on a thread having run before its creator returns passes the specs.
+  `CP_DEFER_THREADS=1` runs the game's order; the end-to-end specs (`e2e`, `admin_control_e2e`, `live_fto_e2e`,
+  `workflows_e2e`) fail in it today (13 failed checks and 3 crashed specs, not triaged yet), so it is not a gate step:
+  triage those failures (a test helper that needs a step, or real code that needs the thread first) before adding
+  one.
 - **Protocol names missing from ARCHITECTURE §8.** `check_contracts.py` compares code with code, not with
   the doc.
 - **Timing budgets in `storage_spec`.** On a busy machine, or next to other specs, they can fail. Rerun

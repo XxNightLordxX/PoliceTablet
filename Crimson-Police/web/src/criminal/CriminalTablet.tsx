@@ -31,7 +31,16 @@ import { action, fetchNui } from '../shared/nui';
 import { toast } from '../shared/toast';
 import { TourHelpButton } from '../shared/tour';
 import type { CrimActive, CrimHistoryRow, CrimJob, CrimRole, CrimScreen, CrimView } from '../types/criminal';
-import { badgeOf, CRIM_SCREENS, hoursLeft, minutesLeft, normalizeCrimView, outcomeKey, rolesPayload } from './model';
+import {
+    badgeOf,
+    cancelKey,
+    CRIM_SCREENS,
+    hoursLeft,
+    minutesLeft,
+    normalizeCrimView,
+    outcomeKey,
+    rolesPayload,
+} from './model';
 import './criminal.css';
 
 const ICONS: Record<CrimScreen, IconName> = {
@@ -169,6 +178,8 @@ function Home({ view, busy, run }: { view: CrimView; busy: boolean; run: Run }) 
     const [picked, setPicked] = useState<Record<string, boolean>>(start);
     const [agreed, setAgreed] = useState(false);
     const roles = rolesPayload(picked);
+    // a case running: "Get off the list" gives it up too, free only while its free give-up lasts (as on Active)
+    const graceLeft = useCountdown(view.active?.graceLeft ?? null, { resetKey: view.active?.phase });
 
     if (s.listed) {
         return (
@@ -178,6 +189,11 @@ function Home({ view, busy, run }: { view: CrimView; busy: boolean; run: Run }) 
                 </p>
                 <p className="crim-muted">{t('crimtab.home.roles_hint')}</p>
                 <RolePicker all={s.allRoles} picked={picked} onChange={setPicked} />
+                {view.active ? (
+                    <p className="crim-warn" data-testid="crim-stop-case">
+                        {t('crimtab.home.stop_case')} {t(cancelKey(view.active, graceLeft))}
+                    </p>
+                ) : null}
                 <Row gap={2} wrap className="crim-actions">
                     <Button disabled={busy || roles.length === 0} onClick={() => void run({ what: 'roles', roles })}>
                         {t('crimtab.home.save_roles')}
@@ -328,11 +344,7 @@ function Active({ active, busy, run }: { active: CrimActive | null; busy: boolea
                 <li>{t('crimtab.active.rule_force')}</li>
                 <li>{t('crimtab.active.rule_log')}</li>
             </ul>
-            <p className="crim-muted">
-                {active.freeCancel && (graceLeft === null || graceLeft > 0)
-                    ? t('crimtab.active.cancel_free')
-                    : t('crimtab.active.cancel_strike')}
-            </p>
+            <p className="crim-muted">{t(cancelKey(active, graceLeft))}</p>
             <Row gap={2} wrap className="crim-actions">
                 <ConfirmButton
                     disabled={busy}

@@ -3032,11 +3032,23 @@ function H.boot(opts)
         H.stopRequests[#H.stopRequests + 1] = tostring(name)
         return name ~= GetCurrentResourceName()
     end
-    _G.CreateThread = function(fn)
+    -- Stub fidelity: FXServer's Citizen.CreateThread queues the thread for the scheduler's next tick, and only
+    -- Citizen.CreateThreadNow (what event handlers run in) starts it at once (citizen/scripting/lua/scheduler.lua).
+    -- By default the harness runs every new thread at once, up to its first Wait. H.deferThreads = true before
+    -- H.boot (or opts.deferThreads, or CP_DEFER_THREADS=1) queues CreateThread threads to the next H.step instead,
+    -- as the game does; CreateThreadNow always runs at once. Opt-in: docs/dev/TESTING.md.
+    local defer = opts.deferThreads == true or H.deferThreads == true or os.getenv('CP_DEFER_THREADS') == '1'
+    H.deferring = defer
+    local function CreateThreadNow(fn)
         local co = coroutine.create(fn)
         Resume(co)
     end
-    _G.Citizen = { CreateThread = _G.CreateThread, Wait = nil, Await = nil }
+    _G.CreateThread = defer
+            and function(fn)
+                sleeping[#sleeping + 1] = { co = coroutine.create(fn), wake = H.clockMs }
+            end
+        or CreateThreadNow
+    _G.Citizen = { CreateThread = _G.CreateThread, CreateThreadNow = CreateThreadNow, Wait = nil, Await = nil }
     _G.Wait = function(ms)
         local co = coroutine.running()
         if not co or coroutine.isyieldable() == false then H.clockMs = H.clockMs + (ms or 0); return end

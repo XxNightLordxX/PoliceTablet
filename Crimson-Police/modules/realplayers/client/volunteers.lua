@@ -94,7 +94,9 @@ local function Menu(state)
             onSelect = function()
                 local answer = lib.alertDialog({
                     header = CP.L('volunteer.menu.stop'),
-                    content = CP.L('volunteer.stop.content'),
+                    -- stopping during a case gives it up too (and may be a strike): say so
+                    content = CP.L(
+                        type(state.case) == 'table' and 'volunteer.stop.content_case' or 'volunteer.stop.content'),
                     centered = true,
                     cancel = true,
                 })

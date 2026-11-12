@@ -23,7 +23,8 @@
 #   release       python3 tools/build_release.py --draft into the logs folder: the release builds (every manifest
 #                 file there, the versions agree, no scratch file or secret in what ships)
 #   clickthrough  (opt-in) node tools/clickthrough.mjs: Playwright clicks through every tablet and the in-world
-#                 screens in Chromium (about 15 minutes); SKIP unless named or CP_CLICKTHROUGH=1
+#                 screens in Chromium, then a nav pass at each size of CP_CT_VIEWPORTS and a phone (about 20
+#                 minutes); SKIP unless named or CP_CLICKTHROUGH=1
 #   race-all      (opt-in) CP_RACE_CUTS=all lua5.4 tests/run.lua race: the race spec's crash cuts after every
 #                 query of every case, not 5 spread over it; SKIP unless named or CP_RACE_ALL=1
 #   db-check      (opt-in) tools/db_check.sh: the migrations and every query on a throwaway MariaDB server of its
@@ -62,7 +63,7 @@ ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build release click
 OPT_IN=" clickthrough race-all db-check "
 
 usage() {
-    sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 VERBOSE=0

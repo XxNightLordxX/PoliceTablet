@@ -169,6 +169,27 @@ do
     H.eq(Opp.wasSuspect('CRIM0001', 'run-0001'), true, 'wasSuspect: a suspect of the open case')
     H.eq(Opp.wasSuspect('OFF00001', 'run-0001'), false, 'not the officer')
 end
+-- Config.RealPlayers.staff.names = false: the case view, its lines, its ledger and the case list carry citizen
+-- IDs only, no character names
+do
+    Config.RealPlayers.staff.names = false
+    local view = Opp.staffCase('run-0001')
+    H.eq(view.suspects[1].name, nil, 'names = false: no suspect name on the case')
+    H.eq(view.suspects[1].citizenid, 'CRIM0001', 'names = false: the suspect\'s citizenid stays')
+    H.eq(view.officers[1].name, nil, 'names = false: no officer name on the case')
+    local byWhat = {}
+    for _, l in ipairs(view.lines) do byWhat[l.what] = l end
+    H.eq(byWhat.cuff_attempt.text, ('OFF00001 cuffed suspect %s'):format(byWhat.cuff_attempt.label),
+        'names = false: a line names the officer by citizenid only')
+    H.eq(byWhat.suspect.who.name, nil, 'names = false: the open line has no suspect name')
+    H.eq(view.ledger[1].officer.name, nil, 'names = false: the ledger has no officer name')
+    local list = cbs['admin:getRsCases'].fn({ src = 9, args = {} })
+    H.eq(list.cases[1].officers[1].name, nil, 'names = false: no officer name on the case list')
+    H.eq(list.cases[1].officers[1].citizenid, 'OFF00001', 'names = false: the case list keeps the citizenid')
+    Config.RealPlayers.staff.names = true
+    view = Opp.staffCase('run-0001')
+    H.eq(view.officers[1].name, 'Ada Test', 'names = true again: the officer is named')
+end
 
 -- ============================================================================
 --                        2. CASES KEPT AFTER THE CLOSE

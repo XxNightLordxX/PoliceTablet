@@ -15,6 +15,7 @@ import { DEPT_TABS } from '../../layouts/supDepartment';
 import { action, request } from '../nui';
 import { SCREEN_HEADS } from '../screenHeads';
 import { placeCard } from './place';
+import { tourCovered } from './TourHost';
 import {
     askTour,
     autoTourFor,
@@ -60,6 +61,7 @@ const TEXT = trainingText as Record<string, string>;
 export async function walk(): Promise<{ passed: number; failures: string[] }> {
     try {
         await steps();
+        dialogChecks();
     } catch (e) {
         failures.push(`stopped: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -309,4 +311,16 @@ async function steps(): Promise<void> {
     }
     const below = placeCard({ left: 100, top: 100, width: 60, height: 30 }, card, { width: 1280, height: 720 });
     ok(below.side === 'below' && below.top > 130, 'under a small element near the top');
+}
+
+// a dialog opened while a tour runs: the tour steps aside (its card would cover the dialog's buttons), unless the
+// step points into that dialog
+function dialogChecks(): void {
+    const inside = { id: 'inside' };
+    const outside = { id: 'outside' };
+    const dialog = { contains: (n: unknown) => n === inside };
+    ok(tourCovered(null, outside) === false, 'no dialog open: the tour shows');
+    ok(tourCovered(dialog, outside) === true, 'a dialog open, the step points elsewhere: the tour steps aside');
+    ok(tourCovered(dialog, null) === true, 'a dialog open, a step with no element: the tour steps aside');
+    ok(tourCovered(dialog, inside) === false, 'the step points into the open dialog: the tour shows');
 }

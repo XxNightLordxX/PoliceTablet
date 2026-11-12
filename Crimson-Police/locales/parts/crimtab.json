@@ -20,6 +20,7 @@
   "crimtab.home.save_roles": "Save suspects",
   "crimtab.home.renew": "Renew ({minutes} min)",
   "crimtab.home.stop": "Get off the list",
+  "crimtab.home.stop_case": "You are playing a case: getting off the list now gives it up too.",
   "crimtab.home.off_title": "Get on the list",
   "crimtab.home.off_text": "For the next {minutes} minutes, police running a tablet mission may ask you to play its suspect instead of an NPC. Nothing starts without your yes, and officers never see where you are.",
   "crimtab.home.blocked": "Too many strikes: you can get on the list again in about {hours} h.",

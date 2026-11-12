@@ -3441,6 +3441,7 @@
   "crimtab.home.roles_hint": "Police running a tablet mission may ask you to play one of these. Untick what you don't want.",
   "crimtab.home.save_roles": "Save suspects",
   "crimtab.home.stop": "Get off the list",
+  "crimtab.home.stop_case": "You are playing a case: getting off the list now gives it up too.",
   "crimtab.jobs.accept": "Accept",
   "crimtab.jobs.area": "Area",
   "crimtab.jobs.consent": "Accept is your yes: the meet point becomes your map waypoint. Decline costs nothing.",
@@ -3808,6 +3809,7 @@
   "err.dept_notice_unknown": "That notice is not a running notice of your department. Refresh the list.",
   "err.dept_on_run": "Officers of this department are on a run or a Cross-Department Mission. Try again when they are done.",
   "err.dept_unknown": "That department does not exist. Pick a department from the list.",
+  "err.desk_changed": "Another admin changed the desk list since you opened it. Nothing was changed: check the list and try again.",
   "err.desk_department": "This mission desk is not for your department. Use your own department's desk.",
   "err.desk_size": "That desk box size is not valid. Each side must be 0.3 to 5 m.",
   "err.desk_unknown": "That desk no longer exists. Refresh the list.",
@@ -3830,6 +3832,7 @@
   "err.fto_not_paired": "That officer isn't in field training. Pair them with a trainer first.",
   "err.fto_not_trainer": "Only the rookie's own trainer can sign their tasks off. Ask that trainer.",
   "err.fto_off": "Field training is switched off on this server.",
+  "err.fto_rookie_trains": "That officer is training rookies of their own and can't be put in field training. End their trainees' training first.",
   "err.fto_same_officer": "The trainer and the rookie must be two different officers. Pick another officer.",
   "err.fto_task_not_ready": "The rookie hasn't finished enough missions with you for this task yet. Play more missions together first.",
   "err.fto_task_signed": "That task is already signed off. Nothing was changed.",
@@ -8456,6 +8459,7 @@
   "volunteer.roles_saved": "Your choice of suspects is saved.",
   "volunteer.started": "You volunteer as a suspect for {minutes} minutes. Police may send you a question when a mission needs you.",
   "volunteer.stop.content": "Stop volunteering now? Police can no longer ask you to play a suspect.",
+  "volunteer.stop.content_case": "Stop volunteering now? You are playing a case: it is given up too, and giving it up after the free moment is a strike.",
   "volunteer.strike": "Strike {count} of {max}: you said yes and did not play it out.",
   "volunteer.title": "Volunteer suspect"
 }

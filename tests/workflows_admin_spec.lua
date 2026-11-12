@@ -418,6 +418,49 @@ do
 end
 
 do
+    -- two admins on the desk list: admin 5 opens Remove on "B desk" while admin 8 removes "A desk" (the indexes
+    -- shift). Admin 5's confirm names what he saw, so it is refused and C desk stays.
+    local before = #(Config.Tablet.desks or {})
+    for i, name in ipairs({ 'A desk', 'B desk', 'C desk' }) do
+        Place(5, vec3(100.0 + i, 200.0, 30.0))
+        Secs(1)
+        local ok, res = Act('server:admin:addDeskHere', 5, { label = name, size = { x = 1, y = 1, z = 1 } })
+        H.eq(ok, true, 'desks: ' .. name .. ' added: ' .. tostring(res))
+    end
+    local function Seen(i)
+        local d = Config.Tablet.desks[i]
+        return { label = d.label, x = d.coords.x, y = d.coords.y, z = d.coords.z }
+    end
+    local function Has(label)
+        for _, d in ipairs(Config.Tablet.desks or {}) do if d.label == label then return true end end
+        return false
+    end
+    local bIndex, bSeen, cSeen = before + 2, Seen(before + 2), Seen(before + 3)
+    Secs(3)
+    local ok, res = Act('server:admin:removeDesk', 8, { index = before + 1, expect = Seen(before + 1) })
+    H.eq(ok, true, 'desks: admin 8 removes A desk: ' .. tostring(res))
+    Secs(3)
+    ok, res = Act('server:admin:removeDesk', 5, { index = bIndex, expect = bSeen })
+    H.eq(res, 'err.desk_changed', 'desks: admin 5\'s stale Remove of B desk is refused')
+    H.ok(Has('B desk') and Has('C desk'), 'desks: B desk and C desk are both still there')
+    Secs(3)
+    ok, res = Act('server:admin:updateDesk', 5, { index = bIndex, expect = bSeen, label = 'B renamed' })
+    H.eq(res, 'err.desk_changed', 'desks: a stale edit is refused too')
+    H.ok(not Has('B renamed') and Has('C desk'), 'desks: C desk is not renamed')
+    Secs(6)
+    ok, res = Act('server:admin:teleportToDesk', 5, { index = bIndex, expect = bSeen })
+    H.eq(res, 'err.desk_changed', 'desks: a stale teleport is refused')
+    Secs(3)
+    ok, res = Act('server:admin:removeDesk', 5, { index = before + 2, expect = cSeen })
+    H.eq(ok, true, 'desks: with the list read again, C desk is removed: ' .. tostring(res))
+    Secs(3)
+    ok, res = Act('server:admin:removeDesk', 5, { index = before + 1, expect = bSeen })
+    H.eq(ok, true, 'desks: and B desk: ' .. tostring(res))
+    H.eq(#(Config.Tablet.desks or {}), before, 'desks: back to the shipped desks')
+    for src = 1, 10 do Place(src, vec3(AT.x + src * 2.0, AT.y, AT.z)) end
+end
+
+do
     -- permissions: the screen; a supervisor power switched off is refused, back on works
     local perms, err = Cb('admin:getPermissions', 5)
     H.ok(type(perms) == 'table' and type(perms.supervisor) == 'table',
