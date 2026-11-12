@@ -649,6 +649,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/shadow/fuzz_rows.lua`: Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 - `tests/shadow/fuzz_store.lua`: Storing values into typed columns, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 - `tests/shared_spec.lua`: The shared layer, the migrations splitter and the harness itself.
+- `tests/soak_spec.lua`: WF6A: a seeded random action soak across every workflow (the owner: "do extensive workflow testing on everything").
 - `tests/spawn_check_spec.lua`: Check spawn points (modules/missions/testing server and client, each block's pointKinds): the server lists every
 - `tests/spawn_client_spec.lua`: CP.Spawn.visible and the ox_lib callback crimson-police:client:spawn:visible (modules/runs/client/spawn.lua): what an officer's game can see of the points the server's spawn director may use, from line-of-sight probes run the way the game runs them (asynchronous, a handle polled each frame until it is done).
 - `tests/spawn_director_spec.lua`: The spawn director (Config.Spawning; modules/runs/runs.lua Runs.choosePoints, Runs.whenNear, ctx.choosePoints, ctx.whenNear) on a real test run of the engine, officers placed through the harness's ped coords.

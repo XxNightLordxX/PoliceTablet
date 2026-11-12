@@ -231,6 +231,7 @@ Variables for one run:
 | `E2E_VERBOSE=1` | print the resource's console output in `e2e`, `storage` and `storage_copy` specs |
 | `CP_STORAGE_RUNS=n`, `CP_COPY_RUNS=n` | size of the storage timing specs (default 50000 and 1203 runs) |
 | `FUZZ_SEED=n`, `FUZZ_N=n` | the fuzz scripts' seed and statement count |
+| `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
 
 The specs pass at any wall-clock time and in any time zone: this was checked with `CP_TEST_CLOCK` on a
 Monday 00:10, a Tuesday 20:10 and 23:00 and a New Year's Eve, and with `CP_TEST_TZ` set to
