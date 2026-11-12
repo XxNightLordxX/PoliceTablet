@@ -651,6 +651,9 @@ local function IssuerRole(src)
     return 'supervisor'
 end
 
+local commendLock = CP.Lock.new() -- 'by|<issuer>' and 'to|<officer>' while a commendation is checked and written
+local CommendChecked
+
 -- Gives a commendation. role 'supervisor' or 'admin' (the caller has checked the permission).
 function Profile.commend(src, role, payload)
     local cfg = CommendCfg()
@@ -683,6 +686,16 @@ function Profile.commend(src, role, payload)
         end
     end
     if issuer == cid then return false, 'err.commend_self' end
+    -- WF6C: the issuer's count of today and the officer's same-kind check are read before yields, so one
+    -- commendation per issuer and per officer at a time: two sent at once cannot both pass them
+    local st, ok, data, extra = commendLock:runAll({ 'by|' .. issuer, 'to|' .. cid }, CommendChecked, src, role, cfg,
+        cid, kind, runUuid, citation, issuer, issuerDept)
+    if st == 'busy' then return false, 'err.busy' end
+    if st == 'error' then error(ok, 0) end
+    return ok, data, extra
+end
+
+CommendChecked = function(src, role, cfg, cid, kind, runUuid, citation, issuer, issuerDept)
     local target = ReadRow(cid)
     if not target then return false, 'err.unknown_officer' end
     local dept = NonEmpty(target.department)

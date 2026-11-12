@@ -619,6 +619,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/pursuit_volunteer_spec.lua`: Pursuit's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact hand-off) played by a volunteer in his own car.
 - `tests/push_mission_spec.lua`: A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the random draw.
 - `tests/qbx_cache_spec.lua`: CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many times Qbox's exports are called, and that every change event makes the next answer fresh.
+- `tests/race_spec.lua`: WF6C: every action that writes, sent twice at the same moment (the owner: "do extensive workflow testing on everything").
 - `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/teams/client/teams.lua): the toast names the twists the leader chose , and stays the plain one without twists.
 - `tests/realplayers_spec.lua`: Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.

@@ -1073,7 +1073,7 @@ function Corr.adjust(ctx, citizenid, points)
         if not used then return false, 'err.internal' end
         if used + math.abs(n) > limit then return false, 'err.adjust_daily_limit' end
     end
-    local ok, rowId, err = Call('Scoring', 'adjust', ctx.src, cid, n, ctx.reason)
+    local ok, rowId, err = Call('Scoring', 'adjust', ctx.src, cid, n, ctx.reason, ctx.actor)
     if not ok or not rowId then return false, err or 'err.internal' end
     if n > 0 then
         ctx.audit('manualAward', cid, nil, ('%d'):format(n))
