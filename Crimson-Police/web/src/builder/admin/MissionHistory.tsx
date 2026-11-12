@@ -22,7 +22,7 @@ import {
 } from '../../shared/components';
 import { formatDateTime, formatDuration, formatMoney } from '../../shared/format';
 import { useRequest } from '../../shared/hooks';
-import { t } from '../../shared/i18n';
+import { t, tn } from '../../shared/i18n';
 import { DateRangeField, useAdminAction, type DateRange } from '../../admin/components/kit';
 import { BulkVoidDialog } from '../../admin/components/BulkVoidDialog';
 import type {
@@ -131,7 +131,7 @@ export function LoadSummaryBody({ summary }: { summary: MissionLoadSummary }) {
             ) : null}
             {warnings.length ? (
                 <details className="admin-missions-details">
-                    <summary>{t('admin.missions.load.warning_list', { n: warnings.length })}</summary>
+                    <summary>{tn('admin.missions.load.warning_list', warnings.length)}</summary>
                     <ul className="builder_client-errors is-compact">
                         {warnings.map((w, i) => (
                             <li key={i}>

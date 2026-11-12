@@ -290,5 +290,6 @@
   "admin.review.tab.queue": "Queue",
   "ui.pager.prev": "Previous page",
   "ui.pager.next": "Next page",
-  "ui.pager.of": "Page {page} of {pages}"
+  "ui.pager.of": "Page {page} of {pages}",
+  "locale.lang": "en"
 }

@@ -1,6 +1,10 @@
 -- The objective blocks' client kit (CP.BlockKit): what every block client did with its own copy of the code.
 
---   states(fresh, cleanup)  one state per run and objective; the resource-stop cleanup of every block is here
+--   states(fresh, cleanup, retarget)
+--                           one state per run and objective; the resource-stop cleanup of every block is here;
+--                           retarget(S) (optional) runs for every started state when ox_target (re)starts: it forgets
+--                           the state's ox_target ids (they are gone with ox_target) and adds them again
+--   target(what, fn)        an ox_target add that never raises: ok, result (a failed add is logged; store nothing)
 --   onStop(fn)              a block with no states (live_response) cleans up on resource stop through the kit
 --   entity(netId)           the entity of a net id, or nil when it is not in this game
 --   bag(ent)                the entity's 'cp' state bag, or nil (never raises on a gone entity)
@@ -27,10 +31,11 @@ local lists = {}   -- every block's states and cleanup: { active, cleanup }
 local stops = {}   -- the onStop functions
 
 -- fresh(ctx) returns a new state's table (its own fields); cleanup(S) ends one state and is also run for every
--- started state when the resource stops. Each state knows its key, its run (runKey) and the latest ctx.
-function Kit.states(fresh, cleanup)
+-- started state when the resource stops. retarget(S), when given, runs for every started state when ox_target
+-- starts again. Each state knows its key, its run (runKey) and the latest ctx.
+function Kit.states(fresh, cleanup, retarget)
     local K = { active = {} }
-    lists[#lists + 1] = { active = K.active, cleanup = cleanup }
+    lists[#lists + 1] = { active = K.active, cleanup = cleanup, retarget = retarget }
 
     function K.key(ctx) return tostring(ctx.runId) .. ':' .. tostring(ctx.index) end
 
@@ -64,6 +69,33 @@ function Kit.states(fresh, cleanup)
 end
 
 function Kit.onStop(fn) stops[#stops + 1] = fn end
+
+-- An ox_target add that never raises (ox_target stopped or restarting): ok and the add's result. On a failure the
+-- block stores nothing, so its next sync (or the retarget after ox_target starts) tries again.
+function Kit.target(what, fn)
+    local ok, res = pcall(fn)
+    if not ok then
+        CP.warn('blocks', '%s: ox_target add failed: %s', tostring(what), tostring(res))
+        return false, nil
+    end
+    return true, res
+end
+
+-- ox_target restarted (or started late): every zone and entity option it held is gone. Each block forgets its old
+-- ids and adds them again for its started states (modules/npc does the same for its own options).
+AddEventHandler('onClientResourceStart', function(res)
+    if res ~= 'ox_target' then return end
+    for _, list in ipairs(lists) do
+        if list.retarget then
+            for _, S in pairs(list.active) do
+                if S.alive then
+                    local ok, err = pcall(list.retarget, S)
+                    if not ok then CP.warn('blocks', 'ox_target restart: %s', tostring(err)) end
+                end
+            end
+        end
+    end
+end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end

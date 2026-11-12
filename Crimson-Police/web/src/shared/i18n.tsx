@@ -5,6 +5,7 @@
 // Config.Labels over it); App keeps it as bootLocale. A session carries no locale (normalizeSession leaves
 // it undefined, so App falls back to bootLocale; {} would show raw keys). Keys are flat and dotted;
 // placeholders use {var}:   t('hud.objective_progress', { value: 12, max: 20 })
+// a count with plural forms: tn('admin.audit.total', n) (key_one / key_other, below)
 // An unknown key renders the key itself, so a missing string is visible instead of blank.
 //
 // The foundation's own part (locales/parts/ui.json) is bundled as a last-resort fallback so the HUD,
@@ -32,6 +33,34 @@ export function t(key: string, vars?: Vars): string {
     if (!key) return '';
     const s = current[key] ?? fallback[key];
     return interpolate(s === undefined ? key : s, vars);
+}
+
+// Plural forms: tn('admin.audit.total', 12) reads 'admin.audit.total_one' / '_other' (and '_few', '_many', '_two',
+// '_zero' where the language has them, Intl.PluralRules of the locale's 'locale.lang', English by default), then
+// '<key>_other', then '<key>' itself, so a key without forms keeps its text. {n} is the count unless vars give one
+// (e.g. the count already formatted).
+const pluralRules = new Map<string, Intl.PluralRules>();
+function pluralOf(count: number): string {
+    const lang = current['locale.lang'] ?? fallback['locale.lang'] ?? 'en';
+    let rules = pluralRules.get(lang);
+    if (!rules) {
+        try {
+            rules = new Intl.PluralRules(lang);
+        } catch {
+            rules = new Intl.PluralRules('en');
+        }
+        pluralRules.set(lang, rules);
+    }
+    return rules.select(count);
+}
+
+export function tn(key: string, count: number, vars?: Vars): string {
+    if (!key) return '';
+    const all = { n: count, ...vars };
+    const form = `${key}_${pluralOf(Number.isFinite(count) ? count : 0)}`;
+    if (hasKey(form)) return t(form, all);
+    if (hasKey(`${key}_other`)) return t(`${key}_other`, all);
+    return t(key, all);
 }
 
 // True when the key exists in the session locale (or the bundled ui fallback).

@@ -41,10 +41,14 @@ local ANIM_DICT = 'amb@medic@standing@kneel@base'
 local ANIM_CLIP = 'base'
 
 local Kit = CP.BlockKit
-local Cleanup
+local Cleanup, SyncZones
 -- one state per run and objective across every hook call (the engine may hand each hook a fresh ctx.state)
 local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st)
     Cleanup(st.ctx, st)
+end, function(st)
+    -- ox_target restarted: its zones are gone, so the ids are forgotten and every target gets its zone again
+    st.zones, st.zoneKind = {}, {}
+    if st.data then SyncZones(st.ctx, st) end
 end)
 local StateOf = states.of
 
@@ -266,28 +270,33 @@ end
 local function AddRecoverZone(ctx, st, i, t)
     local name = ('crimson-police:%s:%s:%s:%d:recover'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
     local sb = st.data and st.data.setback or {}
-    st.zones[i] = exports.ox_target:addSphereZone({
-        coords = Kit.point(t.coords),
-        radius = TARGET_RADIUS,
-        debug = false,
-        drawSprite = true,
-        name = name,
-        options = {
-            {
-                name = name,
-                label = sb.label or CP.L('block.skill_check.recover_default'),
-                icon = 'fa-solid fa-fan',
-                distance = TARGET_DISTANCE,
-                canInteract = function()
-                    local cur = TargetOf(st, i)
-                    return st.alive == true and not st.busy and cur ~= nil and cur.status == 'setback'
-                end,
-                onSelect = function()
-                    CreateThread(function() Recover(ctx, st, i) end)
-                end,
+    local ok, id = Kit.target(BLOCK, function()
+        return exports.ox_target:addSphereZone({
+            coords = Kit.point(t.coords),
+            radius = TARGET_RADIUS,
+            debug = false,
+            drawSprite = true,
+            name = name,
+            options = {
+                {
+                    name = name,
+                    label = sb.label or CP.L('block.skill_check.recover_default'),
+                    icon = 'fa-solid fa-fan',
+                    distance = TARGET_DISTANCE,
+                    canInteract = function()
+                        local cur = TargetOf(st, i)
+                        return st.alive == true and not st.busy and cur ~= nil and cur.status == 'setback'
+                    end,
+                    onSelect = function()
+                        CreateThread(function() Recover(ctx, st, i) end)
+                    end,
+                },
             },
-        },
-    })
+        })
+    end)
+    -- ox_target is down: the next sync (or its restart) adds it
+    if not ok then return end
+    st.zones[i] = id
     st.zoneKind = st.zoneKind or {}
     st.zoneKind[i] = 'recover'
 end
@@ -300,34 +309,39 @@ end
 local function AddZone(ctx, st, i, t)
     local target = type(ctx.obj.target) == 'table' and ctx.obj.target or {}
     local name = ('crimson-police:%s:%s:%s:%d'):format(BLOCK, tostring(ctx.runId), tostring(ctx.index), i)
+    local ok, id = Kit.target(BLOCK, function()
+        return exports.ox_target:addSphereZone({
+            coords = Kit.point(t.coords),
+            radius = TARGET_RADIUS,
+            debug = false,
+            drawSprite = true,
+            name = name,
+            options = {
+                {
+                    name = name,
+                    label = Kit.text(target.label) or CP.L('block.skill_check.target_default'),
+                    icon = target.icon,
+                    distance = TARGET_DISTANCE,
+                    canInteract = function()
+                        local cur = TargetOf(st, i)
+                        return st.alive == true and not st.busy and cur ~= nil and cur.status == 'armed'
+                            and (cur.worker == nil or cur.worker == Me())
+                    end,
+                    onSelect = function()
+                        CreateThread(function() Defuse(ctx, st, i) end)
+                    end,
+                },
+            },
+        })
+    end)
+    -- ox_target is down: the next sync (or its restart) adds it
+    if not ok then return end
     st.zoneKind = st.zoneKind or {}
     st.zoneKind[i] = 'check'
-    st.zones[i] = exports.ox_target:addSphereZone({
-        coords = Kit.point(t.coords),
-        radius = TARGET_RADIUS,
-        debug = false,
-        drawSprite = true,
-        name = name,
-        options = {
-            {
-                name = name,
-                label = Kit.text(target.label) or CP.L('block.skill_check.target_default'),
-                icon = target.icon,
-                distance = TARGET_DISTANCE,
-                canInteract = function()
-                    local cur = TargetOf(st, i)
-                    return st.alive == true and not st.busy and cur ~= nil and cur.status == 'armed'
-                        and (cur.worker == nil or cur.worker == Me())
-                end,
-                onSelect = function()
-                    CreateThread(function() Defuse(ctx, st, i) end)
-                end,
-            },
-        },
-    })
+    st.zones[i] = id
 end
 
-local function SyncZones(ctx, st)
+function SyncZones(ctx, st)
     local list = (st.data and st.data.targets) or {}
     st.zoneKind = st.zoneKind or {}
     for i, t in ipairs(list) do

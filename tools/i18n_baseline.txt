@@ -1,0 +1,124 @@
+# tools/check_i18n.py baseline: the known hits, one per line, `<rule> <file> <code>` (S: `<rule> <part> <key>`).
+# <code> is the hit's source line; it is compared without whitespace and with " read as ', so re-indenting keeps it.
+# Seeded 2026-11-12 (H6) with every hit of that day, so only new ones fail. A fix removes the hit; the scan then
+# reports the line as stale and the fixer deletes it in the same commit.
+# P lines that are not plurals (a step index, solo versus unit wording, two whole sentences) stay here on purpose.
+P Crimson-Police/web/src/builder/QuickMission.tsx {idx > 1 ? t(`builder.quick.step.${QUICK_STEPS[idx - 1]}`) : t('builder.quick.back')}
+P Crimson-Police/web/src/officer/components/MissionCallsLink.tsx {n === 1 ? t('mc.board.calls_open_one') : t('mc.board.calls_open', { n })}
+P Crimson-Police/web/src/officer/screens/Home.tsx const streakValue = days === 1 ? t('officer.home.streak_day') : t('officer.home.streak_days', { n: days });
+P Crimson-Police/web/src/officer/screens/MissionBoard.tsx return n === 1 ? t('board.card.pool_one') : t('board.card.pool_many', { n: formatNumber(n) });
+P Crimson-Police/web/src/officer/screens/MissionBoard.tsx size <= 1 ? t('board.unit.solo') : leader ? t('board.unit.leader', { size }) : t('board.unit.member', { size });
+P Crimson-Police/web/src/officer/screens/MissionBoard.tsx size > 1 ? t('board.notice.on_call_text_unit') : t('board.notice.on_call_text')
+P Crimson-Police/web/src/officer/screens/MissionBoard.tsx {size <= 1 ? t('board.unit.build') : t('board.unit.manage')}
+P Crimson-Police/web/src/officer/screens/MissionBoard.tsx {size <= 1 ? t('board.unit.solo_title') : t('board.unit.unit_title', { size })}
+P Crimson-Police/web/src/supervisor/screens/DeptReport.tsx r.participants > 1 ? t('result.participants', { n: r.participants }) : t('result.solo'),
+S Crimson-Police/locales/parts/access.json health.avatar.ok
+S Crimson-Police/locales/parts/access.json health.colour.accent
+S Crimson-Police/locales/parts/access.json health.colour.accent_level
+S Crimson-Police/locales/parts/access.json health.locale.ok
+S Crimson-Police/locales/parts/admin_economy.json payments.rows
+S Crimson-Police/locales/parts/admin_economy.json payments.total_rows
+S Crimson-Police/locales/parts/admin_home.json admin.home.form_mission_hint
+S Crimson-Police/locales/parts/admin_kit.json ui.kit.preview_rows
+S Crimson-Police/locales/parts/admin_live.json admin.live.unit_title
+S Crimson-Police/locales/parts/admin_live.json admin.runctl.board_open
+S Crimson-Police/locales/parts/admin_missions.json admin.missions.load.banner_warn
+S Crimson-Police/locales/parts/admin_missions.json missions.health.ok
+S Crimson-Police/locales/parts/admin_missions.json missions.health.warnings
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.engine_block
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.location
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.no_block
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.no_start
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.objective
+S Crimson-Police/locales/parts/admin_missions.json missions.reason.unknown_block
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.banned.file
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.bulk.excluded
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.bulk.started
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.corrections.undo_message
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.flagged.approve_run
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.review.reporter
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.run.void_all
+S Crimson-Police/locales/parts/admin_officers.json ui.admin_officers.strikes
+S Crimson-Police/locales/parts/admin_system.json settings.console.listed
+S Crimson-Police/locales/parts/admin_system.json sysadmin.jobs.result.cash_forfeiture
+S Crimson-Police/locales/parts/admin_system.json sysadmin.jobs.result.low_balance
+S Crimson-Police/locales/parts/admin_system.json sysadmin.jobs.result.reward_forfeiture
+S Crimson-Police/locales/parts/admin_system.json sysadmin.ui.audit_part_desc
+S Crimson-Police/locales/parts/admin_system.json sysadmin.ui.audit_saved
+S Crimson-Police/locales/parts/admin_system.json sysadmin.ui.copy_export
+S Crimson-Police/locales/parts/admin_system.json sysadmin.ui.import
+S Crimson-Police/locales/parts/admin_system.json sysadmin.ui.import_confirm
+S Crimson-Police/locales/parts/blocks_a.json block.interact_points.hud.together
+S Crimson-Police/locales/parts/blocks_c.json block.escort.hud_attackers
+S Crimson-Police/locales/parts/blocks_c.json block.escort.hud_clear
+S Crimson-Police/locales/parts/blocks_c.json block.pursuit.msg_race_start
+S Crimson-Police/locales/parts/boards.json challenge.rate_hint
+S Crimson-Police/locales/parts/boards.json profile.stat.completed_hint
+S Crimson-Police/locales/parts/boards.json result.departments
+S Crimson-Police/locales/parts/boards.json result.participants
+S Crimson-Police/locales/parts/builder_client.json builder.auto.kept
+S Crimson-Police/locales/parts/builder_client.json builder.editor.saved_errors
+S Crimson-Police/locales/parts/builder_client.json builder.loc.count
+S Crimson-Police/locales/parts/builder_client.json builder.loc.move_all_done
+S Crimson-Police/locales/parts/builder_client.json builder.loc.move_all_message
+S Crimson-Police/locales/parts/builder_client.json builder.loc.move_all_some
+S Crimson-Police/locales/parts/builder_client.json builder.loc.paths
+S Crimson-Police/locales/parts/builder_client.json builder.loc.route_meta
+S Crimson-Police/locales/parts/builder_client.json builder.loc.tag_thin
+S Crimson-Police/locales/parts/builder_client.json builder.pub.check_errors
+S Crimson-Police/locales/parts/builder_client.json builder.quick.filled
+S Crimson-Police/locales/parts/builder_client.json builder.result.path
+S Crimson-Police/locales/parts/builder_client.json builder.result.placed
+S Crimson-Police/locales/parts/builder_client.json builder.result.recorded_checkpoints
+S Crimson-Police/locales/parts/builder_client.json builder.result.recorded_thinned
+S Crimson-Police/locales/parts/builder_client.json builder.route.rejected
+S Crimson-Police/locales/parts/builder_client.json builder.route.thinned
+S Crimson-Police/locales/parts/builder_client.json builder.route.zone_bad
+S Crimson-Police/locales/parts/builder_client.json builder.test.has_errors
+S Crimson-Police/locales/parts/builder_server.json builder.error.block_invalid
+S Crimson-Police/locales/parts/builder_server.json builder.error.item_name
+S Crimson-Police/locales/parts/builder_server.json builder.error.min_seconds
+S Crimson-Police/locales/parts/builder_server.json builder.error.objective_label
+S Crimson-Police/locales/parts/builder_server.json builder.error.scaling_path
+S Crimson-Police/locales/parts/builder_server.json builder.error.unknown_block
+S Crimson-Police/locales/parts/economy.json goals.unnamed
+S Crimson-Police/locales/parts/economy.json officer.home.streak_days
+S Crimson-Police/locales/parts/field_training.json fto.pair_text
+S Crimson-Police/locales/parts/mission_controls.json mc.unit.awardPoints
+S Crimson-Police/locales/parts/mission_controls.json mc.unit.crossDeptPlaces
+S Crimson-Police/locales/parts/mission_controls.json mc.unit.unitSize
+S Crimson-Police/locales/parts/mission_controls.json mc.value.boards
+S Crimson-Police/locales/parts/mission_controls.json mc.value.crossDept_places
+S Crimson-Police/locales/parts/mission_controls.json mc.value.missions_off
+S Crimson-Police/locales/parts/mission_controls.json sup.award.mine_used
+S Crimson-Police/locales/parts/mission_controls.json sup.cd.mine_used
+S Crimson-Police/locales/parts/mission_controls.json sup.live.add_time_left
+S Crimson-Police/locales/parts/mission_controls.json sup.notices.full
+S Crimson-Police/locales/parts/mission_controls.json sup.notices.text
+S Crimson-Police/locales/parts/mission_controls.json sup.notices.used
+S Crimson-Police/locales/parts/opponents.json opp.detail.pair_repeat
+S Crimson-Police/locales/parts/opponents.json opp.line.pair_repeat
+S Crimson-Police/locales/parts/opponents.json rs.ui.n_flags
+S Crimson-Police/locales/parts/opponents.json rs.ui.n_notes
+S Crimson-Police/locales/parts/oversight.json admin.audit.export_desc
+S Crimson-Police/locales/parts/oversight.json admin.audit.export_truncated
+S Crimson-Police/locales/parts/oversight.json admin.officers.runs_hint
+S Crimson-Police/locales/parts/oversight.json admin.officers.susp_days
+S Crimson-Police/locales/parts/oversight.json admin.perms.extra.count
+S Crimson-Police/locales/parts/oversight.json sup.review.participants_value
+S Crimson-Police/locales/parts/oversight.json sup.review.undo_batch_message
+S Crimson-Police/locales/parts/run_ui.json run.partners.cross
+S Crimson-Police/locales/parts/settings.json settings.gear.help
+S Crimson-Police/locales/parts/settings.json settings.presets.apply
+S Crimson-Police/locales/parts/settings.json settings.presets.count
+S Crimson-Police/locales/parts/settings.json settings.presets.done
+S Crimson-Police/locales/parts/settings.json settings.presets.preview_text
+S Crimson-Police/locales/parts/settings.json settings.subtitle
+S Crimson-Police/locales/parts/teams.json sup.crossdept.start_confirm
+S Crimson-Police/locales/parts/testing.json test.debug.waypoints
+S Crimson-Police/locales/parts/testing.json test.debug.zones
+S Crimson-Police/locales/parts/testing.json test.ui.stat_locations
+S Crimson-Police/locales/parts/testing.json test.ui.tier_hint
+S Crimson-Police/locales/parts/ui.json result.departments
+S Crimson-Police/locales/parts/ui.json result.participants
+S Crimson-Police/locales/parts/volunteers.json health.volunteers.ok

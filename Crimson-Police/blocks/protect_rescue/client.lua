@@ -37,7 +37,10 @@ local PedFor, BagOf = Kit.entity, Kit.bag
 local Cleanup
 local states = Kit.states(function()
     return { peds = {}, byNet = {}, blips = {}, targets = {}, applied = {}, tasked = {}, alive = true }
-end, function(S) Cleanup(S) end)
+end, function(S) Cleanup(S) end, function(S)
+    -- ox_target restarted: its entity options are gone; the loop adds "Cut restraints" again on its next pass
+    S.targets = {}
+end)
 
 local function S_of(ctx)
     local S = states.of(ctx)
@@ -135,21 +138,24 @@ local function EnsureTarget(S, netId, ent)
     if S.targets[netId] == ent then return end
     DropTarget(S, netId)
     local t = S.ctx.obj.target or {}
-    exports.ox_target:addLocalEntity(ent, {
-        {
-            name = OPTION,
-            label = t.label or CP.L('block.protect_rescue.cut_restraints'),
-            icon = t.icon or 'fas fa-scissors',
-            distance = tonumber(t.distance) or 2.0,
-            canInteract = function(entity)
-                return S.alive and S.current and not S.busy and StateOf(S, netId, entity) == 'restrained'
-            end,
-            onSelect = function()
-                CreateThread(function() Free(S, netId) end)
-            end,
-        },
-    })
-    S.targets[netId] = ent
+    local ok = Kit.target(BLOCK, function()
+        exports.ox_target:addLocalEntity(ent, {
+            {
+                name = OPTION,
+                label = t.label or CP.L('block.protect_rescue.cut_restraints'),
+                icon = t.icon or 'fas fa-scissors',
+                distance = tonumber(t.distance) or 2.0,
+                canInteract = function(entity)
+                    return S.alive and S.current and not S.busy and StateOf(S, netId, entity) == 'restrained'
+                end,
+                onSelect = function()
+                    CreateThread(function() Free(S, netId) end)
+                end,
+            },
+        })
+    end)
+    -- ox_target down: the loop's next pass tries again
+    if ok then S.targets[netId] = ent end
 end
 
 -- ============================================================================

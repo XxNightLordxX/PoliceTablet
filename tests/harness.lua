@@ -2951,6 +2951,37 @@ function H.resetNetLimits()
 end
 H.resetNetLimits()
 
+-- The entries of one fxmanifest.lua list ('escrow_ignore', 'server_scripts', ...) as Lua patterns of a resource
+-- path: '*' any name part, '**' any number of folders. '@resource/...' entries are left out.
+function H.manifestGlobs(key)
+    local fh = assert(io.open(ROOT .. 'fxmanifest.lua', 'r'))
+    local manifest = fh:read('a')
+    fh:close()
+    local body = manifest:match('\n' .. key .. '%s*{(.-)\n}')
+    local pats = {}
+    for g in (body or ''):gsub('%-%-[^\n]*', ''):gmatch('\'([^\']+)\'') do
+        if g:sub(1, 1) ~= '@' then
+            pats[#pats + 1] = '^'
+                .. g:gsub('[%.%-%+%?%(%)%[%]%^%$%%]', '%%%0'):gsub('%*%*', '\1'):gsub('%*', '[^/]*'):gsub('\1', '.*')
+                .. '$'
+        end
+    end
+    return pats
+end
+
+-- true when FiveM asset escrow leaves the resource path readable: it matches escrow_ignore, or it is not a .lua file
+-- (escrow encrypts .lua files only). LoadResourceFile of any other file gives ciphertext on an escrowed build.
+local escrowIgnore = nil
+function H.escrowIgnored(path)
+    if type(path) ~= 'string' or not path:match('%.lua$') then return true end
+    escrowIgnore = escrowIgnore or H.manifestGlobs('escrow_ignore')
+    for _, lp in ipairs(escrowIgnore) do if path:match(lp) then return true end end
+    return false
+end
+
+-- H.boot's shared/*.lua list (read from fxmanifest.lua once per spec)
+local bootShared = nil
+
 function H.boot(opts)
     opts = opts or {}
     local server = (opts.side or 'server') == 'server'
@@ -3189,25 +3220,11 @@ function H.boot(opts)
     end
     H.load('config/blocks.lua')
     if CP and CP.Hooks then H.resetHooks() end
-    -- shared/*.lua in fxmanifest's (alphabetical) order
-    H.load('shared/init.lua')
-    H.load('shared/lib.lua')
-    H.load('shared/locale.lua')
-    H.load('shared/net.lua')
-    H.load('shared/npccombat.lua')
-    H.load('shared/options.lua')
-    H.load('shared/options_board.lua')
-    H.load('shared/options_dispatch.lua')
-    H.load('shared/options_hud.lua')
-    H.load('shared/options_look.lua')
-    H.load('shared/options_popups.lua')
-    H.load('shared/options_run.lua')
-    H.load('shared/options_sounds.lua')
-    H.load('shared/options_unit.lua')
-    H.load('shared/options_map.lua')
-    H.load('shared/twists.lua')
-    H.load('shared/utils.lua')
-    H.load('shared/weapons.lua')
+    -- shared/*.lua in fxmanifest's order (H.manifestScripts; config/*.lua was loaded above)
+    bootShared = bootShared or H.manifestScripts('shared_scripts')
+    for _, rel in ipairs(bootShared) do
+        if not rel:match('^config/') then H.load(rel) end
+    end
     if H.storage == 'files' and server and not H.filesMySQL then
         -- a spec run on its own (no tests/run.lua) starts from an empty saves folder: build the tables
         -- (H.emptySaves: a fresh install's empty saves folder, the real migrations runner builds the tables at boot)
@@ -3233,6 +3250,14 @@ function H.boot(opts)
                 started = function() return true end,
                 failed = function() return nil end,
                 version = function() return H.migrationVersion() end,
+                -- every file applied, as the real runner answers after a start (the backup schema reads its names)
+                status = function()
+                    local files = {}
+                    for i, name in ipairs(H.migrationFiles()) do
+                        files[i] = { version = tonumber(name:match('^(%d+)')), name = name, applied = true }
+                    end
+                    return { version = H.migrationVersion(), files = files, pending = 0, readable = true }
+                end,
             }
     end
     return H

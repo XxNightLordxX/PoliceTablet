@@ -31,7 +31,7 @@ import { formatDateTime } from '../../shared/format';
 import { useAction, useRequest } from '../../shared/hooks';
 import { applyReplyView } from '../../shared/replyView';
 import { useGrowingLimit } from '../../shared/rowWindow';
-import { hasKey, t } from '../../shared/i18n';
+import { hasKey, t, tn } from '../../shared/i18n';
 import { useNavigate, useNavigation } from '../../shared/navigation';
 import { toast } from '../../shared/toast';
 import type { ConfigHealthItem } from '../../shared/types';
@@ -773,7 +773,7 @@ function HealthCard({
             title={t('access.health.title')}
             icon="activity"
             padding="sm"
-            subtitle={problems.length ? t('access.health.problems', { n: problems.length }) : t('access.health.all_ok')}
+            subtitle={problems.length ? tn('access.health.problems', problems.length) : t('access.health.all_ok')}
             actions={
                 <IconButton
                     icon="refresh"

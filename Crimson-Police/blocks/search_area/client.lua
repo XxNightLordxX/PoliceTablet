@@ -46,7 +46,7 @@ local WITNESS_SCENARIO = 'WORLD_HUMAN_STAND_MOBILE'
 
 local Kit = CP.BlockKit
 local EntityFor, BagOf = Kit.entity, Kit.bag
-local Cleanup
+local Cleanup, SyncClues
 local states = Kit.states(function()
     return {
         data = {},
@@ -60,7 +60,11 @@ local states = Kit.states(function()
         lastReport = {},
         alive = true,
     }
-end, function(S) Cleanup(S) end)
+end, function(S) Cleanup(S) end, function(S)
+    -- ox_target restarted: its zones are gone, so the ids are forgotten and every pending clue gets its zone again
+    S.zones = {}
+    SyncClues(S)
+end)
 local S_of = states.of
 
 local function IsHost(S)
@@ -186,30 +190,34 @@ end
 
 local function EnsureZone(S, cl)
     if S.zones[cl.i] then return end
-    S.zones[cl.i] = exports.ox_target:addSphereZone({
-        coords = ClueVec(cl),
-        radius = 1.2,
-        debug = false,
-        name = 'crimson-police:clue:' .. S.key .. ':' .. tostring(cl.i),
-        options = {
-            {
-                name = OPTION,
-                label = ClueLabel(cl),
-                icon = cl.kind == 'witness' and 'fas fa-comments' or 'fas fa-magnifying-glass',
-                distance = CLUE_RANGE,
-                -- a clue appears once an officer is near it (Config.Spawning): nothing to check before it is there
-                canInteract = function()
-                    local now = S.clues[cl.i]
-                    return S.alive and S.current and not S.busy and now ~= nil and now.status == 'pending'
-                        and now.netId ~= nil
-                end,
-                onSelect = function() CreateThread(function() CheckClue(S, S.clues[cl.i] or cl) end) end,
+    local ok, id = Kit.target(BLOCK, function()
+        return exports.ox_target:addSphereZone({
+            coords = ClueVec(cl),
+            radius = 1.2,
+            debug = false,
+            name = 'crimson-police:clue:' .. S.key .. ':' .. tostring(cl.i),
+            options = {
+                {
+                    name = OPTION,
+                    label = ClueLabel(cl),
+                    icon = cl.kind == 'witness' and 'fas fa-comments' or 'fas fa-magnifying-glass',
+                    distance = CLUE_RANGE,
+                    -- a clue appears once an officer is near it (Config.Spawning): nothing to check before it is there
+                    canInteract = function()
+                        local now = S.clues[cl.i]
+                        return S.alive and S.current and not S.busy and now ~= nil and now.status == 'pending'
+                            and now.netId ~= nil
+                    end,
+                    onSelect = function() CreateThread(function() CheckClue(S, S.clues[cl.i] or cl) end) end,
+                },
             },
-        },
-    })
+        })
+    end)
+    -- ox_target down: the next pass (or its restart) adds it
+    if ok then S.zones[cl.i] = id end
 end
 
-local function SyncClues(S)
+function SyncClues(S)
     for i, cl in pairs(S.clues) do
         if cl.status == 'pending' and S.current then
             EnsureZone(S, cl)

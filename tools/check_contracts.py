@@ -10,7 +10,8 @@ Checks:
      crimson-police:server:* triggered by clients have a server handler (and vice versa).
   3. NUI: every request/action/clientAction name used in web/src exists in Lua (CP.Net.action / callback, or
      CP.AdminKit.action / supAction / callback).
-  4. Locale: every CP.L('key') / CP.Lt('key') / t('key') / returned 'err.*' key exists in the merged locale;
+  4. Locale: every CP.L('key') / CP.Lt('key') / t('key') / returned 'err.*' key exists in the merged locale, and
+     every tn('key', n) / CP.Ln('key', n) has key_other (or key);
      conflicting duplicate keys across parts; locales/en.json (the only file shared/locale.lua loads)
      exists and equals the merge of the parts (regenerate with --merge).
   5. NUI build: web/dist/build-stamp.json (written by `npm run build`) matches the current sources (web/src,
@@ -215,6 +216,16 @@ for w in web:
 missing = sorted(k for k in used if k not in merged and not k.endswith('.') and not k.endswith('_'))
 for k in missing:
     problems['locale-missing'].append(f"'{k}' used in {sorted(used[k])[:3]}")
+# plural keys: tn('key', n) / CP.Ln('key', n) read key_<form>, then key_other, then key (one of the last two is needed)
+plural = defaultdict(set)
+for side in ('server', 'client'):
+    for p in lua_files(side):
+        for m in re.finditer(r"CP\.Ln\(\s*['\"]([\w.\-]+)['\"]", strip_lua_comments(read(p))): plural[m.group(1)].add(rel(p))
+for w in web:
+    for m in re.finditer(r"\btn\(\s*['\"]([\w.\-]+)['\"]", read(w)): plural[m.group(1)].add(rel(w))
+for k in sorted(plural):
+    if k not in merged and k + '_other' not in merged:
+        problems['locale-missing'].append(f"'{k}' (plural: {k}_other or {k}) used in {sorted(plural[k])[:3]}")
 
 if '--merge' in sys.argv:
     out = os.path.join(RES, 'locales', 'en.json')

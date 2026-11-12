@@ -40,10 +40,14 @@ local KNOCK_ANIM = { dict = 'timetable@jimmy@doorknock@', clip = 'knockdoor_idle
 
 local Kit = CP.BlockKit
 local PedFor, BagOf, ToVec3 = Kit.entity, Kit.bag, Kit.vec3
-local Cleanup
+local Cleanup, AddDoorZone
 local states = Kit.states(function()
     return { peds = {}, blips = {}, applied = {}, tasked = {}, lastReport = {}, alive = true }
-end, function(S) Cleanup(S) end)
+end, function(S) Cleanup(S) end, function(S)
+    -- ox_target restarted: the knock zone is gone, so its id is forgotten and the door gets it again
+    S.zone = nil
+    if S.current and not S.knocked and S.door then AddDoorZone(S) end
+end)
 local S_of = states.of
 
 local function IsHost(S)
@@ -165,30 +169,39 @@ local function DropDoor(S)
     DropBlip(S, 'door')
 end
 
+function AddDoorZone(S)
+    local door = S.door
+    local k = S.ctx.obj.knock or {}
+    local ok, id = Kit.target(BLOCK, function()
+        return exports.ox_target:addSphereZone({
+            coords = door,
+            radius = 1.2,
+            debug = false,
+            name = 'crimson-police:knock:' .. S.key,
+            options = {
+                {
+                    name = OPTION,
+                    label = k.label or CP.L('block.flee_arrest.knock'),
+                    icon = 'fas fa-door-closed',
+                    distance = KNOCK_RANGE,
+                    canInteract = function() return S.alive and S.current and not S.knocked and not S.busy end,
+                    onSelect = function() CreateThread(function() Knock(S) end) end,
+                },
+            },
+        })
+    end)
+    -- ox_target down: its restart adds it
+    if ok then S.zone = id end
+end
+
 local function AddDoor(S)
     local ctx = S.ctx
     if ctx.obj.mode ~= 'door' or S.zone or S.knocked then return end
     local door = Points(ctx.location, ctx.obj.door)[1]
     if not door then return end
     S.door = door
-    local k = ctx.obj.knock or {}
-    S.zone = exports.ox_target:addSphereZone({
-        coords = door,
-        radius = 1.2,
-        debug = false,
-        name = 'crimson-police:knock:' .. S.key,
-        options = {
-            {
-                name = OPTION,
-                label = k.label or CP.L('block.flee_arrest.knock'),
-                icon = 'fas fa-door-closed',
-                distance = KNOCK_RANGE,
-                canInteract = function() return S.alive and S.current and not S.knocked and not S.busy end,
-                onSelect = function() CreateThread(function() Knock(S) end) end,
-            },
-        },
-    })
-    if not CP.Markers.hidden(ctx, 'objective') then
+    AddDoorZone(S)
+    if not S.blips.door and not CP.Markers.hidden(ctx, 'objective') then
         local id = AddBlipForCoord(door.x, door.y, door.z)
         SetBlipSprite(id, 40)
         SetBlipColour(id, 5)

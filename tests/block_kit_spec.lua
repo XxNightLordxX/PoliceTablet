@@ -101,6 +101,29 @@ H.eq(table.concat(cleaned, ','), 'r1:1', 'the resource stop cleans every started
 H.eq(stopped, 1, 'and runs the onStop functions')
 H.eq(K.find(a1), nil, 'the cleaned state is gone')
 
+-- H6: ox_target (re)starts: retarget runs for every started state of a list that has one, never for another resource
+local retargeted = {}
+local R = Kit.states(function() return {} end, function() end, function(S)
+    retargeted[#retargeted + 1] = S.key
+end)
+local r1 = R.of({ runId = 'q1', index = 1 })
+r1.alive = true
+R.of({ runId = 'q1', index = 2 })   -- prepared, never started
+TriggerEvent('onClientResourceStart', 'another-resource')
+H.eq(#retargeted, 0, 'another resource starting retargets nothing')
+TriggerEvent('onClientResourceStart', 'ox_target')
+H.eq(table.concat(retargeted, ','), 'q1:1', 'ox_target starting retargets every started state (and only those)')
+local okT, idT = Kit.target('test', function() return 42 end)
+H.ok(okT == true and idT == 42, 'target: an add that works gives its result')
+local warnedT = 0
+local keepWarnT = CP.warn
+CP.warn = function() warnedT = warnedT + 1 end
+okT, idT = Kit.target('test', function() error('No such export addSphereZone in resource ox_target') end)
+CP.warn = keepWarnT
+H.ok(okT == false and idT == nil and warnedT == 1,
+    'target: an add that raises (ox_target down) never raises, is logged')
+R.drop(r1)
+
 -- ============================================================================
 --                                   HELPERS
 -- ============================================================================
