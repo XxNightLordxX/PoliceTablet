@@ -94,7 +94,19 @@ local function Write(citizenid, seen)
     return ok
 end
 
+-- WF6C: a character's row is read, changed and written back with yields between: one change per character at a time
+-- (two tours finished at once both stay saved, a reset and a tour done never cross)
+local rowLock = CP.Lock.new()
+local LOCK_WAIT_MS = 5000
+local function Locked(citizenid, fn, ...)
+    local st, ok, data = rowLock:run(citizenid, LOCK_WAIT_MS, fn, ...)
+    if st == 'busy' then return false, 'err.busy' end
+    if st == 'error' then error(ok, 0) end
+    return ok, data
+end
+
 -- Saves that the character finished a tour in that version (never lower than one saved before). true | false, errKey.
+local MarkDone
 function Tr.markDone(citizenid, tour, version)
     if not CP.ValidCid(citizenid) then return false, 'err.invalid_citizenid' end
     local top = type(tour) == 'string' and Tr.TOURS[tour] or nil
@@ -102,6 +114,10 @@ function Tr.markDone(citizenid, tour, version)
     local v = math.tointeger(tonumber(version))
     if not v or v < 1 then return false, 'err.invalid_payload' end
     v = math.min(v, top)
+    return Locked(citizenid, MarkDone, citizenid, tour, v)
+end
+
+MarkDone = function(citizenid, tour, v)
     local seen = Tr.seen(citizenid)
     if (seen[tour] or 0) >= v then return true end
     seen[tour] = v
@@ -111,8 +127,13 @@ function Tr.markDone(citizenid, tour, version)
 end
 
 -- Forgets every tour of the character, so each starts again on its next open. Returns true and how many were saved.
+local Reset
 function Tr.reset(citizenid)
     if not CP.ValidCid(citizenid) then return false, 'err.invalid_citizenid' end
+    return Locked(citizenid, Reset, citizenid)
+end
+
+Reset = function(citizenid)
     local had = U.count(Tr.seen(citizenid))
     CP.Db()
     local ok, err = pcall(MySQL.update.await, 'DELETE FROM cp_tours WHERE citizenid = ?', { citizenid })

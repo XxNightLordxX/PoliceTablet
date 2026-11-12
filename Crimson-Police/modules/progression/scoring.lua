@@ -1505,7 +1505,9 @@ end
 
 -- A signed manual adjustment, checked by the caller (CP.Corrections): positive points are a manual award row,
 -- negative ones a 'manual_adjust' row. Both store who (breakdown.by) and why. Returns the row id | nil.
-function Scoring.adjust(actorSrc, citizenid, points, reason)
+-- by: who acts, read when his action began (an AdminKit ctx.actor), so a player who dropped meanwhile is still the
+-- one his per-day limit counts (WF6C); nil: read from actorSrc now.
+function Scoring.adjust(actorSrc, citizenid, points, reason, by)
     local n = math.tointeger(tonumber(points))
     if not n or n == 0 or n < -MANUAL_MAX or n > MANUAL_MAX then return nil, 'err.invalid_points' end
     if type(citizenid) ~= 'string' or citizenid == '' then return nil, 'err.invalid_citizenid' end
@@ -1514,7 +1516,7 @@ function Scoring.adjust(actorSrc, citizenid, points, reason)
     local missionId = n > 0 and 'manual_award' or 'manual_adjust'
     local label = n > 0 and CP.L('scoring.manual_award_label') or CP.L('scoring.adjust_label')
     local rowId = Scoring._insertBonusRow(citizenid, 'manual_award', missionId, n, label,
-        { reason = reason, by = ActorId(actor) })
+        { reason = reason, by = (type(by) == 'string' and by ~= '') and by or ActorId(actor) })
     if not rowId then return nil, 'err.internal' end
     if n > 0 then
         CP.notifyCitizen(citizenid, 'success', 'scoring.manual_award', { points = n, reason = reason })

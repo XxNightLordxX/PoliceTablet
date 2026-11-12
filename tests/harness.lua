@@ -217,6 +217,42 @@ function H.advance(ms, stepMs)
     while H.clockMs < target do H.step(stepMs) end
 end
 
+-- Yield control (WF6C): while H.interleave(true) is on, every MySQL.*.await the resource calls yields one harness step
+-- (Wait(0)) right after its answer, as oxmysql's await does in game: two actions sent at the same moment then run
+-- turn by turn, one query each, and H.step() resumes them in the order they yielded. It wraps the MySQL global in use
+-- (call it again after a boot: files mode gets a new engine each time); H.interleave(false) stops the yields and puts
+-- the original functions back. The main chunk and the C boundaries cannot yield and run straight on.
+local interleaveOn = false
+local interleaved = {}    -- MySQL table -> { kind = original await }
+local INTERLEAVE_KINDS = { 'query', 'single', 'scalar', 'insert', 'update', 'transaction' }
+function H.interleave(on)
+    interleaveOn = on == true
+    if not interleaveOn then
+        for tbl, orig in pairs(interleaved) do
+            for kind, fn in pairs(orig) do rawget(tbl, kind).await = fn end
+        end
+        interleaved = {}
+        return
+    end
+    local tbl = rawget(_G, 'MySQL')
+    if type(tbl) ~= 'table' or interleaved[tbl] then return end
+    local orig = {}
+    for _, kind in ipairs(INTERLEAVE_KINDS) do
+        local m = rawget(tbl, kind)
+        if type(m) == 'table' and type(rawget(m, 'await')) == 'function' then
+            local fn = m.await
+            orig[kind] = fn
+            m.await = function(...)
+                local res = table.pack(fn(...))
+                if interleaveOn and coroutine.isyieldable() then _G.Wait(0) end
+                return table.unpack(res, 1, res.n)
+            end
+        end
+    end
+    interleaved[tbl] = orig
+end
+function H.interleaving() return interleaveOn end
+
 -- ============================================================================
 --                         MySQL THROUGH THE MYSQL CLI
 -- ============================================================================

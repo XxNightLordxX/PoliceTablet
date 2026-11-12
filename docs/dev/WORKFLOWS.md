@@ -124,6 +124,26 @@ row, every queued payment paid exactly once, the deadlines and the join window e
 and the harness tick time (CPU ms per step: p95 within 25 ms, p99 within 100 ms, the worst step within 500 ms). Measured
 on both stores: p95 about 2 ms, the worst step 60 to 250 ms (a garbage collection on a busy machine).
 
+**Every writing action sent twice at the same moment.** `tests/race_spec.lua` (WF6C, in all three suites) runs on the
+same world with a second SAST supervisor and a second admin. Each action that writes (money, points, caps, bans,
+grants, settings, review decisions, restores, mission calls, accepts, units, item rewards, notices, the guided tours)
+is sent by two players, or twice by one (a double click), at the same moment with the harness's yield control on
+(`H.interleave`: every MySQL call yields after its answer, as oxmysql's await does in game, so the two copies run turn
+by turn, one query each). Every case runs on the same starting state: alone (what one copy does), at once (each copy
+whole or not at all, never more than one copy's effect per success, exactly one where only one may act), with the
+first sender dropping and reconnecting in the middle, under the maintenance lock (both refused, nothing changes), and
+cut by `restart Crimson-Police` after up to five spread queries of the first copy, then the second sent (never a
+double effect, every part of the effect moves together). The shipped config first where an action is on there, then
+the switches on. It found and fixed: (1) two commendations sent at once both passed the issuer's daily limit and the
+same-kind wait; (2) two admins reverting one setting change both reverted it; (3) two guided tours finished at once
+kept only one, and two admins resetting one character's tours both logged a reset; (4) an action that finished while
+its supervisor or admin had dropped was logged as `player:<id>`, so his daily limits (mission bans, Give points) did
+not count it and a second one passed. Known and left as they are: a stop between a void or a revoke and its audit row
+loses that row (never the void), a stop between a clawback's hold and the money leaves the amount held (never taken
+twice), and a pay cut off part way waits as `paying` for an admin's Resolve; a restore cut by a stop is
+`workflows_system` (3). `CP_WF_STORAGE=database` runs it on MariaDB (about 13 minutes), `CP_RACE_ONLY=<text>` runs the
+cases whose name holds the text, and `CP_RACE_CUTS=n` cuts at more queries.
+
 | Workflow | Spec | Restart | Drop and reconnect | No scripts | Result |
 | --- | --- | --- | --- | --- | --- |
 | Duty and the tablet: command, key, desk, item | officer (1, 2b) | yes (the item kept) | the officer after the item setting | owner stack only | Pass |
@@ -188,10 +208,11 @@ on both stores: p95 about 2 ms, the worst step 60 to 250 ms (a garbage collectio
 | Random actions of every role across every workflow, with the invariants checked after each (WF6A) | soak (24 seeds x 6 h; MariaDB 6 seeds x 4 h) | yes (random) | yes (random players) | owner stack only | Pass |
 | Every workflow and end-to-end spec on MariaDB (database on), compared with the saves folder (WF6B) | the worlds and e2e specs with `CP_WF_STORAGE=database` | yes (each spec's own) | yes (each spec's own) | none, none_* | Pass (same results on both stores) |
 | Load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, a backup and a storage copy (WF6B) | load (MariaDB, saves folder, shadow) | yes (with payments waiting) | yes (mid-run, 20 officers offline) | owner stack only | Pass |
+| Every writing action sent twice at the same moment by two players or a double click (43 cases), interleaved query by query (WF6C) | race (saves folder in each suite; MariaDB with `CP_WF_STORAGE=database`) | yes (after each of up to 5 queries of the first copy) | yes (the first sender, in the middle) | owner stack only | Pass (after fixes WF6C-1 to WF6C-4) |
 | Every tablet screen | everyScreen.walk.ts | - | - | - | Pass |
 | Every screen, tab, button and dialog clicked in a real browser (79 screens and tabs of the four tablets) | tools/clickthrough.mjs (npm run clickthrough, WF5F), clickthrough.walk.ts | - | - | - | Pass (after fixes WF5F-1 to WF5F-3) |
 
-"soak" = tests/soak_spec.lua, "load" = tests/load_spec.lua, "system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
+"soak" = tests/soak_spec.lua, "load" = tests/load_spec.lua, "race" = tests/race_spec.lua, "system" = tests/workflows_system_spec.lua, "system_db" = tests/workflows_system_db_spec.lua, "generic" =
 tests/workflows_system_generic_spec.lua, "admin" = tests/workflows_admin_spec.lua, "realplayers" = tests/workflows_realplayers_spec.lua, "full" = tests/workflows_full_spec.lua, "none" = tests/workflows_none_spec.lua (the same sections, no scripts), "e2e"
 = tests/e2e_spec.lua. Live crimes, volunteers and surrender need a police script's cuff and jail events, so on a city
 with none they stay off (Settings -> Features says why; tests/integrations_spec.lua) and are driven with the owner's

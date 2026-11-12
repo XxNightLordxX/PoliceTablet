@@ -4739,6 +4739,11 @@ local IMPORT_MAX = 262144      -- bytes of an imported settings text
 local IMPORT_ROWS = 1000
 
 -- One history row undone: its old value set again (config.lua's value = a reset), through every check.
+-- WF6C: the "changed since" check reads the history before a yield and the change comes after it: one revert per
+-- setting at a time, so two admins reverting one change at once revert it once (the second finds it changed since).
+-- (Fields, not locals: this file is at Lua's limit of 200 locals.)
+Settings._revertLock = CP.Lock.new()
+Settings._revertWaitMs = 5000
 function Settings.revert(src, historyId, opts)
     opts = opts or {}
     local h = Settings.historyEntry(historyId)
@@ -4746,6 +4751,13 @@ function Settings.revert(src, historyId, opts)
     local e = Settings.entry(h.path)
     if not e then return false, 'err.setting_unknown' end
     if e.locked then return false, 'err.setting_locked' end
+    local st, ok, data = Settings._revertLock:run(h.path, Settings._revertWaitMs, Settings._revert, src, h, opts)
+    if st == 'busy' then return false, 'err.busy' end
+    if st == 'error' then error(ok, 0) end
+    return ok, data
+end
+
+function Settings._revert(src, h, opts)
     if not opts.again then
         local okL, lastId = pcall(MySQL.scalar.await, 'SELECT MAX(id) FROM cp_settings_history WHERE setting_key = ?',
             { h.path })

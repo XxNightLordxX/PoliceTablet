@@ -290,6 +290,11 @@ function Kit.auditSync(src, category, action, target, old, new, reason, opts)
     if not Has('Admin', 'auditSync') then return false end
     local n = U.toSrc(src, true) or 0
     local actor = n > 0 and n or 'console'
+    -- WF6C: a player who dropped while his action ran stays its actor (opts.actor, read when it began), so the
+    -- per-day counts by actor (Kit.dailyCount) still count it and the log still names him
+    if n > 0 and type(opts) == 'table' and type(opts.actor) == 'string' and opts.actor ~= '' and not CitizenOf(n) then
+        actor = opts.actor
+    end
     local role = n > 0 and 'admin' or 'console'
     -- a supervisor's action (Kit.supAction) is audited as 'supervisor'
     if n > 0 and type(opts) == 'table' and opts.role == 'supervisor' then role = 'supervisor' end
@@ -803,9 +808,10 @@ local function MakeCtx(ctx, entry)
         aopts = type(aopts) == 'table' and aopts or {}
         local reason = aopts.reason or ctx.reason
         if ctx.licenceUnknown and reason then reason = ('%s (%s)'):format(reason, CP.L('adminkit.licence_unknown')) end
-        if aopts.role == nil and ctx.role == 'supervisor' then
+        if (aopts.role == nil and ctx.role == 'supervisor') or aopts.actor == nil then
             aopts = U.copy(aopts)
-            aopts.role = 'supervisor'
+            if aopts.role == nil and ctx.role == 'supervisor' then aopts.role = 'supervisor' end
+            if aopts.actor == nil then aopts.actor = ctx.actor end
         end
         local id = Kit.auditSync(ctx.src, aopts.category or entry.opts.category or 'audit', action, target, old, new,
             reason, aopts)
