@@ -63,7 +63,9 @@ end
 local cashSrc = Read('modules/money/cash.lua')
 H.ok(not cashSrc:find('CP.Qbx.addMoney(', 1, true), 'cash: every deposit goes through CP.Money.deposit')
 local _, deposits = cashSrc:gsub('CP%.Money%.deposit%(', '')
-H.eq(deposits, 3, 'cash: the payment, Pay again and the capped rest deposit through the engine')
+H.eq(deposits, 1, 'cash: one deposit through the engine (H3: DepositChecked, which reads the balance around it)')
+local _, checked = cashSrc:gsub('= DepositChecked%(', '')
+H.eq(checked, 2, 'cash: the payment, and Pay again and the capped rest (MoveLocked), deposit through DepositChecked')
 
 H.eq(CP.ValidCid('MN_OFFICER-1'), true, 'CP.ValidCid: a citizenid')
 H.eq(CP.ValidCid('a b'), false, 'CP.ValidCid: not one')
@@ -217,6 +219,20 @@ H.eq(#settled, 1, 'and settled by the engine')
 H.eq(moneyCalls[#moneyCalls].account, 'cash', 'deposited into that account')
 local again, why = CP.FeatureRewards.pay('surrender', 'MN_OFFICER1', { key = 'mn-case-1' })
 H.ok(again == nil and why == 'duplicate', 'the same case pays once')
+-- H3: a restart in the middle of a feature reward (here: the audit row's write never comes back, as when the server
+-- restarts during that await) leaves a payable row: the login sweep pays it, once
+local realAudit = CP.Admin.audit
+CP.Admin.audit = function() Wait(1e9) end
+local paid0 = #moneyCalls
+CreateThread(function() CP.FeatureRewards.pay('surrender', 'MN_OFFICER1', { key = 'mn-case-cut' }) end)
+H.step(0)
+CP.Admin.audit = realAudit
+local cutRow = H.sql([[SELECT id, cash_status FROM cp_mission_runs WHERE mission_id = 'reward_surrender'
+    ORDER BY id DESC LIMIT 1]])[1]
+H.eq(cutRow and cutRow.cash_status, 'pending', 'H3: a feature reward cut before its pay is payable (pending)')
+H.eq(CP.Cash.payPending(7), 1, 'H3: her login pays it')
+H.eq(#moneyCalls - paid0, 1, 'H3: once')
+H.eq(CP.Cash.payPending(7), 0, 'H3: and never again')
 Config.FeatureRewards.surrender.enabled = false
 
 -- H2: a completed run row whose breakdown is NULL (or JSON that does not decode) is still paid: CP.Cash reads the

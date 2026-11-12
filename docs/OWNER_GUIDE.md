@@ -2073,9 +2073,18 @@ What you can do from a row (the buttons show only where they make sense):
 - **Resolve** a payment stuck half way ("paying", after a crash or a Qbox error). It shows what Renewed-Banking
   recorded for that transaction id, and where the payment stopped (Crimson-Police now saves each step: claimed, the
   department paid, the officer got it). Then **Mark paid** (no money moves) or **Pay again** (see below). "Not found"
-  in the bank history proves nothing, so look at the officer's balance too.
+  in the bank history proves nothing, so look at the officer's balance too. When a money call was cut or failed half
+  way and the balance does not show whether it went through, the step says so and Pay again is refused: check both
+  bank histories, then Mark paid or pay by hand. When Qbox or Renewed-Banking fails but the balance shows the money
+  arrived (or did not move at all), the payment finishes (or goes back to pending) by itself.
+- **Resolve** on a paid or capped row marked **Check**: a money tool left half way. Pay the rest: **Mark the rest
+  paid** or **Release** (the department gets back what it paid). A clawback: **It was taken** or **It was not
+  taken**. Giving a clawback back to the department failed: it is tried again at every start and every 10 minutes,
+  or press **Retry give-back** (type the amount) or **It arrived**. A Pay again whose department withdrawal went
+  through but the deposit failed can be pressed again: it only deposits. These rows count in the Payments badge.
 - **Pay now** for a pending payment of an officer who is online, and **Retry all pending** for everyone online. These
-  use the normal pay flow, so nothing is ever paid twice.
+  use the normal pay flow, so nothing is ever paid twice. Like **Forfeit now** and **Cancel payment**, they write their
+  audit row first: if it can't be written, nothing happens.
 - **Forfeit now** ends the dispute window of a voided run early; **Cancel payment** stops a held or pending payment
   while the run keeps its points. Both tell the officer.
 

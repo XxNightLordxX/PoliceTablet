@@ -8,7 +8,7 @@ import paymentsSrc from '../admin/screens/Payments.tsx?raw';
 import { t } from '../shared/i18n';
 import { request } from '../shared/nui';
 import type { Session } from '../shared/types';
-import type { DepartmentFundsView, PaymentsView } from '../types/admin_economy';
+import type { BankingCheck, DepartmentFundsView, PaymentsView } from '../types/admin_economy';
 import type { DepartmentsData } from '../types/oversight';
 import { MONEY_TABS, moneySearchWords, moneyTabOf } from './adminMoney';
 import { ADMIN_GROUP_OF } from './adminNav';
@@ -80,6 +80,25 @@ async function steps(): Promise<void> {
         /<ConfirmButton(?:(?!\/>)[\s\S])*onConfirm=\{\(\) => void retryPending\(\)\}/.test(paymentsSrc) &&
             calls.length === 1,
         'Payments: Retry all pending runs only from the second click of a ConfirmButton',
+    );
+
+    // A paid or capped row with an admin money tool left part way offers Resolve with its own outcomes, each
+    // through the confirm dialog, every outcome named in English
+    const list = await request<PaymentsView>('admin:getPayments', { page: 1, size: 50 });
+    const follow = list.data?.rows.find(r => r.followUp === 'rest');
+    ok(follow !== undefined, 'Payments: a follow-up row is listed');
+    const chk = await request<BankingCheck>('admin:checkBankingTxn', { rowId: follow?.id });
+    ok(chk.ok && chk.data?.followUp === 'rest' && chk.data.outcomes?.restRelease === true, 'Resolve: its outcomes');
+    ok(/r\.status === 'paying' \|\| r\.followUp\) out\.push\('resolve'\)/.test(paymentsSrc), 'Resolve shows for it');
+    const outcomes = ['restPaid', 'restRelease', 'backTaken', 'backUndone', 'giveBack', 'giveBackDone'];
+    ok(
+        outcomes.every(o => t(`payments.followup.${o}`) !== `payments.followup.${o}`) &&
+            outcomes.every(o => t(`payments.followup.${o}_msg`) !== `payments.followup.${o}_msg`),
+        'every follow-up outcome has its English name and message',
+    );
+    ok(
+        ['withdrawing', 'adding', 'review'].every(s => t(`payments.step.${s}`) !== `payments.step.${s}`),
+        'the new step markers have their English text',
     );
 }
 

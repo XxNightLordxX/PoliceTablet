@@ -30,8 +30,12 @@
 --   CP.Cash.range(missionType, members) -> min, max    board card range per officer: missionType is a type key or
 --       'weekly_boss'; members = officer tables or srcs (the unit). Covers every mission of the pool (admin
 --       payouts, stars) at the unit's tier; the top also covers a modifier (never for the boss).
---   CP.Cash.stuckPayments() -> { StuckPayment... }     rows still 'paying' (not being paid right now)
---       StuckPayment = { id, runUuid, citizenid, name, missionId, missionLabel, department, amount, createdAt, transId }
+--   CP.Cash.stuckPayments() -> { StuckPayment... }     rows still 'paying' (not being paid right now), and paid or
+--       capped rows an admin money tool left part way (kind 'rest', 'back', 'giveBack': Cash.followUpOf)
+--       StuckPayment = { id, kind, followUpAmount, runUuid, citizenid, name, missionId, missionLabel, department,
+--       amount, step, createdAt, transId }
+--   CP.Cash.resolveFollowUp(rowId, outcome, audit) -> ok, data | false, errKey   (Admin UI -> Payments -> Resolve)
+--   CP.Cash.retryGiveBacks() -> n                      owed clawback give-backs tried again (start, every 10 min)
 --   CP.Cash.earnedThisWeek(citizenid) -> number        cash_paid of paid/capped rows since the week start
 -- All functions except compute and range query the database: call them from a thread.
 
@@ -324,12 +328,68 @@ local function SupervisorsOf(dept)
     return out
 end
 
+-- ============================================================================
+--                        WHAT A MONEY CALL ACTUALLY DID
+-- ============================================================================
+-- A money call that raised (Qbox AddMoney/RemoveMoney, a Renewed-Banking export) may or may not have moved the money.
+-- The balance read right before the call (no await between) and right after it decides: changed by exactly the
+-- amount = it arrived, unchanged = refused, anything else or no balance to read = no telling (the row is left for an
+-- admin, never refunded or retried blind).
+
+-- The department account's balance, or nil.
+local function SocietyBalance(account)
+    if type(account) ~= 'string' or account == '' then return nil end
+    if not (CP.Banking and CP.Banking.societyBalance) then return nil end
+    local ok, b = pcall(CP.Banking.societyBalance, account)
+    return ok and type(b) == 'number' and b or nil
+end
+
+-- The officer's Qbox balance of a money account, or nil (a money item has none to read).
+local function BalanceOf(src, account, item)
+    if item ~= nil or account == 'item' then return nil end
+    if not (CP.Qbx and CP.Qbx.getMoney) then return nil end
+    local ok, b = pcall(CP.Qbx.getMoney, src, account)
+    return ok and type(b) == 'number' and b or nil
+end
+
+-- 'done' | 'refused' | 'unknown' from the balance before and after a call that raised, for a change of delta.
+local function Outcome(before, after, delta)
+    if type(before) ~= 'number' or type(after) ~= 'number' then return 'unknown' end
+    if after - before == delta then return 'done' end
+    if after == before then return 'refused' end
+    return 'unknown'
+end
+
+-- A society call (withdrawSociety or depositSociety) decided: 'done' | 'refused' | 'unknown'. A plain false is a
+-- refusal (nothing moved); a raise (the adapter's false, 'error', or the call itself raising) reads the balance.
+local function SocietyCall(fn, account, amount, sign)
+    if not (CP.Banking and type(CP.Banking[fn]) == 'function') then return 'refused' end
+    if type(account) ~= 'string' or account == '' then return 'refused' end
+    local before = SocietyBalance(account)
+    local ok, res, why = pcall(CP.Banking[fn], account, amount)
+    if ok and res == true then return 'done' end
+    if ok and why ~= 'error' then return 'refused' end
+    CP.err(TAG, '%s(%s, %d) raised; deciding from the balance', fn, account, amount)
+    return Outcome(before, SocietyBalance(account), sign * amount)
+end
+
+local function WithdrawSociety(account, amount) return SocietyCall('withdrawSociety', account, amount, -1) end
+Cash.societyCall = SocietyCall
+
+-- The officer's deposit decided: 'done' | 'refused' | 'unknown', and the balances read (for the review marker).
+local function DepositChecked(src, account, item, amount)
+    local before = BalanceOf(src, account, item)
+    local ok, why = CP.Money.deposit(src, account, item, amount)
+    if ok then return 'done' end
+    if why ~= 'error' then return 'refused' end
+    local after = BalanceOf(src, account, item)
+    return Outcome(before, after, amount), before, after
+end
+
+-- Gives a department back what it paid: true only when it arrived (a raised call is decided from the balance; no
+-- telling counts as not given back, so it stays a staff item and is never given twice).
 local function RefundSociety(account, amount)
-    if CP.Banking and CP.Banking.depositSociety then
-        local ok, res = pcall(CP.Banking.depositSociety, account, amount)
-        return ok and res == true
-    end
-    return false
+    return SocietyCall('depositSociety', account, amount, 1) == 'done'
 end
 
 local PayClaimed
@@ -438,15 +498,35 @@ PayClaimed = function(row, rowId, cid, src, progress)
         societyAccount = society and account or nil,
         txn = transId,
     }, 'paying')
+    -- An intent marker (withdrawing, adding) is saved before each money call and checked: a restart or a raise in
+    -- the call leaves that marker, which Pay again refuses (it can not know whether the money moved). A row with no
+    -- breakdown.cash (an old or NULL breakdown) has nowhere to keep markers: paid as before, unmarked.
+    local canMark = type(bd.cash) == 'table'
     local withdrew = false
     if amount > 0 and society then
-        local okW = false
+        local got = 'refused'
         if type(account) == 'string' and account ~= '' and CP.Banking and CP.Banking.withdrawSociety then
+            if not Mark(rowId, { step = 'withdrawing' }, 'paying') and canMark then
+                BackToPending(rowId, 'the withdrawing marker could not be written; nothing moved')
+                return 'pending'
+            end
             progress.moved = true
-            okW = CP.Banking.withdrawSociety(account, amount) == true
-            if not okW then progress.moved = false end
+            got = WithdrawSociety(account, amount)
+            if got == 'refused' then progress.moved = false end
         end
-        if not okW then
+        if got == 'unknown' then
+            Mark(rowId, { step = 'review' }, 'paying')
+            CP.err(
+                TAG,
+                'row %d: the withdrawal from %s raised and its balance does not tell; it stays paying for a '
+                    .. 'manual check (transaction %s)',
+                rowId,
+                tostring(account),
+                transId
+            )
+            return 'paying'
+        end
+        if got ~= 'done' then
             SetFinal(rowId, 'unfunded', 0)
             CP.warn(TAG, 'row %d unfunded: society account %s could not cover %d', rowId, tostring(account), amount)
             CP.notify(src, 'error', 'cash.unfunded',
@@ -463,22 +543,43 @@ PayClaimed = function(row, rowId, cid, src, progress)
     end
 
     if amount > 0 then
+        if not Mark(rowId, { step = 'adding' }, 'paying') and canMark then
+            -- nothing reached the officer: the department gets its money back, or the row stays at 'withdrawn'
+            if withdrew and not RefundSociety(account, amount) then
+                CP.err(
+                    TAG,
+                    'row %d: the adding marker could not be written after %s was debited %d; it stays paying '
+                        .. '(transaction %s)',
+                    rowId,
+                    tostring(account),
+                    amount,
+                    transId
+                )
+                return 'paying'
+            end
+            progress.moved = false
+            BackToPending(rowId, 'the adding marker could not be written; nothing reached the officer')
+            return 'pending'
+        end
         progress.moved = true
-        local okMoney, whyMoney = CP.Money.deposit(src, moneyAccount, moneyItem, amount)
-        if not okMoney and whyMoney == 'error' then
-            -- AddMoney raised: the balance may already have changed, so the row is never retried automatically
-            -- (it stays paying and is listed in stuckPayments for a manual check; no society refund either).
+        local got, balBefore, balAfter = DepositChecked(src, moneyAccount, moneyItem, amount)
+        if got == 'unknown' then
+            -- AddMoney raised and the balance does not tell: never retried automatically, never refunded (it stays
+            -- paying at step 'review' and is listed in stuckPayments for a manual check)
+            Mark(rowId, { step = 'review', balBefore = balBefore, balAfter = balAfter }, 'paying')
             CP.err(TAG,
                 'row %d: Qbox AddMoney(%s, %d) raised for %s; the row stays paying for a manual check (transaction %s)',
                 rowId, moneyAccount, amount, cid, transId)
             return 'paying'
         end
-        if not okMoney then
+        if got == 'refused' then
             if withdrew then
                 if RefundSociety(account, amount) then
                     BackToPending(rowId, 'Qbox AddMoney failed; the society withdrawal was refunded')
                     return 'pending'
                 end
+                -- the department paid, the officer did not: Pay again deposits only
+                Mark(rowId, { step = 'withdrawn' }, 'paying')
                 CP.err(TAG,
                     'row %d: Qbox AddMoney failed after %s was debited %d; the row stays paying for a manual check (transaction %s)',
                     rowId, tostring(account), amount, transId)
@@ -682,13 +783,39 @@ local function TxnOf(row) return ('CP-%s-%s'):format(tostring(row.run_uuid), tos
 -- The rows a statement changed; 0 when it raised (CP.update logged it).
 local function Update(sql, params) return CP.update(TAG, sql, params) or 0 end
 
--- Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying'.
-local function Release(rowId, key)
-    Update(
-        ([[UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(breakdown, '$.cash.%s')
-        WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.%s') = 'paying']]):format(key, key),
+-- Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step).
+-- extraWhere: more conditions (the start-up release of claims no money call ever started).
+local function Release(rowId, key, extraWhere)
+    return Update(
+        ([[UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(breakdown, '$.cash.%s', '$.cash.%sStep')
+        WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.%s') = 'paying'%s]]):format(
+            key,
+            key,
+            key,
+            extraWhere or ''
+        ),
         { rowId }
-    )
+    ) > 0
+end
+
+-- Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step
+-- markers of an admin money tool, so a claim released or resolved meanwhile is never moved on. true when it changed.
+local function MarkIf(rowId, fields, key, val)
+    local keys = {}
+    for k in pairs(fields) do keys[#keys + 1] = k end
+    table.sort(keys)
+    local sets, params = {}, {}
+    for _, k in ipairs(keys) do
+        sets[#sets + 1] = ('\'$.cash.%s\', ?'):format(k)
+        params[#params + 1] = fields[k]
+    end
+    params[#params + 1] = rowId
+    params[#params + 1] = val
+    return Update(
+        ([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, %s)
+        WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.%s') = ?]]):format(table.concat(sets, ', '), key),
+        params
+    ) > 0
 end
 
 -- Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins.
@@ -773,11 +900,74 @@ function Cash.markPaid(rowId, audit)
     return true, { id = rowId, status = status, amount = paid }
 end
 
-local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
+-- The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step
+-- (withdrawing -> withdrawn -> adding -> added; review when a raised call left no telling), written compare-and-set on
+-- the claim marker <key> = 'paying'. A refused deposit gives the department its money back; when that fails too the
+-- marker stays at 'withdrawn' (the department paid, the officer did not). -> true | false, errKey
+local function MoveLocked(rowId, key, src, account, needWithdraw, moneyAccount, moneyItem, amount)
+    local stepKey = key .. 'Step'
+    local function Step(v, extra)
+        local f = { [stepKey] = v }
+        for k, x in pairs(extra or {}) do f[key .. k] = x end
+        return MarkIf(rowId, f, key, 'paying')
+    end
+    if needWithdraw then
+        -- the claim was released or resolved meanwhile (the marker is no longer ours): nothing moves
+        if not Step('withdrawing') then return false, 'err.state_changed' end
+        local got = type(account) == 'string' and account ~= '' and WithdrawSociety(account, amount) or 'refused'
+        if got == 'unknown' then
+            -- the marker stays at 'withdrawing': the department may have paid, the officer did not get it
+            CP.err(TAG, 'row %d: the %s withdrawal from %s raised and its balance does not tell', rowId, key,
+                tostring(account))
+            return false, 'err.payment_raised'
+        end
+        if got ~= 'done' then
+            Release(rowId, key)
+            return false, 'err.unfunded_now'
+        end
+        Step('withdrawn')
+    end
+    if not Step('adding') then
+        if not needWithdraw then return false, 'err.state_changed' end
+        if RefundSociety(account, amount) then
+            Release(rowId, key)
+            return false, 'err.state_changed'
+        end
+        return false, 'err.payment_refund_failed'
+    end
+    local got, b0, b1 = DepositChecked(src, moneyAccount, moneyItem, amount)
+    if got == 'unknown' then
+        Step('review', { BalBefore = b0, BalAfter = b1 })
+        CP.err(TAG, 'row %d: %s raised in AddMoney and the balance does not tell; it stays for a manual check', rowId,
+            key)
+        return false, 'err.payment_raised'
+    end
+    if got == 'refused' then
+        if needWithdraw then
+            if RefundSociety(account, amount) then
+                Release(rowId, key)
+                return false, 'err.payment_refused'
+            end
+            Step('withdrawn')
+            CP.err(TAG, 'row %d: %s failed after %s was debited %d; it stays for a manual check', rowId, key,
+                tostring(account), amount)
+            return false, 'err.payment_refund_failed'
+        end
+        Release(rowId, key)
+        return false, 'err.payment_refused'
+    end
+    Step('added')
+    return true
+end
+
+-- Pay again under the officer's payment lock. key 'again' (a fresh Pay again) or 'again2' (the deposit of a Pay
+-- again whose department withdrawal went through, resumed: no second withdrawal). Its transaction id is -r2 either way
+-- (the resumed deposit never reached the officer before).
+local function PayAgainLocked(row, bd, rowId, amount, needWithdraw, key)
     local cid = row.citizenid
     local src, info = OnlineOf(cid)
     if not src then
-        Release(rowId, 'again')
+        Release(rowId, key)
         return false, 'err.officer_offline'
     end
     local c = CashOf(bd)
@@ -787,47 +977,28 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
     local label = MissionLabel(row, bd)
     local message = CP.L('cash.bank_message', { mission = label })
     local transId = TxnOf(row) .. '-r2'
-    if needWithdraw then
-        local okW = type(account) == 'string' and account ~= '' and CP.Banking and CP.Banking.withdrawSociety
-            and CP.Banking.withdrawSociety(account, amount) == true
-        if not okW then
-            Release(rowId, 'again')
-            return false, 'err.unfunded_now'
-        end
-        Mark(rowId, { againStep = 'withdrawn' }, 'paying')
-    end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
     -- a money item again when the payment used one (never a Qbox account named 'item')
-    local okMoney, why = CP.Money.deposit(src, moneyAccount, c.moneyItem, amount)
-    if not okMoney and why == 'error' then
-        CP.err(TAG, 'row %d: Pay again raised in AddMoney; it stays paying for a manual check (transaction %s)', rowId,
-            transId)
-        return false, 'err.payment_raised'
-    end
-    if not okMoney then
-        if needWithdraw and not RefundSociety(account, amount) then
-            CP.err(TAG, 'row %d: Pay again failed after %s was debited %d; it stays paying (transaction %s)', rowId,
-                tostring(account), amount, transId)
-            return false, 'err.payment_refund_failed'
-        end
-        Release(rowId, 'again')
-        return false, 'err.payment_refused'
-    end
+    local okMove, err = MoveLocked(rowId, key, src, account, needWithdraw, moneyAccount, c.moneyItem, amount)
+    if not okMove then return false, err end
     if moneyAccount == 'bank' and CP.Banking and CP.Banking.recordDeposit then
         CP.Banking.recordDeposit(cid, amount, message, deptLabel, info.name or cid, transId)
     end
-    if needWithdraw and CP.Banking and CP.Banking.recordSocietyWithdraw then
+    if (needWithdraw or key == 'again2') and CP.Banking and CP.Banking.recordSocietyWithdraw then
         CP.Banking.recordSocietyWithdraw(account, amount, message, deptLabel, info.name or cid, transId)
     end
     local owed = AmountOf(row, bd)
     local status = amount < owed and 'capped' or 'paid'
-    local n = Update([[
+    local n = Update(
+        ([[
         UPDATE cp_mission_runs
         SET cash_status = ?, cash_paid = ?,
             breakdown = JSON_SET(breakdown, '$.cash.status', ?, '$.cash.paid', ?, '$.cash.again', 'paid',
-                '$.cash.againTxn', ?)
+                '$.cash.againTxn', ?%s)
         WHERE id = ? AND cash_status = 'paying'
-    ]], { status, amount, status, amount, transId, rowId })
+    ]]):format(key ~= 'again' and (', \'$.cash.%s\', \'paid\''):format(key) or ''),
+        { status, amount, status, amount, transId, rowId }
+    )
     if n < 1 then
         CP.err(TAG, 'row %d: Pay again paid %d but the status could not be written (transaction %s)', rowId, amount,
             transId)
@@ -837,8 +1008,13 @@ local function PayAgainLocked(row, bd, rowId, amount, needWithdraw)
 end
 
 -- Pay again: the admin checked the bank history and the money did not arrive. The step markers say what already
--- happened: at 'withdrawn' the department already paid, so only AddMoney runs; at 'claimed' both run; at 'added'
--- the money arrived (Mark paid instead). Its own transaction id CP-<uuid>-<cid>-r2. The officer must be online.
+-- happened: at 'claimed' nothing moved, so both money calls run; at 'withdrawn' the department already paid, so only
+-- AddMoney runs; at 'added' the money arrived (Mark paid instead). At 'withdrawing', 'adding' or 'review' a money
+-- call was cut or raised with no telling whether it moved: refused (Mark paid after checking both bank histories).
+-- A Pay again left at againStep 'withdrawn' (the department paid, the deposit failed) resumes with the deposit only.
+-- Its own transaction id CP-<uuid>-<cid>-r2. The officer must be online.
+local UNKNOWN_STEP = { withdrawing = true, adding = true, review = true }
+
 function Cash.payAgain(rowId, audit)
     local row, bd = Clean(rowId)
     if not row then return false, bd end
@@ -847,26 +1023,36 @@ function Cash.payAgain(rowId, audit)
     if CP.U.truthy(row.flagged) then return false, 'err.payment_flagged' end
     if Cash.rowBusy(rowId, row.citizenid) then return false, 'err.payment_in_flight' end
     local c = CashOf(bd)
-    if c.again ~= nil then return false, 'err.state_changed' end
+    local key = 'again'
+    if c.again ~= nil then
+        if c.again ~= 'paying' or c.againStep ~= 'withdrawn' or c.again2 ~= nil then
+            return false, 'err.state_changed'
+        end
+        key = 'again2'
+    end
     if c.step == 'added' then return false, 'err.payment_arrived' end
+    if UNKNOWN_STEP[c.step] then return false, 'err.payment_step_unknown' end
     local paySource = c.source
     if paySource == nil then
         -- a payment from before the step markers: only safe when nothing was taken from a department
         if Config.Cash and Config.Cash.source == 'society' then return false, 'err.payment_step_unknown' end
         paySource = 'server'
     end
-    local needWithdraw = paySource == 'society' and c.step ~= 'withdrawn'
+    local needWithdraw = key == 'again' and paySource == 'society' and c.step ~= 'withdrawn'
     local amount = PayAmountOf(bd) or AmountOf(row, bd)
     if amount <= 0 then return false, 'err.nothing_to_pay' end
     if not OnlineOf(row.citizenid) then return false, 'err.officer_offline' end
-    if not ClaimMarker(rowId, 'again', 'paying') then return false, 'err.state_changed' end
-    if not Audited(audit, { amount = amount, step = c.step or 'unknown', withdraw = needWithdraw }) then
-        Release(rowId, 'again')
+    if not ClaimMarker(rowId, key, 'paying') then return false, 'err.state_changed' end
+    if
+        not Audited(audit,
+            { amount = amount, step = c.step or 'unknown', withdraw = needWithdraw, resume = key == 'again2' })
+    then
+        Release(rowId, key)
         return false, 'err.audit_failed'
     end
     return RunLocked(row.citizenid, function()
-        return PayAgainLocked(row, bd, rowId, amount, needWithdraw)
-    end, function() Release(rowId, 'again') end)
+        return PayAgainLocked(row, bd, rowId, amount, needWithdraw, key)
+    end, function() Release(rowId, key) end)
 end
 
 -- ============================================================================
@@ -889,31 +1075,12 @@ local function CapRestLocked(row, bd, rowId, rest)
     local label = MissionLabel(row, bd)
     local message = CP.L('cash.bank_message', { mission = label })
     local transId = TxnOf(row) .. '-r'
-    if society then
-        local okW = type(account) == 'string' and account ~= '' and CP.Banking and CP.Banking.withdrawSociety
-            and CP.Banking.withdrawSociety(account, rest) == true
-        if not okW then
-            Release(rowId, 'restPaid')
-            return false, 'err.unfunded_now'
-        end
-    end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
-    -- a money item again when the payment used one (never a Qbox account named 'item')
-    local okMoney, why = CP.Money.deposit(src, moneyAccount, c.moneyItem, rest)
-    if not okMoney and why == 'error' then
-        CP.err(TAG, 'row %d: paying the capped rest raised in AddMoney; its marker stays paying (transaction %s)',
-            rowId, transId)
-        return false, 'err.payment_raised'
-    end
-    if not okMoney then
-        if society and not RefundSociety(account, rest) then
-            CP.err(TAG, 'row %d: the capped rest failed after %s was debited %d (transaction %s)', rowId,
-                tostring(account), rest, transId)
-            return false, 'err.payment_refund_failed'
-        end
-        Release(rowId, 'restPaid')
-        return false, 'err.payment_refused'
-    end
+    -- a money item again when the payment used one (never a Qbox account named 'item'); the society it used is
+    -- kept on the row for a Resolve that has to give it back (restPaidAccount)
+    if society then MarkIf(rowId, { restPaidAccount = account }, 'restPaid', 'paying') end
+    local okMove, err = MoveLocked(rowId, 'restPaid', src, account, society, moneyAccount, c.moneyItem, rest)
+    if not okMove then return false, err end
     if moneyAccount == 'bank' and CP.Banking and CP.Banking.recordDeposit then
         CP.Banking.recordDeposit(cid, rest, message, deptLabel, info.name or cid, transId)
     end
@@ -958,56 +1125,146 @@ end
 --                        TAKE PAID CASH BACK (CLAWBACK)
 -- ============================================================================
 
-local function TakeBackIncrement(rowId, amount)
-    Update('UPDATE cp_mission_runs SET cash_reclaimed = cash_reclaimed - ? WHERE id = ? AND cash_reclaimed >= ?',
-        { amount, rowId, amount })
+-- The clawback's markers on breakdown.cash. The claim (cash_reclaimed + n) also writes backPending = n and
+-- backStep = 'claimed'; backStep becomes 'removing' (compare and set) right before RemoveMoney. Done: backs + 1, the
+-- pending markers cleared and, on a society-source row, the give-back owed to the department (giveBack 'owed',
+-- backOwed, backAccount) saved before the refund is tried. An undone claim takes the increment back and clears the
+-- markers, compare and set on backStep. A row with backPending or an unsettled give-back is a staff item (stuckPayments).
+
+-- The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep.
+local function UndoBack(rowId, amount, fromStep)
+    return Update([[
+        UPDATE cp_mission_runs SET cash_reclaimed = cash_reclaimed - ?,
+            breakdown = JSON_REMOVE(breakdown, '$.cash.backPending', '$.cash.backStep')
+        WHERE id = ? AND cash_reclaimed >= ? AND JSON_VALUE(breakdown, '$.cash.backStep') = ?
+    ]], { amount, rowId, amount, fromStep }) > 0
+end
+
+-- The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account,
+-- the give-back owed (owedTotal: what the department is owed on this row, earlier unpaid give-backs included).
+local function BackDone(rowId, n, fromStep, account, owedTotal)
+    if account then
+        return Update([[
+            UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(JSON_SET(breakdown, '$.cash.backs', ?,
+                '$.cash.giveBack', 'owed', '$.cash.backOwed', ?, '$.cash.backAccount', ?),
+                '$.cash.backPending', '$.cash.backStep')
+            WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.backStep') = ?
+        ]], { n, owedTotal, account, rowId, fromStep }) > 0
+    end
+    return Update([[
+        UPDATE cp_mission_runs SET breakdown = JSON_REMOVE(JSON_SET(breakdown, '$.cash.backs', ?),
+            '$.cash.backPending', '$.cash.backStep')
+        WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.backStep') = ?
+    ]], { n, rowId, fromStep }) > 0
+end
+
+-- Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). A refusal puts it back to
+-- 'owed' (the start-up sweep and the 10-minute job try again; Payments lists it); a raise with no telling leaves it
+-- 'paying' for an admin. Runs under the officer's payment lock. -> true | false, errKey
+local function GiveBackRow(rowId)
+    local row = ReadRow(rowId)
+    if not row then return false, 'err.row_not_found' end
+    local bd = CP.U.jsonField(row.breakdown) or {}
+    local c = CashOf(bd)
+    if c.giveBack ~= 'owed' then return false, 'err.state_changed' end
+    local amount = math.floor(Num(c.backOwed, 0))
+    local account = c.backAccount
+    if amount <= 0 or type(account) ~= 'string' or account == '' then return false, 'err.payment_step_unknown' end
+    if not MarkIf(rowId, { giveBack = 'paying' }, 'giveBack', 'owed') then return false, 'err.state_changed' end
+    local got = SocietyCall('depositSociety', account, amount, 1)
+    if got == 'done' then
+        Update([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.giveBack', 'back',
+            '$.cash.backOwed', 0, '$.cash.backGiven', ?) WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.giveBack') = 'paying']],
+            { math.floor(Num(c.backGiven, 0)) + amount, rowId })
+        if CP.Banking and CP.Banking.recordSocietyDeposit then
+            local dept = DeptOf(row.department)
+            local message = CP.L('cash.clawback_message', { mission = MissionLabel(row, bd) })
+            CP.Banking.recordSocietyDeposit(account, amount, message, row.citizenid,
+                dept and dept.label or tostring(row.department), ('%s-back%d'):format(TxnOf(row), Num(c.backs, 0)))
+        end
+        return true
+    end
+    if got == 'refused' then
+        MarkIf(rowId, { giveBack = 'owed' }, 'giveBack', 'paying')
+        CP.warn(TAG, 'row %d: giving %d back to %s failed; it is owed and tried again later', rowId, amount, account)
+        return false, 'err.payment_refund_failed'
+    end
+    CP.err(TAG, 'row %d: giving %d back to %s raised and its balance does not tell; it waits for an admin', rowId,
+        amount, account)
+    return false, 'err.payment_raised'
 end
 
 local function ClawbackLocked(row, rowId, amount)
     local cid = row.citizenid
     local src, info = OnlineOf(cid)
     if not src then
-        TakeBackIncrement(rowId, amount)
+        UndoBack(rowId, amount, 'claimed')
         return false, 'err.officer_offline'
     end
     local fresh = ReadRow(rowId) or row
     local bd = CP.U.jsonField(fresh.breakdown) or {}
     local c = CashOf(bd)
+    -- a give-back cut part way (no telling whether it arrived) is settled first: never added to
+    if c.giveBack == 'paying' then
+        UndoBack(rowId, amount, 'claimed')
+        return false, 'err.payment_in_flight'
+    end
     local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
     local balance = CP.Qbx.getMoney and CP.Qbx.getMoney(src, moneyAccount)
     if type(balance) ~= 'number' or balance < amount then
-        TakeBackIncrement(rowId, amount)
+        UndoBack(rowId, amount, 'claimed')
         return false, 'err.balance_low'
     end
+    -- the claim released meanwhile (the start-up sweep, an admin's Resolve): nothing is taken
+    if not MarkIf(rowId, { backStep = 'removing' }, 'backStep', 'claimed') then return false, 'err.state_changed' end
+    local before = BalanceOf(src, moneyAccount)
     local okR, why = false, nil
     if CP.Qbx.removeMoney then okR, why = CP.Qbx.removeMoney(src, moneyAccount, amount, 'crimson-police-clawback') end
     if not okR and why == 'error' then
-        CP.err(TAG, 'row %d: RemoveMoney raised during a clawback of %d; check the officer\'s balance', rowId, amount)
-        return false, 'err.payment_raised'
+        -- RemoveMoney raised: the balance decides (taken, refused, or no telling: the row waits for an admin)
+        local o = Outcome(before, BalanceOf(src, moneyAccount), -amount)
+        if o == 'unknown' then
+            CP.err(
+                TAG,
+                'row %d: RemoveMoney raised during a clawback of %d and the balance does not tell; it waits '
+                    .. 'for an admin in Payments',
+                rowId,
+                amount
+            )
+            return false, 'err.payment_raised'
+        end
+        okR = o == 'done'
     end
     if not okR then
-        TakeBackIncrement(rowId, amount)
+        UndoBack(rowId, amount, 'removing')
         return false, 'err.clawback_refused'
     end
     local n = math.floor(Num(c.backs, 0)) + 1
     local transId = ('%s-back%d'):format(TxnOf(row), n)
-    Mark(rowId, { backs = n }, { 'paid', 'capped' })
     local dept = DeptOf(row.department)
     local deptLabel = dept and dept.label or tostring(row.department)
     local message = CP.L('cash.clawback_message', { mission = MissionLabel(row, bd) })
+    -- the department gets it back only when it paid it
+    local account = c.source == 'society' and (c.societyAccount or (dept and dept.societyAccount)) or nil
+    local owed = (c.giveBack == 'owed' and math.floor(Num(c.backOwed, 0)) or 0) + amount
+    local marked = BackDone(rowId, n, 'removing', account, owed)
     if moneyAccount == 'bank' and CP.Banking and CP.Banking.recordWithdraw then
         CP.Banking.recordWithdraw(cid, amount, message, deptLabel, info.name or cid, transId)
     end
-    -- the department gets it back only when it paid it
     local refunded = false
-    if c.source == 'society' then
-        local account = c.societyAccount or (dept and dept.societyAccount)
-        refunded = RefundSociety(account, amount)
-        if refunded and CP.Banking and CP.Banking.recordSocietyDeposit then
-            CP.Banking.recordSocietyDeposit(account, amount, message, info.name or cid, deptLabel, transId)
+    if account then
+        if marked then
+            refunded = GiveBackRow(rowId) == true
+        else
+            -- the markers could not be written: the refund straight away, as before
+            refunded = RefundSociety(account, amount)
+            if refunded and CP.Banking and CP.Banking.recordSocietyDeposit then
+                CP.Banking.recordSocietyDeposit(account, amount, message, info.name or cid, deptLabel, transId)
+            end
         end
         if not refunded then
-            CP.warn(TAG, 'row %d: the clawback of %d could not be put back into %s', rowId, amount, tostring(account))
+            CP.warn(TAG, 'row %d: the clawback of %d could not be put back into %s yet', rowId, amount,
+                tostring(account))
         end
     end
     CP.notify(src, 'warning', 'cash.clawed_back', { amount = FmtMoney(amount), mission = MissionLabel(row, bd) })
@@ -1016,6 +1273,7 @@ end
 
 -- Clawback: takes up to what was paid (minus what was taken back before) from an online officer. The increment of
 -- cash_reclaimed is the claim, so two clicks never take more than was paid; a refused or failed removal takes it back.
+-- One clawback per row at a time (backPending).
 function Cash.clawback(rowId, amount, audit)
     local row, bd = Clean(rowId)
     if not row then return false, bd end
@@ -1025,22 +1283,244 @@ function Cash.clawback(rowId, amount, audit)
     local left = math.floor(CP.U.num(row.cash_paid)) - math.floor(CP.U.num(row.cash_reclaimed))
     if not n or n < 1 then return false, 'err.invalid_amount' end
     if n > left then return false, 'err.clawback_too_much' end
+    local c = CashOf(bd)
     -- a feature reward paid as a money item (account 'item'): Qbox has no such account to take it from
-    if CashOf(bd).account == 'item' then return false, 'err.clawback_item' end
+    if c.account == 'item' then return false, 'err.clawback_item' end
+    if c.backPending ~= nil or c.giveBack == 'paying' then return false, 'err.payment_in_flight' end
     if not OnlineOf(row.citizenid) then return false, 'err.officer_offline' end
     local claimed = Update([[
-        UPDATE cp_mission_runs SET cash_reclaimed = cash_reclaimed + ?
+        UPDATE cp_mission_runs SET cash_reclaimed = cash_reclaimed + ?,
+            breakdown = JSON_SET(breakdown, '$.cash.backPending', ?, '$.cash.backStep', 'claimed')
         WHERE id = ? AND cash_status IN ('paid', 'capped') AND cash_reclaimed + ? <= cash_paid
-    ]], { n, rowId, n })
+          AND JSON_EXTRACT(breakdown, '$.cash') IS NOT NULL AND JSON_EXTRACT(breakdown, '$.cash.backPending') IS NULL
+    ]], { n, n, rowId, n })
     if claimed < 1 then return false, 'err.clawback_too_much' end
     if not Audited(audit, { amount = n, left = left - n }) then
-        TakeBackIncrement(rowId, n)
+        UndoBack(rowId, n, 'claimed')
         return false, 'err.audit_failed'
     end
     return RunLocked(row.citizenid, function() return ClawbackLocked(row, rowId, n) end, function()
-        TakeBackIncrement(rowId, n)
+        UndoBack(rowId, n, 'claimed')
     end)
 end
+
+-- ============================================================================
+--                                  FOLLOW-UPS
+-- ============================================================================
+-- PAY THE REST, CLAWBACK, GIVE-BACK LEFT PART WAY.
+-- A row whose cash_status is final can still carry an admin tool left part way: the rest of a capped payment
+-- (restPaid 'paying'), a clawback (backPending), or a give-back to the department (giveBack 'owed' or 'paying').
+-- Cash.followUpOf names it; stuckPayments lists it (kind) and Payments resolves it (resolveFollowUp).
+
+-- The same rows in SQL (on alias r): the Payments count and list read it.
+Cash.FOLLOW_UP_SQL = [[(JSON_VALUE(r.breakdown, '$.cash.restPaid') = 'paying'
+    OR JSON_EXTRACT(r.breakdown, '$.cash.backPending') IS NOT NULL
+    OR JSON_VALUE(r.breakdown, '$.cash.giveBack') IN ('owed', 'paying'))]]
+
+-- 'rest' | 'back' | 'giveBack' | nil
+function Cash.followUpOf(bd)
+    local c = type(bd) == 'table' and type(bd.cash) == 'table' and bd.cash or nil
+    if not c then return nil end
+    if c.restPaid == 'paying' then return 'rest' end
+    if c.backPending ~= nil then return 'back' end
+    if c.giveBack == 'owed' or c.giveBack == 'paying' then return 'giveBack' end
+    return nil
+end
+
+-- The amount a follow-up is about: the rest owed, the clawback held, the give-back owed.
+local function FollowUpAmount(row, bd, kind)
+    local c = CashOf(bd)
+    if kind == 'rest' then return math.max(0, AmountOf(row, bd) - math.floor(CP.U.num(row.cash_paid))) end
+    if kind == 'back' then return math.floor(Num(c.backPending, 0)) end
+    if kind == 'giveBack' then return math.floor(Num(c.backOwed, 0)) end
+    return 0
+end
+Cash.followUpAmount = FollowUpAmount
+
+-- What a follow-up's Resolve may do now: { outcome = true }. rest: 'restPaid' once a deposit was tried (adding,
+-- review, added); 'restRelease' unless the money reached the officer ('added'): with no step it only releases, at
+-- 'withdrawing' or 'refunding' (a department call cut part way) it only releases after the admin checked the
+-- department's history, and after a department withdrawal ('withdrawn', 'adding', 'review') it gives the department
+-- its money back first. back: 'backTaken' once RemoveMoney ran (removing), 'backUndone' always. giveBack: 'giveBack'
+-- (try the deposit now) and 'giveBackDone' (it arrived, no money moves).
+function Cash.followUpOutcomes(bd)
+    local kind = Cash.followUpOf(bd)
+    local c = CashOf(type(bd) == 'table' and bd or {})
+    if kind == 'rest' then
+        local st = c.restPaidStep
+        return {
+            restPaid = st == 'adding' or st == 'review' or st == 'added',
+            restRelease = st ~= 'added',
+        }
+    elseif kind == 'back' then
+        return { backTaken = c.backStep == 'removing', backUndone = true }
+    elseif kind == 'giveBack' then
+        return { giveBack = true, giveBackDone = true }
+    end
+    return {}
+end
+
+local function ResolveLocked(row, bd, rowId, outcome, amount)
+    local c = CashOf(bd)
+    if outcome == 'restPaid' then
+        local newPaid = math.floor(CP.U.num(row.cash_paid)) + amount
+        local n = Update([[
+            UPDATE cp_mission_runs SET cash_paid = ?,
+                breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paid', '$.cash.restAmount', ?, '$.cash.paid', ?,
+                    '$.cash.restResolved', 'marked')
+            WHERE id = ? AND cash_paid = ? AND JSON_VALUE(breakdown, '$.cash.restPaid') = 'paying'
+        ]], { newPaid, amount, newPaid, rowId, math.floor(CP.U.num(row.cash_paid)) })
+        if n < 1 then return false, 'err.state_changed' end
+        return true, { id = rowId, outcome = outcome, amount = amount, paid = newPaid }
+    elseif outcome == 'restRelease' then
+        local st = c.restPaidStep
+        -- the department paid (its account is kept on the row): it gets the rest back first
+        local refund = (st == 'withdrawn' or st == 'adding' or st == 'review') and c.restPaidAccount ~= nil
+        if st == nil or st == 'claimed' then
+            if not Release(rowId, 'restPaid', ' AND JSON_EXTRACT(breakdown, \'$.cash.restPaidStep\') IS NULL') then
+                return false, 'err.state_changed'
+            end
+        elseif refund then
+            if not MarkIf(rowId, { restPaidStep = 'refunding' }, 'restPaidStep', st) then
+                return false, 'err.state_changed'
+            end
+            if not RefundSociety(c.restPaidAccount, amount) then
+                MarkIf(rowId, { restPaidStep = st }, 'restPaidStep', 'refunding')
+                return false, 'err.payment_refund_failed'
+            end
+            if not Release(rowId, 'restPaid') then return false, 'err.state_changed' end
+        elseif st == 'added' or not Release(rowId, 'restPaid') then
+            -- 'withdrawing', 'refunding' (a department call cut part way: the admin checked its history) and a
+            -- server-paid rest: it only releases
+            return false, 'err.state_changed'
+        end
+        return true, { id = rowId, outcome = outcome, amount = amount }
+    elseif outcome == 'backUndone' then
+        if not UndoBack(rowId, amount, c.backStep) then return false, 'err.state_changed' end
+        return true, { id = rowId, outcome = outcome, amount = amount }
+    elseif outcome == 'backTaken' then
+        local n = math.floor(Num(c.backs, 0)) + 1
+        local dept = DeptOf(row.department)
+        local account = c.source == 'society' and (c.societyAccount or (dept and dept.societyAccount)) or nil
+        local owed = (c.giveBack == 'owed' and math.floor(Num(c.backOwed, 0)) or 0) + amount
+        if not BackDone(rowId, n, 'removing', account, owed) then return false, 'err.state_changed' end
+        local moneyAccount = c.account or (Config.Cash and Config.Cash.account) or 'bank'
+        if moneyAccount == 'bank' and CP.Banking and CP.Banking.recordWithdraw then
+            CP.Banking.recordWithdraw(row.citizenid, amount,
+                CP.L('cash.clawback_message', { mission = MissionLabel(row, bd) }),
+                dept and dept.label or tostring(row.department), row.citizenid, ('%s-back%d'):format(TxnOf(row), n))
+        end
+        local refunded = account ~= nil and GiveBackRow(rowId) == true
+        return true, { id = rowId, outcome = outcome, amount = amount, refunded = refunded }
+    elseif outcome == 'giveBack' then
+        if c.giveBack == 'paying' and not MarkIf(rowId, { giveBack = 'owed' }, 'giveBack', 'paying') then
+            return false, 'err.state_changed'
+        end
+        local ok, err = GiveBackRow(rowId)
+        if not ok then return false, err end
+        return true, { id = rowId, outcome = outcome, amount = amount }
+    elseif outcome == 'giveBackDone' then
+        local n = Update([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.giveBack', 'back',
+            '$.cash.backOwed', 0, '$.cash.backGiven', ?, '$.cash.giveBackResolved', 'marked')
+            WHERE id = ? AND JSON_VALUE(breakdown, '$.cash.giveBack') = ?]],
+            { math.floor(Num(c.backGiven, 0)) + amount, rowId, c.giveBack })
+        if n < 1 then return false, 'err.state_changed' end
+        return true, { id = rowId, outcome = outcome, amount = amount }
+    end
+    return false, 'err.invalid_payload'
+end
+
+-- Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the
+-- change under the officer's payment lock. -> ok, data | false, errKey
+function Cash.resolveFollowUp(rowId, outcome, audit)
+    local row, bd = Clean(rowId)
+    if not row then return false, bd end
+    rowId = math.floor(CP.U.num(row.id))
+    local kind = Cash.followUpOf(bd)
+    if not kind then return false, 'err.state_changed' end
+    if Cash.rowBusy(rowId, row.citizenid) then return false, 'err.payment_in_flight' end
+    if not Cash.followUpOutcomes(bd)[outcome] then return false, 'err.payment_step_unknown' end
+    local amount = FollowUpAmount(row, bd, kind)
+    if amount <= 0 and outcome ~= 'backUndone' then return false, 'err.nothing_to_pay' end
+    if
+        not Audited(audit, {
+            kind = kind,
+            outcome = outcome,
+            amount = amount,
+            step = CashOf(bd)[({
+                rest = 'restPaidStep',
+                back = 'backStep',
+                giveBack = 'giveBack',
+            })[kind]],
+        })
+    then
+        return false, 'err.audit_failed'
+    end
+    local st, a, b = payLock:run(row.citizenid, LOCK_WAIT_MS, ResolveLocked, row, bd, rowId, outcome, amount)
+    if st == 'busy' then return false, 'err.payment_in_flight' end
+    if st == 'error' then
+        CP.err(TAG, 'resolving row %d (%s) failed: %s', rowId, outcome, tostring(a))
+        return false, 'err.payment_raised'
+    end
+    return a, b
+end
+
+-- The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). -> n given back
+function Cash.retryGiveBacks()
+    CP.Db()
+    if PaymentsHeld() then return 0 end
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT id, citizenid FROM cp_mission_runs
+        WHERE cash_status IN ('paid', 'capped') AND JSON_VALUE(breakdown, '$.cash.giveBack') = 'owed' ORDER BY id
+    ]], {})
+    if not ok then
+        CP.err(TAG, 'the owed give-backs lookup failed: %s', tostring(rows))
+        return 0
+    end
+    local n = 0
+    for _, r in ipairs(rows or {}) do
+        local id = math.floor(CP.U.num(r.id))
+        local st, done = payLock:run(r.citizenid, LOCK_WAIT_MS, GiveBackRow, id)
+        if st == 'ok' and done == true then n = n + 1 end
+    end
+    if n > 0 then CP.log(TAG, 'gave %d owed clawback(s) back to their departments', n) end
+    return n
+end
+
+-- At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the
+-- tool can be used again: Pay again (again, again2), Pay the rest (restPaid) and a clawback still at 'claimed' (its
+-- increment taken back). Safe at any time: every later step of those tools is compare-and-set on the claim.
+local function ReleaseUnstarted()
+    CP.Db()
+    if PaymentsHeld() then return 0 end
+    local ok, rows = pcall(MySQL.query.await, [[
+        SELECT id, breakdown FROM cp_mission_runs
+        WHERE cash_status IN ('paying', 'paid', 'capped')
+          AND (JSON_VALUE(breakdown, '$.cash.again') = 'paying' OR JSON_VALUE(breakdown, '$.cash.again2') = 'paying'
+               OR JSON_VALUE(breakdown, '$.cash.restPaid') = 'paying'
+               OR JSON_VALUE(breakdown, '$.cash.backStep') = 'claimed')
+        ORDER BY id
+    ]], {})
+    if not ok then
+        CP.err(TAG, 'the start-up release of cut admin claims failed: %s', tostring(rows))
+        return 0
+    end
+    local n = 0
+    local NO_STEP = ' AND JSON_EXTRACT(breakdown, \'$.cash.%sStep\') IS NULL'
+    for _, r in ipairs(rows or {}) do
+        local id = math.floor(CP.U.num(r.id))
+        local c = CashOf(CP.U.jsonField(r.breakdown) or {})
+        for _, key in ipairs({ 'again2', 'again', 'restPaid' }) do
+            if c[key] == 'paying' and c[key .. 'Step'] == nil and Release(id, key, NO_STEP:format(key)) then
+                n = n + 1
+            end
+        end
+        if c.backStep == 'claimed' and UndoBack(id, math.floor(Num(c.backPending, 0)), 'claimed') then n = n + 1 end
+    end
+    if n > 0 then CP.warn(TAG, 'released %d admin payment claim(s) cut before any money moved', n) end
+    return n
+end
+Cash._releaseUnstarted = ReleaseUnstarted
 
 -- ============================================================================
 --                      STATUS CHANGES THAT MOVE NO MONEY
@@ -1179,10 +1659,10 @@ end
 function Cash.stuckPayments()
     CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[
-        SELECT r.id, r.run_uuid, r.citizenid, r.mission_id, r.department, r.cash_base, r.cash_multiplier, r.breakdown,
-               UNIX_TIMESTAMP(r.created_at) AS created_ts, o.display_name
+        SELECT r.id, r.run_uuid, r.citizenid, r.mission_id, r.department, r.cash_status, r.cash_base, r.cash_multiplier,
+               r.cash_paid, r.breakdown, UNIX_TIMESTAMP(r.created_at) AS created_ts, o.display_name
         FROM cp_mission_runs r LEFT JOIN cp_officers o ON o.citizenid = r.citizenid
-        WHERE r.cash_status = 'paying'
+        WHERE r.cash_status = 'paying' OR (r.cash_status IN ('paid', 'capped') AND ]] .. Cash.FOLLOW_UP_SQL .. [[)
         ORDER BY r.created_at, r.id
     ]], {})
     if not ok then
@@ -1194,7 +1674,10 @@ function Cash.stuckPayments()
         local id = math.floor(CP.U.num(r.id))
         if not rowLock:held(id) then
             local bd = CP.U.jsonField(r.breakdown)
+            local kind = r.cash_status == 'paying' and 'pay' or Cash.followUpOf(bd)
             out[#out + 1] = {
+                kind = kind,
+                followUpAmount = kind ~= 'pay' and FollowUpAmount(r, bd or {}, kind) or nil,
                 id = id,
                 runUuid = r.run_uuid,
                 citizenid = r.citizenid,
@@ -1267,6 +1750,9 @@ CreateThread(function()
     if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
     while true do
         RunForfeiture()
+        -- The clawbacks a department is still owed, tried again
+        local okG, errG = pcall(Cash.retryGiveBacks)
+        if not okG then CP.err(TAG, 'the owed give-backs retry failed: %s', tostring(errG)) end
         nextForfeitAt = os.time() + FORFEIT_EVERY_MS // 1000
         Wait(FORFEIT_EVERY_MS)
     end
@@ -1298,6 +1784,9 @@ end
 
 CreateThread(function()
     Wait(STARTUP_SWEEP_MS)
+    -- Admin claims a restart cut before any money moved are released first
+    local okR, errR = pcall(ReleaseUnstarted)
+    if not okR then CP.err(TAG, 'the start-up release of cut admin claims failed: %s', tostring(errR)) end
     local ok, err = pcall(StartupSweep)
     if not ok then CP.err(TAG, 'pending payments sweep at start failed: %s', tostring(err)) end
 end)

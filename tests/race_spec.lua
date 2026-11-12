@@ -592,10 +592,26 @@ do
         label = 'Pay the rest of a capped payment, two admins',
         switches = true,
         one = true,
-        -- H0 finding, not fixed yet: a cut after the claim (breakdown.cash.restPaid = 'paying') and before the money
-        -- leaves the marker, so Pay the rest is refused from then on, and Payments has no Resolve for it (Resolve is
-        -- for cash_status 'paying'). The switch ships off (Config.Cash.allowCapTopUp).
-        cutKnown = { ['err.state_changed'] = 'Pay the rest left claimed by a cut: no Resolve for it in Payments' },
+        -- H3: a cut after the claim (breakdown.cash.restPaid = 'paying') and before the first money call is released
+        -- by the start-up sweep (15 s after the start), so the second copy is sent after it; a cut inside a money
+        -- call leaves the claim with its step marker, listed in Payments for a Resolve (Mark the rest paid, Release)
+        afterRestart = function()
+            Secs(11)
+            local r = H.sql('SELECT breakdown FROM cp_mission_runs WHERE id = ?', { cur.row })[1]
+            local c = (r and cjson.decode(r.breakdown) or {}).cash or {}
+            if c.restPaid == 'paying' then
+                local listed = false
+                for _, p in ipairs(CP.Cash.stuckPayments()) do
+                    if p.id == cur.row and p.kind == 'rest' then listed = true end
+                end
+                H.ok(
+                    c.restPaidStep ~= nil and listed,
+                    'Pay the rest left by a cut inside a money call is listed for a Resolve: '
+                        .. tostring(c.restPaidStep)
+                )
+            end
+        end,
+        cutRefusals = { 'err.state_changed' },
         setup = function() cur.row = Row({ cid = CID[1], owed = 500, paid = 300, status = 'capped' }) end,
         effect = function()
             return {
@@ -635,12 +651,15 @@ do
         label = 'Cancel a pending payment, two admins',
         one = true,
         setup = function() cur.row = Row({ cid = CID[2], dept = 'fib', owed = 90 }) end,
+        -- H3: the audit row is written first (the intent), so a cut between it and the change may leave an intent
+        -- row with no change; what must never happen is a cancel with no audit row (unaudited)
         effect = function()
-            return {
-                cancelled = Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE id = ?
-                AND cash_status NOT IN ('pending')]], { cur.row }),
-                audit = Audits('paymentCancel'),
-            }
+            local cancelled = Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE id = ?
+                AND cash_status NOT IN ('pending')]], { cur.row })
+            local audits = Count(
+                [[SELECT COUNT(*) AS n FROM cp_audit WHERE action = 'paymentCancel' AND target LIKE ?]],
+                { ('#%d %%'):format(cur.row) })
+            return { cancelled = cancelled, unaudited = (cancelled > 0 and audits == 0) and 1 or 0 }
         end,
         a = a,
         b = b,

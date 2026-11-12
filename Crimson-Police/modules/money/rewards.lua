@@ -1171,8 +1171,11 @@ function Rewards.takeBack(id, audit)
                 Update('UPDATE cp_item_rewards SET status = \'given\' WHERE id = ? AND status = \'forfeited\'', { id })
                 return { false, 'err.reward_not_in_inventory' }
             end
+            -- Only part came back: a second audit row says how many (the first one named the whole count), and
+            -- the reply says what the officer still holds
+            if type(audit) == 'function' then pcall(audit, { count = need, taken = need - left }) end
         end
-        return { true, { id = id, status = 'forfeited', taken = need - left } }
+        return { true, { id = id, status = 'forfeited', taken = need - left, left = left > 0 and left or nil } }
     end)
     if not res then return false, 'err.internal' end
     if res[1] then
@@ -1447,6 +1450,11 @@ if CP.AdminKit and CP.AdminKit.action then
         local id = ToId(ctx.payload.id)
         if not id then return false, 'err.invalid_payload' end
         return Rewards.takeBack(id, function(info)
+            -- A partial removal writes a second row: old the count asked for, new what was taken
+            if info.taken then
+                return ctx.audit('rewardTakeBack', RewardTarget(id), ('-%d'):format(info.count or 0),
+                    ('partial:-%d'):format(info.taken))
+            end
             return ctx.audit('rewardTakeBack', RewardTarget(id), 'given', ('-%d'):format(info.count or 0))
         end)
     end, {

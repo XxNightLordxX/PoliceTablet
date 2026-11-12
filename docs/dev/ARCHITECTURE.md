@@ -1423,6 +1423,17 @@ Points, streaks, XP and badges.
   `nextForfeitureAt()`.
 - Admin money tools (§5.40), each `-> ok, data | false, errKey`; claim first, then `audit(info)` (false: the claim is
   undone, `err.audit_failed`), then the money under the officer's payment lock, then the final state.
+- H3, what a money call did: an intent marker is written (and checked) before each money call (`step` `withdrawing`,
+  `adding`; Pay again and Pay the rest `<key>Step`, compare-and-set on their claim). A call that raised (Qbox
+  `false, 'error'`, the banking adapter's `false, 'error'`) is decided from the balance read right before and after
+  it: changed by the amount = done, unchanged = refused, else `review` (left for an admin, never refunded blind).
+  Pay again refuses `withdrawing`, `adding`, `review` (`err.payment_step_unknown`) and resumes a Pay again left at
+  `againStep = 'withdrawn'` with the deposit only (`again2`).
+- H3 follow-ups on paid/capped rows: `restPaid = 'paying'`, a clawback's `backPending`/`backStep` (`claimed` →
+  `removing`), a give-back's `giveBack` (`owed` → `paying` → `back`, `backOwed`, `backAccount`). `followUpOf(bd)`,
+  `FOLLOW_UP_SQL`, `followUpOutcomes(bd)`, `resolveFollowUp(rowId, outcome, audit)`; `stuckPayments()` lists them
+  (`kind`), `retryGiveBacks()` runs at the start and every 10 min, and the start-up sweep releases claims no money call
+  started (`_releaseUnstarted`).
 
 ### 5.20a CP.Money — modules/money/engine.lua (S; one money engine)
 Every payment (mission cash, §5.52, §5.40) is written (`writeRow`), handed to CP.Cash (`settle`) and deposited
@@ -2747,8 +2758,8 @@ Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11)
 `none` → (Completed, not flagged) claim `paying` → `paid` | `capped` | `unfunded`.
 
 Admin transitions (full admin control, §5.20, §5.40; the money ones ship off behind `Config.Cash.allow*`): `paying` →
-`paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` → `withdrawn` →
-`added`).
+`paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` →
+`withdrawing` → `withdrawn` → `adding` → `added`, or `review` when a raised call left no telling; H3).
 
 ---
 

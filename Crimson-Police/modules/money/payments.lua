@@ -131,6 +131,9 @@ local function View(r)
         step = type(c.step) == 'string' and c.step or nil,
         restPaid = type(c.restPaid) == 'string' and c.restPaid or nil,
         again = type(c.again) == 'string' and c.again or nil,
+        -- An admin money tool left part way on a paid or capped row ('rest', 'back', 'giveBack'): Resolve
+        followUp = (status == 'paid' or status == 'capped') and CP.Cash and CP.Cash.followUpOf and CP.Cash.followUpOf(
+            bd) or nil,
         voided = U.truthy(r.voided),
         flagged = U.truthy(r.flagged),
         busy = CP.Cash and CP.Cash.rowBusy and CP.Cash.rowBusy(id, r.citizenid) or false,
@@ -146,7 +149,13 @@ local function Where(args)
     if args.status ~= nil and args.status ~= '' and args.status ~= 'all' then
         local st = args.status == 'stuck' and 'paying' or args.status
         if not STATUS_SET[st] then return nil, 'err.invalid_filter' end
-        parts[#parts + 1] = 'r.cash_status = ?'
+        local follow = CP.Cash and CP.Cash.FOLLOW_UP_SQL
+        if args.status == 'stuck' and follow then
+            -- 'stuck' is every row the Payments count counts: 'paying' and the follow-ups
+            parts[#parts + 1] = '(r.cash_status = ? OR (r.cash_status IN (\'paid\', \'capped\') AND ' .. follow .. '))'
+        else
+            parts[#parts + 1] = 'r.cash_status = ?'
+        end
         params[#params + 1] = st
     end
     if args.department ~= nil and args.department ~= '' then
@@ -368,12 +377,18 @@ function Payments.export(args)
     return { csv = Payments.csv(list), rows = #list, truncated = #rows > EXPORT_MAX }
 end
 
--- Stuck payments ('paying') for the sidebar badge, read at most every 30 s.
+-- Stuck payments ('paying', and the follow-ups) for the sidebar badge, read at most every 30 s.
 function Payments.stuckCount()
     local now = os.time()
     if navCache.at >= 0 and now - navCache.at < NAV_CACHE_S then return navCache.n end
     CP.Db()
-    local n = Scalar('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE cash_status = \'paying\'', {})
+    -- And the rows an admin money tool left part way (CP.Cash.FOLLOW_UP_SQL: Pay the rest, a clawback, a give-back)
+    local follow = CP.Cash and CP.Cash.FOLLOW_UP_SQL
+    local n = Scalar(
+        'SELECT COUNT(*) AS n FROM cp_mission_runs r WHERE r.cash_status = \'paying\''
+            .. (follow and (' OR (r.cash_status IN (\'paid\', \'capped\') AND ' .. follow .. ')') or ''),
+        {}
+    )
     navCache = { at = now, n = math.floor(U.num(n)) }
     return navCache.n
 end
@@ -642,6 +657,14 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
         busy = v.busy,
         online = CP.srcOf(row.citizenid) ~= nil,
         payAgain = Switch('allowPayAgain'),
+        -- A follow-up (Pay the rest, a clawback, a give-back left part way): its kind, amount, step and the
+        -- outcomes its Resolve offers now
+        followUp = v.followUp,
+        followUpAmount = v.followUp and CP.Cash.followUpAmount(row, bd, v.followUp) or nil,
+        followUpStep = v.followUp
+                and (v.followUp == 'rest' and c.restPaidStep or v.followUp == 'back' and c.backStep or c.giveBack)
+            or nil,
+        outcomes = v.followUp and CP.Cash.followUpOutcomes(bd) or nil,
     }
 end, { rate = 2 })
 
@@ -718,6 +741,16 @@ local function OffSwitch(name) if not Switch(name) then return 'err.money_tool_o
 --                      RESOLVE A PAYMENT LEFT IN 'PAYING'
 -- ============================================================================
 
+-- The outcomes of a follow-up's Resolve (CP.Cash.resolveFollowUp); the ones that move money ask for the amount
+local FOLLOW_UP_OUTCOMES = {
+    restPaid = 'none',
+    restRelease = 'none',
+    backTaken = 'none',
+    backUndone = 'none',
+    giveBack = 'amount',
+    giveBackDone = 'none',
+}
+
 Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
     local p = ctx.payload
     local row = RowById(p.rowId)
@@ -735,9 +768,22 @@ Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
         local off = OffSwitch('allowPayAgain')
         if off then return false, off end
         if p.checked ~= true then return false, 'err.check_first' end
-        local ok, data = CP.Cash.payAgain(id, AuditFn(ctx, 'paymentPayAgain', id, cid, function(i)
-            return ('paying:%s'):format(i.step or 'unknown')
-        end, function(i) return ('%d%s'):format(i.amount or 0, i.withdraw and ':withdraw' or '') end))
+        local ok, data = CP.Cash.payAgain(
+            id,
+            AuditFn(ctx, 'paymentPayAgain', id, cid, function(i)
+                return ('paying:%s'):format(i.step or 'unknown')
+            end, function(i)
+                return ('%d%s%s'):format(i.amount or 0, i.withdraw and ':withdraw' or '', i.resume and ':resume' or '')
+            end)
+        )
+        if not ok then return false, data end
+        Touched(ctx, cid)
+        return true, data
+    elseif FOLLOW_UP_OUTCOMES[p.outcome] then
+        -- A follow-up: audited first ('paymentResolve', old '<kind>:<step>', new '<outcome>:<amount>')
+        local ok, data = CP.Cash.resolveFollowUp(id, p.outcome, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
+            return ('%s:%s'):format(i.kind or '?', tostring(i.step or 'claimed'))
+        end, function(i) return ('%s:%d'):format(i.outcome or '?', i.amount or 0) end))
         if not ok then return false, data end
         Touched(ctx, cid)
         return true, data
@@ -747,11 +793,16 @@ end, {
     requestId = true,
     reason = true,
     confirm = function(p)
-        if p.outcome ~= 'payAgain' then return nil end
+        local money = p.outcome == 'payAgain' or FOLLOW_UP_OUTCOMES[p.outcome] == 'amount'
+        if not money then return nil end
         local row = RowById(p.rowId)
         if not row then return nil end
         local bd = U.jsonField(row.breakdown) or {}
         local c = type(bd.cash) == 'table' and bd.cash or {}
+        if p.outcome ~= 'payAgain' then
+            local kind = CP.Cash.followUpOf(bd)
+            return kind and tostring(CP.Cash.followUpAmount(row, bd, kind)) or nil
+        end
         return tostring(c.payAmount and math.floor(Num(c.payAmount, 0)) or Owed(row))
     end,
     self = SelfOfRow,
@@ -776,14 +827,18 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     -- Z14: a flagged or voided row is never paid (CP.Cash.pay refuses it): no audit row, no "paid" toast
     if U.truthy(row.flagged) or U.truthy(row.voided) then return false, 'err.state_changed' end
     local id = math.floor(U.num(row.id))
+    -- The intent row first (no audit row, no money), the outcome in a second row
+    if not ctx.audit('paymentRetry', Target(id, row.citizenid), st, 'paying') then return false, 'err.audit_failed' end
     local status = CP.Cash.pay(id)
-    ctx.audit('paymentRetry', Target(id, row.citizenid), st, tostring(status or st))
+    ctx.audit('paymentRetry', Target(id, row.citizenid), 'paying', tostring(status or st))
     local online = CP.srcOf(row.citizenid) ~= nil
     Touched(ctx, row.citizenid)
     return true, { id = id, status = status or st, online = online == true }
 end, { requestId = true, rate = 2 })
 
 Kit.action('server:admin:retryPending', 'payments', function(ctx)
+    -- The intent row first (no audit row, no money), the outcome in a second row
+    if not ctx.audit('paymentRetry', 'online', nil, 'paying') then return false, 'err.audit_failed' end
     local paid, officers = 0, 0
     if CP.Qbx and CP.Qbx.getOnlinePlayers then
         for _, s in ipairs(CP.Qbx.getOnlinePlayers()) do
@@ -791,7 +846,7 @@ Kit.action('server:admin:retryPending', 'payments', function(ctx)
             paid = paid + (CP.Cash.payPending(s) or 0)
         end
     end
-    ctx.audit('paymentRetry', 'online', nil, ('%d paid'):format(paid))
+    ctx.audit('paymentRetry', 'online', 'paying', ('%d paid'):format(paid))
     Touched(ctx, nil)
     return true, { paid = paid, officers = officers }
 end, { requestId = true, rate = 2 })
@@ -903,29 +958,48 @@ end, { requestId = true, reason = true, confirm = OwedWord, self = SelfOfRow })
 --                         FORFEIT NOW, CANCEL PAYMENT
 -- ============================================================================
 
+-- One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its
+-- audit row (the intent row comes first, so a second admin must never write one for a change that can't happen)
+local function OneRow(ctx) return ctx.payload and tostring(ctx.payload.rowId) or nil end
+local function Forfeitable(row) return row.cash_status == 'held' or row.cash_status == 'pending' end
+
 Kit.action('server:admin:forfeitNow', 'payments', function(ctx)
     local row = RowById(ctx.payload.rowId)
     if not row then return false, 'err.row_not_found' end
+    if not Forfeitable(row) then return false, 'err.state_changed' end
     local id, cid = math.floor(U.num(row.id)), row.citizenid
+    -- Audited first; a failed audit row changes nothing
+    if not ctx.audit('paymentForfeit', Target(id, cid), row.cash_status, 'forfeited') then
+        return false, 'err.audit_failed'
+    end
     local ok, err = CP.Cash.adminForfeit(id, 'voided')
-    if not ok then return false, err end
-    ctx.audit('paymentForfeit', Target(id, cid), row.cash_status, 'forfeited')
+    if not ok then
+        ctx.audit('paymentForfeit', Target(id, cid), 'forfeited', 'refused:' .. tostring(err))
+        return false, err
+    end
     ctx.notify(cid, 'warning', 'payments.toast.forfeited', { amount = Money(Owed(row)) })
     Touched(ctx, cid)
     return true, { id = id, status = 'forfeited' }
-end, { reason = true, self = SelfOfRow })
+end, { reason = true, self = SelfOfRow, oneAtATime = OneRow })
 
 Kit.action('server:admin:cancelPayment', 'payments', function(ctx)
     local row = RowById(ctx.payload.rowId)
     if not row then return false, 'err.row_not_found' end
+    if not Forfeitable(row) then return false, 'err.state_changed' end
     local id, cid = math.floor(U.num(row.id)), row.citizenid
+    -- Audited first; a failed audit row changes nothing
+    if not ctx.audit('paymentCancel', Target(id, cid), row.cash_status, 'forfeited') then
+        return false, 'err.audit_failed'
+    end
     local ok, err = CP.Cash.adminForfeit(id, 'cancel')
-    if not ok then return false, err end
-    ctx.audit('paymentCancel', Target(id, cid), row.cash_status, 'forfeited')
+    if not ok then
+        ctx.audit('paymentCancel', Target(id, cid), 'forfeited', 'refused:' .. tostring(err))
+        return false, err
+    end
     ctx.notify(cid, 'warning', 'payments.toast.cancelled', { amount = Money(Owed(row)) })
     Touched(ctx, cid)
     return true, { id = id, status = 'forfeited' }
-end, { reason = true, confirm = OwedWord, self = SelfOfRow })
+end, { reason = true, confirm = OwedWord, self = SelfOfRow, oneAtATime = OneRow })
 
 -- ============================================================================
 --                   TAKE PAID CASH BACK (SWITCH, SHIPS OFF)
@@ -1058,16 +1132,28 @@ Kit.action('server:admin:addDepartmentFunds', 'deptFunds', function(ctx)
         Update('UPDATE cp_dept_funding SET state = \'failed\' WHERE id = ? AND state = \'pending\'', { fundId })
         return false, 'err.audit_failed'
     end
-    local ok = CP.Banking and CP.Banking.depositSociety and CP.Banking.depositSociety(dept.societyAccount, amount)
-    if ok ~= true then
+    -- 'depositing' right before the deposit: a 'pending' row never reached it (the start-up sweep fails it), a
+    -- 'depositing' row left by a cut or a raise with no telling waits for an admin (Department funds)
+    if Update('UPDATE cp_dept_funding SET state = \'depositing\' WHERE id = ? AND state = \'pending\'', { fundId })
+        ~= 1 then
         Update('UPDATE cp_dept_funding SET state = \'failed\' WHERE id = ? AND state = \'pending\'', { fundId })
+        return false, 'err.fund_failed'
+    end
+    local got = CP.Cash.societyCall('depositSociety', dept.societyAccount, amount, 1)
+    if got == 'unknown' then
+        CP.err(TAG, 'funding %d: the deposit into %s raised and its balance does not tell; it waits for an admin',
+            fundId, tostring(dept.societyAccount))
+        return false, 'err.payment_raised'
+    end
+    if got ~= 'done' then
+        Update('UPDATE cp_dept_funding SET state = \'failed\' WHERE id = ? AND state = \'depositing\'', { fundId })
         return false, 'err.fund_failed'
     end
     if CP.Banking.recordSocietyDeposit then
         CP.Banking.recordSocietyDeposit(dept.societyAccount, amount, CP.L('payments.fund_message'),
             CP.L('payments.fund_issuer'), dept.label or p.department, txn)
     end
-    Update('UPDATE cp_dept_funding SET state = \'done\' WHERE id = ? AND state = \'pending\'', { fundId })
+    Update('UPDATE cp_dept_funding SET state = \'done\' WHERE id = ? AND state = \'depositing\'', { fundId })
     return true, { id = fundId, txn = txn, amount = amount }
 end, {
     requestId = true,
@@ -1098,7 +1184,25 @@ CreateThread(function()
     end
 end)
 
+-- A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before
+-- it): failed at the start, so it is never mistaken for one that may have arrived ('depositing' waits for an admin).
+local function FailUnstartedFunding()
+    CP.Db()
+    local n = Update([[UPDATE cp_dept_funding SET state = 'failed'
+        WHERE state = 'pending' AND created_at < FROM_UNIXTIME(?)]], { Now() - 60 })
+    if (n or 0) > 0 then CP.warn(TAG, '%d department funding row(s) cut before the deposit: failed', n) end
+    return n or 0
+end
+
+CreateThread(function()
+    Wait(15000)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
+    local ok, err = pcall(FailUnstartedFunding)
+    if not ok then CP.err(TAG, 'the start-up check of department funding failed: %s', tostring(err)) end
+end)
+
 -- Test hooks (not part of the contract).
 Payments._where = Where
 Payments._unfundedSet = UnfundedSet
 Payments._resetNav = function() navCache = { at = -1, n = 0 } end
+Payments._failUnstartedFunding = FailUnstartedFunding

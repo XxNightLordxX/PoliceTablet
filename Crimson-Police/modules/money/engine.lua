@@ -121,9 +121,12 @@ end
 
 -- One manual award ledger row (out of the run counts, goals, streaks and the draw by the existing filters), written
 -- as 'none', which no login payment and no Pay now picks up: settle hands it to CP.Cash once it is audited.
+-- spec.status = 'pending' (a feature reward, whose audit is no gate): written payable at once, so a restart
+-- between the insert and the pay leaves a row the login and start-up sweeps pay.
 function Money.writeRow(spec)
     local amount = math.max(0, math.floor(Num(spec.amount, 0)))
-    local cash = { B = amount, mTier = 1.0, mMod = 1.0, amount = amount, status = 'none' }
+    local status = spec.status == 'pending' and amount > 0 and 'pending' or 'none'
+    local cash = { B = amount, mTier = 1.0, mMod = 1.0, amount = amount, status = status }
     for k, v in pairs(type(spec.cash) == 'table' and spec.cash or {}) do cash[k] = v end
     local bd = {
         runId = spec.runUuid,
@@ -150,7 +153,7 @@ function Money.writeRow(spec)
             departments_n, tier, state, end_reason, points_base, bonus_points, penalty_points, final_points, cash_base,
             cash_multiplier, cash_paid, cash_status, duration_s, breakdown, flagged, voided, created_at)
         VALUES (?, 'manual_award', ?, ?, ?, NULLIF(?, 0), 1, 1, 'standard', 'completed', 'completed', 0, 0, 0, 0, ?,
-            1.00, 0, 'none', 0, ?, 0, 0, FROM_UNIXTIME(?))
+            1.00, 0, ?, 0, ?, 0, 0, FROM_UNIXTIME(?))
     ]], {
         spec.runUuid,
         U.clip(spec.missionId, 40),
@@ -158,6 +161,7 @@ function Money.writeRow(spec)
         U.clip(spec.department or 'unknown', 32),
         spec.seasonId or Money.seasonId() or 0,
         amount,
+        status,
         okJ and js or '{}',
         CP.now(),
     })

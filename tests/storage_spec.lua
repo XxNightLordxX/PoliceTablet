@@ -997,7 +997,8 @@ print('%d %.3f' % (len(paths), total * 1000))
     for _, w in ipairs(written) do
         if not w.path:find('mission_calls', 1, true) then own = own + 1 end
     end
-    H.ok(own <= 8, ('one finished run writes %d documents'):format(own))
+    -- (9 since H3: the payment's intent marker 'adding' is saved before the deposit, one write more)
+    H.ok(own <= 9, ('one finished run writes %d documents'):format(own))
 end
 
 -- start-up: a new engine loads the whole saves folder
