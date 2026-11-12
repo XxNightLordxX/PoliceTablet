@@ -358,7 +358,7 @@ do
     H.eq(PaidTo(cid), before + 1, 'one payment')
     local line = H.sql('SELECT id FROM cp_audit WHERE action = ? AND target LIKE ?',
         { 'paymentRetry', '#' .. id .. ' %' })
-    H.eq(#line, 1, 'the payment is in the audit log')
+    H.eq(#line, 2, 'the payment is in the audit log (H3: its intent row, then its outcome row)')
 
     for _ = 1, 3 do H.step(1000) end
     local pv = Cb('admin:previewRestore', ADMIN, { name = b.name })
@@ -373,8 +373,8 @@ do
     H.ok(okR == true and type(rr) == 'table' and rr.restart == true,
         'restored, and the owner is asked to restart: ' .. tostring(type(rr) == 'table' and rr.backup or rr))
     H.eq(RowOf(id).cash_status, 'paid', 'the row paid after the backup stays paid')
-    H.eq(#H.sql('SELECT id FROM cp_audit WHERE action = ? AND target LIKE ?', { 'paymentRetry', '#' .. id .. ' %' }), 1,
-        'the audit log still has the payment line')
+    H.eq(#H.sql('SELECT id FROM cp_audit WHERE action = ? AND target LIKE ?', { 'paymentRetry', '#' .. id .. ' %' }), 2,
+        'the audit log still has the payment lines')
     X.async(function() return CP.Cash.payPending(7) end)
     H.eq(PaidTo(cid), before + 1, 'nothing pays twice (the restore lock holds payments, and the row is paid)')
     H.eq(EntriesFor(Txn(RowOf(id))), 1, 'one bank entry for it')

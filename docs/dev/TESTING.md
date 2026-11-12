@@ -397,7 +397,12 @@ registers only while its feature is on is listed only while it ships on.
 `tests/race_spec.lua` cuts each client action by a restart after its queries ("cut after query n"), and
 `tests/crash_matrix_spec.lua` does the same to what the server does by itself: a Beat Patrol's end and payout, and
 the pay of a pending payment at login. After each cut the server starts again, the catch-ups run and the officer
-logs in again; a failure names the cut (`patrol cut after await 6 of 25: paid at most once (2 payments)`).
+logs in again; a failure names the cut (`patrol cut after await 6 of 25: paid at most once (2 payments)`). H3 added a
+feature reward, Pay again, a clawback and Pay the rest with the society source on, each checked for the money
+invariants: the department's debits minus refunds equal what reached the officer (or the row says the department
+paid and is listed for an admin), what a clawback took equals what the row holds and what the department got back or
+is owed, never two deposits, and no admin claim left that no step marker explains. The other admin money tools
+(manual cash, Add funds, Pay now, Retry pending, Cancel payment) are cut in `tests/race_spec.lua`.
 
 In `tests/race_spec.lua` a cut that leaves no effect while the second copy is refused fails (`a cut leaves nothing
 that blocks a new try`) unless the case lists that refusal in `cutRefusals` (right by design: a request id sent

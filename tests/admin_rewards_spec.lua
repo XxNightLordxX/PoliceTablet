@@ -269,6 +269,23 @@ do
     ok, e = Act('server:admin:takeBackReward', 1, { id = g2, reason = 'x', confirm = 'water', requestId = Rid() })
     H.eq(e, 'err.officer_offline', 'the officer must be online')
     people[7].offline = nil
+    -- H3: only part of it comes back (one of two slots refuses): a second audit row says how many, the reply what is left
+    local g3 = Reward({ status = 'given', item = 'water', count = 2 })
+    Holding(7, 'water', 1, g3)
+    Holding(7, 'water', 1, g3)
+    local lastSlot = #inv.slots[7]
+    local realRemove = H.exportsMock.ox_inventory.RemoveItem
+    H.exportsMock.ox_inventory.RemoveItem = function(src, item, count, meta, slot)
+        if slot == lastSlot then return false end
+        return realRemove(src, item, count, meta, slot)
+    end
+    ok, e = Act('server:admin:takeBackReward', 1, { id = g3, reason = 'x', confirm = 'water', requestId = Rid() })
+    H.exportsMock.ox_inventory.RemoveItem = realRemove
+    local partial = H.sql([[SELECT old_value, new_value FROM cp_audit WHERE action = 'rewardTakeBack' AND target = ?
+        ORDER BY id]], { ('reward #%d'):format(g3) })
+    H.ok(ok and e.taken == 1 and e.left == 1, 'H3: a partial take back says one is left: ' .. tostring(e))
+    H.ok(#partial == 2 and tostring(partial[2].old_value) == '-2' and partial[2].new_value == 'partial:-1',
+        'H3: and its second audit row records what was taken: ' .. require('cjson').encode(partial))
     Config.Rewards.allowTakeBack = false
 end
 

@@ -43,12 +43,15 @@ const rows: PaymentRow[] = Array.from({ length: 70 }, (_, i) => {
         status,
         owed,
         paid,
-        reclaimed: 0,
-        cut: status === 'capped' ? owed - paid : 0,
+        cut: status === 'capped' && i !== 3 ? owed - paid : 0,
         txn: `CP-9c1e${i.toString().padStart(4, '0')}-${o.citizenid}`,
         account: 'bank',
         source: 'society',
         step: status === 'paying' ? 'withdrawn' : status === 'paid' ? 'added' : null,
+        // One capped row whose rest was left part way, one paid row whose clawback give-back is owed
+        restPaid: i === 3 ? 'paying' : null,
+        followUp: i === 3 ? 'rest' : i === 9 ? 'giveBack' : null,
+        reclaimed: i === 9 ? 50 : 0,
         voided: status === 'held' && i % 2 === 0,
         flagged: false,
         busy: false,
@@ -191,12 +194,26 @@ registerMock('request', 'admin:checkBankingTxn', (args: unknown): BankingCheck =
         busy: false,
         online: true,
         payAgain: MONEY,
+        followUp: r.followUp ?? null,
+        followUpAmount: r.followUp === 'rest' ? r.owed - r.paid : r.followUp === 'giveBack' ? r.reclaimed : null,
+        followUpStep: r.followUp === 'rest' ? 'withdrawn' : r.followUp === 'giveBack' ? 'owed' : null,
+        outcomes:
+            r.followUp === 'rest'
+                ? { restPaid: false, restRelease: true }
+                : r.followUp === 'giveBack'
+                  ? { giveBack: true, giveBackDone: true }
+                  : null,
     };
 });
 
 registerMock('action', 'server:admin:resolvePayment', (p: { outcome?: string; checked?: boolean }) => {
     const r = byId(p);
     needReason(p);
+    if (r.followUp && p.outcome !== 'paid' && p.outcome !== 'payAgain') {
+        r.followUp = null;
+        r.restPaid = null;
+        return { id: r.id, outcome: p.outcome };
+    }
     if (r.status !== 'paying') throw new Error('err.state_changed');
     if (p.outcome === 'payAgain') {
         needSwitch();

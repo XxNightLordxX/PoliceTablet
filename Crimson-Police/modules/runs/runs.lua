@@ -3249,7 +3249,7 @@ local function Settle(run, p, result, endReason, others)
         cash_paid = 0,
         cash_status = status,
         duration_s = CP.Int(duration, 0, 32767),
-        breakdown = okJ and breakdownJson or nil,
+        breakdown = okJ and breakdownJson or '{}',
         flagged = flag and 1 or 0,
         flag_reason = flag and U.clip(tostring(flag.reason or 'flagged'), 64) or nil,
         location_index = run.locationIndex and CP.Int(run.locationIndex, -128, 127) or nil,

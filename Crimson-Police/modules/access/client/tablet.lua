@@ -854,6 +854,13 @@ RegisterNUICallback('request', function(body, cb)
             CP.err(TAG, 'request %s failed: %s', body.name, tostring(res))
             res = { ok = false, error = 'err.internal' }
         end
+        -- the NUI's own getSession (refreshSession, e.g. after a look change) is the session Lua keeps too, so the
+        -- next theme message ('options:changed', 'ready', Dispatch) sends the new look
+        if body.name == 'getSession' and type(res) == 'table' and res.ok and type(res.data) == 'table' and state.open
+            and res.data.ui == state.ui then
+            state.session = res.data
+            if CP.Access and CP.Access.setSession then CP.Access.setSession(res.data) end
+        end
         Reply(cb, res)
     end)
 end)

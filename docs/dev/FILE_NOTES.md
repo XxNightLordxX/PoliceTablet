@@ -666,6 +666,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/saved_cases_spec.lua`: Real-suspect data survives a restart.
 - `tests/search_area_director_spec.lua`: Manhunt through the spawn director (Config.Spawning) on the real engine, the real search_area block and the
 - `tests/search_area_volunteer_spec.lua`: search_area's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Manhunt's fugitive played by a volunteer who hides inside the search circle.
+- `tests/season_boot_spec.lua`: A planned season end that fell due while the server was down: the season start-up catches it up, the way the weekly bounty weeks are caught up, so a server that restarts across the daily reset still ends the season.
 - `tests/server_cost_spec.lua`: Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 - `tests/settings_spec.lua`: Admin UI → Settings (modules/admin/settings): the schema read from config.lua and blocks.lua, every check of a value, saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
 - `tests/setup_coords_spec.lua`: Setup coordinates from the Qbox scripts: each shipped mission desk and drop-off names its source or is kept.

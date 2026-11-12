@@ -1610,7 +1610,12 @@ local function Body()
             'builder:get hides another supervisor\'s draft')
         H.eq(select(2, act(2, 'duplicate', { id = id })), 'err.builder_unknown_mission',
             'an unseen draft cannot be duplicated')
+        -- H2: validate is gated like builder:get, so it never tells another supervisor about an unseen draft
+        local okV2, resV2 = act(2, 'validate', { id = id })
+        H.ok(okV2 == false and resV2 == 'err.builder_unknown_mission',
+            'an unseen draft cannot be validated (no errors, armed or tier back)')
         Config.Permissions.supervisor.builderEditAny = true
+        H.ok((act(2, 'validate', { id = id })), 'builderEditAny may validate the draft')
         e = nil
         local _, list3 = cb(2, 'builder:list', {})
         for _, m in ipairs(list3.missions) do if m.id == id then e = m end end

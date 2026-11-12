@@ -7,6 +7,7 @@ import {
     Button,
     Card,
     Checkbox,
+    ConfirmButton,
     ConfirmDialog,
     Dialog,
     EmptyState,
@@ -39,6 +40,7 @@ import { toast } from '../../shared/toast';
 import type {
     BankingCheck,
     BankingEntry,
+    FollowUpOutcome,
     PaymentRow,
     PaymentsExport,
     PaymentsView,
@@ -81,7 +83,8 @@ type RowAction = 'resolve' | 'payNow' | 'unfunded' | 'capRest' | 'repay' | 'forf
 function rowActions(r: PaymentRow, v: PaymentsView): RowAction[] {
     const out: RowAction[] = [];
     const sw = v.switches;
-    if (r.status === 'paying') out.push('resolve');
+    // A paid or capped row with an admin money tool left part way (the rest, a clawback, a give-back) too
+    if (r.status === 'paying' || r.followUp) out.push('resolve');
     // a 'held' row no longer flagged or voided: an approval whose release did not run
     // a flagged or voided 'pending' row is never paid (Z14: the server refuses it)
     if ((r.status === 'pending' || r.status === 'held') && !r.flagged && !r.voided) out.push('payNow');
@@ -138,23 +141,47 @@ function EntryLine({ label, e }: { label: string; e?: BankingEntry | null }) {
     );
 }
 
+// Pay again can't know what happened at these steps (a money call was cut or raised with no telling): Mark paid only
+const UNKNOWN_STEPS = ['added', 'withdrawing', 'adding', 'review'];
+
+// The follow-up outcomes in the order the dialog offers them; giveBack moves money (typed amount)
+const FOLLOW_UP_ORDER: FollowUpOutcome[] = [
+    'restPaid',
+    'restRelease',
+    'backTaken',
+    'backUndone',
+    'giveBack',
+    'giveBackDone',
+];
+
+type ResolveMode = 'paid' | 'payAgain' | FollowUpOutcome;
+
 function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClose: () => void; onDone: () => void }) {
     const { data, loading, error } = useRequest<BankingCheck>(
         'admin:checkBankingTxn',
         { rowId: row?.id ?? 0 },
         { skip: !row },
     );
-    const [mode, setMode] = useState<'paid' | 'payAgain' | null>(null);
+    const [mode, setMode] = useState<ResolveMode | null>(null);
     const [checked, setChecked] = useState(false);
     const { run } = useAdminAction();
     if (!row) return null;
-    const amount = data?.amount ?? row.owed;
+    const followUp = data?.followUp ?? null;
+    const amount = followUp ? (data?.followUpAmount ?? 0) : (data?.amount ?? row.owed);
+    const moves = mode === 'payAgain' || mode === 'giveBack';
 
     const submit = async (reason: string, typed: string) => {
         const res = await run(
             'server:admin:resolvePayment',
             { rowId: row.id, outcome: mode, checked, reason, confirm: typed },
-            { success: mode === 'paid' ? 'payments.resolve.marked' : 'payments.resolve.paid_again' },
+            {
+                success:
+                    mode === 'paid'
+                        ? 'payments.resolve.marked'
+                        : mode === 'payAgain'
+                          ? 'payments.resolve.paid_again'
+                          : 'payments.followup.done',
+            },
         );
         if (res.ok) {
             setMode(null);
@@ -162,37 +189,66 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
         }
     };
 
+    const title = (m: ResolveMode) =>
+        m === 'paid'
+            ? t('payments.resolve.mark_paid')
+            : m === 'payAgain'
+              ? t('payments.resolve.pay_again')
+              : t(`payments.followup.${m}`);
+    const message = (m: ResolveMode) =>
+        m === 'paid'
+            ? t('payments.resolve.mark_paid_msg')
+            : m === 'payAgain'
+              ? t('payments.resolve.pay_again_msg')
+              : t(`payments.followup.${m}_msg`);
+
     return (
         <>
             <Dialog
                 open={!mode}
                 onClose={onClose}
                 title={t('payments.resolve.title', { name: row.name ?? row.citizenid })}
-                description={t('payments.resolve.desc')}
+                description={followUp ? t(`payments.followup.desc_${followUp}`) : t('payments.resolve.desc')}
                 size="md"
                 footer={
                     <>
                         <Button variant="ghost" onClick={onClose}>
                             {t('common.close')}
                         </Button>
-                        <Button
-                            variant="secondary"
-                            icon="check"
-                            disabled={!data || data.busy}
-                            onClick={() => setMode('paid')}
-                        >
-                            {t('payments.resolve.mark_paid')}
-                        </Button>
-                        {data?.payAgain ? (
-                            <Button
-                                variant="danger"
-                                icon="refresh"
-                                disabled={data.busy || !data.online || data.step === 'added'}
-                                onClick={() => setMode('payAgain')}
-                            >
-                                {t('payments.resolve.pay_again')}
-                            </Button>
-                        ) : null}
+                        {followUp ? (
+                            FOLLOW_UP_ORDER.filter(o => data?.outcomes?.[o] !== undefined).map(o => (
+                                <Button
+                                    key={o}
+                                    variant={o === 'giveBack' ? 'danger' : 'secondary'}
+                                    icon={o === 'giveBack' ? 'refresh' : 'check'}
+                                    disabled={!data || data.busy || !data.outcomes?.[o]}
+                                    onClick={() => setMode(o)}
+                                >
+                                    {t(`payments.followup.${o}`)}
+                                </Button>
+                            ))
+                        ) : (
+                            <>
+                                <Button
+                                    variant="secondary"
+                                    icon="check"
+                                    disabled={!data || data.busy}
+                                    onClick={() => setMode('paid')}
+                                >
+                                    {t('payments.resolve.mark_paid')}
+                                </Button>
+                                {data?.payAgain ? (
+                                    <Button
+                                        variant="danger"
+                                        icon="refresh"
+                                        disabled={data.busy || !data.online || UNKNOWN_STEPS.includes(data.step ?? '')}
+                                        onClick={() => setMode('payAgain')}
+                                    >
+                                        {t('payments.resolve.pay_again')}
+                                    </Button>
+                                ) : null}
+                            </>
+                        )}
                     </>
                 }
             >
@@ -203,12 +259,25 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                         <KeyValue label={t('payments.col.txn')}>
                             <code className="cp-selectable">{data.txn}</code>
                         </KeyValue>
-                        <KeyValue label={t('payments.col.owed')}>
-                            <Money amount={data.amount} />
-                        </KeyValue>
-                        <KeyValue label={t('payments.resolve.step')}>
-                            {t(`payments.step.${data.step ?? 'unknown'}`)}
-                        </KeyValue>
+                        {followUp ? (
+                            <>
+                                <KeyValue label={t(`payments.followup.amount_${followUp}`)}>
+                                    <Money amount={amount} />
+                                </KeyValue>
+                                <KeyValue label={t('payments.resolve.step')}>
+                                    {t(`payments.followup.step.${data.followUpStep ?? 'claimed'}`)}
+                                </KeyValue>
+                            </>
+                        ) : (
+                            <>
+                                <KeyValue label={t('payments.col.owed')}>
+                                    <Money amount={data.amount} />
+                                </KeyValue>
+                                <KeyValue label={t('payments.resolve.step')}>
+                                    {t(`payments.step.${data.step ?? 'unknown'}`)}
+                                </KeyValue>
+                            </>
+                        )}
                         <EntryLine label={t('payments.resolve.personal')} e={data.personal} />
                         <EntryLine label={t('payments.resolve.society')} e={data.society} />
                         <div className="payments-admin__note">
@@ -216,7 +285,7 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                             <span>{t('payments.resolve.nothing_proves')}</span>
                         </div>
                         {data.busy ? <div className="payments-admin__warn">{t('err.payment_in_flight')}</div> : null}
-                        {data.payAgain && !data.online ? (
+                        {!followUp && data.payAgain && !data.online ? (
                             <div className="payments-admin__warn">{t('payments.resolve.offline')}</div>
                         ) : null}
                     </div>
@@ -224,18 +293,24 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
             </Dialog>
             <ConfirmDialog
                 open={mode !== null}
-                title={mode === 'paid' ? t('payments.resolve.mark_paid') : t('payments.resolve.pay_again')}
-                message={mode === 'paid' ? t('payments.resolve.mark_paid_msg') : t('payments.resolve.pay_again_msg')}
+                title={mode ? title(mode) : ''}
+                message={mode ? message(mode) : ''}
                 effect={
-                    mode === 'payAgain' ? (
+                    moves ? (
                         <>
                             <MoneyEffect lines={[{ label: row.missionLabel, amount }]} />
-                            <Checkbox checked={checked} onChange={setChecked} label={t('payments.resolve.checked')} />
+                            {mode === 'payAgain' ? (
+                                <Checkbox
+                                    checked={checked}
+                                    onChange={setChecked}
+                                    label={t('payments.resolve.checked')}
+                                />
+                            ) : null}
                         </>
                     ) : null
                 }
-                typedWord={mode === 'payAgain' ? String(amount) : undefined}
-                tone={mode === 'payAgain' ? 'danger' : 'primary'}
+                typedWord={moves ? String(amount) : undefined}
+                tone={moves ? 'danger' : 'primary'}
                 reason={{ required: true, maxLength: REASON_MAX }}
                 onConfirm={submit}
                 onCancel={() => setMode(null)}
@@ -561,9 +636,16 @@ export default function AdminPayments() {
             header: t('payments.col.status'),
             width: 110,
             render: r => (
-                <Badge size="sm" tone={STATUS_TONE[r.status] ?? 'neutral'}>
-                    {statusLabel(r.status)}
-                </Badge>
+                <span className="payments-admin__who">
+                    <Badge size="sm" tone={STATUS_TONE[r.status] ?? 'neutral'}>
+                        {statusLabel(r.status)}
+                    </Badge>
+                    {r.followUp ? (
+                        <Badge size="sm" tone="danger">
+                            {t('payments.followup.badge')}
+                        </Badge>
+                    ) : null}
+                </span>
             ),
         },
         { key: 'owed', header: t('payments.col.owed'), numeric: true, render: r => <Money amount={r.owed} /> },
@@ -635,9 +717,15 @@ export default function AdminPayments() {
             className="payments-admin"
             actions={
                 <span className="payments-admin__actions">
-                    <Button size="sm" icon="refresh" onClick={() => void retryPending()} loading={busy}>
-                        {t('payments.retry_pending')}
-                    </Button>
+                    <ConfirmButton
+                        size="sm"
+                        icon="refresh"
+                        variant="secondary"
+                        loading={busy}
+                        label={t('payments.retry_pending')}
+                        confirmLabel={t('payments.retry_pending_confirm')}
+                        onConfirm={() => void retryPending()}
+                    />
                     {data?.switches.manualCash ? (
                         <Button size="sm" variant="danger" icon="dollar" onClick={() => setManual(true)}>
                             {t('payments.manual.open')}

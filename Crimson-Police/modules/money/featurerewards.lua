@@ -148,6 +148,9 @@ local function InsertRow(feature, cid, runUuid, amount, opts)
         -- a suspect has no department account: his pay is always new money
         cash = { account = account, moneyItem = moneyItem, source = feature == 'suspect' and 'server' or nil },
         extra = { feature = feature, caseKey = U.clip(opts.key, 80), outcome = opts.outcome },
+        -- Payable from the insert on (its audit row is a record, not a gate): a restart before the pay leaves a
+        -- row the login and start-up sweeps pay, never a 'none' row nothing picks up
+        status = 'pending',
     })
 end
 

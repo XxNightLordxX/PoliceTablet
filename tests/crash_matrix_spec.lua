@@ -8,6 +8,8 @@
 -- the server does by itself. docs/dev/TESTING.md "Crash matrix".
 --   1. A Beat Patrol ends and pays: the last checkpoint, the run's end, its row, the payout (CP.Money, banking).
 --   2. Her login pays a pending payment (CP.Cash.payPending after Qbox's player loaded).
+--   3-6. (H3) A feature reward, Pay again, a clawback and Pay the rest, with the society source on: the money must add
+--      up after every cut (the department's debits minus refunds = what reached her; taken back = given back).
 -- A journey with more than CP_CRASH_SAMPLE cut points (default 40) is cut at that many spread over it;
 -- CP_CRASH_ALL=1 cuts it after every await. Runs on the world of tests/workflows_full_spec.lua (the saves folder, as
 -- shipped; in the database suite the same as there).
@@ -255,6 +257,314 @@ do
     end
     results[#results + 1] = ('her login pays a pending payment: %d awaits, %d cuts'):format(steps, cuts)
 end
+
+-- ============================================================================
+--             3-6. H3: A FEATURE REWARD AND THE ADMIN MONEY TOOLS
+-- ============================================================================
+-- With the society source on (the department pays, Renewed-Banking's account below keeps its balance) and the money
+-- tools switched on: a feature reward (FR.pay), Pay again of a stuck payment, a clawback of a society-paid row and Pay
+-- the rest of a capped row, each cut after every await. After the restart and her login the money must add up:
+--   * the department's debits minus what it got back equal what reached the officer (cut taken = cut returned)
+--   * a clawback: what was taken from her equals what the row holds as taken back, and the department got back (or is
+--     owed on the row) exactly that
+--   * never paid twice; every row settled or listed for an admin (CP.Cash.stuckPayments)
+
+local cjson = require('cjson')
+local soc = { bal = 1000000, out = 0, back = 0 }
+local taken = 0
+local function Wire()
+    local RB = H.exportsMock['Renewed-Banking']
+    RB.getAccountMoney = function() return soc.bal end
+    RB.removeAccountMoney = function(_, amount)
+        if soc.bal < amount then return false end
+        soc.bal, soc.out = soc.bal - amount, soc.out + amount
+        return true
+    end
+    RB.addAccountMoney = function(_, amount)
+        soc.bal, soc.back = soc.bal + amount, soc.back + amount
+        return true
+    end
+    local Q = H.exportsMock.qbx_core
+    if not Q._h3 then
+        local realGet = Q.GetPlayer
+        Q.GetPlayer = function(src)
+            local p = realGet(src)
+            if p then
+                local pd = p.PlayerData
+                pd.money = pd.money or { bank = 100000, cash = 0 }
+                local add = p.Functions.AddMoney
+                p.Functions.AddMoney = function(account, amount, reason)
+                    pd.money[account] = (pd.money[account] or 0) + amount
+                    return add(account, amount, reason)
+                end
+                p.Functions.RemoveMoney = function(account, amount)
+                    if (pd.money[account] or 0) < amount then return false end
+                    pd.money[account] = pd.money[account] - amount
+                    taken = taken + amount
+                    return true
+                end
+            end
+            return p
+        end
+        Q._h3 = true
+    end
+end
+Wire()
+local function CutRestartH3()
+    CutRestart()
+    Wire()
+end
+
+local ADMIN = 5
+for _, path in ipairs({ 'Cash.allowPayAgain', 'Cash.allowClawback', 'Cash.allowCapTopUp' }) do
+    local ok, err = Act('server:admin:setSetting', ADMIN,
+        { path = path, json = 'true', reason = 'H3', confirm = 'ENABLE' })
+    H.eq(ok, true, 'H3 switches: ' .. path .. ': ' .. tostring(err))
+end
+local okS, errS = Act('server:admin:setSetting', ADMIN, { path = 'Cash.source', json = '"society"', reason = 'H3' })
+H.eq(okS, true, 'H3: the society source: ' .. tostring(errS))
+for _, f in ipairs({ 'FeatureRewards.surrender.enabled' }) do
+    local ok, err = Act('server:admin:setSetting', ADMIN, { path = f, json = 'true', reason = 'H3' })
+    H.eq(ok, true, 'H3: ' .. f .. ': ' .. tostring(err))
+end
+
+local seq = 0
+local function Uuid()
+    seq = seq + 1
+    return ('%08x-3333-4000-8000-%012x'):format(math.random(0, 0x7fffffff), seq)
+end
+local function MoneyRow(o)
+    local uuid = Uuid()
+    local c = { B = o.owed, mTier = 1.0, mMod = 1.0, amount = o.owed, status = o.status, account = 'bank' }
+    for k, v in pairs(o.cash or {}) do c[k] = v end
+    H.sql([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, state, end_reason,
+        points_base, final_points, cash_base, cash_multiplier, cash_paid, cash_reclaimed, cash_status, breakdown,
+        flagged, voided, created_at) VALUES (?, 'patrol', 'beat_patrol', ?, 'sast', 'completed', 'completed', 60, 60, ?,
+        1.00, ?, 0, ?, ?, 0, 0, FROM_UNIXTIME(?))]], {
+        uuid,
+        CID[OFFICER],
+        o.owed,
+        o.paid or 0,
+        o.status,
+        cjson.encode({ missionLabel = 'Beat Patrol', cash = c }),
+        H.time - 60,
+    })
+    return uuid
+end
+local function RowByUuid(uuid)
+    local r = H.sql([[SELECT id, cash_status, cash_paid, cash_reclaimed, breakdown FROM cp_mission_runs
+        WHERE run_uuid = ?]], { uuid })[1]
+    if r then
+        r.id = math.floor(tonumber(r.id) or 0)
+        r.cash = (type(r.breakdown) == 'string' and cjson.decode(r.breakdown) or r.breakdown or {}).cash or {}
+    end
+    return r
+end
+local function Listed(id)
+    for _, s in ipairs(CP.Cash.stuckPayments() or {}) do if s.id == id then return s end end
+    return nil
+end
+local function Snap()
+    return {
+        credited = select(2, W.Paid(CID[OFFICER])),
+        n = (W.Paid(CID[OFFICER])),
+        out = soc.out,
+        back = soc.back,
+        taken = taken,
+    }
+end
+local function Delta(a, b)
+    local d = {}
+    for k, v in pairs(b) do d[k] = v - (a[k] or 0) end
+    return d
+end
+local rid = 0
+local function Send(name, payload)
+    rid = rid + 1
+    H.fire('crimson-police:' .. name, ADMIN, payload, 'h3cm' .. rid)
+end
+
+-- The money check after a cut (and her login): what the department paid out minus what it got back is what reached
+-- her (payments), or, for a clawback, what was taken from her is what the row holds and the department got back or is
+-- owed. A row left part way is listed for an admin.
+local function Invariants(label, uuid, d, kind)
+    local r = RowByUuid(uuid)
+    H.ok(d.n <= 1, ('%s: paid at most once (%d deposits)'):format(label, d.n))
+    if kind == 'pay' then
+        -- or the department paid and she did not get it yet: then the row says so (its step marker) and is listed
+        local gap = d.out - d.back - d.credited
+        local c = r and r.cash or {}
+        local step = c.restPaid == 'paying' and c.restPaidStep or c.again == 'paying' and c.againStep or c.step
+        local said = r and (step == 'withdrawing' or step == 'withdrawn' or step == 'adding' or step == 'review')
+            and Listed(r.id) ~= nil
+        H.ok(gap == 0 or (gap > 0 and said), (
+            '%s: the department paid what reached her, or the row says it paid and waits for an admin (paid %d, got '
+            .. 'back %d, she got %d, step %s)'
+        ):format(label, d.out, d.back, d.credited, tostring(step)))
+    elseif kind == 'back' then
+        local reclaimed = r and math.floor(tonumber(r.cash_reclaimed) or 0) or 0
+        local held = r and math.floor(tonumber(r.cash.backPending) or 0) or 0
+        local owed = r and r.cash.giveBack ~= 'back' and math.floor(tonumber(r.cash.backOwed) or 0) or 0
+        H.ok(d.taken == reclaimed - held or (held > 0 and (d.taken == reclaimed or d.taken == reclaimed - held)),
+            ('%s: taken from her (%d) matches the row (%d taken back, %d held)'):format(label, d.taken, reclaimed, held))
+        H.ok(d.back + owed == d.taken or (r and r.cash.giveBack == 'paying') or held > 0,
+            ('%s: the department got back (%d) or is owed (%d) what was taken (%d)'):format(label, d.back, owed,
+                d.taken))
+        H.eq(d.out, 0, label .. ': no department withdrawal')
+    end
+    if r then
+        -- (the follow-up markers read here, not through CP.Cash.followUpOf, so the old code fails instead of stopping)
+        local c = r.cash
+        local left = r.cash_status == 'paying' or c.restPaid == 'paying' or c.backPending ~= nil or c.giveBack == 'owed'
+            or c.giveBack == 'paying'
+        if left then
+            local s = Listed(r.id)
+            H.ok(s ~= nil, ('%s: the row left part way is listed for an admin (%s %s)'):format(label, r.cash_status,
+                tostring(s and s.kind)))
+        end
+        H.ok(not (r.cash.again == 'paying' and r.cash.againStep == nil), label .. ': no Pay again claim left unstarted')
+        H.ok(not (r.cash.restPaid == 'paying' and r.cash.restPaidStep == nil),
+            label .. ': no Pay the rest claim left unstarted')
+        H.ok(r.cash.backStep ~= 'claimed', label .. ': no clawback claim left unstarted')
+    end
+end
+
+-- One journey: set up, then alone (its awaits), then cut after each.
+local function Journey(j)
+    local function Once(cutAt)
+        Later()
+        local ctx = j.setup()
+        Secs(2)
+        local s0 = Snap()
+        H.interleave(true)
+        if not cutAt then
+            yields = 0
+            local undo = CountingWait()
+            j.fire(ctx)
+            local steps = StepOut()
+            undo()
+            H.interleave(false)
+            Secs(10)
+            j.alone(ctx, Delta(s0, Snap()))
+            return steps
+        end
+        j.fire(ctx)
+        for _ = 2, cutAt do H.step(0) end
+        CutRestartH3()
+        local label = ('%s cut after await %d'):format(j.label, cutAt)
+        -- the start-up catch-ups (the 15 s sweep, the give-back retry), then her login and its pay
+        Secs(130)
+        W.Drop(OFFICER)
+        W.Reconnect(OFFICER)
+        Secs(15)
+        Invariants(label, ctx.uuid, Delta(s0, Snap()), j.kind)
+        if j.after then j.after(ctx, label, Delta(s0, Snap())) end
+    end
+    local steps = Once(nil)
+    local cuts = 0
+    for _, at in ipairs(Points(steps)) do
+        Once(at)
+        cuts = cuts + 1
+    end
+    results[#results + 1] = ('%s: %d awaits, %d cuts'):format(j.label, steps, cuts)
+end
+
+-- 3. a feature reward (Talk them down), society source: the suspect's reward is new money, an officer's is the
+-- department's
+Journey({
+    label = 'a feature reward',
+    kind = 'pay',
+    setup = function()
+        local key = Uuid()
+        return { key = key, uuid = CP.FeatureRewards.uuidOf('surrender', key, CID[OFFICER]) }
+    end,
+    fire = function(ctx)
+        CreateThread(function() CP.FeatureRewards.pay('surrender', CID[OFFICER], { key = ctx.key }) end)
+    end,
+    alone = function(ctx, d)
+        local r = RowByUuid(ctx.uuid)
+        H.eq(r and r.cash_status, 'paid', 'feature reward alone: paid')
+        H.eq(d.n, 1, 'feature reward alone: once')
+    end,
+    after = function(ctx, label, d)
+        local r = RowByUuid(ctx.uuid)
+        if r then
+            H.ok((r.cash_status == 'paid' and d.n == 1) or r.cash_status == 'paying',
+                ('%s: a written reward is paid once after her login, or waits for an admin (%s, %d paid)'):format(label,
+                    r.cash_status, d.n))
+        else
+            H.eq(d.n, 0, label .. ': no row, nothing paid')
+        end
+    end,
+})
+
+-- 4. Pay again of a payment stuck at 'claimed' (nothing moved): the department pays, the officer gets it, once
+Journey({
+    label = 'Pay again',
+    kind = 'pay',
+    setup = function()
+        local uuid = MoneyRow({
+            status = 'paying',
+            owed = 200,
+            cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = 200 },
+        })
+        return { uuid = uuid, id = RowByUuid(uuid).id }
+    end,
+    fire = function(ctx)
+        Send('server:admin:resolvePayment',
+            { rowId = ctx.id, outcome = 'payAgain', checked = true, reason = 'H3', confirm = '200', requestId = Uuid() })
+    end,
+    alone = function(ctx, d)
+        H.eq(RowByUuid(ctx.uuid).cash_status, 'paid', 'Pay again alone: paid')
+        H.ok(d.n == 1 and d.out == 200 and d.back == 0, 'Pay again alone: once, from the department')
+    end,
+})
+
+-- 5. a clawback of a society-paid row: taken from her, given back to the department
+Journey({
+    label = 'a clawback',
+    kind = 'back',
+    setup = function()
+        local uuid = MoneyRow({
+            status = 'paid',
+            owed = 300,
+            paid = 300,
+            cash = { source = 'society', societyAccount = 'sast', step = 'added' },
+        })
+        return { uuid = uuid, id = RowByUuid(uuid).id }
+    end,
+    fire = function(ctx)
+        Send('server:admin:clawback',
+            { rowId = ctx.id, amount = 100, reason = 'H3', confirm = '100', requestId = Uuid() })
+    end,
+    alone = function(ctx, d)
+        local r = RowByUuid(ctx.uuid)
+        H.ok(r.cash_reclaimed == 100 and d.taken == 100 and d.back == 100 and r.cash.giveBack == 'back',
+            'clawback alone: taken back and given back: ' .. cjson.encode(r.cash))
+    end,
+})
+
+-- 6. Pay the rest of a capped row: the department pays the rest, the officer gets it, once
+Journey({
+    label = 'Pay the rest',
+    kind = 'pay',
+    setup = function()
+        local uuid = MoneyRow({
+            status = 'capped',
+            owed = 500,
+            paid = 300,
+            cash = { source = 'society', societyAccount = 'sast', step = 'added' },
+        })
+        return { uuid = uuid, id = RowByUuid(uuid).id }
+    end,
+    fire = function(ctx)
+        Send('server:admin:payCapRest', { rowId = ctx.id, reason = 'H3', confirm = '200', requestId = Uuid() })
+    end,
+    alone = function(ctx, d)
+        local r = RowByUuid(ctx.uuid)
+        H.ok(r.cash_paid == 500 and d.n == 1 and d.out == 200, 'Pay the rest alone: once, from the department')
+    end,
+})
 
 for _, line in ipairs(results) do print('REPORT crash ' .. line) end
 

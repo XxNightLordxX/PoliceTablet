@@ -2292,6 +2292,18 @@ local function WeeklyReset()
     InvalidateAll()
 end
 
+-- Start-up catch-up for a planned end that fell due while the server was down: the daily season_end job only fires
+-- at a reset the server is up for. Ends the season only when a daily reset on or after the planned date has passed
+-- (the same rule as the job), so a date that passed since the last reset still waits for the next one.
+function C._plannedEndCatchUp(nowTs)
+    nowTs = nowTs or os.time()
+    local season = C.currentSeason(true)
+    if not season or not season.plannedEnd then return false end
+    local lastReset = Has('Schedule', 'dayStart') and CP.Schedule.dayStart(nowTs) or nowTs
+    if season.plannedEnd > lastReset then return false end
+    return C._plannedEndCheck(nowTs)
+end
+
 function C._boot()
     if booted then return end
     booted = true
@@ -2327,6 +2339,8 @@ function C._boot()
             CloseDueWeeks(season, os.time(), false)
             EnsureBounty(season, WeekIndex(season, os.time()))
             CP.log(TAG, 'season %d (%s), week %d', season.id, season.name, WeekIndex(season, os.time()))
+            -- then a planned end whose reset passed while the server was down
+            if season.plannedEnd then C._plannedEndCatchUp(os.time()) end
         end
     end)
     if not ok then CP.err(TAG, 'start failed: %s', tostring(err)) end

@@ -26,12 +26,15 @@ export interface PaymentRow {
     txn: string;
     account?: string | null;
     source?: 'server' | 'society' | null;
-    // the step markers of the last payment attempt: claimed → withdrawn → added
-    step?: 'claimed' | 'withdrawn' | 'added' | null;
+    // the step markers of the last payment attempt: claimed → (withdrawing →) withdrawn → adding → added; review: a
+    // money call raised and the balance did not tell whether it moved
+    step?: 'claimed' | 'withdrawing' | 'withdrawn' | 'adding' | 'added' | 'review' | null;
     // the capped rest: 'paying' (claimed) or 'paid'
     restPaid?: string | null;
     // Pay again: 'paying' (claimed) or 'paid'
     again?: string | null;
+    // an admin money tool left part way on a paid or capped row: Resolve
+    followUp?: FollowUpKind | null;
     voided: boolean;
     flagged: boolean;
     // the officer's payment is running right now
@@ -125,6 +128,11 @@ export interface BankingEntry {
 }
 
 // admin:checkBankingTxn { rowId }
+// What an admin money tool left part way on a paid or capped row: the rest of a capped payment, a clawback, or the
+// give-back of a clawback to the department.
+export type FollowUpKind = 'rest' | 'back' | 'giveBack';
+export type FollowUpOutcome = 'restPaid' | 'restRelease' | 'backTaken' | 'backUndone' | 'giveBack' | 'giveBackDone';
+
 export interface BankingCheck {
     id: number;
     status: CashStatus;
@@ -139,6 +147,11 @@ export interface BankingCheck {
     busy: boolean;
     online: boolean;
     payAgain: boolean;
+    // A follow-up instead of a stuck payment: its kind, amount, step, and the outcomes it offers now
+    followUp?: FollowUpKind | null;
+    followUpAmount?: number | null;
+    followUpStep?: string | null;
+    outcomes?: Partial<Record<FollowUpOutcome, boolean>> | null;
 }
 
 // admin:previewRetryUnfunded { rowId } | { department, since }

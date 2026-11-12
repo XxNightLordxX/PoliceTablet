@@ -945,3 +945,29 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   players_only accept at the same moment does not take him. (Z14)
 - [ ] Deep sweep (Z14): Settings help for Cash.dailyCap says feature rewards count too; with suspect pay on, the
   volunteer consent says a fair case is paid. (Z14)
+- [ ] Bug sweep (H2): plan a season end (Admin UI -> Boards -> Seasons) with a next season name, stop the server
+  across the date's reset hour and start it again: a few seconds after start the season has ended and the next one
+  runs. (H2)
+- [ ] Bug sweep (H2): Admin UI -> Money -> Payments -> Retry all pending: the first click only turns the button into
+  "Click again to pay all pending"; the second click pays. (H2)
+- [ ] Bug sweep (H2): change your look (Edit profile -> Look) with the tablet open, then switch "Use my tablet look on
+  the HUD" off and on: the HUD and toasts use the new look, not the old one. (H2)
+- [ ] Bug sweep (H2): a second supervisor (no builderEditAny) cannot see or check another supervisor's unpublished
+  Mission Builder draft. (H2)
+- [ ] Money safety (H3): with Config.Cash.source = 'society' and Pay the rest on, stop Renewed-Banking and press Pay
+  the rest on a capped row: nothing is paid and the department is not charged; start it again and Pay the rest works.
+  A row marked Check in Admin UI -> Money -> Payments (filter Stuck) opens Resolve with its own buttons, and the
+  Payments badge counts it. (H3)
+- [ ] Money safety (H3): Take back $100 from a society-paid row while Renewed-Banking refuses deposits: the officer's
+  bank drops by $100, the row shows Check (owed to the department); start Renewed-Banking again and wait 10 minutes
+  (or press Retry give-back): the department gets the $100 back. (H3)
+- [ ] Money safety (H3): a Pay again whose department withdrawal went through but the deposit failed: press Pay again
+  once more: only the deposit runs, the department is not charged again. (H3)
+- [ ] Money safety (H3): Pay now, Forfeit now and Cancel payment each write their audit row (Admin UI -> Audit) before
+  anything changes. (H3)
+- [ ] Money safety (H3): Add funds shows "Sending (check it)" for a deposit Renewed-Banking failed half way, and a
+  funding row cut by a restart before its deposit shows Failed after the start. (H3)
+- [ ] Money safety (H3): with surrender rewards on, restart the server right as an officer talks a suspect down: after
+  she logs in again the reward is paid once. (H3)
+- [ ] Money safety (H3): take back a two-item reward when only one is still in the inventory: the reply says one is
+  left and Admin UI -> Audit shows a second Item taken back row "partial:-1". (H3)

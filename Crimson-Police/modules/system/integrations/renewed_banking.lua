@@ -15,13 +15,13 @@
 --       true = Renewed-Banking accepted the arguments. It still drops the entry silently when the
 --       player's history is not loaded yet (right after QBCore:Server:PlayerLoaded), so pending payouts
 --       should wait a few seconds after the player loads.
---   CP.Banking.withdrawSociety(account, amount) -> boolean
+--   CP.Banking.withdrawSociety(account, amount) -> true | false (refused) | false, 'error' (the export raised)
 --       removeAccountMoney(account, amount): false when the account is unknown or cannot cover it.
 --   CP.Banking.recordSocietyWithdraw(account, amount, message, issuer, receiver, transId) -> boolean
 --       handleTransaction(account, Config.Tablet.title, amount, message, issuer, receiver, 'withdraw', transId).
 --   CP.Banking.available() -> boolean                  Renewed-Banking is started.
 --   CP.Banking.societyBalance(account) -> number|nil   getAccountMoney(account); nil for an unknown account.
---   CP.Banking.depositSociety(account, amount) -> boolean
+--   CP.Banking.depositSociety(account, amount) -> true | false (refused) | false, 'error' (the export raised)
 --       addAccountMoney(account, amount): puts money back into a society account (CP.Cash's refund when a
 --       society-funded payout's AddMoney failed after withdrawSociety). Society/shared accounts only:
 --       Renewed-Banking returns false for a citizenid or an unknown account (and while its account cache
@@ -120,7 +120,8 @@ function B.withdrawSociety(account, amount)
     if n == 0 then return true end
     if not Available() then return false end
     local ok, res = CP.Ext.call(RESOURCE, 'removeAccountMoney', account, n)
-    if not ok then return false end
+    -- The export raised: the account may have changed, which the caller decides from the balance
+    if not ok then return false, 'error' end
     CP.log(TAG, 'withdraw %d from %s -> %s', n, account, tostring(res))
     return res == true
 end
@@ -141,7 +142,8 @@ function B.depositSociety(account, amount)
     if n == 0 then return true end
     if not Available() then return false end
     local ok, res = CP.Ext.call(RESOURCE, 'addAccountMoney', account, n)
-    if not ok then return false end
+    -- The export raised: the account may have changed, which the caller decides from the balance
+    if not ok then return false, 'error' end
     CP.log(TAG, 'deposit %d into %s -> %s', n, account, tostring(res))
     return res == true
 end

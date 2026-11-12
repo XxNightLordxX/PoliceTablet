@@ -357,11 +357,23 @@ do
     )
     H.eq(r.bd.cash.txn, ('CP-%s-OFF00007'):format(r.run_uuid), 'and its transaction id')
 
-    -- AddMoney raised after the society paid: the row stays paying at step 'withdrawn'
+    -- AddMoney raised after the society paid and the balance can not be read: the row stays paying (H3: at step
+    -- 'review', never refunded blind)
     addResult, addWhy = false, 'error'
+    local realGet = CP.Qbx.getMoney
+    CP.Qbx.getMoney = function() return nil end
     local id2 = Row({ status = 'pending', owed = 300 })
+    local sast0 = bank.balance.sast
     H.eq(Async(function() return Cash.pay(id2) end), 'paying', 'a raise in AddMoney leaves the row paying')
-    H.eq(RowOf(id2).bd.cash.step, 'withdrawn', 'step marker: the department already paid')
+    H.eq(RowOf(id2).bd.cash.step, 'review', 'H3 step marker: no telling whether it arrived (review)')
+    H.eq(bank.balance.sast, sast0 - 300, 'H3: and the department is not refunded blind')
+    CP.Qbx.getMoney = realGet
+    -- H3: AddMoney raised and the balance did not change: refused, the department gets it back, pending again
+    local id2b = Row({ status = 'pending', owed = 300 })
+    sast0 = bank.balance.sast
+    H.eq(Async(function() return Cash.pay(id2b) end), 'pending',
+        'H3: a raise that changed nothing goes back to pending')
+    H.eq(bank.balance.sast, sast0, 'H3: the department got its withdrawal back')
     Reset()
     Config.Cash.source = 'server'
 end
@@ -1025,8 +1037,8 @@ do
     local rid = Rid()
     ok, e = Act('server:admin:addDepartmentFunds', 1,
         { department = 'sast', amount = 500, reason = 'top up', confirm = '500', requestId = rid })
-    H.ok(ok and seen and seen.state == 'pending' and seen.txn == e.txn,
-        'the funding row is written before the deposit: ' .. tostring(not ok and e))
+    H.ok(ok and seen and seen.state == 'depositing' and seen.txn == e.txn,
+        'the funding row is written before the deposit (H3: depositing): ' .. tostring(not ok and e))
     H.ok(e.txn == ('CP-FUND-%d'):format(e.id) and bank.balance.sast == 1500, 'deposited, CP-FUND-<id>')
     local entry = Logged('entry', { side = 'society', type = 'deposit' })[1]
     H.ok(entry and entry.txn == e.txn, 'a deposit entry in the department\'s bank history')
@@ -1291,6 +1303,308 @@ do
     Row({ status = 'paying', owed = 10 })
     Pay._resetNav()
     H.eq(Pay.stuckCount(), 1, 'adminPayments: payments stuck in paying')
+end
+
+-- ============================================================================
+--            18. H3: WHAT A MONEY CALL DID, FOLLOW-UPS, AUDIT FIRST
+-- ============================================================================
+
+do
+    Reset()
+    H.sql('DELETE FROM cp_mission_runs')
+    Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = true, true, true
+    local realAdd, realRemove, realGet = CP.Qbx.addMoney, CP.Qbx.removeMoney, CP.Qbx.getMoney
+    local realWithdraw, realDeposit = CP.Banking.withdrawSociety, CP.Banking.depositSociety
+    local function Stuck(id)
+        for _, s in ipairs(Cash.stuckPayments()) do if s.id == id then return s end end
+        return nil
+    end
+    -- (the H3 entry points, read so the old code fails here instead of stopping the spec)
+    local function Call(t, name, ...)
+        local fn = t[name]
+        if type(fn) ~= 'function' then return nil end
+        return fn(...)
+    end
+    local function Resolve(id, outcome, confirm)
+        return Act('server:admin:resolvePayment', 1,
+            { rowId = id, outcome = outcome, checked = true, reason = 'H3', confirm = confirm, requestId = Rid() })
+    end
+
+    -- (a) AddMoney credits, then raises: the balance shows it arrived, so the row is paid once (with its history
+    -- entry) and Pay again is refused
+    CP.Qbx.addMoney = function(src, account, amount)
+        people[src].money[account] = (people[src].money[account] or 0) + amount
+        return false, 'error'
+    end
+    people[7].money.bank = 1000
+    local id = Row({ status = 'pending', owed = 300, cash = { source = 'server', account = 'bank' } })
+    H.eq(Async(function() return Cash.pay(id) end), 'paid', 'H3 (a): a raise after the money arrived: paid')
+    CP.Qbx.addMoney = realAdd
+    H.ok(people[7].money.bank == 1300 and RowOf(id).cash_paid == 300, 'H3 (a): once, $300')
+    local e1 = Logged('entry', { side = 'personal', type = 'deposit' })[1]
+    H.ok(e1 and e1.txn == ('CP-%s-OFF00007'):format(RowOf(id).run_uuid), 'H3 (a): with its bank history entry')
+    local ok, e = Resolve(id, 'payAgain', '300')
+    H.ok(not ok and e == 'err.state_changed' and people[7].money.bank == 1300,
+        'H3 (a): Pay again refused, no second pay')
+
+    -- (b) the department withdrawal raised after it took the money and the balance can not be read: no telling, the
+    -- row stays at 'review' and Pay again is refused (never a second withdrawal)
+    Reset()
+    Config.Cash.source = 'society'
+    local sast0 = bank.balance.sast
+    CP.Banking.withdrawSociety = function(account, amount)
+        bank.balance[account] = bank.balance[account] - amount
+        bank.log[#bank.log + 1] = { kind = 'withdraw', account = account, amount = amount }
+        error('cut')
+    end
+    local realBal = CP.Banking.societyBalance
+    CP.Banking.societyBalance = function() return nil end
+    local idB = Row({ status = 'pending', owed = 200 })
+    H.eq(Async(function() return Cash.pay(idB) end), 'paying', 'H3 (b): a raised withdrawal stays paying')
+    CP.Banking.withdrawSociety, CP.Banking.societyBalance = realWithdraw, realBal
+    H.eq(RowOf(idB).bd.cash.step, 'review', 'H3 (b): at step review')
+    ok, e = Resolve(idB, 'payAgain', '200')
+    H.ok(not ok and e == 'err.payment_step_unknown' and #Logged('withdraw') == 1 and #calls.add == 0,
+        'H3 (b): Pay again is refused, no second withdrawal: ' .. tostring(e))
+    H.eq(bank.balance.sast, sast0 - 200, 'H3 (b): the department paid once')
+    -- a cut inside a money call leaves its intent marker: Pay again refuses each of them
+    for _, step in ipairs({ 'withdrawing', 'adding', 'review' }) do
+        local idS = Row({
+            status = 'paying',
+            owed = 100,
+            cash = { step = step, source = 'society', societyAccount = 'sast', payAmount = 100 },
+        })
+        Reset()
+        ok, e = Resolve(idS, 'payAgain', '100')
+        H.ok(not ok and e == 'err.payment_step_unknown' and #bank.log == 0 and #calls.add == 0,
+            'H3: Pay again at step ' .. step .. ' is refused: ' .. tostring(e))
+    end
+    Config.Cash.source = 'server'
+
+    -- (c) clawback of a society-source row, the give-back fails: owed on the row, listed, retried later
+    Reset()
+    people[7].money.bank = 1000
+    local idC = Row({
+        status = 'paid',
+        owed = 300,
+        paid = 300,
+        cash = { source = 'society', societyAccount = 'sast', account = 'bank' },
+    })
+    CP.Banking.depositSociety = function() return false end
+    Pay._resetNav()
+    local n0 = Pay.stuckCount()
+    ok, e = Act('server:admin:clawback', 1,
+        { rowId = idC, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })
+    H.ok(ok and e.refunded == false and people[7].money.bank == 900, 'H3 (c): taken back, the give-back failed')
+    local c = RowOf(idC).bd.cash
+    H.ok(c.giveBack == 'owed' and c.backOwed == 100 and c.backAccount == 'sast' and c.backs == 1,
+        'H3 (c): the give-back is owed on the row')
+    local s = Stuck(idC)
+    H.ok(s and s.kind == 'giveBack' and s.followUpAmount == 100, 'H3 (c): listed in stuckPayments as a give-back')
+    Pay._resetNav()
+    H.eq(Pay.stuckCount(), n0 + 1, 'H3 (c): and counted in the Payments badge')
+    H.eq(Async(function() return Call(Cash, 'retryGiveBacks') end), 0, 'H3 (c): the retry fails while banking refuses')
+    H.eq(RowOf(idC).bd.cash.giveBack, 'owed', 'H3 (c): still owed')
+    CP.Banking.depositSociety = realDeposit
+    sast0 = bank.balance.sast
+    H.eq(Async(function() return Call(Cash, 'retryGiveBacks') end), 1, 'H3 (c): the retry gives it back')
+    c = RowOf(idC).bd.cash
+    H.ok(bank.balance.sast == sast0 + 100 and c.giveBack == 'back' and c.backOwed == 0 and c.backGiven == 100,
+        'H3 (c): cut taken equals cut returned')
+    H.eq(Stuck(idC), nil, 'H3 (c): no longer listed')
+    -- a give-back left for staff: Retry give-back in Payments asks for the amount
+    CP.Banking.depositSociety = function() return false end
+    ok = Act('server:admin:clawback', 1, { rowId = idC, amount = 50, reason = 'x', confirm = '50', requestId = Rid() })
+    CP.Banking.depositSociety = realDeposit
+    local chk = Cb('admin:checkBankingTxn', 1, { rowId = idC })
+    H.ok(ok and chk and chk.followUp == 'giveBack' and chk.followUpAmount == 50 and (chk.outcomes or {}).giveBack,
+        'H3 (c): Resolve shows the give-back and its outcomes')
+    ok, e = Resolve(idC, 'giveBack', '5')
+    H.ok(not ok and e == 'err.confirm_mismatch', 'H3 (c): Retry give-back asks for the amount')
+    sast0 = bank.balance.sast
+    ok, e = Resolve(idC, 'giveBack', '50')
+    H.ok(ok and bank.balance.sast == sast0 + 50 and RowOf(idC).bd.cash.giveBack == 'back',
+        'H3 (c): Retry give-back gives it back: ' .. tostring(e))
+    H.ok((LastAudit('paymentResolve') or {}).new_value == 'giveBack:50', 'H3 (c): audited')
+
+    -- (d) RemoveMoney takes the money, then raises: the balance shows it was taken, the clawback completes
+    Reset()
+    people[7].money.bank = 1000
+    CP.Qbx.removeMoney = function(src, account, amount)
+        calls.remove[#calls.remove + 1] = { src = src, account = account, amount = amount }
+        people[src].money[account] = people[src].money[account] - amount
+        return false, 'error'
+    end
+    local idD = Row({
+        status = 'paid',
+        owed = 300,
+        paid = 300,
+        cash = { source = 'society', societyAccount = 'sast', account = 'bank' },
+    })
+    sast0 = bank.balance.sast
+    ok, e = Act('server:admin:clawback', 1,
+        { rowId = idD, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })
+    c = RowOf(idD).bd.cash
+    H.ok(
+        ok and e.refunded == true and people[7].money.bank == 900 and bank.balance.sast == sast0 + 100 and c.backs == 1
+            and c.backPending == nil,
+        'H3 (d): a raise after the money was taken: taken back and given back'
+    )
+    H.ok(#Logged('entry', { side = 'personal', type = 'withdraw' }) == 1, 'H3 (d): with the withdraw history entry')
+    -- no telling (no balance): the claim stays held for staff, listed; Resolve "taken" or "not taken"
+    CP.Qbx.getMoney = function(src, account)
+        if calls.remove[1] then return nil end
+        return realGet(src, account)
+    end
+    calls.remove = {}
+    ok, e = Act('server:admin:clawback', 1,
+        { rowId = idD, amount = 50, reason = 'x', confirm = '50', requestId = Rid() })
+    CP.Qbx.getMoney, CP.Qbx.removeMoney = realGet, realRemove
+    c = RowOf(idD).bd.cash
+    H.ok(
+        not ok and e == 'err.payment_raised' and c.backPending == 50 and c.backStep == 'removing'
+            and RowOf(idD).cash_reclaimed == 150,
+        'H3 (d): no telling: held for staff'
+    )
+    s = Stuck(idD)
+    H.ok(s and s.kind == 'back' and s.followUpAmount == 50, 'H3 (d): listed as a clawback')
+    ok, e = Act('server:admin:clawback', 1,
+        { rowId = idD, amount = 10, reason = 'x', confirm = '10', requestId = Rid() })
+    H.ok(not ok and e == 'err.payment_in_flight', 'H3 (d): no new clawback while one is held')
+    sast0 = bank.balance.sast
+    ok, e = Resolve(idD, 'backTaken')
+    c = RowOf(idD).bd.cash
+    H.ok(
+        ok and c.backs == 2 and c.backPending == nil and bank.balance.sast == sast0 + 50
+            and RowOf(idD).cash_reclaimed == 150,
+        'H3 (d): Resolve "taken": recorded and given back: ' .. tostring(e)
+    )
+    -- "not taken" takes the claim back
+    CP.Qbx.removeMoney = function(src, account, amount)
+        calls.remove[#calls.remove + 1] = { src = src, account = account, amount = amount }
+        return false, 'error'
+    end
+    CP.Qbx.getMoney = function(src, account)
+        if calls.remove[1] then return nil end
+        return realGet(src, account)
+    end
+    calls.remove = {}
+    Act('server:admin:clawback', 1, { rowId = idD, amount = 20, reason = 'x', confirm = '20', requestId = Rid() })
+    CP.Qbx.getMoney, CP.Qbx.removeMoney = realGet, realRemove
+    ok, e = Resolve(idD, 'backUndone')
+    H.ok(ok and RowOf(idD).cash_reclaimed == 150 and RowOf(idD).bd.cash.backPending == nil,
+        'H3 (d): Resolve "not taken": the claim is taken back: ' .. tostring(e))
+
+    -- (e) Pay the rest: AddMoney raised with no telling: listed as a rest, Release refused, Mark the rest paid
+    Reset()
+    local idE = Row({ status = 'capped', owed = 500, paid = 300 })
+    CP.Qbx.addMoney = function() return false, 'error' end
+    CP.Qbx.getMoney = function() return nil end
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = idE, reason = 'x', confirm = '200', requestId = Rid() })
+    CP.Qbx.addMoney, CP.Qbx.getMoney = realAdd, realGet
+    c = RowOf(idE).bd.cash
+    H.ok(not ok and e == 'err.payment_raised' and c.restPaid == 'paying' and c.restPaidStep == 'review',
+        'H3 (e): the rest at step review')
+    s = Stuck(idE)
+    H.ok(s and s.kind == 'rest' and s.followUpAmount == 200, 'H3 (e): listed as a rest')
+    local chkE = Cb('admin:checkBankingTxn', 1, { rowId = idE })
+    H.ok(
+        chkE and chkE.followUp == 'rest' and (chkE.outcomes or {}).restPaid == true
+            and (chkE.outcomes or {}).restRelease == true,
+        'H3 (e): at review the admin decides: Mark the rest paid or Release'
+    )
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaidStep', 'added') WHERE id = ?]],
+        { idE })
+    ok, e = Resolve(idE, 'restRelease')
+    H.ok(not ok and e == 'err.payment_step_unknown', 'H3 (e): Release refused once the rest reached the officer')
+    ok, e = Resolve(idE, 'restPaid')
+    H.ok(ok and RowOf(idE).cash_paid == 500 and RowOf(idE).bd.cash.restPaid == 'paid' and #calls.add == 0,
+        'H3 (e): Mark the rest paid moves no money: ' .. tostring(e))
+    -- the department paid, the officer did not, the refund failed: at 'withdrawn'; Release gives it back first
+    Reset()
+    Config.Cash.source = 'society'
+    local idE2 = Row({ status = 'capped', owed = 500, paid = 300 })
+    addResult = false
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = idE2, reason = 'x', confirm = '200', requestId = Rid() })
+    CP.Banking.depositSociety = realDeposit
+    addResult = true
+    c = RowOf(idE2).bd.cash
+    H.ok(not ok and e == 'err.payment_refund_failed' and c.restPaidStep == 'withdrawn' and c.restPaidAccount == 'sast',
+        'H3 (e): the rest at step withdrawn')
+    sast0 = bank.balance.sast
+    ok, e = Resolve(idE2, 'restRelease')
+    H.ok(ok and bank.balance.sast == sast0 + 200 and RowOf(idE2).bd.cash.restPaid == nil,
+        'H3 (e): Release gives the department its $200 back and frees the rest: ' .. tostring(e))
+    ok = Act('server:admin:payCapRest', 1, { rowId = idE2, reason = 'x', confirm = '200', requestId = Rid() })
+    H.ok(ok == true and RowOf(idE2).cash_paid == 500, 'H3 (e): Pay the rest can be used again')
+    -- a claim cut before any money moved is released at the start
+    local idE3 = Row({ status = 'capped', owed = 500, paid = 300 })
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying') WHERE id = ?]],
+        { idE3 })
+    H.eq(Async(function() return Call(Cash, '_releaseUnstarted') end), 1,
+        'H3 (e): the start-up release frees a claim cut before money')
+    H.eq(RowOf(idE3).bd.cash.restPaid, nil, 'H3 (e): ...so Pay the rest works again')
+
+    -- (f) Pay again: the department paid, the deposit was refused and the refund failed: Pay again resumes with the
+    -- deposit only (no second withdrawal)
+    Reset()
+    local idF = Row({
+        status = 'paying',
+        owed = 250,
+        cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = 250 },
+    })
+    addResult = false
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idF, 'payAgain', '250')
+    CP.Banking.depositSociety = realDeposit
+    addResult = true
+    c = RowOf(idF).bd.cash
+    H.ok(not ok and e == 'err.payment_refund_failed' and c.again == 'paying' and c.againStep == 'withdrawn',
+        'H3 (f): Pay again left at withdrawn')
+    Reset()
+    people[7].money.bank = 1000
+    ok, e = Resolve(idF, 'payAgain', '250')
+    H.ok(ok and #Logged('withdraw') == 0 and people[7].money.bank == 1250 and RowOf(idF).cash_status == 'paid',
+        'H3 (f): the resumed Pay again deposits only: ' .. tostring(e))
+    H.ok((LastAudit('paymentPayAgain') or {}).new_value == '250:resume', 'H3 (f): audited as a resume')
+    H.eq(#Logged('entry', { side = 'society', type = 'withdraw' }), 1,
+        'H3 (f): the department\'s history entry is written')
+
+    -- (g) Pay now, Forfeit now, Cancel payment: a failed audit row changes nothing (audit first)
+    Reset()
+    local Kit = CP.AdminKit
+    local realAudit = Kit.auditSync
+    Kit.auditSync = function() return nil end
+    local idG = Row({ status = 'pending', owed = 90 })
+    ok, e = Act('server:admin:payNow', 1, { rowId = idG, requestId = Rid() })
+    H.ok(not ok and e == 'err.audit_failed' and #calls.add == 0 and RowOf(idG).cash_status == 'pending',
+        'H3 (g): Pay now with no audit row pays nothing: ' .. tostring(e))
+    ok, e = Act('server:admin:retryPending', 1, { requestId = Rid() })
+    H.ok(not ok and e == 'err.audit_failed' and #calls.add == 0, 'H3 (g): Retry all pending neither')
+    ok, e = Act('server:admin:cancelPayment', 1, { rowId = idG, reason = 'x', confirm = '90', requestId = Rid() })
+    H.ok(not ok and e == 'err.audit_failed' and RowOf(idG).cash_status == 'pending', 'H3 (g): Cancel payment neither')
+    local idG2 = Row({ status = 'pending', owed = 40, voided = true })
+    ok, e = Act('server:admin:forfeitNow', 1, { rowId = idG2, reason = 'x', requestId = Rid() })
+    H.ok(not ok and e == 'err.audit_failed' and RowOf(idG2).cash_status == 'pending', 'H3 (g): Forfeit now neither')
+    Kit.auditSync = realAudit
+    ok = Act('server:admin:payNow', 1, { rowId = idG, requestId = Rid() })
+    local rows = H.sql(
+        'SELECT old_value, new_value FROM cp_audit WHERE action = \'paymentRetry\' ORDER BY id DESC LIMIT 2')
+    H.ok(ok and rows[2] and rows[2].new_value == 'paying' and rows[1].new_value == 'paid',
+        'H3 (g): Pay now: the intent row, then the outcome row')
+
+    -- (h) Add funds: a funding row cut before its deposit is failed at the start; the deposit marks 'depositing'
+    H.sql('DELETE FROM cp_dept_funding')
+    H.sql([[INSERT INTO cp_dept_funding (department, amount, txn, state, by_actor, reason, created_at)
+        VALUES ('sast', 100, 'CP-FUND-1', 'pending', 'x', 'x', FROM_UNIXTIME(?))]], { H.time - 600 })
+    H.eq(Async(function() return Call(Pay, '_failUnstartedFunding') end), 1,
+        'H3 (h): a pending funding row cut before the deposit')
+    H.eq(H.sql('SELECT state FROM cp_dept_funding')[1].state, 'failed', 'H3 (h): ...is failed')
+
+    Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = false, false, false
+    Config.Cash.source = 'server'
+    Reset()
 end
 
 _G.print = realPrint
