@@ -1,6 +1,6 @@
--- One history per run (FIN4, modules/review/history.lua): the rows of the run (live and archived), its flags and
+-- One history per run (modules/review/history.lua): the rows of the run (live and archived), its flags and
 
--- One history per run (FIN4, modules/review/history.lua): the rows of the run (live and archived), its flags and
+-- One history per run (modules/review/history.lua): the rows of the run (live and archived), its flags and
 -- staff notes, the decisions on its rows, its disputes and the correction batch that voided a row come back as one
 -- timeline, oldest first. The smallest database case for the new reads; the queue's History button and the Admin UI's
 -- run detail draw this list.

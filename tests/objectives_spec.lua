@@ -1,6 +1,6 @@
--- Config.Objectives (FM1): the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
+-- Config.Objectives: the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
 
--- Config.Objectives (FM1): the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
+-- Config.Objectives: the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
 -- of the Day are one config section, each kind with its own switch, points (or multiplier) and picking rules. One
 -- block per old feature, driven through the new section: what the shipped config gives is what the server gave
 -- before, and each kind's switch turns only that kind off. Plain stubs, no database.

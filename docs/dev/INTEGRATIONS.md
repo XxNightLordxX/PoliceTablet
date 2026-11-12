@@ -2637,7 +2637,7 @@ end)
 
 - **Spec claim:** Crimson-Police learns what is done with sc-police's player cuffs, escorts, jail, bobby pins and cash seizures without editing, cancelling or answering any of it (police vs real criminal players, owner decision 2026-10-26: "Build all 3 but options in the config.lua")
 - **Evidence:** server/interactions.lua:24 (`police:server:CuffBreakAlert(officerId)`, sent by the suspect who broke free; client/interactions.lua:1070-1071 sends it only when it knows who cuffed him), :56 (`police:server:CuffPlayer(playerId, isSoftcuff)`, the client always sends `true`), :95 (`police:server:UncuffPlayer(playerId)`), :227-233 (`police:server:BobbyPinResult(success)` from the picker; sc-police ignores a result with no pending attempt), :277 (`police:server:EscortPlayer(playerId)`), :476 (`police:server:SeizeCash(playerId)`); server/commands.lua:248-264 (`police:server:JailPlayer(targetId, jailTime)`, which writes `injail` inside its own handler; client/interactions.lua:439 sends `tonumber(input[1])`). server/prison.lua:284 registers another `JailPlayer` handler, but prison.lua is not in sc-police's fxmanifest.
-- **Implication:** net events call every registered handler, so modules/system/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.Police.on` listener of its kind exists or `CP.Opponents.active()` is not true (CP.Opponents is built in V4; until then the handlers do nothing), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
+- **Implication:** net events call every registered handler, so modules/system/integrations/sc_police registers a second handler for each of these seven events (like the Impound one above). Each one only reads: `local src = source` first; it returns at once while no `CP.Police.on` listener of its kind exists or `CP.Opponents.active()` is not true (the handlers do nothing while CP.Opponents is not loaded), so with no case open it reads no native at all; then a rate limit of 6 a second per sender and kind (`CP.Net.rateOk(src, 'scp:' .. kind, 6, 1000)`, dropped without a log line); then the ids must be whole numbers 1..65535 (a bad one drops the event). The listeners get `'cuff'` (officerSrc, targetSrc, isSoftcuff == true), `'uncuff'` (officerSrc, targetSrc), `'cuffBreak'` (suspectSrc, officerSrc), `'escort'` (officerSrc, targetSrc), `'jail'` (officerSrc, targetSrc, jailTime as sent: the listener clamps it), `'bobbyPin'` (pickerSrc, success == true) and `'seizeCash'` (officerSrc, targetSrc), each inside pcall (at most one error line a minute per kind), inside the event and without yielding. A raw `BobbyPinResult(true)` with no pending attempt still reaches this handler, so a listener must not trust it on its own (design critic 2 #6). Crimson-Police never registers `police:server:SetHandcuffStatus` (it reads cuffs from the qbx `ishandcuffed` metadata only) and still never triggers any police:* event. Nothing consumes these facts until CP.Opponents.
 
 ```lua
 RegisterNetEvent('police:server:CuffBreakAlert', function(officerId) ... end)          -- source = the suspect
@@ -2958,8 +2958,8 @@ end
 
 ## Crimson-Contracts
 
-Checked against Crimson-Contracts' own repository (branch john.allday/awesome-noether-p5qdq2, commit e20316f, steps
-VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it.
+Checked against Crimson-Contracts' own repository (branch john.allday/awesome-noether-p5qdq2, commit e20316f).
+Crimson-Police never requires it, never calls it and never edits it.
 
 ### crimsonPoliceRun player bag: Crimson-Contracts' guard damage scaling stands back
 
@@ -2977,7 +2977,7 @@ VC1 to VC3). Crimson-Police never requires it, never calls it and never edits it
   `CP.Alerts.releaseRun`), and sets it to nil when he leaves the run (any reason, a disconnect included), when the run
   ends and when Crimson-Police stops. It is written only on a change. The value is a plain boolean: it is not the
   `crimsonArena` table that sc-dispatch indexes, so no other script reads it. A run whose start data says
-  `npcCombat = false` (V14's live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
+  `npcCombat = false` (the live runs) never sets it, so Crimson-Contracts scales its guards for those officers as
   for anyone else.
 
 ### Lifecycle events: the live-crime intake

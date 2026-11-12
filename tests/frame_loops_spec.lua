@@ -1,4 +1,4 @@
--- Frame loops read cache.ped (skill check K19): every while loop that can wait 0 ms in the block clients, the run
+-- Frame loops read cache.ped: every while loop that can wait 0 ms in the block clients, the run
 -- client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not
 -- PlayerPedId() each frame.
 

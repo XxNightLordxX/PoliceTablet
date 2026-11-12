@@ -1,6 +1,6 @@
-// The one restrictions list as a panel (FM5, FIN4): every restriction running now, each with its kind, who it names,
+// The one restrictions list as a panel: every restriction running now, each with its kind, who it names,
 
-// The one restrictions list as a panel (FM5, FIN4): every restriction running now, each with its kind, who it names,
+// The one restrictions list as a panel: every restriction running now, each with its kind, who it names,
 // until when, who set it and why, a kind filter, and Extend / Lift with a reason through server:restriction (each
 // kind keeps its own rules on the server, modules/supervisor/restrictions.lua). Used by the Admin UI's Restrictions
 // screen (scope 'admin': admin:getRestrictions) and the Supervisor UI's Department -> Restrictions tab (scope 'sup':

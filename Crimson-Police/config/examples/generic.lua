@@ -1,6 +1,6 @@
--- GENERIC STARTING CONFIG for a fresh Qbox city (SALE3). To package a copy for sale, copy this file over
+-- GENERIC STARTING CONFIG for a fresh Qbox city. To package a copy for sale, copy this file over
 
--- GENERIC STARTING CONFIG for a fresh Qbox city (SALE3). To package a copy for sale, copy this file over
+-- GENERIC STARTING CONFIG for a fresh Qbox city. To package a copy for sale, copy this file over
 -- config/config.lua. It is config.lua with these differences: the departments are qbx_core's own police jobs (police,
 -- bcso and sasp from qbx_core shared/jobs.lua, supervising from grade 3 Lieutenant), every other script is 'auto'
 -- (README "Supported scripts"), the field training grades follow those departments, no zone names a private script,

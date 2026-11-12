@@ -1,6 +1,6 @@
--- H7: the resource starts on an escrowed (Tebex) build. FiveM asset escrow encrypts every .lua file escrow_ignore does
+-- The resource starts on an escrowed (Tebex) build. FiveM asset escrow encrypts every .lua file escrow_ignore does
 
--- H7: the resource starts on an escrowed (Tebex) build. FiveM asset escrow encrypts every .lua file escrow_ignore does
+-- The resource starts on an escrowed (Tebex) build. FiveM asset escrow encrypts every .lua file escrow_ignore does
 -- not list: FXServer runs those scripts, but LoadResourceFile of one gives ciphertext. Here every such file of
 -- Crimson-Police reads back as garbage through LoadResourceFile while every server script, then every client
 -- script, loads in fxmanifest order (CreateThread deferred to the next tick, as FXServer does). The resource must

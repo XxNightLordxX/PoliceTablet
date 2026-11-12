@@ -1436,13 +1436,13 @@ Points, streaks, XP and badges.
   `nextForfeitureAt()`.
 - Admin money tools (§5.40), each `-> ok, data | false, errKey`; claim first, then `audit(info)` (false: the claim is
   undone, `err.audit_failed`), then the money under the officer's payment lock, then the final state.
-- H3, what a money call did: an intent marker is written (and checked) before each money call (`step` `withdrawing`,
+- What a money call did: an intent marker is written (and checked) before each money call (`step` `withdrawing`,
   `adding`; Pay again and Pay the rest `<key>Step`, compare-and-set on their claim). A call that raised (Qbox
   `false, 'error'`, the banking adapter's `false, 'error'`) is decided from the balance read right before and after
   it: changed by the amount = done, unchanged = refused, else `review` (left for an admin, never refunded blind).
   Pay again refuses `withdrawing`, `adding`, `review` (`err.payment_step_unknown`) and resumes a Pay again left at
   `againStep = 'withdrawn'` with the deposit only (`again2`).
-- H3 follow-ups on paid/capped rows: `restPaid = 'paying'`, a clawback's `backPending`/`backStep` (`claimed` →
+- Follow-ups on paid/capped rows: `restPaid = 'paying'`, a clawback's `backPending`/`backStep` (`claimed` →
   `removing`), a give-back's `giveBack` (`owed` → `paying` → `back`, `backOwed`, `backAccount`). `followUpOf(bd)`,
   `FOLLOW_UP_SQL`, `followUpOutcomes(bd)`, `resolveFollowUp(rowId, outcome, audit)`; `stuckPayments()` lists them
   (`kind`), `retryGiveBacks()` runs at the start and every 10 min, and the start-up sweep releases claims no money call
@@ -1983,12 +1983,12 @@ Server:
   `missionView(def)`, `setMissionEnabled(src, id, on)` (`missionSwitch`), `setLocationEnabled(src, id, index, on)`
   (`locationSwitch`; the label when it is unique in the mission, else the number), `resetMission(src, id)`
   (`missionSwitchesReset`).
-- Simple set (A7): `COMMON` lists about 25 everyday paths (Debug, Locale, the tablet key, NPC accuracy and damage, the
+- Simple set: `COMMON` lists about 25 everyday paths (Debug, Locale, the tablet key, NPC accuracy and damage, the
   Flee times, spawning distances, the route line, Radio Silence, mission calls, the Builder minimums, payout reasons,
   built-in editing, the test overlay, the resets).
-- Simple view (A8): `admin/screens/Settings.tsx` opens in Simple until the admin picks All settings with the Simple /
+- Simple view: `admin/screens/Settings.tsx` opens in Simple until the admin picks All settings with the Simple /
   All settings switch.
-- Gear and presets (UI6): `Play.screens` maps each Admin UI screen key to its sections (`Settings.screens()`,
+- Gear and presets: `Play.screens` maps each Admin UI screen key to its sections (`Settings.screens()`,
   `SettingsData.screens`); `layouts/AdminLayout.tsx` shows the gear over every screen but Settings and lazy-loads
   `admin/components/ScreenSettings.tsx` (the same `SettingRow` and `useSettingSave`). `Preset` holds the presets'
   order, the paths no preset may set (`Preset.refusal`) and the check of `Config.AdminUi.presets`; `Settings.presets()`,
@@ -2582,7 +2582,7 @@ admin switched them on and only inside the admin's bounds.
 - `view(src)` (each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved,
   setBy, setRole, at, expiresAt, timeLeft, waitLeft, flags, list, offered, choices, ... }`), `available(src)` (sent as
   `session.config.missionControls`), `mine(src)` (Department → Controls, each control's limits and today's use inline,
-  always on since MG3; callback `sup:getMyControls`), `checkConfig(map, boot)` (registered names only, `on` boolean,
+  always on; callback `sup:getMyControls`), `checkConfig(map, boot)` (registered names only, `on` boolean,
   `min ≤ max` inside `range`, known flags and list names; `err.control_config`).
 - Kind `action`: a staff action with no saved value (`get` nil, `set`/`reset` refuse `err.control_unknown`); `bounded
   = false` = no min/max. Kind `choice`.
@@ -2787,7 +2787,7 @@ Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11)
 
 Admin transitions (full admin control, §5.20, §5.40; the money ones ship off behind `Config.Cash.allow*`): `paying` →
 `paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` →
-`withdrawing` → `withdrawn` → `adding` → `added`, or `review` when a raised call left no telling; H3).
+`withdrawing` → `withdrawn` → `adding` → `added`, or `review` when a raised call left no telling).
 
 ---
 
@@ -3223,7 +3223,7 @@ which add no event of their own. The conduct step also adds a third read-only `w
 Other resources' server-only events Crimson-Police listens to with `AddEventHandler` (never `RegisterNetEvent`, so no
 client can send them), checked against `GetInvokingResource()`: Crimson-Contracts' `crimson-contracts:server:contractStarted`,
 `:dispatchSent`, `:contractEnded`, `:memberRejoined` and `:crewShot` (modules/system/integrations/crimson_contracts, live
-crimes V10, §5.46). Registered always; they do nothing while `Config.RealPlayers.liveCrime.enabled` is not true or the sender is
+crimes, §5.46). Registered always; they do nothing while `Config.RealPlayers.liveCrime.enabled` is not true or the sender is
 not in `Config.RealPlayers.liveCrime.sources`.
 
 ### 8.3 Supervisor, admin, builder and test actions (`CP.Net.action`) and callbacks (`CP.Net.callback`)
@@ -3240,8 +3240,8 @@ Callbacks (read): `getSession`, `getMissionTypes`, `getUnit`, `getRun`, `getHome
 Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`, `getRewardsLocker`, `sup:getMissionCalls`,
 `sup:getProfileQueue`, `admin:getRewards` (`{ page }`), `admin:getAreaCoverage`, `admin:getLocationStats`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
-`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday` (UI4,
-modules/supervisor/today: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
+`admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday`
+(modules/supervisor/today: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
 `notices:get` (`{ kind }`, CP.Notices: limits, running, history + cp_audit endedBy/endReason), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3), `crimtab:get` (rate 4, §5.51);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
@@ -3545,7 +3545,7 @@ for type `crimtab` only).
 | `notify` | `notification = { id, kind, title?, text, duration }` | Crimson-Police toast |
 | `hud` | `hud = HudState \| null` | mission HUD (full state) |
 | `result` | `result = RunResult` | result screen |
-| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (its supervisors and admins: a control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27), `reviewQueue` (Config.Tablet.supervisorReviewLive: someone else decided a flagged run or dispute; his ReviewQueue, only while it is open); `unit` gains `readyCheck`, `run` gains `contact` |
+| `push` | `topic`, `data` | live data for open screens: `run`, `unit`, `board`, `operation`, `invites`, `test`, `builder`, `payouts`, and `calls` (DispatchView), `nav` (NavCounts), `profile` (own profile changed), `options` (own officer options changed, `{ values }`), `rewards` (locker changed), `contactConfirm`, `settings` (admins: a setting or switch changed, `{ paths }`), `missionControls` (its supervisors and admins: a control changed, `{ department, key }`, §5.49), `spawnCheck` (the admin's spawn point check, §5.27), `reviewQueue` (someone else decided a flagged run or dispute; his ReviewQueue, only while it is open); `unit` gains `readyCheck`, `run` gains `contact` |
 | `overlay` | `overlay = null \| { kind: 'placement'\|'recording'\|'testdrive'\|'fade', ... }` | full-screen/HUD overlays |
 | `theme` | `theme`, `locale?`, `prefs?`, `options?` | the department theme for the HUD (login, duty, job, unload, and a change of the options `hudLook` / `textSize`), with the officer's look (`prefs` { appearance, accent }, `options` { hudLook, textSize }; absent without an officer session); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |
@@ -3957,8 +3957,8 @@ Screen keys (for `navigate`) and title keys (`ui.screen.<key>`):
 
 | UI | keys (sidebar order) | |---|---| | Officer | `home` `board` `dispatch` (hidden when
 `Config.MissionCalls.enabled = false`) `unit` `active` `leaderboard` `challenge` `profile` | | Supervisor |
-`sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` (+ minutes: addTime) `sup_department` (MG3,
-`layouts/supDepartment.ts`: tabs Officers = viewMissionList, officer dialog: Clear cooldown; Controls =
+`sup_missions` `sup_crossdept` (launchCrossDept) `sup_live` (+ minutes: addTime) `sup_department`
+(`layouts/supDepartment.ts`: tabs Officers = viewMissionList, officer dialog: Clear cooldown; Controls =
 missionControls or `session.config.missionControls`, happy hour: Start with minutes, countdown, End now; Review =
 reviewFlagged or handleDisputes; Calls & notices = missionCalls or a Mission control; Training = viewMissionList or
 fieldTraining; a link names its tab with `{ deptTab }`)

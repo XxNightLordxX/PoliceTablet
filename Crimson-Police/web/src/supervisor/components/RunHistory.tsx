@@ -1,6 +1,6 @@
-// One run's history as one timeline (FIN4): the rows written, the flags and staff notes, every staff decision, the
+// One run's history as one timeline: the rows written, the flags and staff notes, every staff decision, the
 
-// One run's history as one timeline (FIN4): the rows written, the flags and staff notes, every staff decision, the
+// One run's history as one timeline: the rows written, the flags and staff notes, every staff decision, the
 // disputes and the correction batches, oldest first (modules/review/history.lua). RunHistoryList draws a list of
 // events (the Admin UI's run detail hands its view.history); RunHistoryDialog asks review:getRunHistory for one run
 // (the Review queue's History button).

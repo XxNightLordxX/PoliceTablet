@@ -1,6 +1,6 @@
--- Supervisor UI -> Department, today at a glance (UI4): the sup:getToday answer and its permission.
+-- Supervisor UI -> Department, today at a glance: the sup:getToday answer and its permission.
 
--- Supervisor UI -> Department, today at a glance (UI4): sup:getToday answers the department's officers on duty, its
+-- Supervisor UI -> Department, today at a glance: sup:getToday answers the department's officers on duty, its
 -- runs going (as Live Missions lists them: every run not ended with an officer of the department on it) and the
 -- viewer's Mission controls used today (each control with a day count, use capped at it); an admin with no department
 -- sees every department; refused without viewMissionList. Plain Lua: modules/supervisor/today with stand-ins.

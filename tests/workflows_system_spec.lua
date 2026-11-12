@@ -1,6 +1,6 @@
--- WF5E: the system and its integrations, extensively (the owner: "do extensive workflow testing on everything").
+-- The system and its integrations, extensively.
 
--- WF5E: the system and its integrations, extensively (the owner: "do extensive workflow testing on everything").
+-- The system and its integrations, extensively.
 -- What Crimson-Police does on its own, driven on the REAL server side: the world of tests/workflows_full_spec.lua
 -- (every server file of fxmanifest loaded as in game, the owner's scripts running, database off: the saves folder, as
 -- shipped), booted on the shipped config with no section of that spec run (CP_WF_WORLD). Each part runs on the

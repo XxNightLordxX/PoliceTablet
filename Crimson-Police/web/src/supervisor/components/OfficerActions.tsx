@@ -1,6 +1,6 @@
-// Supervisor UI · Department → Officers: the action forms of the officer's side panel (UI4).
+// Supervisor UI · Department → Officers: the action forms of the officer's side panel.
 
-// Supervisor UI · Department → Officers · the forms of the officer's side panel (UI4): Give points, Mission ban
+// Supervisor UI · Department → Officers · the forms of the officer's side panel: Give points, Mission ban
 // (or Lift), Clear cooldown and Field training, each shown in the panel under its action (the dialogs before). The
 // same fields, limits and reasons as before; the server checks every rule again (own department, never himself, a
 // lower grade for a ban, the supervisor's and the officer's uses a day, Config.AdminControl) and writes the audit row.

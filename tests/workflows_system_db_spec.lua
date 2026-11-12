@@ -1,6 +1,6 @@
--- WF5E: tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder.
+-- Tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder.
 
--- WF5E: tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder:
+-- Tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder:
 -- an empty database built by the real migrations runner at start (every table utf8mb4), a restart that applies
 -- nothing twice, every adapter, a restart and the maintenance lock in the middle of each money and storage action
 -- (backups and restore read and write the database, the copy and the switch go to the saves folder), the clean-up's

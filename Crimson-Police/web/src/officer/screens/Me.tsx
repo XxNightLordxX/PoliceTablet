@@ -1,4 +1,4 @@
-// Officer UI · Me (screen key 'me', UI5): Profile & History (officer/screens/Profile), Leaderboard
+// Officer UI · Me (screen key 'me'): Profile & History (officer/screens/Profile), Leaderboard
 // (officer/screens/Leaderboard) and Department Challenge (officer/screens/Challenge) as tabs of one screen, each the old
 // screen itself. params.meTab picks the tab (layouts/officerMe.ts); params.citizenid opens an officer's public profile.
 

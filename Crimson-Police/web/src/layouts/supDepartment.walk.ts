@@ -1,11 +1,11 @@
-// The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step, MG3): its five
+// The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step): its five
 // tabs, each with the permission of the screen it replaces, the old keys sup_report, sup_controls and sup_review
 // opening their tab (params kept), the tab a link or the landing picks, and the sidebar listing Department alone.
 
-// The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step, MG3): its five
+// The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step): its five
 // tabs, each with the permission of the screen it replaces, the old keys sup_report, sup_controls and sup_review
 // opening their tab (params kept), the tab a link or the landing picks, and the sidebar listing Department alone.
-// UI4: today at a glance above the tabs (todayTiles against the sup:getToday mock) and the officer's side panel
+// Today at a glance above the tabs (todayTiles against the sup:getToday mock) and the officer's side panel
 // (officerActions, ftoRoleOf; one panel with the forms in it, no dialog per action).
 
 import '../mocks/core.mock';

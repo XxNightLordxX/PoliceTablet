@@ -13,8 +13,8 @@ What to update with each change is at the end, in "Working on the code".
 |---|---|---:|
 | `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.9 s |
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
-| `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
+| `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
 | `lint-i18n` | `python3 tools/check_i18n.py`: the translation scanner, English joined to a translated text (J), a plural built in place (P), a count string with no `_one` / `_other` forms (S), known hits in `tools/i18n_baseline.txt` ("Translation scanner" below) | 1 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/dev/STYLE.md) | 75 s |
 | `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
@@ -30,7 +30,8 @@ What to update with each change is at the end, in "Working on the code".
 **Opt-in steps.** `clickthrough`, `race-all` and `db-check` print `SKIP` (and count as skipped) unless they are
 named (`tools/check_all.sh clickthrough race-all db-check`) or turned on (`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`,
 `CP_DB_CHECK=1`).
-`.github/workflows/nightly.yml` runs both every night and on request. `clickthrough` serves the built web UI in its
+`.github/workflows/nightly.yml` runs `clickthrough` and `race-all` every night and on request (`db-check` runs only when
+named). `clickthrough` serves the built web UI in its
 browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright, pinned in `Crimson-Police/web`'s
 devDependencies; `npx playwright install chromium` once): the Officer, Supervisor, Admin and criminal tablets, every
 screen, every tab, every button of each screen and each dialog a button opens, then the in-world screens (each
@@ -254,7 +255,7 @@ Variables for one run:
 | `CP_STORAGE_RUNS=n`, `CP_COPY_RUNS=n` | size of the storage timing specs (default 50000 and 1203 runs) |
 | `FUZZ_SEED=n`, `FUZZ_N=n` | the fuzz scripts' seed and statement count |
 | `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
-| `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (WF6B; docs/dev/WORKFLOWS.md) |
+| `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (docs/dev/WORKFLOWS.md) |
 | `CP_LOAD_TRACE=1` | `tests/load_spec.lua` prints each harness step over 30 ms as a REPORT line |
 | `CP_RACE_ONLY=<text>`, `CP_RACE_CUTS=n` or `all`, `CP_RACE_DEBUG=1` | `tests/race_spec.lua`: only the cases whose name holds the text; the restart cuts per case (default 5; `all`: after every query, a case's own `maxCuts` too); print both replies of each at-once pair |
 | `CP_CRASH_SAMPLE=n`, `CP_CRASH_ALL=1` | `tests/crash_matrix_spec.lua`: the cut points of a journey with more awaits than n (default 40) are spread over it; `CP_CRASH_ALL=1` cuts after every await |
@@ -417,7 +418,7 @@ registers only while its feature is on is listed only while it ships on.
 `tests/race_spec.lua` cuts each client action by a restart after its queries ("cut after query n"), and
 `tests/crash_matrix_spec.lua` does the same to what the server does by itself: a Beat Patrol's end and payout, and
 the pay of a pending payment at login. After each cut the server starts again, the catch-ups run and the officer
-logs in again; a failure names the cut (`patrol cut after await 6 of 25: paid at most once (2 payments)`). H3 added a
+logs in again; a failure names the cut (`patrol cut after await 6 of 25: paid at most once (2 payments)`). It also cuts a
 feature reward, Pay again, a clawback and Pay the rest with the society source on, each checked for the money
 invariants: the department's debits minus refunds equal what reached the officer (or the row says the department
 paid and is listed for an admin), what a clawback took equals what the row holds and what the department got back or
@@ -775,11 +776,17 @@ Run `tools/check_all.sh` once, right before the commit (its steps are listed at 
 - **What an owner sees or sets** (install, a setting, a command, a console line) goes in the root `README.md` when
   it is install, admins, what ships off, commands or troubleshooting, else in `docs/OWNER_GUIDE.md`, and in the folder
   README that covers it. The README stays under 60 KB (`tests/docs_spec.lua`).
+- **Links, references and order** (`tests/docs_spec.lua`): in every tracked `.md` (outside ``` fences) each relative
+  link lands on a tracked file or folder, and a `#anchor` into a `.md` on one of its headings; each `path:line` or
+  `path:first-last` into this repository names a line the file has (a reference into another resource needs that
+  resource on its line or in its section's heading); the README keeps its nine parts in order, each `n.m` under part n
+  and counted up from 1. The console lines the docs quote (the mission load line, the department job warning) are
+  checked against the code that prints them, and the in-game checklist opens with its first hour (12 to 18 checks,
+  each with `->`).
 - **No build history in the docs**: they describe what the code does now, not which step changed it. Step and plan
-  ids stay out of the prose (only `docs/IN_GAME_CHECKLIST.md` keeps its step tags); `tests/docs_spec.lua` checks it.
+  ids stay out of every document but `Crimson-Police/CHANGELOG.md`; `tests/docs_spec.lua` checks it.
 - **One place per fact**: SPEC states each rule once and points at ARCHITECTURE, the migrations and the config
-  copy instead of restating them; its prose (everything but the config copies) stays under 280 KB
-  (`tests/docs_spec.lua`).
+  copy instead of restating them; the SPEC stays under 250000 bytes (`tests/docs_spec.lua`).
 - **Commit messages** say what changed and why. The only numbers in them come from the gate.
 
 ### Keeping the style applied

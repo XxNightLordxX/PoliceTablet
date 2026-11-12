@@ -1,12 +1,12 @@
-// The Department screen of the Supervisor UI (MG3): the supervisor's department tools as tabs of one screen.
+// The Department screen of the Supervisor UI: the supervisor's department tools as tabs of one screen.
 
-// The Department screen of the Supervisor UI (MG3): the supervisor's department tools as tabs of one screen.
+// The Department screen of the Supervisor UI: the supervisor's department tools as tabs of one screen.
 // Officers (the Department Report and each officer's actions), Controls (Mission controls with each control's admin
 // limits and today's use inline), Review (the Review Queue), Restrictions (the mission bans and tablet suspensions of
 // his department, admin/components/RestrictionsPanel.tsx), Calls & notices (the mission calls panel and the
 // department notices) and Training (field training). A link to a tab is navigate('sup_department', { deptTab }).
 
-// Above the tabs (UI4): today at a glance (todayTiles): officers on duty, runs going, waiting for review and the
+// Above the tabs: today at a glance (todayTiles): officers on duty, runs going, waiting for review and the
 // supervisor's Mission controls used today, each opening the tab or screen where he acts on it.
 // Pure functions, checked by supDepartment.walk.ts: deptTabsFor (the tabs a session may see: each tab keeps the
 // permission of the screen it replaces), deptTabOf (the tab the screen shows) and todayTiles.

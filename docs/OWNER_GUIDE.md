@@ -845,7 +845,7 @@ from an older `config.lua` (Crimson-Police ignores it).
 | `Config.AdminUi.settingsView` | Settings opens in Simple; **All settings** is one click away | Admin UI → Settings |
 | `Config.AdminUi.homeForms` | the Home shortcuts hold their quick forms; **Open** opens the full screen | Admin UI → Home |
 | `Config.AdminUi.markersScreen` | the **Map markers** screen is shown | Admin UI → NPC missions → Map markers ([3.13](#313-map-markers-every-part-of-a-mission)) |
-| `Config.AdminUi.needsAttention` | Home's **Live now** queues and **Alerts** (UI3: one dashboard) | Admin UI → Home |
+| `Config.AdminUi.needsAttention` | Home's **Live now** queues and **Alerts** (one dashboard) | Admin UI → Home |
 | `Config.AdminUi.oneRequest` | Payments made and Leaderboards open with one request each | Admin UI → Money → Payments, Leaderboards |
 | `Config.AdminUi.windowRows` | long lists draw only the rows in view | every tablet UI |
 | `Config.AdminUi.foldAdvanced` | settings-heavy dialogs and Mission controls fold the rare options under **More** | Admin UI dialogs, Supervisor UI → Department → Controls |

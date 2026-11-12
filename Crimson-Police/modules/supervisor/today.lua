@@ -1,4 +1,4 @@
--- CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
+-- CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday).
 
 -- CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday): the department's officers on
 -- duty, its runs going (as Live Missions lists them) and the viewer's Mission controls used today (CP.DeptControls.mine).

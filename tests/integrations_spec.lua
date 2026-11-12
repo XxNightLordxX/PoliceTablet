@@ -1,6 +1,6 @@
--- SALE1: Crimson-Police on any Qbox city. CP.Integrations picks the dispatch, ambulance, banking and police script
+-- Crimson-Police on any Qbox city. CP.Integrations picks the dispatch, ambulance, banking and police script
 
--- SALE1: Crimson-Police on any Qbox city. CP.Integrations picks the dispatch, ambulance, banking and police script
+-- Crimson-Police on any Qbox city. CP.Integrations picks the dispatch, ambulance, banking and police script
 -- (Config.Integrations: 'auto' in a fixed order with the owner's scripts first, a name, or 'none'); each adapter is
 -- checked against stand-ins shaped like that script's real API (ps-dispatch, qbx_ambulancejob, qbx_policejob, copied
 -- from their server files), and every 'none' path answers like a missing script instead of failing.

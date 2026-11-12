@@ -1,4 +1,4 @@
-// Happy hour as the timed cooldown change (FM10, node walk.mjs, a gate step): the officer banner names the scale
+// Happy hour as the timed cooldown change (node walk.mjs, a gate step): the officer banner names the scale
 // when it is not 0 (and keeps "no mission cooldowns" at 0), and the Mission controls value text shows the scale and
 // the no-repeat tail.
 

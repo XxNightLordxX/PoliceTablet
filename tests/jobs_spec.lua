@@ -1,8 +1,8 @@
--- FM9: one jobs engine (modules/system/schedule.lua): every timed job of the resource registers through
+-- One jobs engine (modules/system/schedule.lua): every timed job of the resource registers through
 -- CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer
 -- runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
 
--- FM9: one jobs engine (modules/system/schedule.lua): every timed job of the resource registers through
+-- One jobs engine (modules/system/schedule.lua): every timed job of the resource registers through
 -- CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer
 -- runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
 -- Plain Lua: CP.AdminKit and CP.Maintenance are stubs, the jobs are the spec's own (tests/e2e_spec.lua runs the real

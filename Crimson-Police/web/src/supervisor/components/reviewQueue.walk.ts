@@ -1,6 +1,6 @@
-// The one Review queue against the browser mocks (node walk.mjs, a gate step, FM3): review:getQueue lists flagged
+// The one Review queue against the browser mocks (node walk.mjs, a gate step): review:getQueue lists flagged
 
-// The one Review queue against the browser mocks (node walk.mjs, a gate step, FM3): review:getQueue lists flagged
+// The one Review queue against the browser mocks (node walk.mjs, a gate step): review:getQueue lists flagged
 // runs and disputes in one list with a type, the filter keeps one type, server:review:decide decides both types and
 // answers with the fresh queue, the Admin UI's queue (all) also lists disputes about failed runs, and the old
 // screens' callbacks are gone from the screens.

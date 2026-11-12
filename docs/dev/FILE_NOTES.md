@@ -32,7 +32,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/blocks/skill_check/server.lua`: Objective block "skill_check" (server half)
 - `Crimson-Police/config/blocks.lua`: Mission Builder ranges and defaults.
 - `Crimson-Police/config/config.lua`: Every Crimson-Police setting.
-- `Crimson-Police/config/examples/generic.lua`: GENERIC STARTING CONFIG for a fresh Qbox city (SALE3).
+- `Crimson-Police/config/examples/generic.lua`: GENERIC STARTING CONFIG for a fresh Qbox city.
 - `Crimson-Police/fxmanifest.lua`: The Crimson-Police resource manifest: its dependencies, the scripts in load order and the NUI files.
 - `Crimson-Police/items/ox_inventory_items.lua`: The Crimson-Police tablet item for ox_inventory.
 - `Crimson-Police/modules/access/access.lua`: CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
@@ -122,7 +122,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/modules/supervisor/notices.lua`: CP.Notices (server): the one notice system.
 - `Crimson-Police/modules/supervisor/restrictions.lua`: CP.Restrictions (server): the one restrictions list.
 - `Crimson-Police/modules/supervisor/supawards.lua`: CP.SupAwards (server): a supervisor gives points to an officer of his own department (the Mission
-- `Crimson-Police/modules/supervisor/today.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday, UI4).
+- `Crimson-Police/modules/supervisor/today.lua`: CP.SupToday (server): Supervisor UI -> Department, today at a glance (sup:getToday).
 - `Crimson-Police/modules/system/client/ambulance.lua`: CP.Ambulance (client): the downed participant's EMS request to the city's ambulance script, and Crimson-Police's own revive when the city has none.
 - `Crimson-Police/modules/system/client/qbx.lua`: CP.Qbx (client): the only client code that talks to qbx_core.
 - `Crimson-Police/modules/system/integrations/crimson_contracts.lua`: CP.CrimsonContracts (server): the adapter for Crimson-Contracts' server-only contract events (sent only with ContractsConfig.LifecycleEvents = true).
@@ -178,7 +178,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/web/src/admin/components/OfficerRunControls.tsx`: Slot: Officers → officer detail → Today & cooldowns: cooldowns (with Clear), today's counts against every cap (with Allow more today), cash today, the Weekly Boss attempt (with Another boss attempt), free abandons (with Treat as a normal abandon) and the Mission Board as the officer sees it (modules/supervisor/livectl.lua).
 - `Crimson-Police/web/src/admin/components/OfficerSupport.tsx`: Slot: Officers → officer detail → Support: check why the tablet won't open, give the tablet item, release a stuck screen and show what holds it.
 - `Crimson-Police/web/src/admin/components/ReasonChips.tsx`: Admin UI · ReasonChips (Config.AdminUi.reasonChips): ready-made reasons as buttons under a reason box.
-- `Crimson-Police/web/src/admin/components/RestrictionsPanel.tsx`: The one restrictions list as a panel (FM5, FIN4): every restriction running now, each with its kind, who it names,
+- `Crimson-Police/web/src/admin/components/RestrictionsPanel.tsx`: The one restrictions list as a panel: every restriction running now, each with its kind, who it names,
 - `Crimson-Police/web/src/admin/components/RewardPoolEditor.tsx`: Slot: Settings → Item rewards: a structured editor for the reward pools (item picker without forbidden items, chance 0–1, rolls 0–10, count 1–100, weight above 0, value 0 or more) with the server's verdict and the expected items and value per run at each tier.
 - `Crimson-Police/web/src/admin/components/ScreenSettings.tsx`: The gear of each Admin UI screen: a drawer with only that screen's settings (modules/admin/settings Play.screens), the same rows, checks, saves and audit as Settings -> All settings, which still lists every setting.
 - `Crimson-Police/web/src/admin/components/SettingsPresets.tsx`: Admin UI -> Settings -> Presets: a group of settings (Config.AdminUi.presets) set in one click.
@@ -300,16 +300,16 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/web/src/layouts/adminMoney.walk.ts`: The Money screen and one request per screen open against the browser mocks (node walk.mjs, a gate step): one Money screen with Pay rates, Rewards, Payments and Department funds tabs (a link names its tab), and Payments gets its totals with its list.
 - `Crimson-Police/web/src/layouts/adminNav.ts`: The Admin UI layout, organised by job: Home on top, then People, Missions, Real players, Money, Review and System, each with a one-line description, the rarely used tools under More, and a breadcrumb.
 - `Crimson-Police/web/src/layouts/adminNav.walk.ts`: The Admin UI layout against the browser mocks (node walk.mjs, a gate step): Home, then the screens by job (People, Missions, Real players, Money, Review, System) each with a description, the rare tools under More, the search that jumps to any screen or tab, officer, mission or setting (Ctrl+K), the Review screen and the breadcrumb.
-- `Crimson-Police/web/src/layouts/clickthrough.walk.ts`: What the browser click-through (tools/clickthrough.mjs, WF5F) found, against the browser mocks (node walk.mjs).
-- `Crimson-Police/web/src/layouts/everyScreen.walk.ts`: Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step; WF4).
+- `Crimson-Police/web/src/layouts/clickthrough.walk.ts`: What the browser click-through (tools/clickthrough.mjs) found, against the browser mocks (node walk.mjs).
+- `Crimson-Police/web/src/layouts/everyScreen.walk.ts`: Every screen of every tablet walked against the browser mocks (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/layouts/navBadges.ts`: Sidebar badges: the NavCounts of getNavCounts, kept fresh by the 'nav' push (the server sends one after every push that can change a count).
-- `Crimson-Police/web/src/layouts/officerMe.ts`: The Officer UI with fewer screens (UI5): the Me screen's tabs, Home's next step and the run bar's quick links.
-- `Crimson-Police/web/src/layouts/officerMe.walk.ts`: The Officer UI with fewer screens (UI5) against the browser mocks (node walk.mjs, a gate step).
+- `Crimson-Police/web/src/layouts/officerMe.ts`: The Officer UI with fewer screens: the Me screen's tabs, Home's next step and the run bar's quick links.
+- `Crimson-Police/web/src/layouts/officerMe.walk.ts`: The Officer UI with fewer screens against the browser mocks (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/layouts/officerNav.ts`: The Officer UI sidebar order: Config.Tablet.sidebarOrder ('classic' = the registry order, as before; 'mostUsed' = the screens an officer opens most first) and Config.Tablet.activeFirst (Active Mission right under Home while on a run).
 - `Crimson-Police/web/src/layouts/officerNav.walk.ts`: Officer UI sidebar order against the browser mocks (node walk.mjs, a gate step): Config.Tablet's sidebarOrder, activeFirst and compactSidebar reach the sidebar as the session's config.officerNav, and the order changes only when they are set.
 - `Crimson-Police/web/src/layouts/screens.ts`: The screen registry: sidebar order, titles, icons and visibility.
-- `Crimson-Police/web/src/layouts/supDepartment.ts`: The Department screen of the Supervisor UI (MG3): the supervisor's department tools as tabs of one screen.
-- `Crimson-Police/web/src/layouts/supDepartment.walk.ts`: The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step, MG3): its five tabs, each with the permission of the screen it replaces, the old keys sup_report, sup_controls and sup_review opening their tab (params kept), the tab a link or the landing picks, and the sidebar listing Department alone.
+- `Crimson-Police/web/src/layouts/supDepartment.ts`: The Department screen of the Supervisor UI: the supervisor's department tools as tabs of one screen.
+- `Crimson-Police/web/src/layouts/supDepartment.walk.ts`: The Department screen of the Supervisor UI against the browser mocks (node walk.mjs, a gate step): its five tabs, each with the permission of the screen it replaces, the old keys sup_report, sup_controls and sup_review opening their tab (params kept), the tab a link or the landing picks, and the sidebar listing Department alone.
 - `Crimson-Police/web/src/layouts/supervisorNav.ts`: The Supervisor UI sidebar and landing: the screens grouped by task under People, Missions and Rewards (supervisorTaskOf), Config.Tablet.supervisorCompact (icons only) and supervisorLanding (the screen it opens on).
 - `Crimson-Police/web/src/layouts/supervisorNav.walk.ts`: Supervisor UI sidebar and landing against the browser mocks (node walk.mjs, a gate step): the screens grouped by task, and Config.Tablet's supervisorCompact and supervisorLanding reaching the Supervisor UI as the session's config.supervisorNav.
 - `Crimson-Police/web/src/main.tsx`: Every stylesheet first, in its fixed order (styles/order.ts)
@@ -361,13 +361,13 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/web/src/officer/components/TwistPicker.tsx`: The twists a leader may add at the accept step (Mission Board, mission call claim): one switch per twist with its own bonus, and the total bonus of the ones picked ("+45% points, x1.50 cash"), capped as the server caps it.
 - `Crimson-Police/web/src/officer/components/twistTicks.ts`: The twists the accept step (Mission Board, mission call claim) starts with ticked.
 - `Crimson-Police/web/src/officer/components/usualTwists.walk.ts`: My usual twists against the browser mocks (node walk.mjs, a gate step): the accept step starts with the officer's usual twists that the card offers, so a usual twist the type does not offer is never sent; with none picked the department's pre-ticked twists stay the start, as before.
-- `Crimson-Police/web/src/officer/happyHour.walk.ts`: Happy hour as the timed cooldown change (FM10, node walk.mjs, a gate step): the officer banner names the scale when it is not 0 (and keeps "no mission cooldowns" at 0), and the Mission controls value text shows the scale and the no-repeat tail.
+- `Crimson-Police/web/src/officer/happyHour.walk.ts`: Happy hour as the timed cooldown change (node walk.mjs, a gate step): the officer banner names the scale when it is not 0 (and keeps "no mission cooldowns" at 0), and the Mission controls value text shows the scale and the no-repeat tail.
 - `Crimson-Police/web/src/officer/screens/ActiveMission.tsx`: Officer UI · Active Mission (screen key 'active', title key 'ui.screen.active') · run_ui slice.
 - `Crimson-Police/web/src/officer/screens/Challenge.tsx`: Officer UI · Department Challenge (the Challenge tab of Me, callbacks getChallenge + getDeptContributors).
 - `Crimson-Police/web/src/officer/screens/Dispatch.tsx`: Officer UI · Dispatch (screen key 'dispatch'): mission calls.
 - `Crimson-Police/web/src/officer/screens/Home.tsx`: Officer UI · Home (screen key 'home', title key 'ui.screen.home').
 - `Crimson-Police/web/src/officer/screens/Leaderboard.tsx`: Officer UI · Leaderboard (the Leaderboard tab of Me, screen key 'me', callback getBoard).
-- `Crimson-Police/web/src/officer/screens/Me.tsx`: Officer UI · Me (screen key 'me', UI5): Profile & History (officer/screens/Profile), Leaderboard (officer/screens/Leaderboard) and Department Challenge (officer/screens/Challenge) as tabs of one screen, each the old screen itself. params.meTab picks the tab (layouts/officerMe.ts); params.citizenid opens an officer's public profile.
+- `Crimson-Police/web/src/officer/screens/Me.tsx`: Officer UI · Me (screen key 'me'): Profile & History (officer/screens/Profile), Leaderboard (officer/screens/Leaderboard) and Department Challenge (officer/screens/Challenge) as tabs of one screen, each the old screen itself. params.meTab picks the tab (layouts/officerMe.ts); params.citizenid opens an officer's public profile.
 - `Crimson-Police/web/src/officer/screens/MissionBoard.tsx`: Officer UI · Mission Board (screen key 'board', title key 'ui.screen.board') · run_ui slice.
 - `Crimson-Police/web/src/officer/screens/MyOptions.tsx`: Officer UI · My options (screen key 'options'): one place where an officer sets the tablet up for himself.
 - `Crimson-Police/web/src/officer/screens/Profile.tsx`: Officer UI · Profile & History (the Profile tab of Me, callback getProfile, actions server:setHideName and
@@ -444,17 +444,17 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `Crimson-Police/web/src/supervisor/components/CommendDialog.tsx`: Commend an officer: a kind, a citation (10–255 characters) and optionally the run it is for.
 - `Crimson-Police/web/src/supervisor/components/FieldTrainingPanel.tsx`: Supervisor UI · Department · Training (Config.Recognition.fieldTraining): every pairing of the department
 - `Crimson-Police/web/src/supervisor/components/MissionCallsPanel.tsx`: Mission calls for staff: the Supervisor UI's Department → Calls & notices panel and the Admin UI's Missions tab (withdraw, one New call dialog that posts, pages or pushes (server:<scope>:mcPost), today's calls), plus the Admin area coverage matrix and location plays.
-- `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons (MG3): each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
-- `Crimson-Police/web/src/supervisor/components/OfficerActions.tsx`: Supervisor UI · Department → Officers: the action forms of the officer's side panel (UI4).
+- `Crimson-Police/web/src/supervisor/components/MyControlsCard.tsx`: Supervisor UI · Department → Controls · Used from their own buttons: each action control this supervisor may use now (Give points, Mission ban, notices ...), the admin's limits and today's use against the per-day count.
+- `Crimson-Police/web/src/supervisor/components/OfficerActions.tsx`: Supervisor UI · Department → Officers: the action forms of the officer's side panel.
 - `Crimson-Police/web/src/supervisor/components/OperationPanel.tsx`: Supervisor/Admin UI · OperationPanel: the active Cross-Department Mission and its controls.
 - `Crimson-Police/web/src/supervisor/components/ProfilesReview.tsx`: Review Queue → Profiles: pending pictures and bios of the department and the profile reports.
 - `Crimson-Police/web/src/supervisor/components/ReviewQueuePanel.tsx`: The one Review queue: flagged runs and disputes in one table with a Type column, a filter (All / Flagged runs /
-- `Crimson-Police/web/src/supervisor/components/RunHistory.tsx`: One run's history as one timeline (FIN4): the rows written, the flags and staff notes, every staff decision, the
+- `Crimson-Police/web/src/supervisor/components/RunHistory.tsx`: One run's history as one timeline: the rows written, the flags and staff notes, every staff decision, the
 - `Crimson-Police/web/src/supervisor/components/lastUsed.ts`: Supervisor action forms open with the values last used: the values of the last successful Give points (points, reason), Mission ban (hours, reason; never a lift) and Clear cooldown (reason), kept in the page's memory only (until Crimson-Police restarts or the player reconnects), so a second award or ban in a row needs no typing.
-- `Crimson-Police/web/src/supervisor/components/myControls.ts`: Department → Controls, inline use (MG3; the 'Your controls today' card before): one row per Mission control the supervisor may use now, with its current value, the admin's limits and today's use.
-- `Crimson-Police/web/src/supervisor/components/officerPanel.ts`: Supervisor UI · Department → Officers: which actions the officer's side panel offers (UI4).
+- `Crimson-Police/web/src/supervisor/components/myControls.ts`: Department → Controls, inline use: one row per Mission control the supervisor may use now, with its current value, the admin's limits and today's use.
+- `Crimson-Police/web/src/supervisor/components/officerPanel.ts`: Supervisor UI · Department → Officers: which actions the officer's side panel offers.
 - `Crimson-Police/web/src/supervisor/components/reviewQueue.ts`: The one Review queue (review:getQueue): flagged runs and disputes in one list with a type column.
-- `Crimson-Police/web/src/supervisor/components/reviewQueue.walk.ts`: The one Review queue against the browser mocks (node walk.mjs, a gate step, FM3): review:getQueue lists flagged
+- `Crimson-Police/web/src/supervisor/components/reviewQueue.walk.ts`: The one Review queue against the browser mocks (node walk.mjs, a gate step): review:getQueue lists flagged
 - `Crimson-Police/web/src/supervisor/components/todayRefresh.ts`: Supervisor UI · Department: today at a glance asks again the moment a side panel action is taken (points given, a ban set or lifted, a cooldown cleared, a commendation, a training pairing), not only on its 30 s poll. todayChanged() tells it; useTodayChanged(fn) runs fn on each tell while the component is shown.
 - `Crimson-Police/web/src/supervisor/screens/Builder.tsx`: Supervisor UI · Mission Builder (screen key 'sup_builder', title key 'ui.screen.sup_builder').
 - `Crimson-Police/web/src/supervisor/screens/CrossDept.tsx`: Supervisor UI · Cross-Department Mission (screen key 'sup_crossdept', title key 'ui.screen.sup_crossdept').
@@ -501,13 +501,13 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/admin_boards_spec.lua`: Full admin control, boards: keeping an officer off the boards, past windows, ranking by any metric,
 - `tests/admin_control_e2e_spec.lua`: Full admin control, end to end: the packages together on the real server side.
 - `tests/admin_economy_spec.lua`: Full admin control, economy: the payments ledger, resolving stuck payments, pay now and retries, the money tools that ship off, payout unlock and Adjust all, the archive and forfeiture jobs under the busy lock, maintenance, the clean-up job (System -> Jobs) and the cash health lines.
-- `tests/admin_features_spec.lua`: Admin UI split by play, (the owner: "ensure the admin panel separates npc stuff and player player stuff
+- `tests/admin_features_spec.lua`: Admin UI split by play: the Settings sections fold into NPC missions, Player vs police and Police teamwork.
 - `tests/admin_home_spec.lua`: Admin UI -> Home, the dashboard: admin:getHome answers everything Home shows in one request: live now (officers on
 - `tests/admin_lists_spec.lua`: The long Admin UI lists: Config.AdminUi.pageSize (rows per page, 0 = each list as before) read through CP.AdminKit, and the Player suspects cases a page at a time.
 - `tests/admin_live_spec.lua`: Full admin control, live runs and units: the Live screen's runs (incl. tests and operations), End run, End test, Recall, + minutes, the units list with Remove and Disband, Type of the Day, the modifier switches and the maintenance refusal at accept.
 - `tests/admin_missions_spec.lua`: Full admin control, Missions and Mission Builder: the Builder for admins while it is off, Change owner,
 - `tests/admin_officers_spec.lua`: Full admin control, officers: signed point adjustments, the bulk void and restore engine, restore run, void kinds, flag by hand, retire, XP check, record move, badge overrides, profile tools, streaks, first-run bonus, goals and staff notices.
-- `tests/admin_permissions_spec.lua`: Admin full control, (the owner: "ensure the admin menu can have full control over every feature limit stuff
+- `tests/admin_permissions_spec.lua`: Admin full control: every limit, cap, cooldown and per-day count has a sane range in Admin UI -> Settings.
 - `tests/admin_rewards_spec.lua`: Full admin control, item rewards: resolve a stuck reward, deliver now, cancel, take back (ships off), rewards back on row:forfeitUndone, the admin filters, the pool check of every Rewards.* change, forbidden items refused live, and delivery waiting under the maintenance lock.
 - `tests/admin_runctl_spec.lua`: Full admin control, an officer's run state and the anti-farm overrides: Today & cooldowns (cooldowns, counts, cash today, free abandons, the board as the officer sees it), Clear cooldowns, Allow more today, Another boss attempt and Treat as a normal abandon, with the limits counted from saved rows and the caches they clear.
 - `tests/admin_system_spec.lua`: Full admin control, System: departments added, turned off and deleted in game (the same answers from the raw Settings editor), logo links and uploads, desks, positions, storage status and the storage switch, webhook states, problems, integrations, Settings history with Revert, Export and Import, the console way back in, Support.
@@ -515,7 +515,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/anticheat_note_spec.lua`: Staff notes (critic 2 #12 and #13): CP.AntiCheat.note records a fact for staff (audited as runNoted, shown in the Review run detail) and never holds anyone's points or items; a flag (runFlagged) still does.
 - `tests/backup_index_spec.lua`: Backups: saves/_backups/index.json and each <name>.manifest.json are written through the storage engine's atomic writer (.tmp, then a rename), so a full disk keeps the old index; a missing or unreadable index.json is rebuilt from the manifests in the backup folder instead of listing no backups.
 - `tests/backup_restore_spec.lua`: Backup restore: money and voids only move forward, the oldest backup of a full list restores, a damaged backup changes nothing, and a restore that stops part way keeps payments held, also after a restart, until a restore works (details below).
-- `tests/baked_in_spec.lua`: One way to do each thing (BK1): the switches that only chose between an old and a new layout of the same screens
+- `tests/baked_in_spec.lua`: One way to do each thing: the switches that only chose between an old and a new layout of the same screens
 - `tests/block_kit_spec.lua`: The block client kit (CP.BlockKit, blocks/_kit/client.lua): one state per run and objective, one resource-stop cleanup, the entity helpers, a progress bar that never raises and one marker loop per run; and every block client uses it instead of its own copy.
 - `tests/blocks_a_spec.lua`: Objective blocks checkpoint_route, interact_points and skill_check (server halves) driven with a fake ctx, plus the locale part check for every key the six files use.
 - `tests/blocks_b_spec.lua`: Slice blocks_b: the server halves of hostile_waves, protect_rescue and flee_arrest driven through a FAKE ctx (spies for complete/fail/award/penalize/spawnPed/canSpawn/ coords/send/hud), a stubbed CP.Npc and a tiny entity world.
@@ -552,7 +552,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/engine_a_spec.lua`: Modules/missions, draw, scaling, schedule, events (slice engine_a).
 - `tests/engine_b_spec.lua`: The run engine (modules/runs/runs.lua) against stubs of the other modules, with every SQL statement of the engine run on the MariaDB test database.
 - `tests/escort_director_spec.lua`: Armored Truck Escort through the spawn director (Config.Spawning) on the real engine, the real block and
-- `tests/escrow_boot_spec.lua`: H7: the resource starts on an escrowed (Tebex) build.
+- `tests/escrow_boot_spec.lua`: The resource starts on an escrowed (Tebex) build.
 - `tests/failed_start_spec.lua`: A start that fails.
 - `tests/feature_rewards_spec.lua`: Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
 - `tests/field_contact_director_spec.lua`: field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
@@ -575,10 +575,10 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/flee_arrest_volunteer_spec.lua`: flee_arrest's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Warrant Service's wanted person at the door played by a volunteer runner.
 - `tests/foreign_sites_spec.lua`: Other scripts' places: no built-in mission spawns or starts on a fixed place of another public script.
 - `tests/foundation_spec.lua`: The foundation: migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other modules build on (stats, decisions, adoption, hidden spawns, plates, held bodies, removals), levels, tweaks, the Session.
-- `tests/frame_loops_spec.lua`: Frame loops read cache.ped (skill check K19): every while loop that can wait 0 ms in the block clients, the run client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
+- `tests/frame_loops_spec.lua`: Frame loops read cache.ped: every while loop that can wait 0 ms in the block clients, the run client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
 - `tests/freeze_spec.lua`: The freeze after a down on the way to a mission start (recovered before the pick-up): the downed follow-up's end signal, the client's screen safety net, the tablet while down, the NUI open check, the web error boundaries and lint rule FX10 (loops that can go round with no Wait).
-- `tests/generic_config_spec.lua`: The generic starting config (SALE3, config/examples/generic.lua): what a copy for sale ships as config/config.lua.
-- `tests/globals_lint_spec.lua`: Globals lint (skill check K20): no server or shared script names a local, loop variable or parameter source (the event global; RegisterCommand's own signature aside), and no script writes the global _ or source.
+- `tests/generic_config_spec.lua`: The generic starting config (config/examples/generic.lua): what a copy for sale ships as config/config.lua.
+- `tests/globals_lint_spec.lua`: Globals lint: no server or shared script names a local, loop variable or parameter source (the event global; RegisterCommand's own signature aside), and no script writes the global _ or source.
 - `tests/happy_hour_spec.lua`: Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
 - `tests/harness.lua`: A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
 - `tests/hostile_waves_director_spec.lua`: hostile_waves through the spawn director (Config.Spawning) on the real engine, the real block and the built-in mission files: wave 1 once an officer is near, every wave away from the officers, the rest waits.
@@ -590,8 +590,8 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/int_engine_spec.lua`: Integration of the engine group: the REAL modules missions, draw, scaling, schedule, events, runs and npc with every REAL block, on the REAL built-in mission files, with stubs only for the modules outside the group (access, qbx, alerts, route, payouts, scoring, cash, anticheat, tablet ...).
 - `tests/int_services_spec.lua`: Integration of the services group: the REAL modules scoring, goals, cash, payouts, leaderboard, challenge, admin, disputes and anticheat running together (plus the real permissions, scaling and schedule), on stubs of CP.Qbx, CP.Access, CP.Tablet, CP.Banking, CP.Missions and CP.Runs.
 - `tests/int_web_spec.lua`: Integration checks for the web group (web/src outside the Mission Builder).
-- `tests/integrations_spec.lua`: SALE1: Crimson-Police on any Qbox city.
-- `tests/jobs_spec.lua`: FM9: one jobs engine (modules/system/schedule.lua): every timed job of the resource registers through CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
+- `tests/integrations_spec.lua`: Crimson-Police on any Qbox city.
+- `tests/jobs_spec.lua`: One jobs engine (modules/system/schedule.lua): every timed job of the resource registers through CP.Schedule.job, the daily, weekly and monthly ones run at their boundary in their order, a job on its own timer runs through its runner, each keeps its last result, and Admin UI -> System -> Jobs lists them with Run now.
 - `tests/lib_spec.lua`: The shared helper library (shared/lib.lua and CP.U.toSrc): sources, the store wait, toasts and pushes, export calls, one-at-a-time locks and per-day caps, with the races two requests sent at once used to win.
 - `tests/limit_controls_spec.lua`: The no-repeat rule, the hourly cap and the daily cap as Mission controls: noRepeat, hourlyCap and
 - `tests/live_claim_spec.lua`: The live claim and the case: the live_crime engine mission in its own registry (CP.Missions.registerEngine), CP.LiveCrime.missionFor / claimCheck, the run:created hook that opens the CP.Opponents case, the run:ended hook that writes the pair rows, and CP.Runs.create opts.live.
@@ -603,7 +603,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/live_surrender_spec.lua`: Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 - `tests/live_tablet_spec.lua`: The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
 - `tests/livecrime_intake_spec.lua`: Live crimes: the Crimson-Contracts adapter and the intake (CP.LiveCrime).
-- `tests/load_spec.lua`: WF6B: every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
+- `tests/load_spec.lua`: Every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
 - `tests/location_labels_spec.lua`: Built-in location labels name the right place: renamed locations keep their old label in `aliases`, so a Config.DisabledLocations or MissionTweaks entry written by the old label still matches; Traffic Enforcement's two city corridors are posted at 60 km/h.
 - `tests/loop_census_spec.lua`: Loop census (docs/dev/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 - `tests/loop_pace_spec.lua`: Loops run less often (docs/dev/LOOPS.md): CP.Perf scales the idle and far waits by Config.Performance.loopScale (1-4) and never a per-frame wait; the slower shipped intervals; the NUI's shortest screen poll.
@@ -627,7 +627,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/npc_combat_spec.lua`: Config.NpcCombat: no automatic weapons, the accuracy caps, and an officer's run-scoped damage settings.
 - `tests/npc_spec.lua`: Slice npc: modules/npc/npc.lua driven through a fake entity world, stubbed
 - `tests/nui_bundle_spec.lua`: The NUI bundle (docs/dev/LOOPS.md "Server cost and NUI"): every player's NUI starts with the officer and
-- `tests/objectives_spec.lua`: Config.Objectives (FM1): the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
+- `tests/objectives_spec.lua`: Config.Objectives: the daily goal, the weekly goal, the department challenge, the weekly bounty and the Type
 - `tests/opponents_conduct_spec.lua`: CP.Opponents conduct: the armed definition, the damage ledger between a case's officers and its
 - `tests/opponents_core_spec.lua`: CP.Opponents core: cases keyed by citizenid, the 1 s watch, leaving, instances, rejoins, AFK samples and staff notes, against the real qbx, access, anticheat and cash modules (qbx_core's exports and events mocked).
 - `tests/opponents_pairs_spec.lua`: CP.Opponents identity and pairs: the self rule (characters, licenses, linked accounts), the duty maps,
@@ -636,7 +636,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/options_client_spec.lua`: The officer options on this PC (modules/access/client/options.lua): 'local' options live in the resource KVP crimsonpolice:options and apply at once; 'server' options come from the session and the push 'options'.
 - `tests/options_spec.lua`: Officer options (shared/options.lua CP.OptionDefs, modules/access/options CP.Options): the rules, saving per character (sparse JSON in cp_officers.options), getOptions and server:options:set, and what the tablet session carries.
 - `tests/oversight_spec.lua`: The oversight slice: modules/admin (audit, webhooks, /CrimsonPoliceAdmin, review and void, force recall, supervisor/admin callbacks), modules/review/disputes and modules/review/anticheat.
-- `tests/pair_flag_row_spec.lua`: Z9: a flag raised after a participant's row was stored (rs_pair_repeat comes from the run:ended hook, after every row settled) flags the stored row too: it reaches the Review Queue, cash not paid yet is held, paid cash stays paid, the counted XP and the pending item rewards wait for the review.
+- `tests/pair_flag_row_spec.lua`: A flag raised after a participant's row was stored (rs_pair_repeat comes from the run:ended hook, after every row settled) flags the stored row too: it reaches the Review Queue, cash not paid yet is held, paid cash stays paid, the counted XP and the pending item rewards wait for the review.
 - `tests/plain_labels_spec.lua`: Plain-language admin labels: the Payouts dialog, the Mission Builder and Settings read in plain words, with no file names or game jargon in what an admin or supervisor sees.
 - `tests/points_bonus_spec.lua`: Points bonuses inside admin bounds: happyHourPoints (x the final points of a completed run a department leads that was accepted while a happy hour ran, fixed at the accept) and twistPoints (x each twist's points share, still under Config.Events.twistMaxPoints).
 - `tests/process_scene_spec.lua`: Blocks/process_scene: kept bodies (at most the limit, oldest out), nobody died (+15 at once), Photograph & tag and Bag body with reach and dwell, Release at the coroner van or the scene marker, cleanup, the clocks.
@@ -646,23 +646,23 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/pursuit_volunteer_spec.lua`: Pursuit's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Street Race Bust's driver (stop mode, no contact hand-off) played by a volunteer in his own car.
 - `tests/push_mission_spec.lua`: A mission a supervisor pushes to a unit (the pushMission Mission control): the paged call names that mission, only the paged unit sees its name and may accept or decline it; the accept runs every rule but skips the random draw.
 - `tests/qbx_cache_spec.lua`: CP.Qbx's player info cache (Config.Limits.playerInfoCacheMs) and the online list kept by qbx_core's events: how many times Qbox's exports are called, and that every change event makes the next answer fresh.
-- `tests/race_spec.lua`: WF6C: every action that writes, sent twice at the same moment (the owner: "do extensive workflow testing on everything").
+- `tests/race_spec.lua`: Every action that writes, sent twice at the same moment.
 - `tests/ready_toast_client_spec.lua`: The unit ready check on a member's game (modules/teams/client/teams.lua): the toast names the twists the leader chose , and stays the plain one without twists.
-- `tests/realplayers_spec.lua`: Config.RealPlayers (FM4): real players as suspects are one config section with two modes, liveCrime and volunteer
+- `tests/realplayers_spec.lua`: Config.RealPlayers: real players as suspects are one config section with two modes, liveCrime and volunteer
 - `tests/realsuspects_config_spec.lua`: Police vs real criminal players, (the owner's decision of 2026-10-26, "Build all 3 but options in the config.lua"): the two master switches ship off and show in Admin UI → Settings, and the docs record the decision without rewording RT1's start-route text.
 - `tests/realsuspects_docs_spec.lua`: The owner docs for real suspects stay in step with the code.
 - `tests/realsuspects_e2e_spec.lua`: End-to-end scenarios for real suspects on the REAL server side of Crimson-Police: every server file loaded as in game, database off (the saves folder, as shipped), only the other resources and the natives stubbed.
 - `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.Police.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 - `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealPlayers choice, and Config.RealPlayers.liveCrime.requireRoute for live crimes.
-- `tests/recognition_spec.lua`: Config.Recognition (FM2): XP levels, the auto badges, the weekly board badges, commendations and the field training
+- `tests/recognition_spec.lua`: Config.Recognition: XP levels, the auto badges, the weekly board badges, commendations and the field training
 - `tests/resmon_spec.lua`: Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 - `tests/restore_flagged_spec.lua`: Restoring a bulk-void batch keeps the held item rewards of a row that is still flagged (it waits for the Review Queue), and undoing a batch-caused forfeit of a flagged row puts its items back to held, not pending.
 - `tests/restrictions_spec.lua`: The one restrictions list (modules/supervisor/restrictions.lua): every kind registers with CP.Restriction from
-- `tests/review_queue_spec.lua`: The one Review queue (FM3, modules/review/queue.lua): flagged runs and disputes in one list with a type column,
+- `tests/review_queue_spec.lua`: The one Review queue (modules/review/queue.lua): flagged runs and disputes in one list with a type column,
 - `tests/rewards_spec.lua`: CP.Rewards (modules/rewards): optional item rewards.
 - `tests/run.lua`: Runs every tests/*_spec.lua in a fresh Lua state and prints a summary.
 - `tests/run_controls_spec.lua`: In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
-- `tests/run_history_spec.lua`: One history per run (FIN4, modules/review/history.lua): the rows of the run (live and archived), its flags and
+- `tests/run_history_spec.lua`: One history per run (modules/review/history.lua): the rows of the run (live and archived), its flags and
 - `tests/run_ui_spec.lua`: run_ui slice (Officer Mission Board + Active Mission screens, UI only).
 - `tests/runs_maintenance_spec.lua`: The run engine's once-a-minute maintenance (Runs._maintenance): who is online comes from the map that the Qbox load, unload and drop events keep, so no GetPlayerByCitizenId export runs per cached citizen.
 - `tests/safety_spec.lua`: Modules/route, calls, alerts, downed (slice safety: Hard rules 15-18).
@@ -673,14 +673,14 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/server_cost_spec.lua`: Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
 - `tests/settings_spec.lua`: Admin UI → Settings (modules/admin/settings): the schema read from config.lua and blocks.lua, every check of a value, saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
 - `tests/setup_coords_spec.lua`: Setup coordinates from the Qbox scripts: each shipped mission desk and drop-off names its source or is kept.
-- `tests/setup_spec.lua`: Admin UI -> Home's First-start setup (SALE3, modules/admin/setup): shipped off (Home as before); with
+- `tests/setup_spec.lua`: Admin UI -> Home's First-start setup (modules/admin/setup): shipped off (Home as before); with
 - `tests/shadow/fuzz_agg.lua`: Random aggregate queries, compared in shadow mode (lua5.4 tests/run.lua --fuzz): SUM /
 - `tests/shadow/fuzz_funcs.lua`: Random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 - `tests/shadow/fuzz_rows.lua`: Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 - `tests/shadow/fuzz_store.lua`: Storing values into typed columns, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 - `tests/shadow/twin.cjs`: The MariaDB twin of CP_TEST_STORAGE=shadow (started by tests/harness.lua, one per spec).
 - `tests/shared_spec.lua`: The shared layer, the migrations splitter and the harness itself.
-- `tests/soak_spec.lua`: WF6A: a seeded random action soak across every workflow (the owner: "do extensive workflow testing on everything").
+- `tests/soak_spec.lua`: A seeded random action soak across every workflow.
 - `tests/spawn_check_spec.lua`: Check spawn points (modules/missions/testing server and client, each block's pointKinds): the server lists every
 - `tests/spawn_client_spec.lua`: CP.Spawn.visible and the ox_lib callback crimson-police:client:spawn:visible (modules/runs/client/spawn.lua): what an officer's game can see of the points the server's spawn director may use, from line-of-sight probes run the way the game runs them (asynchronous, a handle polled each frame until it is done).
 - `tests/spawn_director_spec.lua`: The spawn director (Config.Spawning; modules/runs/runs.lua Runs.choosePoints, Runs.whenNear, ctx.choosePoints, ctx.whenNear) on a real test run of the engine, officers placed through the harness's ped coords.
@@ -696,7 +696,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/storage_spec.lua`: Database off (Config.Database.enabled = false) from end to end: the saves folder holds every feature's data, survives a restart, and stays fast and small at 50,000 runs.
 - `tests/sup_actions_spec.lua`: Supervisor officer actions: Clear cooldown (one officer's mission or type cooldown, from Department Report) and "+ minutes" on a live run (Live Missions), both Mission controls of kind 'action'.
 - `tests/sup_award_points_spec.lua`: A supervisor gives points (the awardPoints Mission control, owner decision 2026-10-19): only through the admin's point-adjust path (CP.Corrections.adjust), inside the admin's min and max and awardPointsPerDay, to an officer of his own department, never to a character of his own license, with a reason, audited as 'supervisor'.
-- `tests/sup_today_spec.lua`: Supervisor UI -> Department, today at a glance (UI4): the sup:getToday answer and its permission.
+- `tests/sup_today_spec.lua`: Supervisor UI -> Department, today at a glance: the sup:getToday answer and its permission.
 - `tests/teams_spec.lua`: The teams module: modules/teams/units.lua and operations.lua (units and Cross-Department Missions).
 - `tests/testing_spec.lua`: The testing slice: CP.Testing server (invites, start gates, controls, debug geometry, the run-end hook, recording results, the catalog view) and client (panel focus, HUD flag, teleport arena re-check, debug data).
 - `tests/training_spec.lua`: The guided tours (modules/access/training CP.Training, Config.Training): the shipped settings, a finished tour
@@ -706,20 +706,20 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/volunteers_client_spec.lua`: Volunteer opt-in, the client: the command exists only once Config.RealPlayers.volunteer.enabled is on, and the server's menu becomes ox_lib's consent alert, the roles input, the context menu and notifications.
 - `tests/volunteers_spec.lua`: Volunteer opt-in: CP.Volunteers on the server, the command's event (open, join, renew, roles, stop), the window, the ends (expired, on duty, excluded, disabled, left) and strikes.
 - `tests/workflow_errors_spec.lua`: Easy to understand (docs/dev/WORKFLOWS.md): every error an officer, a supervisor or an admin meets on
-- `tests/workflows_admin_spec.lua`: WF5C: every admin workflow, extensively (the owner: "do extensive workflow testing on everything").
+- `tests/workflows_admin_spec.lua`: Every admin workflow, extensively.
 - `tests/workflows_e2e_spec.lua`: End-to-end workflows, part 2: officers and supervisors on the REAL server side of Crimson-Police, every server file loaded as in game, database off (the saves folder, as shipped), every switch these workflows touch turned on by the admin through the Admin UI's own Settings action.
-- `tests/workflows_full_spec.lua`: Full workflow testing (the owner: "do a full workflow testing of everything"), with a restart and a drop in each.
-- `tests/workflows_none_ambulance_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.ambulance set to none.
-- `tests/workflows_none_banking_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.banking set to none.
-- `tests/workflows_none_dispatch_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.dispatch set to none.
-- `tests/workflows_none_police_spec.lua`: FIN11: every workflow of tests/workflows_full_spec.lua with only Config.Integrations.police set to none.
-- `tests/workflows_none_spec.lua`: WF4: every workflow of tests/workflows_full_spec.lua on a city with none of the owner's scripts.
-- `tests/workflows_officer_spec.lua`: WF5A: every officer workflow, extensively (the owner: "do extensive workflow testing on everything").
-- `tests/workflows_realplayers_spec.lua`: WF5D: real players and the criminal tablet, extensively (the owner: "do extensive workflow testing on everything").
-- `tests/workflows_supervisor_spec.lua`: WF5B: every supervisor workflow, extensively (the owner: "do extensive workflow testing on everything").
-- `tests/workflows_system_db_spec.lua`: WF5E: tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder.
-- `tests/workflows_system_generic_spec.lua`: WF5E: the generic example config on the real server, with its first-start setup.
-- `tests/workflows_system_spec.lua`: WF5E: the system and its integrations, extensively (the owner: "do extensive workflow testing on everything").
+- `tests/workflows_full_spec.lua`: Full workflow testing, with a restart and a drop in each.
+- `tests/workflows_none_ambulance_spec.lua`: Every workflow of tests/workflows_full_spec.lua with only Config.Integrations.ambulance set to none.
+- `tests/workflows_none_banking_spec.lua`: Every workflow of tests/workflows_full_spec.lua with only Config.Integrations.banking set to none.
+- `tests/workflows_none_dispatch_spec.lua`: Every workflow of tests/workflows_full_spec.lua with only Config.Integrations.dispatch set to none.
+- `tests/workflows_none_police_spec.lua`: Every workflow of tests/workflows_full_spec.lua with only Config.Integrations.police set to none.
+- `tests/workflows_none_spec.lua`: Every workflow of tests/workflows_full_spec.lua on a city with none of the owner's scripts.
+- `tests/workflows_officer_spec.lua`: Every officer workflow, extensively.
+- `tests/workflows_realplayers_spec.lua`: Real players and the criminal tablet, extensively.
+- `tests/workflows_supervisor_spec.lua`: Every supervisor workflow, extensively.
+- `tests/workflows_system_db_spec.lua`: Tests/workflows_system_spec.lua on MariaDB (database on), where the storage differs from the saves folder.
+- `tests/workflows_system_generic_spec.lua`: The generic example config on the real server, with its first-start setup.
+- `tests/workflows_system_spec.lua`: The system and its integrations, extensively.
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.
 - `tools/boot_smoke.sh`: Boots a real FXServer headless with Crimson-Police for a while and says PASS or FAIL.
 - `tools/boot_smoke_setup.sh`: Makes (or brings up to date) a clean FXServer test folder for tools/boot_smoke.sh.

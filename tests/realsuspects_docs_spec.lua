@@ -98,27 +98,25 @@ H.ok(Has(golive, '(#6-real-suspects-live-crimes-and-volunteers)'), 'guide 7.1 po
 -- ============================================================================
 
 local realPart = checklist:match('\n## Real suspects %(ships off%)(.-)\n## ') or ''
-for _, step in ipairs({
-    'V11',
-    'V12',
-    'V13',
-    'V14',
-    'V15',
-    'V16',
-    'V17',
-    'V18',
-    'V19',
-    'V20',
-    'V21',
-    'V22',
-    'V23',
-    'V24',
-    'V25',
-    'V26',
-    'V27',
+-- a check for each part of real suspects: the LIVE call and its case, the staff side, the volunteers and their slots
+for _, part in ipairs({
+    'LIVE call (Config.RealPlayers.liveCrime.enabled = true',
+    'Claim the LIVE call as a unit leader',
+    'Cuff the suspect with sc-police and keep him cuffed 30 s',
+    'During the case the map shows the reported scene',
+    'Backup: a second officer on no mission',
+    'Admin UI -> Real suspects shows the case with its timeline',
+    'As shipped, the Admin UI has no Real suspects screen',
+    'crimson-police:server:liveCrimeEnded',
+    'As shipped, /crimsonheat does nothing',
+    'As shipped nobody is ever asked to play a suspect',
+    'Warrant Service with a volunteer',
+    'Street Race Bust with a volunteer driver',
+    'Manhunt with a volunteer fugitive',
+    'crimson-police:server:volunteerEnded',
+    'Owner walk-through: follow docs/OWNER_GUIDE.md 6.1',
 }) do
-    local tagged = realPart:find('%(' .. step .. '[,%)]') or realPart:find(', ' .. step .. '[,%)]')
-    H.ok(tagged ~= nil, 'the in-game checklist has a check for ' .. step)
+    H.ok(Has(realPart, part), 'the in-game checklist has a real suspects check: ' .. part)
 end
 H.ok(Has(checklist, '\n## Real suspects (ships off)\n'), 'the checklist has one Real suspects section')
 

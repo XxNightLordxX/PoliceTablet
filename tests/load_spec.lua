@@ -1,6 +1,6 @@
--- WF6B: every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
+-- Every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
 
--- WF6B: every workflow under load (the owner: "do extensive workflow testing on everything"). On the world of
+-- Every workflow under load. On the world of
 -- tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the owner's scripts running):
 -- MariaDB with the database on in the database suite (lua5.4 tests/run.lua), the saves folder in the files and shadow
 -- suites, so the same load runs on both stores and the suites compare them. 48 officers in three departments (SAST,

@@ -1,6 +1,6 @@
--- Admin UI -> Home's First-start setup (SALE3, modules/admin/setup): shipped off (Home as before); with
+-- Admin UI -> Home's First-start setup (modules/admin/setup): shipped off (Home as before); with
 
--- Admin UI -> Home's First-start setup (SALE3, modules/admin/setup): shipped off (Home as before); with
+-- Admin UI -> Home's First-start setup (modules/admin/setup): shipped off (Home as before); with
 -- Config.AdminUi.setupScreen on it shows to admins until one finishes or skips it. What it shows (departments, the
 -- Qbox police jobs, desks, storage, the scripts found, the presets) and how each answer becomes ordinary settings,
 -- saved and audited, with the preset applied after.

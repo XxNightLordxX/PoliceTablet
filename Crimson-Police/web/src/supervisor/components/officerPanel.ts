@@ -1,6 +1,6 @@
-// Supervisor UI · Department → Officers: which actions the officer's side panel offers (UI4).
+// Supervisor UI · Department → Officers: which actions the officer's side panel offers.
 
-// Supervisor UI · Department → Officers · the officer's side panel (UI4): which of his actions the viewer may take
+// Supervisor UI · Department → Officers · the officer's side panel: which of his actions the viewer may take
 // here, each opening its form in the panel (no dialog of its own). Pure functions, checked by
 // layouts/supDepartment.walk.ts. Each action is offered on the same terms as before; the server checks every rule
 // again (own department, never himself, the caps, the audit row).

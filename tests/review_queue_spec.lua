@@ -1,6 +1,6 @@
--- The one Review queue (FM3, modules/review/queue.lua): flagged runs and disputes in one list with a type column,
+-- The one Review queue (modules/review/queue.lua): flagged runs and disputes in one list with a type column,
 
--- The one Review queue (FM3, modules/review/queue.lua): flagged runs and disputes in one list with a type column,
+-- The one Review queue (modules/review/queue.lua): flagged runs and disputes in one list with a type column,
 -- one read (review:getQueue) and one decide action (server:review:decide) for supervisors and admins. One block per
 -- old feature, driven through the new engine: the supervisor's flagged runs, his disputes, the Admin UI's flagged
 -- runs and disputes, Approve / Void, the second Void, a dispute's answer (failed runs: admins only, with points),

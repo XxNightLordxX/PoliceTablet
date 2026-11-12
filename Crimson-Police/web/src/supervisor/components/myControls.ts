@@ -1,4 +1,4 @@
-// Department → Controls, inline use (MG3; the 'Your controls today' card before): one row per Mission control the
+// Department → Controls, inline use: one row per Mission control the
 // supervisor may use now, with its current value, the admin's limits and today's use. Pure functions, checked by
 // supHead.walk.ts; the server (sup:getMyControls) decides which controls are listed. Always shown (no switch).
 

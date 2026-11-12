@@ -1,6 +1,6 @@
--- The generic starting config (SALE3, config/examples/generic.lua): what a copy for sale ships as config/config.lua.
+-- The generic starting config (config/examples/generic.lua): what a copy for sale ships as config/config.lua.
 
--- The generic starting config (SALE3, config/examples/generic.lua): what a copy for sale ships as config/config.lua.
+-- The generic starting config (config/examples/generic.lua): what a copy for sale ships as config/config.lua.
 -- It holds every setting config.lua has, its departments are qbx_core's own police jobs (police, bcso, sasp), every
 -- other script is 'auto', no zone names a private script, and the First-start setup is on. Both files load and pass
 -- Config health against the Qbox jobs each one is built for; every value of the generic file passes its setting's own
