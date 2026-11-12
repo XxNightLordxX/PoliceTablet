@@ -987,3 +987,6 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   controls, then cross checkpoint 1: the timer stays paused until you press Resume. (H4)
 - [ ] Timers and holds (H4): Admin UI -> Restrictions: extend a real-suspect pair block, then restart: it keeps the
   new end. With the database stopped the extend is refused ("Something went wrong") and nothing is audited. (H4)
+- [ ] Security and anonymity (H5): set Recognition -> commendations -> announce on, turn Hide name on for an officer with
+  no callsign, then commend him: the board channel in Discord shows "Hidden officer" (the hidden name), never his
+  real name or citizen id. (H5)

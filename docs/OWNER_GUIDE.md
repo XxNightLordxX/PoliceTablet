@@ -1061,7 +1061,7 @@ Five optional webhooks, set as convars in `server.cfg` (the block in [README
 
 | Convar | What it posts |
 |---|---|
-| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Recognition.commendations.announce = true`) |
+| `cp_webhook_board` | Weekly top 3, season results (and commendations with `Config.Recognition.commendations.announce = true`; an officer who hid his name is shown by callsign, or as hidden) |
 | `cp_webhook_audit` | Payout changes and admin actions |
 | `cp_webhook_flags` | Flagged runs, voids and disputes |
 | `cp_webhook_builder` | Mission Builder: publish, archive, rollback, edit-lock breaks, file edits and test results |
