@@ -141,8 +141,10 @@ function EntryLine({ label, e }: { label: string; e?: BankingEntry | null }) {
     );
 }
 
-// Pay again can't know what happened at these steps (a money call was cut or raised with no telling): Mark paid only
-const UNKNOWN_STEPS = ['added', 'withdrawing', 'adding', 'review'];
+// Pay again can't know what happened at these steps (a department call or its refund was cut or raised with no
+// telling, or the money arrived): Mark paid only. At 'adding' and 'review' (the officer's deposit) Pay again works with
+// the checked box (the officer's history shows it never arrived).
+const UNKNOWN_STEPS = ['added', 'withdrawing', 'refunding'];
 
 // The follow-up outcomes in the order the dialog offers them; giveBack moves money (typed amount)
 const FOLLOW_UP_ORDER: FollowUpOutcome[] = [

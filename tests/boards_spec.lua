@@ -539,6 +539,33 @@ do
     H.sql('DELETE FROM cp_disputes WHERE run_id = ?', { lb1Failed })
 end
 
+-- H8: the profile's Dispute button after a suspension (PROFILE_RUNS_SQL reads suspended_ts and suspended_from_ts, the
+-- filing rule of modules/review/disputes): held while a suspension that started inside the window ran, 48 h after
+-- the lift, and never reopened for a run whose window had closed before the suspension started.
+do
+    local savedD = CP.Disputes
+    H.load('modules/review/disputes.lua')
+    local from, untilTs = Ts(2026, 9, 23, 11), Ts(2026, 9, 25, 12)
+    H.sql(
+        'UPDATE cp_officers SET suspended_from = FROM_UNIXTIME(?), suspended_until = FROM_UNIXTIME(?) WHERE citizenid = ?',
+        { from, untilTs, 'LB1' })
+    local function RunOf(id)
+        LB.invalidate()
+        local res = Cb('getProfile', 11, nil)
+        H.ok(res.data ~= nil, 'H8: profile read: ' .. tostring(res.error))
+        for _, x in ipairs(res.data and res.data.runs or {}) do if x.id == id then return x end end
+        return {}
+    end
+    H.time = untilTs + 47 * 3600
+    H.eq(RunOf(lb1Failed).canDispute, true, 'H8: a run whose window the suspension held can be disputed 47 h after')
+    H.eq(RunOf(lb1Old).canDispute, false, 'H8: a run whose window closed before the suspension stays closed')
+    H.time = untilTs + 49 * 3600
+    H.eq(RunOf(lb1Failed).canDispute, false, 'H8: and not 49 h after the lift')
+    H.sql('UPDATE cp_officers SET suspended_from = NULL, suspended_until = NULL WHERE citizenid = ?', { 'LB1' })
+    H.time = NOW
+    CP.Disputes = savedD   -- the rest of this spec runs on the fallback rule, as before
+end
+
 -- public profile: the breakdown keeps only RunResult fields without cash (no admin notes)
 do
     H.sql('UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, \'$.reason\', \'admin note\') WHERE id = ?',

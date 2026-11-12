@@ -96,7 +96,7 @@ what you do and, after the arrow, what you should see. The full 60-minute plan i
   case: it is a strike. Cancel within the first minute with no officer near: no strike, as before.
 - [ ] My options -> Sounds -> objective cues off: no cue plays; on again: the next cue plays.
 - [ ] Restart once: the server log shows "applied migration 017_lookup_indexes.sql" (database or saves folder), then
-  Crimson-Police at version 18.
+  Crimson-Police at version 19.
 - [ ] Officer tablet -> Department Challenge: the same header (title, one line of help, a refresh button) and the same
   loading and error lines as the other officer screens.
 - [ ] Dispatch open: a call claimed by another unit updates within about a second. A HUD countdown steps once a
@@ -509,7 +509,7 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 
 ## Restarts and logout
 
-- [ ] Start the server: the console shows the database or saves folder at version 18 (the newest migration, 018_tours.sql).
+- [ ] Start the server: the console shows the database or saves folder at version 19 (the newest migration, 019_suspension_start.sql).
 - [ ] After a restart, mission cooldowns, the abandon cooldown, board locks, the hourly and daily caps and mission calls behave exactly as before.
 - [ ] Nothing to test in game for run ids: runs started before and after a restart simply never share an id.
 - [ ] Mark responding to a real sc-dispatch call, switch character: the new character is not "On a call" and can accept missions.
@@ -1030,6 +1030,20 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Escrow and start-up: on the escrowed (Tebex) build, start the resource: the console shows no "could not
   be read" line, every built-in mission is on the Mission Board, and Admin UI -> System -> Make a backup lists every
   cp_ table.
+- [ ] Suspensions and disputes: start the server once: the console shows the database or saves folder at version 19
+  (019_suspension_start.sql).
+- [ ] Suspensions and disputes: an officer with a failed run from last month is suspended for 1 day, then the
+  suspension ends: his Profile shows no Dispute button on that old run, and filing one is refused ("dispute window").
+- [ ] Suspensions and disputes: before updating, lift an officer's suspension a few hours after voiding one of his
+  runs; update and start: his Profile still shows the Dispute button on that run until 48 h after the lift.
+- [ ] Suspensions and disputes: void a run, suspend the officer at once for 7 days, lift it on day 3: 47 h after the
+  lift he can still file a dispute from his Profile; 49 h after it the button is gone.
+- [ ] Pay again: with Pay again on, a payment whose officer's deposit failed half way (Payments -> Resolve shows "The
+  officer's deposit ...") offers Pay again; tick the box and confirm: he is paid once and the department is not
+  charged a second time.
+- [ ] Translations: with a translated locales/<code>.json written before the counted (plural) forms (it has
+  'admin.audit.total' but not 'admin.audit.total_one'), Admin UI -> Audit shows the translated total, not the
+  English one.
 - [ ] Real database: start the server with MariaDB set to a time zone with daylight saving (the machine's zone,
   if it has one): the console shows one warning that names default-time-zone = '+00:00', and Crimson-Police still
   starts. With MariaDB on UTC there is no such line.

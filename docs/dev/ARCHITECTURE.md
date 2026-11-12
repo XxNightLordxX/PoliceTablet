@@ -169,7 +169,8 @@ PoliceTablet/                      (git repo)
                    005_mission_calls.sql, 006_item_rewards.sql, 007_settings.sql, 008_admin_control.sql,
                    009_real_suspects.sql, 010_officer_options.sql, 011_dept_controls.sql,
                    012_mission_ban.sql, 013_call_department.sql, 014_live_catches.sql,
-                   015_field_training.sql, 016_saved_cases.sql, 017_lookup_indexes.sql, 018_tours.sql
+                   015_field_training.sql, 016_saved_cases.sql, 017_lookup_indexes.sql, 018_tours.sql,
+                   019_suspension_start.sql
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
@@ -1427,9 +1428,9 @@ Points, streaks, XP and badges.
   only; fires `row:forfeited`).
 - Maintenance: `pay` and `payPending` do nothing while `CP.Maintenance.active()`.
 - Forfeiture of voided held/pending rows (and the item rewards' own job, §5.52) when the dispute window ended with
-  no open dispute: the window starts at `CP.Money.DISPUTE_START_SQL` (the row's `created_at`, or the end of the
-  officer's suspension when later; `NOW()` while suspended) and ends at `CP.Money.disputeEnd(start)`; each UPDATE
-  checks again that the start did not move later.
+  no open dispute: the window starts at `CP.Money.disputeStartSql()` (the row's `created_at`, or the end of the
+  officer's suspension when later and that suspension started inside the window; `NOW()` while suspended) and ends at
+  `CP.Money.disputeEnd(start)`; each UPDATE checks again that the start did not move later.
 - `range(missionType, members) -> min, max` (pool from `CP.Draw.pool`; max includes `modifierCash` when
   `modifierChance > 0`, never for the boss; empty pool → the type payout), `earnedThisWeek(citizenid)`,
   `stuckPayments()`, `amountOf(row)`, `txnOf(row)`, `rowBusy(rowId, citizenid)`, `paymentsHeld()`,
@@ -1439,18 +1440,23 @@ Points, streaks, XP and badges.
 - What a money call did: an intent marker is written (and checked) before each money call (`step` `withdrawing`,
   `adding`; Pay again and Pay the rest `<key>Step`, compare-and-set on their claim). A call that raised (Qbox
   `false, 'error'`, the banking adapter's `false, 'error'`) is decided from the balance read right before and after
-  it: changed by the amount = done, unchanged = refused, else `review` (left for an admin, never refunded blind).
-  Pay again refuses `withdrawing`, `adding`, `review` (`err.payment_step_unknown`) and resumes a Pay again left at
-  `againStep = 'withdrawn'` with the deposit only (`again2`).
+  it: changed by the amount = done, unchanged = refused, else no telling (left for an admin, never refunded blind): a
+  department call stays at `withdrawing`, the officer's deposit at `review`. A department refund with no telling
+  (`RefundSociety` answers `'done' | 'refused' | 'unknown'`) leaves `refunding` (`step`, `againStep`,
+  `restPaidStep`): never refunded again and never resumed as a deposit only.
+  Pay again refuses `withdrawing` and `refunding` (`err.payment_step_unknown`); at `adding` and `review` it deposits
+  only (the department already paid) when the admin ticked the checked box (`opts.checked`); it resumes a Pay
+  again left at `againStep = 'withdrawn'` with the deposit only (`again2`).
 - Follow-ups on paid/capped rows: `restPaid = 'paying'`, a clawback's `backPending`/`backStep` (`claimed` →
   `removing`), a give-back's `giveBack` (`owed` → `paying` → `back`, `backOwed`, `backAccount`). `followUpOf(bd)`,
   `FOLLOW_UP_SQL`, `followUpOutcomes(bd)`, `resolveFollowUp(rowId, outcome, audit)`; `stuckPayments()` lists them
   (`kind`), `retryGiveBacks()` runs at the start and every 10 min, and the start-up sweep releases claims no money call
-  started (`_releaseUnstarted`).
+  started (`_releaseUnstarted`): only claims with their tag `<key>Claim` (written by `ClaimMarker`); an
+  untagged claim with no step is from before the step markers and stays for Resolve.
 
 ### 5.20a CP.Money — modules/money/engine.lua (S; one money engine)
 Every payment (mission cash, §5.52, §5.40) is written (`writeRow`), handed to CP.Cash (`settle`) and deposited
-(`deposit`) here; `seasonId()`, `department(key)`. `DISPUTE_START_SQL` (an SQL expression over a run row `r`) and
+(`deposit`) here; `seasonId()`, `department(key)`. `disputeStartSql()` (an SQL expression over a run row `r`) and
 `disputeEnd(startTs)` (`Config.Disputes.windowHours` on, plus `CP.Maintenance.windowEnd`'s hold) are the one dispute
 window rule of both forfeiture jobs.
 
@@ -1526,7 +1532,12 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   failed (kind priority in that order), within `Config.Disputes.windowHours` from `created_at`, never award rows, 3
   filings a minute. The window stands still while the officer is suspended (it starts again at the end of his last
   suspension, `row.suspended_ts`; a lift writes `suspended_until = NOW()`) and while a maintenance lock holds
-  (`CP.Maintenance.windowEnd`); `eligible` and both forfeiture jobs use the same rule.
+  (`CP.Maintenance.windowEnd`); `eligible` and both forfeiture jobs use the same rule. Only a suspension that started
+  inside the window holds it (`cp_officers.suspended_from`, migration 019, `row.suspended_from_ts`): a later one
+  never reopens a closed window. `CP.Access.suspend` writes it on a new suspension; one given while he is suspended or
+  less than a window after the last one ended keeps that start; a lift keeps it. Migration 019 fills it for the
+  suspensions given before it: the last `suspend` row of `cp_audit` up to their end, else `NOW()` for one still
+  running.
 - `forSupervisor(src)`, `forAdmin()` (both read by the one Review queue, §5.26a), `forOfficer(citizenid, goesTo?,
   viewerSrc?)`.
 - `handle(src, disputeId, decision, reason, awardPoints)` — claim first (`status = 'open'`), then apply.
@@ -2787,7 +2798,8 @@ Shots at surrendered NPCs are detected server-side (`weaponDamageEvent`, §5.11)
 
 Admin transitions (full admin control, §5.20, §5.40; the money ones ship off behind `Config.Cash.allow*`): `paying` →
 `paid`/`capped` (Mark paid, no money; or Pay again, txn `-r2`, read from the step markers `claimed` →
-`withdrawing` → `withdrawn` → `adding` → `added`, or `review` when a raised call left no telling).
+`withdrawing` → `withdrawn` → `adding` → `added`, or `review` when the raised deposit left no telling, `refunding`
+when a department refund left no telling).
 
 ---
 
@@ -3854,7 +3866,9 @@ interface RunResult { runId: string; missionLabel: string; missionType: string;
   `theme` message) and again as `locale` after a `Config.Labels` change. Sessions carry no locale.
 - Counts: `tn(key, n, vars)` (web) and `CP.Ln(key, n, vars)` (Lua) read `key_one` / `key_other` (and `_few`,
   `_many`, ... in the NUI, by `Intl.PluralRules` of the locale's `locale.lang`, `en` today), then `key_other`, then
-  `key`, so a key without forms keeps its text; `{n}` is the count unless vars give one. Never build a plural with
+  `key`, so a key without forms keeps its text; `{n}` is the count unless vars give one. A translated locale that has
+  only the base key (written before the forms) keeps its text: the English forms are not merged over it, and a
+  `Config.Labels` rename of the base key wins over the file's forms. Never build a plural with
   `n === 1 ? t(a) : t(b)` or join English to a translated text: `tools/check_i18n.py` (gate step `lint-i18n`)
   fails on new ones.
 

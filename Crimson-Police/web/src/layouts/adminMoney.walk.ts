@@ -5,7 +5,8 @@
 import '../mocks/admin_economy.mock';
 import '../mocks/oversight.mock';
 import paymentsSrc from '../admin/screens/Payments.tsx?raw';
-import { t } from '../shared/i18n';
+import { mockLocale } from '../mocks/samples';
+import { setLocale, t } from '../shared/i18n';
 import { request } from '../shared/nui';
 import type { Session } from '../shared/types';
 import type { BankingCheck, DepartmentFundsView, PaymentsView } from '../types/admin_economy';
@@ -25,6 +26,8 @@ function ok(cond: unknown, what: string): void {
 const sessionOf = (adminUi: Record<string, unknown>) => ({ actions: [], config: { adminUi } }) as unknown as Session;
 
 async function steps(): Promise<void> {
+    // the English texts of every locale part, as in game (run alone, no other walk loads them first)
+    setLocale(mockLocale);
     // one Money screen, always: the old money screens are its tabs, not sidebar items
     const shipped = sessionOf({});
     const keys = screensFor('admin', shipped).map(s => s.key);
@@ -97,8 +100,14 @@ async function steps(): Promise<void> {
         'every follow-up outcome has its English name and message',
     );
     ok(
-        ['withdrawing', 'adding', 'review'].every(s => t(`payments.step.${s}`) !== `payments.step.${s}`),
+        ['withdrawing', 'adding', 'review', 'refunding'].every(s => t(`payments.step.${s}`) !== `payments.step.${s}`),
         'the new step markers have their English text',
+    );
+    // Pay again stays offered after a cut or raised officer's deposit (the checked box is required); never at an
+    // unknown department call or refund
+    ok(
+        /const UNKNOWN_STEPS = \['added', 'withdrawing', 'refunding'\];/.test(paymentsSrc),
+        'Pay again: only added, withdrawing and refunding disable it',
     );
 }
 

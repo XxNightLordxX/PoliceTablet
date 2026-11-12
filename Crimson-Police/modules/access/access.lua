@@ -753,9 +753,16 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
             CP.err(TAG, 'suspending %s failed: the database cannot store a date after 2038-01-19', citizenid)
             return false, 'err.internal'
         end
-        local ok, err = pcall(MySQL.update.await,
-            'INSERT INTO cp_officers (citizenid, suspended_until) VALUES (?, FROM_UNIXTIME(?)) ON DUPLICATE KEY UPDATE suspended_until = VALUES(suspended_until)',
-            { citizenid, untilTs })
+        -- suspended_from: when this suspension started, for the dispute window (CP.Disputes.eligible). A new
+        -- suspension starts now; one given while he is still suspended, or while the windows his last one held are
+        -- still open (it ended less than a dispute window ago), keeps the start of that one. Set before
+        -- suspended_until: the assignments run left to right and read the old end.
+        local held = math.floor(math.max(0, CP.Num(Config.Disputes and Config.Disputes.windowHours, 48)) * 3600)
+        local ok, err = pcall(MySQL.update.await, [[INSERT INTO cp_officers (citizenid, suspended_until, suspended_from)
+            VALUES (?, FROM_UNIXTIME(?), NOW()) ON DUPLICATE KEY UPDATE
+            suspended_from = IF(suspended_from IS NOT NULL AND suspended_until IS NOT NULL
+                AND suspended_until >= NOW() - INTERVAL ? SECOND, suspended_from, NOW()),
+            suspended_until = VALUES(suspended_until)]], { citizenid, untilTs, held })
         if not ok then
             CP.err(TAG, 'suspending %s failed: %s', citizenid, tostring(err))
             return false, 'err.internal'

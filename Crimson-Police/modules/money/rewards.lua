@@ -744,13 +744,13 @@ end
 -- CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending. A row voided after its
 -- cash was paid (or one that carried none) is forfeited here, on the same rule: its dispute window closed and no
 -- dispute is open. Each row is claimed by its own UPDATE, which checks the rule again.
--- The window starts and ends as for the cash (CP.Money.DISPUTE_START_SQL, CP.Money.disputeEnd: held while the
+-- The window starts and ends as for the cash (CP.Money.disputeStartSql, CP.Money.disputeEnd: held while the
 -- officer is suspended or a maintenance lock stands it still).
 local function ForfeitRows()
     local hours = Num(Config.Disputes and Config.Disputes.windowHours, 48)
     local now = Now()
     local cutoff = now - math.floor(hours * 3600)
-    local startSql = CP.Money.DISPUTE_START_SQL
+    local startSql = CP.Money.disputeStartSql()
     local rows = Query(
         ([[
         SELECT DISTINCT i.row_id, UNIX_TIMESTAMP(%s) AS start_ts FROM cp_item_rewards i

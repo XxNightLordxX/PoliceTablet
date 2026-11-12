@@ -1348,7 +1348,8 @@ do
         'H3 (a): Pay again refused, no second pay')
 
     -- (b) the department withdrawal raised after it took the money and the balance can not be read: no telling, the
-    -- row stays at 'review' and Pay again is refused (never a second withdrawal)
+    -- row stays at 'withdrawing' (H8: 'review' is only the officer's deposit) and Pay again is refused (never a second
+    -- withdrawal)
     Reset()
     Config.Cash.source = 'society'
     local sast0 = bank.balance.sast
@@ -1362,13 +1363,14 @@ do
     local idB = Row({ status = 'pending', owed = 200 })
     H.eq(Async(function() return Cash.pay(idB) end), 'paying', 'H3 (b): a raised withdrawal stays paying')
     CP.Banking.withdrawSociety, CP.Banking.societyBalance = realWithdraw, realBal
-    H.eq(RowOf(idB).bd.cash.step, 'review', 'H3 (b): at step review')
+    H.eq(RowOf(idB).bd.cash.step, 'withdrawing', 'H3 (b): at step withdrawing (H8)')
     ok, e = Resolve(idB, 'payAgain', '200')
     H.ok(not ok and e == 'err.payment_step_unknown' and #Logged('withdraw') == 1 and #calls.add == 0,
         'H3 (b): Pay again is refused, no second withdrawal: ' .. tostring(e))
     H.eq(bank.balance.sast, sast0 - 200, 'H3 (b): the department paid once')
-    -- a cut inside a money call leaves its intent marker: Pay again refuses each of them
-    for _, step in ipairs({ 'withdrawing', 'adding', 'review' }) do
+    -- a cut inside a department call leaves its intent marker: Pay again refuses each of them (H8: 'adding' and
+    -- 'review', the officer's deposit, are paid with the checked box: section 19)
+    for _, step in ipairs({ 'withdrawing', 'refunding' }) do
         local idS = Row({
             status = 'paying',
             owed = 100,
@@ -1540,8 +1542,8 @@ do
     H.ok(ok == true and RowOf(idE2).cash_paid == 500, 'H3 (e): Pay the rest can be used again')
     -- a claim cut before any money moved is released at the start
     local idE3 = Row({ status = 'capped', owed = 500, paid = 300 })
-    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying') WHERE id = ?]],
-        { idE3 })
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying',
+        '$.cash.restPaidClaim', 1) WHERE id = ?]], { idE3 })
     H.eq(Async(function() return Call(Cash, '_releaseUnstarted') end), 1,
         'H3 (e): the start-up release frees a claim cut before money')
     H.eq(RowOf(idE3).bd.cash.restPaid, nil, 'H3 (e): ...so Pay the rest works again')
@@ -1608,6 +1610,160 @@ do
 end
 
 -- ============================================================================
+--                                    19. H8
+-- ============================================================================
+-- A REFUND WITH NO TELLING, PAY AGAIN AFTER A CUT DEPOSIT, OLD CLAIMS.
+
+do
+    Reset()
+    H.sql('DELETE FROM cp_mission_runs')
+    Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = true, true, true
+    Config.Cash.source = 'society'
+    local realDeposit, realBal, realGet = CP.Banking.depositSociety, CP.Banking.societyBalance, CP.Qbx.getMoney
+    local function Resolve(id, outcome, confirm, checked)
+        return Act('server:admin:resolvePayment', 1, {
+            rowId = id,
+            outcome = outcome,
+            checked = checked ~= false,
+            reason = 'H8',
+            confirm = confirm,
+            requestId = Rid(),
+        })
+    end
+    -- the department's refund arrives, then raises, and its balance can not be read: no telling
+    local function UnknownRefund()
+        CP.Banking.depositSociety = function(a, n)
+            bank.balance[a] = bank.balance[a] + n
+            return false, 'error'
+        end
+        CP.Banking.societyBalance = function() return nil end
+    end
+    local function Restore() CP.Banking.depositSociety, CP.Banking.societyBalance = realDeposit, realBal end
+
+    -- (A) Pay the rest at 'withdrawn'; Release's refund has no telling: it stays at 'refunding', a second Release
+    -- only releases (the department is never given the rest back twice)
+    local idA = Row({ status = 'capped', owed = 500, paid = 300 })
+    addResult = false
+    CP.Banking.depositSociety = function() return false end
+    Act('server:admin:payCapRest', 1, { rowId = idA, reason = 'x', confirm = '200', requestId = Rid() })
+    Restore()
+    addResult = true
+    H.eq(RowOf(idA).bd.cash.restPaidStep, 'withdrawn', 'H8 (A): the rest at step withdrawn')
+    local sast0 = bank.balance.sast
+    UnknownRefund()
+    local ok, e = Resolve(idA, 'restRelease')
+    Restore()
+    H.ok(not ok and e == 'err.payment_raised' and RowOf(idA).bd.cash.restPaidStep == 'refunding',
+        'H8 (A): a refund with no telling stays at refunding: ' .. tostring(e))
+    ok, e = Resolve(idA, 'restRelease')
+    H.ok(ok and RowOf(idA).bd.cash.restPaid == nil, 'H8 (A): the second Release only releases: ' .. tostring(e))
+    H.eq(bank.balance.sast - sast0, 200, 'H8 (A): the department got back $200 once, for the $200 it paid')
+
+    -- (B) Pay again: the deposit refused, the refund with no telling: 'refunding', never resumed as a deposit only
+    Reset()
+    people[7].money.bank = 1000
+    local idB = Row({
+        status = 'paying',
+        owed = 250,
+        cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = 250 },
+    })
+    local s0 = bank.balance.sast
+    addResult = false
+    UnknownRefund()
+    ok, e = Resolve(idB, 'payAgain', '250')
+    Restore()
+    addResult = true
+    H.ok(not ok and e == 'err.payment_raised' and RowOf(idB).bd.cash.againStep == 'refunding',
+        'H8 (B): Pay again left at refunding: ' .. tostring(e))
+    Reset()
+    ok, e = Resolve(idB, 'payAgain', '250')
+    H.ok(not ok and people[7].money.bank == 1000 and #calls.add == 0,
+        'H8 (B): no deposit-only resume after a refund with no telling: ' .. tostring(e))
+    H.eq(bank.balance.sast - s0, 0, 'H8 (B): the department paid and got it back: net $0')
+
+    -- (C) a payment: the deposit refused, the refund with no telling: step 'refunding', Pay again refused
+    Reset()
+    people[7].money.bank = 1000
+    local idC = Row({ status = 'pending', owed = 300 })
+    local s1 = bank.balance.sast
+    addResult = false
+    UnknownRefund()
+    local stC = Async(function() return Cash.pay(idC) end)
+    Restore()
+    addResult = true
+    H.ok(stC == 'paying' and RowOf(idC).bd.cash.step == 'refunding',
+        'H8 (C): the payment stays at refunding: ' .. tostring(stC) .. ' ' .. tostring(RowOf(idC).bd.cash.step))
+    Reset()
+    ok, e = Resolve(idC, 'payAgain', '300')
+    H.ok(not ok and e == 'err.payment_step_unknown' and people[7].money.bank == 1000 and #calls.add == 0,
+        'H8 (C): Pay again refused, no deposit-only pay: ' .. tostring(e))
+    H.eq(bank.balance.sast - s1, 0, 'H8 (C): the department net $0')
+
+    -- Pay again after the officer's deposit was cut ('adding') or raised with no telling ('review'): with the checked
+    -- box it deposits once, never a second department withdrawal; without it, refused
+    for _, step in ipairs({ 'adding', 'review' }) do
+        Reset()
+        people[7].money.bank = 1000
+        local id = Row({
+            status = 'paying',
+            owed = 150,
+            cash = { step = step, source = 'society', societyAccount = 'sast', payAmount = 150 },
+        })
+        local d0 = bank.balance.sast
+        local okN, eN = Async(function() return Cash.payAgain(id) end)
+        H.ok(not okN and eN == 'err.payment_step_unknown' and #calls.add == 0,
+            'H8: Pay again at ' .. step .. ' without the checked box is refused: ' .. tostring(eN))
+        ok, e = Resolve(id, 'payAgain', '150', false)
+        H.ok(not ok and e == 'err.check_first', 'H8: and through the Payments screen too: ' .. tostring(e))
+        ok, e = Resolve(id, 'payAgain', '150')
+        H.ok(ok and people[7].money.bank == 1150 and RowOf(id).cash_status == 'paid',
+            'H8: Pay again at ' .. step .. ' with the checked box pays once: ' .. tostring(e))
+        H.ok(#Logged('withdraw') == 0 and bank.balance.sast == d0,
+            'H8: ...and the department is not debited a second time')
+        ok = Resolve(id, 'payAgain', '150')
+        H.ok(not ok and people[7].money.bank == 1150, 'H8: ...and never twice')
+    end
+    -- a server-paid row cut at 'adding' is paid once too
+    Reset()
+    people[7].money.bank = 1000
+    local idS = Row({ status = 'paying', owed = 120, cash = { step = 'adding', source = 'server', payAmount = 120 } })
+    ok, e = Resolve(idS, 'payAgain', '120')
+    H.ok(ok and people[7].money.bank == 1120 and #Logged('withdraw') == 0,
+        'H8: a server-paid row at adding: ' .. tostring(e))
+
+    -- the start-up release: a claim from before the step markers (no step, no tag) may have moved money and is left
+    -- for Resolve; a claim of this build (tagged) cut before its first money call is still released
+    Reset()
+    local idL = Row({ status = 'capped', owed = 500, paid = 300 })
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying') WHERE id = ?]],
+        { idL })
+    local idL2 = Row({ status = 'paying', owed = 100, cash = { step = 'claimed', source = 'server', payAmount = 100 } })
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.again', 'paying') WHERE id = ?]],
+        { idL2 })
+    local idN = Row({ status = 'capped', owed = 500, paid = 300 })
+    local cut = false
+    CreateThread(function()
+        Cash.payCapRest(idN, function()
+            cut = true
+            Wait(1e12)   -- the server stops here: claimed, no money call yet
+        end)
+    end)
+    H.ok(cut and RowOf(idN).bd.cash.restPaid == 'paying' and RowOf(idN).bd.cash.restPaidClaim ~= nil,
+        'H8: a new claim carries its tag')
+    H.eq(Async(function() return Cash._releaseUnstarted() end), 1, 'H8: the start-up release frees only the new claim')
+    H.eq(RowOf(idN).bd.cash.restPaid, nil, 'H8: the new claim cut before money is released')
+    H.eq(RowOf(idL).bd.cash.restPaid, 'paying', 'H8: an old Pay the rest claim is left for Resolve')
+    H.eq(RowOf(idL2).bd.cash.again, 'paying', 'H8: an old Pay again claim is left too')
+    ok, e = Resolve(idL, 'restRelease')
+    H.ok(ok and RowOf(idL).bd.cash.restPaid == nil, 'H8: Resolve releases the old claim: ' .. tostring(e))
+
+    CP.Qbx.getMoney = realGet
+    Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = false, false, false
+    Config.Cash.source = 'server'
+    Reset()
+end
+
+-- ============================================================================
 --                     17. THE DISPUTE WINDOW STANDS STILL
 -- ============================================================================
 -- SUSPENSION, MAINTENANCE LOCK.
@@ -1622,7 +1778,9 @@ do
     local function Eligible(id, cid, at)
         local r = H.sql(
             [[SELECT citizenid, mission_type, state, flagged, voided, UNIX_TIMESTAMP(created_at) AS created_ts,
-            (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts
+            (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts,
+            (SELECT UNIX_TIMESTAMP(o.suspended_from) FROM cp_officers o WHERE o.citizenid = r.citizenid)
+                AS suspended_from_ts
             FROM cp_mission_runs r WHERE id = ?]], { id })[1]
         return (D.eligible(r, cid, at))
     end
@@ -1665,6 +1823,85 @@ do
     H.time = T1 + 59 * HR
     Forfeit()
     H.eq(RowOf(w).cash_status, 'forfeited', 'forfeited after the moved end')
+
+    -- H8: a suspension that starts after a run's window closed never reopens it (D.eligible and the forfeiture SQL
+    -- read when the suspension started, cp_officers.suspended_from)
+    local T2 = T0 + 400 * HR
+    H.time = T2
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'HOLD0009\', \'sast\')')
+    local f = Row({ cid = 'HOLD0009', status = 'none', owed = 0 })
+    H.sql('UPDATE cp_mission_runs SET state = \'failed\' WHERE id = ?', { f })
+    local v2 = Row({ cid = 'HOLD0009', status = 'held', owed = 50, voided = true })
+    local v3 = Row({ cid = 'HOLD0009', status = 'held', owed = 50, voided = true })
+    H.eq(Eligible(f, 'HOLD0009', T2 + 49 * HR), false, 'H8: the failed run closes after 48 h')
+    H.time = T2 + 49 * HR
+    Forfeit()
+    H.eq(RowOf(v2).cash_status, 'forfeited', 'H8: and the voided run is forfeited then')
+    H.sql('UPDATE cp_mission_runs SET cash_status = \'held\' WHERE id = ?', { v3 })   -- held by hand (no job ran)
+    H.time = T2 + 30 * 24 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0009', 1, 0, 'x') end), 'H8: suspended a month later')
+    H.time = T2 + 31 * 24 * HR + HR
+    H.eq(Eligible(f, 'HOLD0009', H.time), false, 'H8: a month-old failed run stays closed after a later suspension')
+    H.eq(Eligible(v2, 'HOLD0009', H.time), false, 'H8: a forfeited month-old voided run stays closed')
+    Forfeit()
+    H.eq(RowOf(v3).cash_status, 'forfeited', 'H8: the forfeiture job does not hold a month-old row either')
+    -- a second suspension given inside the windows the first one held keeps its start (the hold goes on)
+    H.time = T2 + 40 * 24 * HR
+    local g = Row({ cid = 'HOLD0009', status = 'held', owed = 50, voided = true })
+    H.time = H.time + HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0009', 1, 0, 'x') end), 'H8: suspended in its window')
+    local from1 = Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0009\'')
+    H.eq(from1, H.time, 'H8: a suspension given 9 days after the last one ended starts now')
+    H.time = H.time + 24 * HR + 10 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0009', 1, 0, 'x') end), 'H8: suspended again 10 h after')
+    H.eq(Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0009\''), from1,
+        'H8: the second suspension keeps the first one\'s start')
+    H.eq(Eligible(g, 'HOLD0009', H.time + 24 * HR + 47 * HR), true, 'H8: so the run stays open 48 h after it')
+
+    -- H8: filing through server:dispute (ROW_SQL reads the suspension): open until 48 h after the lift, not after
+    H.time = T0 + 2000 * HR
+    local T3 = H.time
+    H.sql('DELETE FROM cp_disputes')
+    local a = Row({ cid = 'OFF00008', dept = 'fib', status = 'held', owed = 50, voided = true })
+    local b = Row({ cid = 'OFF00008', dept = 'fib', status = 'held', owed = 50, voided = true })
+    H.time = T3 + HR
+    H.ok(Async(function() return CP.Access.suspend('OFF00008', 7, 0, 'auto') end), 'H8: OFF00008 suspended')
+    H.time = T3 + 72 * HR
+    H.ok(Async(function() return CP.Access.suspend('OFF00008', 0, 0, 'lifted') end), 'H8: and lifted on day 3')
+    H.time = T3 + 72 * HR + 47 * HR
+    local okD, eD = Act('server:dispute', 8, { rowId = a, reason = 'x', requestId = Rid() })
+    H.ok(okD == true, 'H8: a dispute filed 47 h after the lift is taken: ' .. tostring(eD))
+    H.time = T3 + 72 * HR + 49 * HR
+    okD, eD = Act('server:dispute', 8, { rowId = b, reason = 'x', requestId = Rid() })
+    H.ok(not okD and eD == 'err.dispute_window', 'H8: one filed 49 h after it is refused: ' .. tostring(eD))
+
+    -- H8: migration 019 fills suspended_from for the suspensions given before it: the last 'suspend' audit row up to
+    -- their end (so one lifted just before the update still holds its windows), else now for one still running
+    do
+        local f19 = io.open('Crimson-Police/sql/migrations/019_suspension_start.sql', 'r')
+        local text = f19 and f19:read('a') or ''
+        if f19 then f19:close() end
+        text = text:gsub('%-%-[^\n]*', '')
+        local fill = text:match('(UPDATE cp_officers.-);')
+        H.ok(fill ~= nil, 'H8: 019 has its fill statement')
+        H.time = T0 + 3000 * HR
+        local now = H.time
+        H.sql([[INSERT INTO cp_officers (citizenid, department, suspended_until) VALUES
+            ('BACK0001', 'sast', FROM_UNIXTIME(?)), ('BACK0002', 'sast', FROM_UNIXTIME(?)),
+            ('BACK0003', 'sast', FROM_UNIXTIME(?))]], { now - 10 * HR, now + 24 * HR, now - 900 * HR })
+        H.sql([[INSERT INTO cp_audit (actor, role, action, target, created_at)
+            VALUES ('console', 'console', 'suspend', 'BACK0001', FROM_UNIXTIME(?)),
+                   ('console', 'console', 'suspend', 'BACK0001', FROM_UNIXTIME(?))]], { now - 900 * HR, now - 80 * HR })
+        if fill then H.sql(fill) end
+        local function From(cid)
+            return Count(
+                ('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'%s\''):format(cid))
+        end
+        H.eq(From('BACK0001'), now - 80 * HR, 'H8: 019: a suspension lifted before the update starts at its audit row')
+        H.eq(From('BACK0002'), now, 'H8: 019: a running one with no audit row starts at the update')
+        H.eq(From('BACK0003'), 0, 'H8: 019: one that ended long ago with no audit row stays empty')
+        H.sql('DELETE FROM cp_audit WHERE target LIKE \'BACK%\'')
+    end
     H.time = T0
 end
 

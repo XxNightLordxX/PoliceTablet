@@ -1094,7 +1094,7 @@ H.eq(RowCount('SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_s
     'the 30 tables were created')
 local applied = Mq('SELECT version, name FROM cp_schema_migrations ORDER BY version')
 H.eq(#applied, MIGRATIONS, 'with every migration recorded')
-H.eq(applied[#applied] and applied[#applied].name, '018_tours.sql', 'the 018 migration ran last')
+H.eq(applied[#applied] and applied[#applied].name, '019_suspension_start.sql', 'the 019 migration ran last')
 H.eq(applied[2] and applied[2].name, '002_test_def_hash.sql', 'the 002 migration ran (def_hash exists)')
 H.eq(SameTables(engineDump, DumpMaria(live, true), 'files-to-database'), COPIED_TABLES,
     'the new database holds the saves folder')

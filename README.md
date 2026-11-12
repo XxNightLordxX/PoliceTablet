@@ -230,13 +230,13 @@ result. On a good install the console shows lines like these (the order can diff
 [crimson-police] applied migration 001_initial.sql
 [crimson-police] applied migration 002_test_def_hash.sql
 ...
-[crimson-police] Crimson-Police saves folder at version 18
+[crimson-police] Crimson-Police saves folder at version 19
 [crimson-police] missions loaded: 19 built-in (0 edited), 0 custom, 0 rejected
 [crimson-police] Start-up check: all 18 checks passed. Type CrimsonPoliceAdmin check in the server console to see them
 ```
 
 - With the database on, the first line reads `storage: MySQL/MariaDB through oxmysql`, the "first start" line is
-  not there, and the version line reads `Crimson-Police database at version 18`. On a database made by txAdmin's
+  not there, and the version line reads `Crimson-Police database at version 19`. On a database made by txAdmin's
   recipe, the first start also prints one `cp_... is utf8mb3_general_ci: switching it to utf8mb4
   (once)` line per table.
 - The `applied migration` lines only show on the first start and after an update. A migration is Crimson-Police

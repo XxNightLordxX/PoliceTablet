@@ -1414,7 +1414,8 @@ local PROFILE_RUNS_SQL = [[
 SELECT r.id, r.mission_type, r.mission_id, r.state, r.end_reason, r.final_points, r.cash_paid, r.cash_status,
   r.flagged, r.voided, r.breakdown, UNIX_TIMESTAMP(r.created_at) AS created_ts,
   (SELECT COUNT(*) FROM cp_disputes d WHERE d.run_id = r.id) AS disputes,
-  (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts
+  (SELECT UNIX_TIMESTAMP(o.suspended_until) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_ts,
+  (SELECT UNIX_TIMESTAMP(o.suspended_from) FROM cp_officers o WHERE o.citizenid = r.citizenid) AS suspended_from_ts
 FROM cp_mission_runs r
 WHERE r.citizenid = ?
 ORDER BY r.created_at DESC, r.id DESC
@@ -1435,6 +1436,7 @@ local function Disputable(row, own, nowTs, citizenid)
             voided = row.voided,
             created_ts = row.created_ts,
             suspended_ts = row.suspended_ts,
+            suspended_from_ts = row.suspended_from_ts,
         }, citizenid, nowTs)
         if ok then return eligible == true end
     end
