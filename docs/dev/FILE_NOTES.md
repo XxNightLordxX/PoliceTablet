@@ -619,6 +619,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/missions_a_spec.lua`: The missions_a built-in mission files and missions/builtin/index.lua.
 - `tests/missions_b_spec.lua`: Slice missions_b: the built-in mission files warrant_service, manhunt,
 - `tests/missions_c_spec.lua`: The five newer built-in missions (parking_patrol, traffic_enforcement, suspicious_activity, drug_lab_raid, gang_hideout_raid) and the changed cards: files, guardrails, and end-to-end runs at every tier they support.
+- `tests/missions_load_yield_spec.lua`: The mission loader yields between missions, so loading them never holds one server tick.
 - `tests/module_layout_spec.lua`: The module layout: the 14 owner-approved modules, each a folder of named sub-files.
 - `tests/money_spec.lua`: The money module (modules/money): one money engine (CP.Money) that every payment goes through.
 - `tests/my_keys_spec.lua`: My options -> My keys (modules/access/client/tablet.lua): the client action getKeyLabels names the key bound to each Crimson-Police key mapping, or says it is not set.

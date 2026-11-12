@@ -534,11 +534,17 @@ It says **FAIL** when:
 
 - a `SCRIPT ERROR`, `Error parsing`, `Failed to load` or `Couldn't start` line names Crimson-Police;
 - a `server thread hitch warning` line shows up while Crimson-Police starts (from its script environment to the
-  first line of another resource after its start-up check);
+  first line of another resource after its start-up check). When the line right before it is another resource's
+  work (its `script:NAME` line, or oxmysql reporting that resource's query) it is only an `info  hitch during
+  another resource's work (NAME)` line: oxmysql's first connection, for example, makes every resource's first
+  queries slow;
 - a start of Crimson-Police has no `Crimson-Police database at version N` (or `saves folder at version N`) line
   or no `missions loaded:` line (each restart is checked the same way);
 - Crimson-Police starts fewer times than asked, or `CrimsonPoliceAdmin check` gets no `Check:` answer;
-- the server refuses its license key.
+- the server refuses its license key;
+- the server crashes (a `Segmentation fault` line, or an exit status of a crash signal such as 139) before
+  `Quitting`. A crash after `Quitting` (some containers crash FXServer at its shutdown) is only an info line. The
+  tool writes `[boot_smoke] the server exited with status N` at the end of the log for this.
 
 **The key is never written to a file.** The tool reads it from `CP_FX_LICENSE_KEY` and hands it to FXServer with
 `+set sv_licenseKey` on the command line; `CP_FX_MYSQL` (the mysql connection string) goes the same way. The log

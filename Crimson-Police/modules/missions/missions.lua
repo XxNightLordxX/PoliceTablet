@@ -17,6 +17,7 @@
 --
 -- Public API (server)
 --   CP.Missions.loadAll() -> summary          summary = { loaded, builtin, custom, failed = { { id, file, error } }, warnings }
+--                                             (+ yields: the Wait(0)s between missions, see LOAD_SLICE_MS)
 --   CP.Missions.reload() -> summary           CP.Builder.onReload() (hand edits) first, then loadAll(); summary.builder
 --   CP.Missions.get(id) -> def|nil
 --   CP.Missions.all() -> { [id] = def }       (a copy of the map; the defs are shared, do not mutate them)
@@ -112,6 +113,11 @@ local loading = false
 local lastSummary = nil
 local clientList = {}      -- serialized definitions for clients, rebuilt on every change
 local WARN_TEXTS_MAX = 200 -- warning lines kept in the load summary (Admin UI → Missions → Load result)
+-- The loader gives the server thread back (Wait(0)) between missions once it has worked this long in one go, so
+-- reading and normalising every mission never holds one server tick (a real restart hitched 224 ms on it). Only in
+-- a thread that may yield; the old missions stay live until the swap at the end.
+local LOAD_SLICE_MS = 20
+local duringLoad = nil     -- while loadAll runs: id -> { def = def | false, raw } changed meanwhile (its swap keeps it)
 
 -- ============================================================================
 --                                SMALL HELPERS
@@ -991,6 +997,7 @@ function Missions.register(def)
     end
     defs[d.id] = d
     rawOf[d.id] = CP.U.deepcopy(def)
+    if duringLoad then duringLoad[d.id] = { def = d, raw = rawOf[d.id] } end
     CP.log(TAG, 'registered %s (%s v%s)', d.id, d.source, tostring(d.version))
     Broadcast()
     return d
@@ -1005,6 +1012,7 @@ function Missions.unregister(id)
     end
     defs[id] = nil
     rawOf[id] = nil
+    if duringLoad then duringLoad[id] = { def = false } end
     CP.log(TAG, 'unregistered %s', id)
     Broadcast()
     return true
@@ -1089,6 +1097,16 @@ local function BuiltinDef(id, override, summary, onWarn)
     return out, raw
 end
 
+-- Between two missions of a load: Wait(0) once the load has worked LOAD_SLICE_MS since its last yield, when the
+-- calling thread may yield (the main chunk and a C boundary such as an export call cannot: they load in one go).
+local function Breather(summary, slice)
+    if not coroutine.isyieldable() then return end
+    if GetGameTimer() - slice.since < LOAD_SLICE_MS then return end
+    Wait(0)
+    summary.yields = summary.yields + 1
+    slice.since = GetGameTimer()
+end
+
 local function Overrides()
     if not (CP.Builder and CP.Builder.loadOverrides) then return {} end
     local ok, list = pcall(CP.Builder.loadOverrides)
@@ -1118,9 +1136,12 @@ function Missions.loadAll()
         overrideFailed = {},
         warnings = 0,
         warningTexts = {},
+        yields = 0,
         at = os.time(),
     }
     local newDefs, newRaws = {}, {}
+    local slice = { since = GetGameTimer() }
+    duringLoad = {}
     local function onWarn(id, msg)
         if #summary.warningTexts < WARN_TEXTS_MAX then
             summary.warningTexts[#summary.warningTexts + 1] = { id = tostring(id), text = tostring(msg) }
@@ -1150,6 +1171,7 @@ function Missions.loadAll()
             ids = {}
         end
         for _, id in ipairs(ids) do
+            Breather(summary, slice)
             local def, raw, err = BuiltinDef(id, overrides[id], summary, onWarn)
             if not def then
                 failed(id, raw, err)
@@ -1184,6 +1206,7 @@ function Missions.loadAll()
             end
         elseif type(customList) == 'table' then
             for i, entry in ipairs(customList) do
+                Breather(summary, slice)
                 local raw, meta, err = CustomEntry(entry)
                 local label = (type(entry) == 'table' and (entry.id or (entry.def and entry.def.id))) or ('#' .. i)
                 local file = meta and meta.filePath
@@ -1208,6 +1231,9 @@ function Missions.loadAll()
         end
     end)
 
+    Breather(summary, slice)   -- the swap and the broadcast to clients get a tick of their own
+    local changed = duringLoad
+    duringLoad = nil
     if not okAll then
         loading = false
         CP.err(TAG, 'loading missions failed; the previous missions stay loaded: %s', tostring(errAll))
@@ -1217,6 +1243,11 @@ function Missions.loadAll()
         return summary
     end
 
+    -- a publish, unpublish or edited built-in that went live while the load yielded wins over what it read before
+    for id, c in pairs(changed) do
+        newDefs[id] = c.def or nil
+        newRaws[id] = c.def and c.raw or nil
+    end
     defs = newDefs
     rawOf = newRaws
     loadedOnce = true
@@ -1241,6 +1272,7 @@ function Missions.refreshBuiltin(id)
     end
     defs[id] = def
     rawOf[id] = raw
+    if duringLoad then duringLoad[id] = { def = def, raw = raw } end
     if lastSummary then
         lastSummary.overrideFailed = lastSummary.overrideFailed or {}
         for i = #lastSummary.overrideFailed, 1, -1 do

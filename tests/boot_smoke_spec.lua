@@ -2,8 +2,9 @@
 -- or fail for the right reason, keys are masked and the server.cfg it writes holds no secret.
 
 -- The logs in tests/fixtures/boot are real FXServer consoles (build 38435, Qbox v1.24.1): a clean start, a start
--- with "server thread hitch" lines, and a start where settings.lua did not parse. Variants (a restart, a missing
--- line) are written to a temporary file. Runs bash and awk only; no stubs, no database.
+-- with "server thread hitch" lines, a start where settings.lua did not parse, and a database-off boot with
+-- --admin-check --restart (real_restart.txt, its folder paths shortened). Variants (a restart, a missing line, a
+-- moved hitch, a crash at quit) are written to a temporary file. Runs bash and awk only; no stubs, no database.
 
 local H = dofile('tests/harness.lua')
 
@@ -113,6 +114,68 @@ local badRestart = start:gsub('[^\n]*missions loaded: [^\n]*\n', '')
 out, rc = Check(clean .. restart .. stop .. badRestart)
 H.eq(rc, 1, 'a restart without its missions line fails')
 H.ok(Has(out, 'start 2 of Crimson-Police has no "missions loaded" line'), 'the second start is named')
+
+-- A real boot (tests/fixtures/boot/real_restart.txt, build 38435, database off, --admin-check --restart):
+-- a 258 ms hitch on the first start while oxmysql answered qbx_core's and ox_inventory's first queries (the line
+-- before it is ox_inventory's query), and a 224 ms hitch of the restart while Crimson-Police loaded its missions.
+local real = Read(FIX .. 'real_restart.txt')
+H.ok(real ~= nil and Has(real, 'timer interval of 224 milliseconds'), 'the real restart log is readable')
+real = real or ''
+out, rc = Run('--check ' .. FIX .. 'real_restart.txt')
+H.eq(rc, 1, 'the real restart log fails (the mission load hitch)')
+H.ok(Has(out, 'FAIL  server thread hitch while Crimson-Police starts: ') and Has(out, 'interval of 224 milliseconds'),
+    'the 224 ms hitch next to Crimson-Police\'s lines is a FAIL')
+H.ok(Has(out, 'FAIL: 1 problem(s)'), 'one problem only: ' .. out)
+H.ok(
+    Has(out, 'info  hitch during another resource\'s work (ox_inventory): ')
+        and Has(out, 'interval of 258 milliseconds'),
+    'the 258 ms hitch after ox_inventory\'s query is info'
+)
+H.ok(Has(out, 'Crimson-Police started 2 time(s)'), 'both starts counted')
+
+-- the same boot without the mission load hitch (the fix): PASS
+local fixed = real:gsub('[^\n]*timer interval of 224 milliseconds[^\n]*\n', '')
+out, rc = Check(fixed)
+H.eq(rc, 0, 'the real boot without the restart hitch passes: ' .. out)
+H.ok(Has(out, '\nPASS'), 'and says PASS')
+
+-- the hitch right after another resource's own script line is info too; after oxmysql reporting Crimson-Police's
+-- query, or after a Crimson-Police line, it stays a FAIL
+local hitch258 = '[ citizen-server-impl] server thread hitch warning: timer interval of 258 milliseconds\n'
+local function Move(text, after)
+    local cut = text:gsub('[^\n]*timer interval of 258 milliseconds[^\n]*\n', '')
+    local at = cut:find(after, 1, true)
+    if not at then return cut end
+    local eol = cut:find('\n', at, true)
+    return cut:sub(1, eol) .. hitch258 .. cut:sub(eol + 1)
+end
+out, rc = Check(Move(fixed, 'Warning: Table \'properties\' does not exist'))
+H.eq(rc, 0, 'a hitch after a qbx_core line passes')
+H.ok(Has(out, 'info  hitch during another resource\'s work (qbx_core): '), 'and names qbx_core')
+out, rc = Check(Move(fixed, 'SELECT COUNT(*) FROM cp_schema_migrations []'))
+H.eq(rc, 1, 'a hitch after oxmysql reports Crimson-Police\'s query fails')
+H.ok(Has(out, 'FAIL  server thread hitch while Crimson-Police starts: ') and Has(out, 'interval of 258'),
+    'and is the Crimson-Police hitch')
+out, rc = Check(Move(fixed, 'storage: database off, data saved as files'))
+H.eq(rc, 1, 'a hitch right after a Crimson-Police line fails')
+out, rc = Check(Move(fixed, 'Started resource Crimson-Police'))
+H.eq(rc, 1, 'a hitch right after "Started resource Crimson-Police" fails')
+
+-- the server crashed at quit (proot shutdown): info, not FAIL; a crash before "Quitting" fails
+local exit139 = '[boot_smoke] the server exited with status 139\n'
+local segv = 'Segmentation fault (core dumped)\n'
+out, rc = Check(fixed .. segv .. exit139)
+H.eq(rc, 0, 'a crash after "Quitting" passes: ' .. out)
+H.ok(Has(out, 'info  the server crashed after "Quitting" (its shutdown, not counted): '), 'and is shown as info')
+local early = fixed:gsub('(%[boot_smoke%] sent: quit\n)', segv .. '%1')
+out, rc = Check(early .. exit139)
+H.eq(rc, 1, 'a crash before "Quitting" fails')
+H.ok(Has(out, 'FAIL  the server crashed: Segmentation fault'), 'and names the crash line')
+out, rc = Check(clean .. exit139)
+H.eq(rc, 1, 'exit status 139 without a "Quitting" line fails')
+out, rc = Check(fixed .. '[boot_smoke] the server exited with status 0\n')
+H.eq(rc, 0, 'a clean exit passes')
+H.ok(Has(Read(TOOL), 'the server exited with status'), 'a boot writes the exit status of the server to its log')
 
 -- Keys are masked: the key itself, any cfxk_ value and the mysql connection string.
 local raw = os.tmpname()

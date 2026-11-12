@@ -850,7 +850,11 @@ The mission registry.
 Server:
 - `loadAll()` — waits for `CP.Migrations.ready()` (so built-ins are normalised with the settings changed in game),
   reads `missions/builtin/index.lua` and each built-in with the mission file reader, then `CP.Builder.loadPublished()`
-  (its file sync runs first) and `CP.Builder.loadOverrides()`.
+  (its file sync runs first) and `CP.Builder.loadOverrides()`. In a thread that may yield it hands the server
+  thread back (`Wait(0)`) between missions once it has worked `LOAD_SLICE_MS` (20 ms of `GetGameTimer()`) in one go,
+  so no server tick holds the whole load (a real restart hitched 224 ms on it; `summary.yields` counts the yields).
+  The old missions stay live until the swap at the end, and a `register`, `unregister` or `refreshBuiltin` made
+  while it yields is kept by that swap. A call that cannot yield (main chunk, an export) loads in one go.
 - Edited built-ins (§8.4.2): each override replaces its built-in under the same id (`source = 'builtin'`,
   `overridden`, `overrideVersion`, `baseHash`, `shippedHash`).
 - `reload() -> summary` (`/CrimsonPoliceAdmin reload` and `server:admin:reloadMissions`: `can(src, 'reloadMissions')`,

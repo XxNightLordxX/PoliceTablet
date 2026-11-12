@@ -25,9 +25,11 @@
 #
 # FAIL when: a SCRIPT ERROR, Error parsing, Failed to load or Couldn't start line names Crimson-Police; a
 # "server thread hitch" line shows up while Crimson-Police starts (from its script environment to the first line
-# of another resource after its start-up check); a start of Crimson-Police has no "at version" (migrations) or
-# "missions loaded" line; Crimson-Police starts fewer times than asked; `CrimsonPoliceAdmin check` printed no
-# "Check:" answer; the server refused its license key.
+# of another resource after its start-up check), unless the line right before it is another resource's work (its
+# script line, or oxmysql reporting its query: info only); a start of Crimson-Police has no "at version"
+# (migrations) or "missions loaded" line; Crimson-Police starts fewer times than asked; `CrimsonPoliceAdmin check`
+# printed no "Check:" answer; the server refused its license key; the server crashed (a segfault line, or an exit
+# status of a crash signal) before "Quitting". A crash after "Quitting" (its shutdown) is info only.
 # Exit status: 0 PASS, 1 FAIL, 2 usage error or the server could not be started.
 
 set -u -o pipefail
@@ -36,7 +38,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 MARK=.cp_boot_smoke
 
 usage() {
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 die() {
@@ -103,6 +105,24 @@ check_log() {
             if (length(line) > 220) line = substr(line, 1, 220) "..."
             print "  FAIL  " why (line != "" ? ": " line : "")
         }
+        # whose work a console line is: the resource of a [script:NAME] line ("" for engine lines); an oxmysql line
+        # is the resource whose query it reports ("NAME took N ms to execute a query!" and the SQL lines after it)
+        function owner_of(line,    name) {
+            if (line !~ /^\[ *script:[^]]+\]/) { sql = ""; return "" }
+            name = line
+            sub(/^\[ *script:/, "", name)
+            sub(/\].*$/, "", name)
+            sub(/:(warn|error|info|debug)$/, "", name)
+            if (name != "oxmysql") { sql = ""; return name }
+            if (match(line, /\] [^ ]+ took [0-9.]+ms to execute a query/)) {
+                sql = substr(line, RSTART + 2)
+                sub(/ took .*$/, "", sql)
+                return sql
+            }
+            if (line ~ /^\[ *script:oxmysql\] \[/) { sql = ""; return "oxmysql" }
+            return sql != "" ? sql : "oxmysql"
+        }
+        function ours(name) { return name == "" || index(name, "Crimson-Polic") == 1 }
         function close_start() {
             if (!open) return
             if (!mig) fail("start " starts " of Crimson-Police has no migrations line (\"... at version N\")", "")
@@ -115,6 +135,21 @@ check_log() {
             gsub(/\033\[[0-9;]*m/, "", line)
             cp = index(line, "Crimson-Polic") > 0
             hitch = index(line, "server thread hitch warning") > 0
+            crash = line ~ /Segmentation fault|SIGSEGV|core dumped/
+            if (match(line, /^\[boot_smoke\] the server exited with status [0-9]+/)) {
+                status = line
+                sub(/^.* status /, "", status)
+                status += 0
+                # 132 SIGILL, 134 SIGABRT, 135 SIGBUS, 136 SIGFPE, 139 SIGSEGV
+                if (status == 132 || status == 134 || status == 135 || status == 136 || status == 139) crash = 1
+                else { print "  info  " line; next }
+            }
+            if (line ~ /Quitting: /) quitting = 1
+            if (crash) {
+                if (quitting) print "  info  the server crashed after \"Quitting\" (its shutdown, not counted): " line
+                else fail("the server crashed", line)
+                next
+            }
 
             if (line ~ /^\[boot_smoke\] sent: /) {
                 cmd = substr(line, 20)
@@ -147,7 +182,11 @@ check_log() {
 
             # the hitch window: from the script environment to the first line of another resource after the start-up
             # check (Crimson-Police still prints its integration lines then), at most 12 lines after it
-            if (window && hitch) fail("server thread hitch while Crimson-Police starts", line)
+            if (window && hitch) {
+                if (ours(prev)) fail("server thread hitch while Crimson-Police starts", line)
+                else print "  info  hitch during another resource\047s work (" prev "): " line
+            }
+            if (!hitch && line !~ /^[ \t]*$/) prev = owner_of(line)
             if (window && closing && !hitch && line !~ /^[ \t]*$/ && (!cp || ++closing > 13)) window = 0
             if (window && cp && index(line, "Start-up check: ") > 0) {
                 closing = 1
@@ -322,9 +361,14 @@ if alive; then
 else
     echo "boot_smoke: the server stopped by itself after $(elapsed)s"
 fi
+SERVER=$PID
 stop_server
+wait "$SERVER" 2> /dev/null
+RC=$?
 wait 2> /dev/null
 sleep 1 # the masking reader writes the last lines
+# a crash after "Quitting" (the shutdown) is info, one before it a FAIL: check_log reads this line
+echo "[boot_smoke] the server exited with status $RC" >> "$LOG"
 
 echo "boot_smoke: $(wc -l < "$LOG") console lines in $LOG"
 check_log "$LOG"
