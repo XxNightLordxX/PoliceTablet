@@ -76,7 +76,7 @@ do
     for _, kind in ipairs(CP.Integrations.KINDS) do
         H.eq(Config.Integrations[kind], 'auto', 'generic: ' .. kind .. ' auto')
     end
-    H.eq(Config.Database.enabled, false, 'generic: the saves folder')
+    H.eq(Config.Database.enabled, W.ON_DB, 'generic: the store (the saves folder as shipped)')
     H.eq(Config.Debug, true, 'generic: Debug on as shipped')
 
     local home = Cb('admin:getHome', 5)
@@ -90,7 +90,7 @@ do
     end
     H.eq(table.concat(keys, ' '), 'bcso:3 police:3 sasp:3', 'setup: the three departments, supervising from 3')
     H.eq(table.concat(jobs, ' '), 'bcso>bcso police>police ranger sasp>sasp', 'setup: the Qbox police jobs')
-    H.eq(s and s.storage and s.storage.database, false, 'setup: the saves folder')
+    H.eq(s and s.storage and s.storage.database, W.ON_DB, 'setup: the store (the saves folder as shipped)')
     local found = {}
     for _, i in ipairs(s and s.integrations or {}) do found[#found + 1] = i.kind .. ':' .. tostring(i.active) end
     H.eq(table.concat(found, ' '),

@@ -96,7 +96,8 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, W.ON_DB,
+        W.ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Debug, true, 'shipped: Debug on')
     H.eq(Config.AdminUi.setupScreen, false, 'shipped: no first-start setup on Home')
     for _, src in ipairs({ 1, 2, 3, 4, 6, 7, 9 }) do
@@ -1282,7 +1283,7 @@ do
     local ok
     ok, err = Act('server:admin:setStorageMode', 5, { mode = 'database', reason = 'x', requestId = RequestId() })
     H.eq(err, 'err.confirm_mismatch', 'storage: Switch needs the typed SWITCH')
-    H.eq(Config.Database.enabled, false, 'storage: still the saves folder')
+    H.eq(Config.Database.enabled, W.ON_DB, 'storage: still the same store')
 end
 
 do

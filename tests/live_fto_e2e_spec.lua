@@ -7,9 +7,11 @@
 -- what survives is what docs/OWNER_GUIDE.md 6.4 and 3.11 say. Only the other resources and the natives are stubs.
 
 local H = dofile('tests/harness.lua')
-H.useFiles()
+-- WF6B: CP_WF_STORAGE=database (with lua5.4 tests/run.lua's default MariaDB mode) runs it on MariaDB, database on
+local ON_DB = os.getenv('CP_WF_STORAGE') == 'database' and H.storage == 'database'
+if not ON_DB then H.useFiles() end
 H.db = (os.getenv('CP_TEST_DB') or 'cp_test') .. '_lf_e2e'
-H.resetSaves()
+if ON_DB then H.resetDatabase() else H.resetSaves() end
 local cjson = require('cjson')
 local U, Runs
 
@@ -586,7 +588,8 @@ end
 -- ============================================================================
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, ON_DB,
+        ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.RealPlayers.liveCrime.enabled, false, 'shipped: live crimes off')
     H.eq(Config.RealPlayers.liveCrime.cash, false, 'shipped: live cases pay points only')
     H.eq(Config.Recognition.fieldTraining.enabled, false, 'shipped: field training off')

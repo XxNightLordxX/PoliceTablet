@@ -11,7 +11,7 @@
 
 local H = dofile('tests/harness.lua')
 -- WF5E: tests/workflows_system_db_spec.lua runs this world on MariaDB (CP_WF_STORAGE = 'database', database on)
-local ON_DB = rawget(_G, 'CP_WF_STORAGE') == 'database' and H.storage == 'database'
+local ON_DB = (rawget(_G, 'CP_WF_STORAGE') or os.getenv('CP_WF_STORAGE')) == 'database' and H.storage == 'database'
 if not ON_DB then H.useFiles() end
 -- WF5E: tests/workflows_system_generic_spec.lua runs this world on config/examples/generic.lua (copied over config.lua)
 H.configFile = rawget(_G, 'CP_WF_CONFIG')
@@ -606,6 +606,7 @@ end
 if WORLD then
     return {
         H = H,
+        ON_DB = ON_DB,
         PD = PD,
         CID = CID,
         ents = ents,
@@ -658,7 +659,8 @@ end
 -- A SETTING, A FEATURE, AN EXTRA GRANT, THE REWARDS, A RESTART.
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, ON_DB,
+        ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Rewards.enabled, false, 'shipped: item rewards off')
     H.eq(Config.Debug, true, 'shipped: Debug on')
 
@@ -736,7 +738,7 @@ do
         'restart: the rewards edit kept')
     H.eq(Config.Limits.maxCompletionsHour, 12, 'restart: the hourly cap kept')
     H.eq(CP.Permissions.can(7, 'missionCalls'), true, 'restart: the extra grant kept')
-    H.eq(Config.Database.enabled, false, 'restart: still the saves folder')
+    H.eq(Config.Database.enabled, ON_DB, 'restart: still the same store')
     for _, kind in ipairs(CP.Integrations.KINDS) do
         H.eq(Config.Integrations[kind], KindOff(kind) and 'none' or 'auto', 'restart: Integrations.' .. kind .. ' kept')
     end
@@ -1517,26 +1519,45 @@ local function Maria(sql)
     h:close()
     return (out:gsub('%s+$', ''))
 end
-do
-    -- the server's MariaDB database, empty (oxmysql's connection string names it)
-    os.execute(
-        ('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;"'):format(H.db, H.db))
+-- WF6B: on MariaDB (CP_WF_STORAGE=database) the other way: the database in use into the saves folder (it has the
+-- folder's start rows: Replace, typed REPLACE)
+if ON_DB then
     local before = Count('SELECT COUNT(*) AS n FROM cp_mission_runs')
-    local ok, res = Act('server:admin:storageCopy', 5,
-        { direction = 'files-to-database', reason = 'WF1 move', requestId = RequestId() }, 400)
-    H.eq(ok, true, 'copy: the admin copies the saves folder into the database: ' .. tostring(res))
-    H.eq(type(res) == 'table' and res.restart, false, 'copy: no restart needed (the saves folder stays in use)')
-    H.eq(tonumber(Maria('SELECT COUNT(*) FROM cp_mission_runs')), before, 'copy: every run row is in MariaDB')
-    H.eq(tonumber(Maria(('SELECT xp FROM cp_officers WHERE citizenid = \\"%s\\"'):format(CID[1]))), Xp(CID[1]),
-        'copy: ...and the officer\'s XP')
-    H.eq(tonumber(Maria('SELECT COUNT(*) FROM cp_custom_missions')),
-        Count('SELECT COUNT(*) AS n FROM cp_custom_missions'), 'copy: ...and the Mission Builder missions')
-    H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs'), before, 'copy: the saves folder in use is unchanged')
+    local ok, res = Act('server:admin:storageCopy', 5, {
+        direction = 'database-to-files',
+        force = true,
+        confirm = 'REPLACE',
+        reason = 'WF6B move',
+        requestId = RequestId(),
+    }, 400)
+    H.eq(ok, true, 'copy: the admin copies the database into the saves folder: ' .. tostring(res))
+    H.eq(type(res) == 'table' and res.restart, false, 'copy: no restart needed (the database stays in use)')
+    local rows = type(res) == 'table' and type(res.vars) == 'table' and tonumber(res.vars.rows) or 0
+    H.ok(rows >= before, ('copy: every row written (%d, %d runs)'):format(rows, before))
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs'), before, 'copy: the database in use is unchanged')
+end
+do
+    if not ON_DB then
+        -- the server's MariaDB database, empty (oxmysql's connection string names it)
+        os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s; CREATE DATABASE %s CHARACTER SET utf8mb4;"'):format(
+            H.db, H.db))
+        local before = Count('SELECT COUNT(*) AS n FROM cp_mission_runs')
+        local ok, res = Act('server:admin:storageCopy', 5,
+            { direction = 'files-to-database', reason = 'WF1 move', requestId = RequestId() }, 400)
+        H.eq(ok, true, 'copy: the admin copies the saves folder into the database: ' .. tostring(res))
+        H.eq(type(res) == 'table' and res.restart, false, 'copy: no restart needed (the saves folder stays in use)')
+        H.eq(tonumber(Maria('SELECT COUNT(*) FROM cp_mission_runs')), before, 'copy: every run row is in MariaDB')
+        H.eq(tonumber(Maria(('SELECT xp FROM cp_officers WHERE citizenid = \\"%s\\"'):format(CID[1]))), Xp(CID[1]),
+            'copy: ...and the officer\'s XP')
+        H.eq(tonumber(Maria('SELECT COUNT(*) FROM cp_custom_missions')),
+            Count('SELECT COUNT(*) AS n FROM cp_custom_missions'), 'copy: ...and the Mission Builder missions')
+        H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs'), before, 'copy: the saves folder in use is unchanged')
+    end
     Drop(5)                                        -- WF4: the admin quits; back online System shows the same store
     Reconnect(5)
     local st = Cb('admin:getStorage', 5)
     H.ok(st ~= nil, 'reconnect: the admin opens System -> Storage')
-    H.eq(Config.Database.enabled, false, 'reconnect: ...the saves folder still in use')
+    H.eq(Config.Database.enabled, ON_DB, 'reconnect: ...the same store still in use')
     Config.DisabledMissions = PATROL_OTHERS
     H.time = H.time + 601
     local okA, why = Act('server:acceptType', 6, 'patrol')
@@ -1544,7 +1565,7 @@ do
     local run = Runs.getBySrc(6)
     if run then Act('server:abandon', 6, run.id) end
     Config.DisabledMissions = {}
-    os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db))
+    if not ON_DB then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s;"'):format(H.db)) end
 end
 
 -- ============================================================================

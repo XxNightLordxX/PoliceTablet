@@ -576,6 +576,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/live_surrender_spec.lua`: Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 - `tests/live_tablet_spec.lua`: The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
 - `tests/livecrime_intake_spec.lua`: Live crimes: the Crimson-Contracts adapter and the intake (CP.LiveCrime).
+- `tests/load_spec.lua`: WF6B: every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
 - `tests/location_labels_spec.lua`: Built-in location labels name the right place: renamed locations keep their old label in `aliases`, so a Config.DisabledLocations or MissionTweaks entry written by the old label still matches; Traffic Enforcement's two city corridors are posted at 60 km/h.
 - `tests/loop_census_spec.lua`: Loop census (docs/dev/LOOPS.md "Loop census"): every Lua file of Crimson-Police that starts a thread
 - `tests/loop_pace_spec.lua`: Loops run less often (docs/dev/LOOPS.md): CP.Perf scales the idle and far waits by Config.Performance.loopScale (1-4) and never a per-frame wait; the slower shipped intervals; the NUI's shortest screen poll.

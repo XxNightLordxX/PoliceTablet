@@ -163,7 +163,8 @@ local AT = vec3(-300.0, -1400.0, 30.0)
 -- ============================================================================
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, W.ON_DB,
+        W.ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Rewards.enabled, false, 'shipped: item rewards off')
     H.eq(Config.Tablet.item, false, 'shipped: no tablet item')
     H.eq(Config.Tablet.access.requireItem, false, 'shipped: the item is never required')
@@ -361,7 +362,8 @@ local function PlayMission(typeKey, def, crew)
         ('every: %s: the card shows the row\'s points'):format(def.id))
     H.eq(W.Xp(CID[lead]) - xp0, row.final_points, ('every: %s: the XP grew by them'):format(def.id))
     local cash = tonumber(row.cash_paid) or 0
-    H.eq(row.flagged, false, ('every: %s: not held for review (%s)'):format(def.id,
+    H.eq(row.flagged == true or tonumber(row.flagged) == 1, false, ('every: %s: not held for review (%s)'):format(
+        def.id,
         tostring((CP.U.jsonField(row.breakdown) or {}).flagged and CP.U.jsonField(row.breakdown).flagged.reason)))
     H.ok(cash >= Config.MissionTypes[typeKey].payout,
         ('every: %s: paid at least the %s payout ($%d)'):format(def.id, typeKey, cash))

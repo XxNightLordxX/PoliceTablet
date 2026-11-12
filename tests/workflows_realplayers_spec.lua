@@ -169,7 +169,8 @@ end
 -- LIVE CRIMES, VOLUNTEERS, THE TABLET CHANGE NOTHING.
 
 do
-    H.eq(Config.Database.enabled, false, 'shipped: database off (the saves folder)')
+    H.eq(Config.Database.enabled, W.ON_DB,
+        W.ON_DB and 'database on (MariaDB)' or 'shipped: database off (the saves folder)')
     H.eq(Config.Debug, true, 'shipped: Debug on')
     H.eq(Config.RealPlayers.liveCrime.enabled, false, 'shipped: live crimes off')
     H.eq(Config.RealPlayers.volunteer.enabled, false, 'shipped: volunteers off')
