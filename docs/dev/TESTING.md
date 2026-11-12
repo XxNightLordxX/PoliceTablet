@@ -23,6 +23,7 @@ What to update with each change is at the end, in "Working on the code".
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 14 s |
 | `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish, and every screen of every tablet rendered (`everyScreen.walk.ts`); `node walk.mjs <text>` runs only the walks whose path holds that text | 15 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
+| `release` | `python3 tools/build_release.py --draft` into the logs folder: the release builds, "Release build" below | 1 s |
 | `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 15 min |
 | `race-all` | opt-in: `CP_RACE_CUTS=all lua5.4 tests/run.lua --jobs=1 race`, `tests/race_spec.lua` cut after every query of every case instead of 5 spread over it | 6 min |
 | `db-check` | opt-in: `tools/db_check.sh`, "Real database check" below | 10 min |
@@ -444,9 +445,41 @@ added after the award row, money a 'paying' row waits on) is in the case's `lag`
 - `walk`: `ok   <walk>: N passed, 0 failed` per walk, or `FAIL <walk>` and one `FAIL <what>` line per step that did
   not hold (`stopped: <action>: <err key>` when a mock refused). A new walk is a `src/**/<name>.walk.ts` exporting
   `walk(): Promise<{ passed, failures }>`.
+- `release`: one `release: <problem>` line per problem, then `release: FAIL`. Fix each (the message names the
+  file), or add a new runtime file to `EXTRA` in `tools/build_release.py`.
 - `build`: `web/dist is stale: N files differ from a fresh build`, then the files (`Only in ...`, `Files ...
   differ`). Run `cd Crimson-Police/web && npm run build` and commit `web/dist`. The fresh build is kept in the
   logs folder. A build of the same sources is byte-identical, so a difference is never noise.
+
+## Release build
+
+`python3 tools/build_release.py` builds what a city installs: `dist/Crimson-Police/`, the root `README.md` and
+`docs/OWNER_GUIDE.md`, `docs/IN_GAME_CHECKLIST.md` and `docs/IN_GAME_TEST_PLAN.md` beside it (at the paths their links
+expect), and `dist/Crimson-Police-<version>.zip` of all of it. `dist/` is in `.gitignore` (anchored as `/dist/`, so a
+new file under `Crimson-Police/web/dist` is never ignored).
+
+```sh
+python3 tools/build_release.py                 # the sale build
+python3 tools/build_release.py --draft         # while the CHANGELOG heading still says "(not released yet)"
+python3 tools/build_release.py --out DIR       # another output folder (it must be empty or a build of this tool)
+```
+
+- **What ships is an allow-list.** Every file the `fxmanifest.lua` names (the script lists, `files`, `ui_page`,
+  `escrow_ignore`; `*` is one folder level, `**` any depth, `@res/...` entries are other resources), from
+  `missions/custom/**` only the `.gitkeep` files, and the tool's `EXTRA` list: the files read with `LoadResourceFile`
+  (`sql/migrations/*.sql`, `config/banned_words.txt`, `missions/builtin/*.lua`), `config/examples`, `items`,
+  `logos`, `saves/README.md` and the `.gitkeep` of every folder the resource writes into. Never `web/src`,
+  `node_modules`, `locales/parts`, the build config of `web/`, a city's missions or saves data.
+- **It fails, naming each problem, on:** a manifest entry or `EXTRA` glob that matches no file, a missing owner doc,
+  `fxmanifest.lua`, `web/package.json` and the top `CHANGELOG.md` heading not on the same version, that heading saying
+  `(not released yet)` without `--draft`, a symlink, and in the copied files: a scratch file (`*.bak`, `*.orig`,
+  `*.rej`, `*.swp`, `*~`, `*.log`, `*.map`, `.cp-write-test`, `.DS_Store`, `.env*`), a developer path, or a line
+  that looks like a secret (a Discord webhook, a `cfxk_` key, a `mysql://` URL with a password, `password=` with a
+  value, a private key, a GitHub or API token). The secret scan reads only the copied files, never the repository,
+  whose specs hold fake webhooks. A failed build leaves no zip.
+- **A new file the resource reads with `LoadResourceFile`** or a new write folder goes into `EXTRA` in the same
+  commit. `tests/release_spec.lua` builds this tree into a scratch folder, checks what is in it and in the zip, and
+  breaks a scratch copy of the repository once per failure above.
 
 ## Real database check
 

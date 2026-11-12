@@ -655,6 +655,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/realsuspects_facts_spec.lua`: Police vs real criminal players: second, read-only handlers for sc-police's and sc-ambulance's net events pass facts to CP.Police.on / CP.Ambulance.on listeners while a case is open, and read nothing otherwise.
 - `tests/realsuspects_rules_spec.lua`: Police vs real criminal players: the NPC-mission Hard rules 15-18 bent for cases with a real suspect (run.realSuspect), each a Config.RealPlayers choice, and Config.RealPlayers.liveCrime.requireRoute for live crimes.
 - `tests/recognition_spec.lua`: Config.Recognition: XP levels, the auto badges, the weekly board badges, commendations and the field training
+- `tests/release_spec.lua`: The release build (tools/build_release.py): it ships the runtime files, the files read with LoadResourceFile, the write folders and the owner docs, nothing of the developer tree, and it fails on a missing file, a version mismatch, a scratch file or a secret. docs/dev/TESTING.md "Release build".
 - `tests/resmon_spec.lua`: Client resmon (docs/dev/LOOPS.md "Resmon"): every client script of fxmanifest.lua loaded as FXServer runs it,
 - `tests/restore_flagged_spec.lua`: Restoring a bulk-void batch keeps the held item rewards of a row that is still flagged (it waits for the Review Queue), and undoing a batch-caused forfeit of a flagged row puts its items back to held, not pending.
 - `tests/restrictions_spec.lua`: The one restrictions list (modules/supervisor/restrictions.lua): every kind registers with CP.Restriction from
@@ -723,6 +724,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.
 - `tools/boot_smoke.sh`: Boots a real FXServer headless with Crimson-Police for a while and says PASS or FAIL.
 - `tools/boot_smoke_setup.sh`: Makes (or brings up to date) a clean FXServer test folder for tools/boot_smoke.sh.
+- `tools/build_release.py`: Builds the release of Crimson-Police: dist/Crimson-Police/, the owner docs and a zip (dev tooling, not shipped).
 - `tools/capability_inventory.lua`: The capability inventory: every command, event, callback, NUI callback, export, admin action, setting, feature and Config key Crimson-Police has, one sorted line each (dev tooling, not shipped).
 - `tools/check_all.sh`: Every check of the repository in one command, in order, with a PASS/FAIL summary.
 - `tools/check_contracts.py`: Static cross-checks for Crimson-Police: CP calls, net events, NUI names and locale keys (dev tooling, not shipped).

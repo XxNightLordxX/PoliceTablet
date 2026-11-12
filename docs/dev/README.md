@@ -21,6 +21,9 @@
   `tools/db_check.sh` runs the migrations and every query on a throwaway MariaDB server of its own (docs/dev/TESTING.md,
   "Real database check").
   `.github/workflows/ci.yml` runs the same on GitHub.
+- **The release**: `python3 tools/build_release.py` writes `dist/Crimson-Police/`, the owner docs and
+  `dist/Crimson-Police-<version>.zip`, only what a city needs, and fails on a missing file, a version mismatch, a
+  scratch file or a secret (docs/dev/TESTING.md, "Release build").
 - **Text** lives in `Crimson-Police/locales/parts/<part>.json`. `python3 tools/check_contracts.py --merge` builds
   `locales/en.json` from them.
 - **Custom missions** published from the Mission Builder are `Crimson-Police/missions/custom/<id>.lua`. Edit one and
@@ -50,5 +53,6 @@
 | `tests/` | Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB) |
 | `tools/check_all.sh` | Every check in one command |
 | `tools/check_contracts.py` | Cross-checks of module calls, events, NUI names and locale keys |
+| `tools/build_release.py` | Builds the release folder and zip in `dist/` (ignored by git) |
 | `tools/lint_fivem.py` | FiveM pitfall rules; known hits in `tools/lint_baseline.txt` |
 | `tools/lua_flow.py` | The Lua parser and loop flow behind rule FX10 (`python3 tools/lua_flow.py --all <files>`) |
