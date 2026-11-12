@@ -1,3 +1,5 @@
+// Table with sorting, filtering and paging (sortRows, filterRows, pageRows) over a row window.
+
 import { useMemo, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';

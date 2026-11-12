@@ -1,0 +1,81 @@
+# The long checks tools/check_all.sh runs only when asked (opt-in steps): the Playwright click-through of every tablet
+# and the in-world screens (clickthrough), and the race spec cut after every query (race-all). Every night and on
+# request. docs/dev/TESTING.md "Opt-in steps" says what each one does and how to run it on a local machine.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  opt-in:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    services:
+      mariadb:
+        # as in ci.yml: root without a password, UTC, the default sql_mode
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: MariaDB service address
+        run: |
+          echo "MYSQL_HOST=127.0.0.1" >> "$GITHUB_ENV"
+          echo "MYSQL_TCP_PORT=${{ job.services.mariadb.ports['3306'] }}" >> "$GITHUB_ENV"
+
+      - name: TCP ports for the suites
+        # ci.yml explains it: every harness call opens a new connection
+        run: sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.ipv4.ip_local_port_range="16384 65535"
+
+      - name: Lua 5.4, lua-cjson and the MariaDB client
+        run: |
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            lua5.4 lua-cjson mariadb-client
+          command -v mysql > /dev/null || sudo ln -s "$(command -v mariadb)" /usr/local/bin/mysql
+          mysql --version | grep -q MariaDB
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            Crimson-Police/web/package-lock.json
+            tests/shadow/package-lock.json
+
+      - name: npm ci (web UI)
+        working-directory: Crimson-Police/web
+        run: npm ci --no-audit --no-fund
+
+      - name: Chromium for Playwright
+        working-directory: Crimson-Police/web
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: The opt-in steps
+        run: bash tools/check_all.sh clickthrough race-all
+        env:
+          CHECK_LOGS: ${{ runner.temp }}/check-logs
+
+      - name: Logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-logs
+          path: ${{ runner.temp }}/check-logs
+          if-no-files-found: ignore
+          retention-days: 7

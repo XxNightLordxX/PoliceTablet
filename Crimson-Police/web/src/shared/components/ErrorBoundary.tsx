@@ -1,3 +1,5 @@
+// ErrorBoundary: shows an error state with a retry button when a part of the UI crashes.
+
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { t } from '../i18n';
 import { EmptyState } from './Feedback';

@@ -20,8 +20,15 @@
 #   tsc           cd Crimson-Police/web && npx tsc --noEmit
 #   walk          cd Crimson-Police/web && node walk.mjs: every src/**/*.walk.ts against the browser mocks
 #   build         npm run build in a scratch copy of the web sources; web/dist must equal its output
+#   clickthrough  (opt-in) node tools/clickthrough.mjs: Playwright clicks through every tablet and the in-world
+#                 screens in Chromium (about 15 minutes); SKIP unless named or CP_CLICKTHROUGH=1
+#   race-all      (opt-in) CP_RACE_CUTS=all lua5.4 tests/run.lua race: the race spec's crash cuts after every
+#                 query of every case, not 5 spread over it; SKIP unless named or CP_RACE_ALL=1
 #
 # The suites run 2 specs at a time (CP_TEST_JOBS=N changes it for all three, 1 = one after another).
+#
+# Every step runs under `timeout`: CP_STEP_TIMEOUT=<seconds> (default 1800; the opt-in steps 3600) stops a step that
+# hangs, and the summary says TIMEOUT. Inside the suites each spec has its own limit (CP_SPEC_TIMEOUT, tests/run.lua).
 #
 # Each step's output is kept in $CHECK_LOGS/<step>.log (default: a new folder under ${TMPDIR:-/tmp}).
 # Exit status: 0 every step passed, 1 a step failed, 2 usage error.
@@ -45,18 +52,23 @@ for f in tools/lint_*.py tools/check_*.py; do
     LINT_SCRIPT[$name]=$f
     ALL_STEPS+=("lint-$name")
 done
-ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build)
+ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build clickthrough race-all)
+# the long steps that run only when named or turned on (their run_<step> prints SKIP otherwise)
+OPT_IN=" clickthrough race-all "
 
 usage() {
-    sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 VERBOSE=0
 [ "${GITHUB_ACTIONS:-}" = true ] && VERBOSE=1
 FAIL_FAST=0
 STEPS=()
+BODY=
+NAMED=" "
 for a in "$@"; do
     case "$a" in
+        --step-body=*) BODY=${a#--step-body=} ;;
         -h|--help) usage; exit 0 ;;
         --list) printf '%s\n' "${ALL_STEPS[@]}"; exit 0 ;;
         -v|--verbose) VERBOSE=1 ;;
@@ -67,6 +79,7 @@ for a in "$@"; do
             for s in "${ALL_STEPS[@]}"; do [ "$s" = "$a" ] && ok=1; done
             [ "$ok" = 1 ] || { echo "unknown step '$a'; steps: ${ALL_STEPS[*]}"; exit 2; }
             STEPS+=("$a")
+            NAMED+="$a "
             ;;
     esac
 done
@@ -245,7 +258,59 @@ detail_lint() {
     tail -1 "$1" | cut -c1-80
 }
 
+# An opt-in step runs when it is named on the command line or its variable is 1; otherwise it says SKIP.
+opted_in() {
+    [[ "$NAMED" == *" $1 "* ]] || [ "${!2:-}" = 1 ]
+}
+
+# Playwright in Chromium: every tablet screen and the in-world screens (HUD, result screen), docs/dev/TESTING.md
+# "Click-through". Needs `npx playwright install chromium` once (tools/setup_test_env.sh --install).
+run_clickthrough() {
+    opted_in clickthrough CP_CLICKTHROUGH || { echo "SKIP: opt-in (tools/check_all.sh clickthrough, or CP_CLICKTHROUGH=1)"; return 0; }
+    web_ready || return 1
+    if [ ! -e Crimson-Police/web/node_modules/playwright/package.json ]; then
+        echo "Crimson-Police/web/node_modules has no playwright: run (cd Crimson-Police/web && npm ci)"
+        return 1
+    fi
+    node tools/clickthrough.mjs "$LOGS/clickthrough"
+}
+detail_clickthrough() {
+    grep -m1 -E '^SKIP: ' "$1" && return 0
+    grep -E '^(ok   clickthrough|FAIL [0-9]+ defect|missing|Crimson-Police/web/node_modules has no)' "$1" | tail -1 |
+        cut -c1-80
+}
+
+# The race spec with a crash cut after every database query of every case (tests/race_spec.lua "cut").
+run_race-all() {
+    opted_in race-all CP_RACE_ALL || { echo "SKIP: opt-in (tools/check_all.sh race-all, or CP_RACE_ALL=1)"; return 0; }
+    need lua5.4 || return 1
+    CP_RACE_CUTS=all CP_SPEC_TIMEOUT="${CP_SPEC_TIMEOUT:-3300}" lua5.4 tests/run.lua --jobs=1 race
+}
+detail_race-all() {
+    grep -m1 -E '^SKIP: ' "$1" && return 0
+    detail_suite "$1"
+}
+
+# One step, called by the loop below under `timeout` (tools/check_all.sh --step-body=<step>): its output and exit
+# status are the step's.
+if [ -n "$BODY" ]; then
+    NAMED=${CP_CHECK_NAMED:- }
+    case "$BODY" in
+        lint-*) run_lint "${BODY#lint-}" ;;
+        *) "run_$BODY" ;;
+    esac
+    exit $?
+fi
+need timeout || exit 2
+export CHECK_LOGS="$LOGS"
+# the steps named on this command line, for opted_in in each step's own process
+export CP_CHECK_NAMED="$NAMED"
+
 # ---- run them ----
+
+# `timeout` runs each step in a process group of its own, which Ctrl-C at the terminal does not reach: pass it on
+STEP_PID=
+trap '[ -n "$STEP_PID" ] && kill -TERM "$STEP_PID" 2> /dev/null; echo; echo "interrupted"; exit 130' INT TERM
 
 T0=$(now)
 RESULTS=()
@@ -255,24 +320,41 @@ for step in "${STEPS[@]}"; do
     i=$((i + 1))
     log="$LOGS/$step.log"
     case "$step" in
-        lint-*) runner=(run_lint "${step#lint-}"); detailer=detail_lint ;;
-        *) runner=("run_$step"); detailer="detail_$step" ;;
+        lint-*) detailer=detail_lint ;;
+        *) detailer="detail_$step" ;;
     esac
+    limit=${CP_STEP_TIMEOUT:-1800}
+    [[ "$OPT_IN" == *" $step "* ]] && limit=${CP_STEP_TIMEOUT:-3600}
+    runner=(timeout --kill-after=30 "$limit" bash "$0" "--step-body=$step")
     printf '[%d/%d] %-13s ' "$i" "${#STEPS[@]}" "$step"
     t=$(now)
+    # in the background, so Ctrl-C (the trap above) can stop the step's own process group
+    : > "$log"
+    "${runner[@]}" > "$log" 2>&1 < /dev/null &
+    STEP_PID=$!
     if [ "$VERBOSE" = 1 ]; then
         echo
         [ "${GITHUB_ACTIONS:-}" = true ] && echo "::group::$step"
-        "${runner[@]}" 2>&1 | tee "$log"
-        rc=${PIPESTATUS[0]}
-        [ "${GITHUB_ACTIONS:-}" = true ] && echo "::endgroup::"
-    else
-        "${runner[@]}" > "$log" 2>&1
-        rc=$?
+        tail -n +1 -f --pid="$STEP_PID" "$log"
     fi
+    wait "$STEP_PID"
+    rc=$?
+    STEP_PID=
+    [ "$VERBOSE" = 1 ] && [ "${GITHUB_ACTIONS:-}" = true ] && echo "::endgroup::"
     secs=$(since "$t")
     detail=$("$detailer" "$log" 2>/dev/null)
-    if [ "$rc" -eq 0 ]; then status=PASS; else status=FAIL; FAILED=$((FAILED + 1)); fi
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+        detail="TIMEOUT after ${limit} s (CP_STEP_TIMEOUT)${detail:+; $detail}"
+        echo "TIMEOUT: $step stopped after $limit s" >> "$log"
+    fi
+    if [ "$rc" -eq 0 ] && grep -q '^SKIP: ' "$log"; then
+        status=SKIP
+    elif [ "$rc" -eq 0 ]; then
+        status=PASS
+    else
+        status=FAIL
+        FAILED=$((FAILED + 1))
+    fi
     [ "$VERBOSE" = 1 ] && printf '[%d/%d] %-13s ' "$i" "${#STEPS[@]}" "$step"
     printf '%s  %7ss  %s\n' "$status" "$secs" "$detail"
     RESULTS+=("$status|$step|$secs|$detail")
@@ -280,7 +362,7 @@ for step in "${STEPS[@]}"; do
         if [ "$VERBOSE" = 0 ]; then
             # the lines that say what failed (or the end of the log), the whole log is in $log
             echo "      ---- $log"
-            hits=$(grep -E '^✗|  FAIL |^ERROR|cannot start|could not|missing|^  - |^luac5.4: |error TS|: FX[0-9]+ |: stale: | would change$|^restyle: |not found: ' "$log"
+            hits=$(grep -E '^✗|  FAIL |^ERROR|cannot start|could not|missing|^  - |^luac5.4: |error TS|: FX[0-9]+ |: [EW][0-9]{3} |: stale: | would change$|^restyle: |not found: |^TIMEOUT' "$log"
                 grep -E '^Only in|^Files ' "$log")
             if [ -n "$hits" ]; then echo "$hits" | head -40; else tail -20 "$log"; fi | sed 's/^/      /'
         fi
@@ -298,9 +380,13 @@ for r in "${RESULTS[@]}"; do
 done
 skipped=$(( ${#STEPS[@]} - ${#RESULTS[@]} ))
 [ "$skipped" -gt 0 ] && echo "  (--fail-fast: $skipped step(s) not run)"
-passed=$(( ${#RESULTS[@]} - FAILED ))
+skips=0
+for r in "${RESULTS[@]}"; do [[ "$r" == SKIP\|* ]] && skips=$((skips + 1)); done
+passed=$(( ${#RESULTS[@]} - FAILED - skips ))
 if [ "$FAILED" -eq 0 ]; then verdict=PASS; else verdict=FAIL; fi
-echo "$verdict: $passed passed, $FAILED failed in $(clock "$TOTAL") (logs: $LOGS)"
+skipped_txt=
+[ "$skips" -gt 0 ] && skipped_txt=", $skips skipped (opt-in)"
+echo "$verdict: $passed passed, $FAILED failed$skipped_txt in $(clock "$TOTAL") (logs: $LOGS)"
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     {

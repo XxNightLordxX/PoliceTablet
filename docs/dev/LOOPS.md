@@ -198,7 +198,7 @@ happy hour, a waiting Testing result) still ticks. While armed, each pass keeps 
 
 Checked and kept as always-on (every one of them watches online players or a feature that is on all day):
 the arena flag reconcile (alerts, 2 s: a lost flag back within two seconds), the anticheat buckets and idle sampling
-(1 s: its rules count seconds per player), operations (adaptive 2 s / 10 s), mission call posting (`checkEvery`), and
+(2 s, not scaled: its rules count seconds per player), operations (adaptive 2 s / 10 s), mission call posting (`checkEvery`), and
 the minute or longer housekeeping (run engine caches, schedule, challenge reminders, call prune, draw holders, cash
 and reward forfeit sweeps): one pass a minute or ten, each over its own module's tables. Merging those into one
 thread would save a few wakes a minute and tie the modules' failures together.
@@ -238,7 +238,7 @@ thread would save a few wakes a minute and tie the modules' failures together.
 | downed/server checks | the meta change is the event; the poll is the safety net | yes, a run | `checkEvery` | yes | its own entries | owner setting |
 | opponents/server live crime watch | no | yes, a case or crew tracked | 1000 ms | yes | the live crime scan runs on its tick (`onTick`) | second deadlines |
 | alerts/server flag reconcile | no: a lost flag sends no event | players online | 2000 ms, scaled | yes | its own flags | a lost flag back within 2 s |
-| anticheat/server buckets, idle, presence | no | players online | 1000 ms, presence 5 s | yes | presence on the same pass | its rules count seconds |
+| anticheat/server buckets, idle, presence | no | players online | 2000 ms (not scaled), presence 5 s | yes | presence on the same pass | its rules count seconds |
 | operations/server | no | adaptive | 2000 ms active, 10000 ms idle | yes | one loop | the join window is minutes |
 | spawn/server open asks | no | yes, asks open | 1000 ms | yes | one loop | placement timeouts are seconds |
 | units/server sweep | no: an invite expiry is checked on accept too | yes, a unit | 5000 ms, scaled; ready check on its own timer | yes | one loop | invites last 120 s |
@@ -323,7 +323,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | modules/progression/challenge.lua | planned-end reminders | always | 60 s | |
 | modules/dispatch/calls.lua | prune | always | 60 s | |
 | modules/runs/draw.lua | housekeeping | always | 60 s | |
-| modules/money/cash.lua, rewards/server.lua | forfeit sweeps | always | 10 min | |
+| modules/money/cash.lua, modules/money/rewards.lua | forfeit sweeps | always | 10 min | |
 
 ## NUI timers (web/src)
 

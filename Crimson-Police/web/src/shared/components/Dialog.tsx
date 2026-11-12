@@ -1,3 +1,5 @@
+// Modal dialogs: Dialog and ConfirmDialog, rendered into the layer root (LayerRoot.ts).
+
 import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../cx';

@@ -5,9 +5,13 @@
 // It fails on a console error or page error, a screen that crashed (the error card), a blank screen, a button that
 // cannot be clicked (something else is on top of it), two buttons that overlap, or text that is a locale key (a
 // missing string shows its key).
+// The "world" pass opens the in-world screens with no tablet (?hud=<kind> and ?result=<kind>: the mission HUD, its
+// contact card and test controls, the result card and its debrief) in a 1280x720 window: the same checks, the HUD
+// column inside the window, and each button of the result card clicked.
 // Screenshots go to outDir (default: a fresh folder in the system temp folder), never into the repo.
-// `only` (officer, supervisor, admin or crimtab) runs one tablet. Needs a browser: not part of CI or check_all.
-// npm run clickthrough (in Crimson-Police/web) builds and runs it.
+// `only` (officer, supervisor, admin, crimtab or world) runs one part. Needs Chromium for Playwright (npx playwright
+// install chromium once): the opt-in step `tools/check_all.sh clickthrough` (or CP_CLICKTHROUGH=1) and the nightly CI
+// job run it. npm run clickthrough (in Crimson-Police/web) builds and runs it.
 
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -68,6 +72,10 @@ const TABLETS = [
     { ui: 'crimtab', frame: '.crim-frame', main: '.crim-body', nav: '.crim-tab' },
 ];
 
+// the samples of the world pass (src/mocks/samples.ts SampleHudKind, the ?result= kinds of src/mocks/DevPanel.tsx)
+const HUD_KINDS = ['progress', 'offroute', 'test'];
+const RESULT_KINDS = ['completed', 'failed', 'test', 'flagged'];
+
 // Buttons nobody should click in a sweep: they close the tablet or leave it (checked as shown and clickable only).
 const LEAVES = /^(close|close tablet|switch to|log out)$/i;
 
@@ -76,6 +84,7 @@ try {
         if (ONLY && tab.ui !== ONLY) continue;
         await sweep(tab);
     }
+    if (!ONLY || ONLY === 'world') await world();
 } finally {
     await browser.close();
     await new Promise(r => server.httpServer.close(r));
@@ -174,6 +183,70 @@ async function sweep(tab) {
         }
     }
     await page.close();
+}
+
+// The in-world screens (src/hud): every sample HUD and result card of the browser mocks (src/mocks/samples.ts) on a
+// 1280x720 game screen with no tablet open (HUD_KINDS, RESULT_KINDS above).
+async function world() {
+    const views = [
+        ...HUD_KINDS.map(k => ({ name: `hud ${k}`, query: `hud=${k}`, sel: '.cp-hud-column' })),
+        ...RESULT_KINDS.map(k => ({ name: `result ${k}`, query: `result=${k}`, sel: '.cp-result' })),
+    ];
+    for (const v of views) {
+        const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+        await page.route(
+            url => !url.href.startsWith(base),
+            route => route.fulfill({ contentType: 'image/png', body: BLANK_PNG }),
+        );
+        const where = `world > ${v.name}`;
+        page.on('console', m => {
+            if (m.type() === 'error') fail(where, `console error: ${m.text().slice(0, 300)}`);
+        });
+        page.on('pageerror', e => fail(where, `page error: ${String(e.message).slice(0, 300)}`));
+        try {
+            await page.goto(`${base}?${v.query}&dev=0&bg=none`);
+            try {
+                await page.waitForSelector(v.sel, { timeout: 8000 });
+            } catch {
+                fail(where, `${v.sel} did not show`);
+                continue;
+            }
+            await settle(page);
+            const el = page.locator(v.sel).first();
+            const text = (await el.innerText()).trim();
+            if (text.length < 3) fail(where, 'blank');
+            keysIn(text, where);
+            await buttonsOk(page, v.sel, where);
+            // the HUD column stays on the screen (it scales itself down to fit the height)
+            const box = await page.locator('.cp-hud-column').first().boundingBox();
+            if (!box) fail(where, 'no HUD column');
+            else if (box.x < 0 || box.y < 0 || box.x + box.width > 1280.5 || box.y + box.height > 720.5)
+                fail(where, `the HUD column leaves the 1280x720 screen (${JSON.stringify(box)})`);
+            await shot(page, where);
+            covered.push(where);
+            // each button of the card once (Dismiss and Close last: they close the card)
+            const labels = await page
+                .locator(`${v.sel} button`)
+                .evaluateAll(els => els.map(b => (b.getAttribute('aria-label') || b.innerText || '').trim()));
+            const last = l => (/^(dismiss|close)/i.test(l) ? 1 : 0);
+            const order = labels.map((l, i) => ({ l, i })).sort((a, b) => last(a.l) - last(b.l));
+            for (const { l, i } of order) {
+                const b = page.locator(`${v.sel} button`).nth(i);
+                if (!(await b.count()) || !(await b.isVisible()) || !(await b.isEnabled())) continue;
+                try {
+                    await b.click({ timeout: 2000 });
+                } catch (e) {
+                    fail(`${where} [${l}]`, `could not be clicked (${why(e)})`);
+                }
+                await settle(page);
+                if (await page.locator(v.sel).count()) keysIn((await page.locator(v.sel).first().innerText()).trim(), where);
+            }
+        } catch (e) {
+            fail(where, `stopped: ${String(e.message).split('\n')[0]}`);
+        } finally {
+            await page.close();
+        }
+    }
 }
 
 // Every visible button of the screen once, in order; the screen is opened again after each.

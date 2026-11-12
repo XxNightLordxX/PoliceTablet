@@ -1,3 +1,5 @@
+// Form inputs: Field, TextInput, SearchInput, NumberInput, Select, Textarea, Toggle and Checkbox.
+
 import {
     createContext,
     forwardRef,

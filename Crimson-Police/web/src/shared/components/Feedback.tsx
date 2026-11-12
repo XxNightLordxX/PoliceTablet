@@ -1,3 +1,5 @@
+// Feedback parts: Spinner, LoadingBlock, ProgressBar, Stat, EmptyState and ErrorState.
+
 import type { ReactNode } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';

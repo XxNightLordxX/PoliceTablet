@@ -5,7 +5,8 @@
 #   tools/setup_test_env.sh                   check only: one line per requirement, the fix for each problem
 #   tools/setup_test_env.sh --install         also install what is missing: apt packages, Node.js 22 from
 #                                             NodeSource, npm ci in Crimson-Police/web and tests/shadow, StyLua
-#                                             (release binary), and start the local MariaDB server
+#                                             (release binary), Chromium for Playwright, and start the local
+#                                             MariaDB server
 #   tools/setup_test_env.sh --root-no-password
 #                                             (with --install) let every local user in as MariaDB root without
 #                                             a password, which the harness needs (a test machine only)
@@ -28,7 +29,7 @@ for a in "$@"; do
         --install) INSTALL=1 ;;
         --root-no-password) ROOT_NO_PASSWORD=1 ;;
         --clean) CLEAN=1 ;;
-        -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option $a (tools/setup_test_env.sh --help)"; exit 2 ;;
     esac
 done
@@ -131,13 +132,14 @@ if [ "$INSTALL" = 1 ]; then
     has lua5.4 || missing+=(lua5.4)
     has luac5.4 || missing+=(lua5.4)
     has lua5.4 && lua5.4 -e "require('cjson')" > /dev/null 2>&1 || missing+=(lua-cjson)
+    has luacheck || missing+=(lua-check)
     has python3 || missing+=(python3)
     has mysql || missing+=(mariadb-client)
     # a server only when none is configured elsewhere (MYSQL_HOST) and none is installed here
     if [ -z "${MYSQL_HOST:-}" ] || [ "${MYSQL_HOST:-}" = localhost ]; then
         has mariadbd || [ -x /usr/sbin/mariadbd ] || [ -x /usr/sbin/mysqld ] || missing+=(mariadb-server)
     fi
-    for t in find xargs tar diff mkfifo; do has "$t" || missing+=(coreutils findutils tar diffutils); done
+    for t in find xargs tar diff mkfifo timeout; do has "$t" || missing+=(coreutils findutils tar diffutils); done
     if [ "${#missing[@]}" -gt 0 ]; then
         mapfile -t missing < <(printf '%s\n' "${missing[@]}" | sort -u)
         echo "installing: ${missing[*]}"
@@ -166,6 +168,12 @@ else
     bad lua-cjson "require('cjson') fails in Lua 5.4"
     fix "apt install lua-cjson (or: luarocks --lua-version 5.4 install lua-cjson)"
 fi
+# the lint-lua step (tools/lint_lua.py and .luacheckrc are written against 1.1.2, Ubuntu 24.04's lua-check)
+if has luacheck; then
+    ok luacheck "$(luacheck --version 2>&1 | sed -n 's/^Luacheck: //p')"
+else
+    bad luacheck "not found (the lint-lua step)"; fix "apt install lua-check"
+fi
 
 # ---- Python ----
 if has python3; then
@@ -175,8 +183,9 @@ else
     bad python3 "not found (tools/check_contracts.py)"; fix "apt install python3"
 fi
 
-# ---- small tools the scripts use (mkfifo: the harness's mysql client; xargs: tests/run.lua --jobs) ----
-for t in find xargs tar diff mkfifo awk sed grep sort mktemp; do
+# ---- small tools the scripts use (mkfifo: the harness's mysql client; xargs: tests/run.lua --jobs; timeout: the
+# time limits of tests/run.lua and tools/check_all.sh) ----
+for t in find xargs tar diff mkfifo awk sed grep sort mktemp timeout; do
     has "$t" || { bad "$t" "not found"; fix "apt install coreutils findutils diffutils tar gawk sed grep"; }
 done
 
@@ -358,6 +367,26 @@ modules() {
 if has node; then
     modules Crimson-Police/web "web/node_modules"
     modules tests/shadow "shadow/node_modules"
+fi
+
+# ---- Chromium for Playwright (the opt-in clickthrough step only: a warning, never a problem) ----
+chromium_path() {
+    (cd Crimson-Police/web && node -e '
+        const p = require("playwright").chromium.executablePath();
+        if (!require("fs").existsSync(p)) process.exit(1);
+        console.log(p);
+    ' 2> /dev/null)
+}
+if has node && [ -e Crimson-Police/web/node_modules/playwright/package.json ]; then
+    if ! chromium_path > /dev/null && [ "$INSTALL" = 1 ]; then
+        echo "installing Chromium for Playwright (npx playwright install chromium)"
+        (cd Crimson-Police/web && npx --no-install playwright install chromium) || echo "  the Chromium download failed"
+    fi
+    if cp_chrome=$(chromium_path); then
+        ok chromium "$cp_chrome (the clickthrough step)"
+    else
+        warn chromium "Playwright has no Chromium: the opt-in clickthrough step needs (cd Crimson-Police/web && npx playwright install chromium)"
+    fi
 fi
 
 # ---- the formatters of the style step (tools/restyle.py --check) ----

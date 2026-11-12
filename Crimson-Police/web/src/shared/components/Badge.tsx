@@ -1,3 +1,5 @@
+// Small labels: Badge (a tone and an optional icon), TierBadge (a mission tier) and XpBadge.
+
 import type { ReactNode } from 'react';
 import { cx } from '../cx';
 import { t, tOr } from '../i18n';

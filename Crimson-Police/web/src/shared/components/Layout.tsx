@@ -1,3 +1,5 @@
+// Layout helpers: Grid, Stack, Row, Spacer, Divider and KeyValue.
+
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { cx } from '../cx';
 

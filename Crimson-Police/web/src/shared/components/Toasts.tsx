@@ -1,3 +1,5 @@
+// Toasts: the Crimson-Police notifications stacked on screen.
+
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';

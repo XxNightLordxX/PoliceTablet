@@ -106,6 +106,7 @@ PoliceTablet/                      (git repo)
   README.md                        the owner's guide (install, admins, what ships off, commands, Admin UI tour,
                                    troubleshooting); every folder README below is a short note that points to it
   docs/OWNER_GUIDE.md              every other owner detail (settings, extras, how it plays, real suspects, go-live)
+  docs/IN_GAME_TEST_PLAN.md        the short in-game test plan (a 60-minute smoke test, then the riskiest changes)
   docs/IN_GAME_CHECKLIST.md        what to check in game
   docs/dev/README.md               for developers: building the web UI, the checks, the documents and tools
   docs/dev/ARCHITECTURE.md         this file: code structure, module APIs (§5), events, storage, the web UI (§12)
@@ -121,6 +122,7 @@ PoliceTablet/                      (git repo)
     fxmanifest.lua
     config/config.lua              every setting, each with its comment (the Settings description)
     config/blocks.lua              Mission Builder ranges and defaults
+    config/examples/generic.lua    the generic starting config for a fresh Qbox city (copied over config.lua)
     shared/init.lua                CP namespace, logging, CP.Blocks registry, RegisterMission stub
     shared/lib.lua                 the helper library (§2)
     shared/locale.lua              CP.L / CP.Locale
@@ -131,12 +133,14 @@ PoliceTablet/                      (git repo)
     shared/options_dispatch.lua    Dispatch and opening: one-click claim, call pop-ups, key after a call, open on (§5.48)
     shared/options_hud.lua         The mission HUD's officer options: side, size, compact, fewer animations (§5.48)
     shared/options_look.lua        Easier to read: the tablet look on the HUD, larger text (§5.48)
+    shared/options_map.lua         Map: how Objective GPS leads, the HUD direction line, colour-blind map colours (§5.48)
     shared/options_run.lua         During a mission: abandon in two presses, one-click recalculate, miles (§5.48)
     shared/options_popups.lua      Pop-ups: toast time, result card time, fewer pop-ups on a run, key hints (§5.48)
     shared/options_sounds.lua      Sounds: mission call tone, unit tone, objective cues on or off (§5.48)
     shared/options_unit.lua        Unit: Auto-Ready answers the unit ready check near the leader (§5.48)
     shared/twists.lua              CP.Twists: a run's twists (the modifiers officers choose) and their stacked bonus (§5.9)
     shared/utils.lua               CP.U helpers (round, rng, hash, vectors, colours ...)
+    shared/weapons.lua             CP.Weapons: GTA weapon names by hash (the Real suspects damage ledger, §2)
     config/banned_words.txt        the default banned-word list for profile bios (one word or phrase a line)
     locales/en.json                all player-facing text (merged from locales/parts/*.json; English only)
     locales/parts/<slice>.json     one part per package; `python3 tools/check_contracts.py --merge` builds en.json
@@ -169,9 +173,10 @@ PoliceTablet/                      (git repo)
 ```
 
 fxmanifest loads: `@ox_lib/init.lua`, config/config.lua, config/blocks.lua, shared/*.lua
-(alphabetical: init, lib, locale, net, npccombat, options, twists, utils), then every module sub-file by name, in the
-order the files loaded in before the module folders existed (some read another module's CP table as they load; the
-order is pinned by tests/module_layout_spec.lua), with the folders made only of their own parts listed as globs
+(alphabetical: init, lib, locale, net, npccombat, options, options_board, options_dispatch, options_hud, options_look,
+options_map, options_popups, options_run, options_sounds, options_unit, twists, utils, weapons), then every module
+sub-file by name, in the order the files loaded in before the module folders existed (some read another module's CP
+table as they load; the order is pinned by tests/module_layout_spec.lua), with the folders made only of their own parts listed as globs
 (`modules/progression/*.lua`, `modules/review/*.lua`, `modules/realplayers/*.lua`, `modules/dispatch/*.lua`,
 `modules/teams/*.lua`; client: `modules/realplayers/client/*.lua`, `modules/dispatch/client/*.lua`,
 `modules/teams/client/*.lua`), then `blocks/**/server.lua`; client: `blocks/_kit/client.lua`, then each
@@ -246,6 +251,9 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.RealPlayers(part?) -> cfg, on`, `CP.RealPlayersOn(part?)` | shared/lib.lua | The one reader of `Config.RealPlayers`: a part, never nil, and whether it is on (a mode: its switch, off while the police script sends no cuff and jail facts; `criminalTablet`: its switch; `staff`, `antiFarm`, `surrender`: either mode on); no part: the section, either mode on. Modules keep no Cfg()/On() copy |
 | `CP.RealPlayersTakePart(run, what)`, `CP.RealPlayersRowFilter(what, alias)` | shared/lib.lua | Whether a live or volunteer case takes part in `typeOfTheDay`, `goals`, `challenge`, `cash` or `items` (that switch of its mode; any other run: true), and the SQL that leaves such rows out of goal and challenge sums while the switch is off. Cash, item rewards, scoring, goals and the challenge use them; the modes keep no copy |
 | `CP.U.*` | shared/utils.lua | `round` (halves up), `clamp`, `inRange`, `copy`, `deepcopy`, `contains`, `keys`, `count`, `map`, `filter`, `getPath`, `setPath`, `hash`, `hashHex`, `startsWith`, `trim`, `rng(seed)` (`:next() :int(a,b) :chance(p) :pick(l) :shuffle(l) :sample(l,n)`), `uuid()`, `xyz`, `dist`, `dist2d`, `distToPolyline`, `vecToTable`, `tableToVec`, `serialize`, `isHexColour`, `contrastText`, `toSrc(v, console?)` (a player source: an integer above 0, or nil; 0 too with `console = true`) |
+| `CP.Perf.scale()`, `CP.Perf.ms(ms)`, `CP.Perf.rangeSq(r2)`, `CP.Perf.armed(tag, ms, pass) -> arm, running` | shared/init.lua | `Config.Performance.loopScale` (1-4) stretches idle and far waits (never a per-frame wait); `armed`: a loop that runs `pass` every `ms` until it returns true, armed again by `arm()` (docs/dev/LOOPS.md) |
+| `CP.Restriction(key, def)`, `CP.RestrictionKinds` `{ order, byKey }` | shared/lib.lua | The kinds of the one restrictions list (`suspension` in admin, `missionBan`, the real-suspect and `volunteerBlock` kinds in realplayers/staff); `CP.Restrictions` (§5.54) reads them |
+| `CP.Weapons.label(hash)`, `.text(hash)`, `.count` | shared/weapons.lua | The common GTA weapon names by hash (signed or unsigned), built once at load; `text` gives `'#<hash>'` for an unknown one (the Real suspects damage ledger, realplayers/staff) |
 
 Naming of `CP.Net.action` names: officer actions are `'server:<name>'` (spec events, e.g. `'server:acceptType'`),
 supervisor actions `'server:sup:<name>'`, admin actions `'server:admin:<name>'`, Mission Builder actions
@@ -2630,6 +2638,8 @@ A front end of CP.Volunteers (5.47) for players who play real suspects, behind `
 - `criminalTablet` is a grantable extra power (5.3) that `actionsFor` never lists (no Supervisor UI).
 - Client: `/crimtab` (`command`) and the `useCriminalTablet` export (`item`) open it with
   `CP.Tablet.panelFocus('crimtab')`; NUI message `crimtab` `{ open, view, screen }`.
+- Net and NUI: `crimtab:get` and `server:crimtab:act` (§8.3), `client:crimtabOpen` / `client:crimtabClose` and the
+  volunteer events it listens to (§8.1), the NUI callbacks `crimtabClose` and `crimtabAnswered` (§9.1).
 - NUI: web/src/criminal (CriminalTablet.tsx, model.ts, criminal.walk.ts), its own CSS; mocks/criminal.mock.ts
   (`?ui=crimtab`).
 
@@ -2655,6 +2665,32 @@ shipped false, each with a default money amount).
 Steps: `web/src/shared/tour/tours.ts` (`run`: RunHints.tsx). `cp_tours` (018): `{"<tour>": <version>}` per cid;
 `Tr.TOURS` = the versions; only newer steps show. `training:get`, `server:training:done`, `server:admin:resetTours`,
 `/crimsonhelp` -> `client:startTour`; `CP.Setup.checklist()` -> `admin:getHome.checklist`.
+
+### 5.54 Smaller server modules (supervisor, admin and review parts)
+Each is one server file with no client half; its Net names are in §8.3 / §8.4 and its Mission control rows in §5.49.
+
+- `CP.HappyHour` — modules/supervisor/happyhour.lua: the `happyHour` Mission control (a timed, server-wide cooldown
+  scale). `HH.perDay()`, `scaleBounds()`, `usedToday()` (from `cp_audit`), `state(officer) -> { endsAt, left, minutes,
+  scale, noRepeat, by, byRole, self } | nil` (read by draw, livectl and the tablet session), `pushAll()`, and
+  `register` / `registerCash` / `registerPoints` (the control rows). Hooks: `deptControls:changed`, `settings:changed`.
+  Loop: 30 s, armed only while a happy hour runs (LOOPS.md).
+- `CP.MissionBan` — modules/supervisor/missionban.lua: a supervisor's temporary mission ban (`cp_officers.mission_ban`,
+  012). `MB.get(cid, now)`, `first(officers, now)` (the accept checks of draw and runs), `view(cid)`, `perDay()`,
+  `usedToday(src)`, `supView(src, cid)`, `clearCache()`; action `server:sup:missionBan`; restriction kind `missionBan`.
+  No loop (one load at start).
+- `CP.Restrictions` — modules/supervisor/restrictions.lua: the one restrictions list over `CP.RestrictionKinds` (§2).
+  `R.list(src)`, `run(ctx)`, `forSupervisor(src)`, `tabOn()`; `admin:getRestrictions`, `sup:getRestrictions`,
+  `server:restriction` (lift / extend). No loop.
+- `CP.SupAwards` — modules/supervisor/supawards.lua: the `awardPoints` Mission control through `CP.Corrections.adjust`.
+  `SA.perDay()`, `usedToday(src)`, `supView(src, cid)`; action `server:sup:awardPoints` (a feature reward, §5.52). No
+  loop.
+- `CP.SupToday` — modules/supervisor/today.lua: `ST.today(src)` behind `sup:getToday` (on duty, runs going, the
+  viewer's controls used). Read only, no loop.
+- `CP.AdminHome` — modules/admin/adminhome.lua: `AH.home(src)` behind `admin:getHome` (live counts, queues, alerts,
+  `CP.Setup.checklist()`) and `AH.shortcuts()` (`Config.AdminUi.homeShortcuts`). Read only, no loop.
+- `CP.ReviewRules` — modules/review/reviewrules.lua: the `reviewRules` Mission control. `RR.rules(dept)`,
+  `adminOnly(dept, kind)` (review/flagged and disputes), `voidStep(officer, row)` (the second Void), `pendingOf(rowId)`,
+  `clear(rowId)` (flagged, admin), `registerControls()`. One restore at start, no loop.
 
 ## 6. Cross-cutting conventions
 
@@ -3072,6 +3108,12 @@ prepare: `CP.Runs.holdBodies(run, { roles, max = bodies })`. start: `pauseFastCl
 | `client:closeTablet` | errKey (requireItem: the item left the inventory) | tablet |
 | `client:markerParts` | `{ runId, items = { { k, p, n?, s?, x, y, z } } }` to an officer when the extra parts on his map change; an empty list clears (§5.44, Config.Markers.parts) | markers |
 | `client:settings` | `{ { path, value } \| { path, none = true } }`: every setting changed in game that is in use | settings |
+| `client:volunteerAsk` | token, `{ role, seconds, km, travelMinutes }`: the volunteer is asked to play a suspect (§5.47) | realplayers/match |
+| `client:volunteerAskClose` | token: that question is gone (answered elsewhere, timed out, case ended) | realplayers/match |
+| `client:volunteerCase` | `{ phase = 'travel'\|'in_position'\|'engaged'\|'over', role?, meet?, seconds?, radius? }`: the volunteer's case changed | realplayers/match |
+| `client:volunteerNote` | kind, key, vars: a translated toast for the volunteer | realplayers/volunteers, match |
+| `client:crimtabOpen` | — : open the criminal tablet instead of the volunteer menu (`criminalTablet.replaceCommand`, §5.51) | realplayers/volunteers |
+| `client:crimtabClose` | — : close an open criminal tablet (the player may no longer use it) | realplayers/crimtab |
 
 Server → client ox_lib callback: `crimson-police:client:roadPoint` `{ near, min, max }` → `{ coords, heading }` or nil (the service-vehicle driver's client; the server validates the reply; custody).
 
@@ -3125,7 +3167,14 @@ Other resources' net events Crimson-Police also handles, each with a second, rea
 cancels or answers them (§5.1): `police:server:Impound` (CP.Police.onImpound); `police:server:CuffPlayer`,
 `police:server:UncuffPlayer`, `police:server:CuffBreakAlert`, `police:server:EscortPlayer`, `police:server:JailPlayer`,
 `police:server:BobbyPinResult` and `police:server:SeizeCash` (CP.Police.on listeners, real suspects);
-`hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners). The real-suspect handlers do nothing while no case with a
+`hospital:server:RespawnAtHospital` (CP.Ambulance.on listeners). The dispatch adapters (§5 CP.Dispatch; INTEGRATIONS.md has
+the validation) register client-sendable events too: `ps-dispatch:server:attach` and `ps-dispatch:server:detach` (rate key
+`ps_dispatch:toggle`, 6 per s; the `responding` listeners) and `ps-dispatch:server:clearCall` (`ps_dispatch:clear`, 6 per s;
+`cleared` once ps-dispatch removed the call) in modules/system/integrations/ps_dispatch;
+`sc-dispatch:server:ToggleResponding` (`sc_dispatch:toggle`, 6 per s; `responding`),
+`sc-dispatch:server:ShotsFired`, `PlayerDown` and `PlayerDead`
+(`sc_dispatch:shots` / `down` / `dead`, 5 per s each; `shots` / `down` / `dead`) in modules/system/integrations/sc_dispatch.
+The real-suspect handlers do nothing while no case with a
 real suspect is open; their consumers are the proof step (§5.45) and the conduct step (§5.45: 'seizeCash'),
 which add no event of their own. The conduct step also adds a third read-only `weaponDamageEvent` game-event listener
 (CP.Npc has two): it never cancels the event and returns at once while no case is open.
@@ -3152,7 +3201,7 @@ Also: `getMissionCalls`, `getNavCounts`, `getOptions` (§5.48), `getProfileEdit`
 (`{ missionId }`), `admin:getOfficerProfile` (`{ citizenid }`), `admin:getConfigHealth`, `admin:getTabletAccess`,
 `admin:getSettings`, `admin:getSettingsHistory` (`{ page, path? }`), `sup:getMissionControls`, `sup:getMyControls`, `sup:getToday` (UI4,
 modules/supervisor/today: `{ onDuty, running, controls { counted, used, perDay } }`, viewMissionList),
-`notices:get` (`{ kind }`, CP.Notices: limits, running, history + cp_audit endedBy/endReason), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3);
+`notices:get` (`{ kind }`, CP.Notices: limits, running, history + cp_audit endedBy/endReason), `sup:getOfficerCooldowns` (`{ citizenid }`) and `admin:getMissionControls` (§5.49; rate 3), `crimtab:get` (rate 4, §5.51);
 `getBoard` gains `metric`, `getSession` gains `via` and `desk`.
 
 Actions (write), each checks `CP.Permissions.can`:
@@ -3185,7 +3234,7 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:test:cancelInvites` | — | testRun | testing |
 | `server:test:control` | `{ control, ... }` | test starter only | testing |
 | `server:test:spawnCheckReport` | `{ missionId, location, results = { { id, status, groundZ?, dz?, roofZ?, seen? } } }` (the spawn point check, §5.27) | testRun | testing |
-| `server:builder:*` | see builder section of its own module header | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
+| `server:builder:*` | see §5.28.4 | builderEdit/Publish/Archive/EditAny/Rollback/breakEditLock | builder |
 | `server:builder:teleport` | `{ missionId, location, key, index }` → `{ missionId, location, key, index }` + `client:builder:teleport` with the stored point (no coordinates are accepted from the client) | builderEdit + `Config.Builder.teleport` + admin or a `Config.Permissions.builderTeleport` grant (department, grade) | builder; refused in the arena, on a run, while down; audit `builderTeleport` |
 | `server:sup:mcWithdraw` / `server:admin:mcWithdraw` | `{ callId, reason }` | missionCalls | missioncalls |
 | `server:sup:mcPost` / `server:admin:mcPost` | `{ type, area, leaderSrc?, missionId?, skipWait?, reason? }`: no leaderSrc = to every unit, leaderSrc = paged, missionId too = pushed | missionCalls | missioncalls |
@@ -3199,11 +3248,13 @@ Actions (write), each checks `CP.Permissions.can`:
 | `server:admin:setMissionEnabled` / `setLocationEnabled` / `resetMissionSwitches` | `{ missionId, enabled }` / `{ missionId, index, enabled }` / `{ missionId }` → MissionSwitchView | openAdmin | settings |
 | `server:admin:setSettings` | `{ changes = { { path, value? \| json?, none? } }, confirm?, reason? }` → SettingsReply (several settings as one save) | openAdmin | settings |
 | `server:admin:applyPreset` | `{ preset }` → SettingsReply + `preset { key, changed }` (Config.AdminUi.presets through setMany, reason "Preset: <name>", one `settingsPreset` audit line; refused whole when a row is refused; 1 per 5 s) | openAdmin | settings |
+| `server:crimtab:act` | `{ what = 'join'\|'renew'\|'roles'\|'stop'\|'answer'\|'cancel', ... }` → the tablet's view (rate 4; §5.51) | `CP.CrimTab.canUse` | crimtab |
 
 `server:admin:setSetting` also takes `confirm` (`ENABLE` for a money switch) and `reason`.
 
 
-Key mappings: `crimsonpolice_dispatch` (Config.Tablet.dispatchKey), `crimsonpolice_ready` (readyKey),
+Key mappings: `crimsonpolice_tablet` (Config.Tablet.keybind), `crimsonpolice_dispatch` (Config.Tablet.dispatchKey),
+`crimsonpolice_ready` (readyKey),
 `crimsonpolice_contact` (contactKey), `+crimsonpolice_testpanel` (Config.Testing.panelKey, F7). ox_target option
 names (all `crimson-police:*`): `desk`, `contact_<action>`, `seat_<action>_<door>`, `custody_escort`, `body_tag`,
 `body_bag`, `coroner`.
@@ -3442,7 +3493,8 @@ Events: `client:diagUnstick`, `client:diagState (token)` (server → one client)
 
 ### 9.1 Transport
 
-Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/access/client/tablet.lua calls it).
+Lua → NUI: `SendNUIMessage({ type = ..., ... })` (modules/access/client/tablet.lua, and modules/realplayers/client/crimtab.lua
+for type `crimtab` only).
 
 | type | fields | meaning |
 |---|---|---|
@@ -3457,6 +3509,7 @@ Lua → NUI: `SendNUIMessage({ type = ..., ... })` (only modules/access/client/t
 | `theme` | `theme`, `locale?`, `prefs?`, `options?` | the department theme for the HUD (login, duty, job, unload, and a change of the options `hudLook` / `textSize`), with the officer's look (`prefs` { appearance, accent }, `options` { hudLook, textSize }; absent without an officer session); only the reply to `ready` carries `locale` (`CP.Locale.all()`), the NUI's one copy of the text |
 | `locale` | `locale` | the whole locale again after `Config.Labels` changed (an open tablet shows the new names at once) |
 | `localOptions` | `options` | this PC's 'local' officer options (§8.5): on `ready` and after every change |
+| `crimtab` | `open`, `view?`, `screen?` | the criminal tablet (§5.51; sent by realplayers/client/crimtab.lua) |
 
 Full admin control push topics: `maintenance` (MaintenanceView, `false` when the lock ended; every client) and
 `adminjob` (AdminJobProgress; admin players only).
@@ -3472,6 +3525,8 @@ NUI → Lua: `fetch('https://Crimson-Police/<endpoint>', { method: 'POST', body:
 | `action` | `{ name, payload }` | `{ ok, data?, error? }` — net event `crimson-police:<name>` (name includes `server:`) |
 | `client` | `{ name, payload }` | `{ ok, data?, error? }` — client-local action (`CP.Tablet.registerClientAction`) |
 | `switchUi` | `{ ui }` | `{ ok, data: Session }` |
+| `crimtabClose` | `{}` | `{ ok: true }` — closes the criminal tablet (realplayers/client/crimtab.lua) |
+| `crimtabAnswered` | `{ token }` | `{ ok: true }` — the tablet answered that volunteer question; its pop-up closes (`CP.Volunteers.askAnswered`) |
 
 The web bridge exposes `request<T>(name, args)`, `action<T>(name, payload)`, `clientAction<T>(name, payload)`
 and `useNuiEvent(type, handler)`. In a normal browser (dev) the bridge uses registered mocks.
