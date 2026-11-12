@@ -648,6 +648,11 @@ do
     H.sql('UPDATE cp_mission_runs SET flagged = 0 WHERE id = ?', { id5 })
     local okG, dG = Act('server:admin:payNow', 1, { rowId = id5, requestId = Rid() })
     H.ok(okG and dG.status == 'paid', 'Z8: Pay now pays a held row once its flag is cleared')
+    -- Z14: a flagged 'pending' row is never paid: Pay now refuses it (no audit, no paid toast)
+    local id6 = Row({ status = 'pending', owed = 30, flagged = true })
+    local okH, eH = Act('server:admin:payNow', 1, { rowId = id6, requestId = Rid() })
+    H.ok(okH == false and eH == 'err.state_changed', '(Z14) Pay now refuses a flagged pending row')
+    H.eq(RowOf(id6).cash_status, 'pending', '(Z14) it stays pending')
 end
 
 -- ============================================================================

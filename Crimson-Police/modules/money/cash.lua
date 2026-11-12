@@ -171,6 +171,8 @@ function Cash.compute(run, p)
     -- a volunteer case ended early by Config.RealPlayers.volunteer.voidRun = 'keep_earned': only the points earned so
     -- far, no mission cash
     if run.keepEarned == true then B = 0 end
+    -- Z14: a live-case officer who went down ('downed_case') leaves with the points he earned so far, no mission cash
+    if p.endReason == 'downed_case' then B = 0 end
     local mTier = Num(TierRow(run).cash, 1.0)
     -- the run's twists (CP.Twists): their cash multipliers multiply (each x the department's twist cash), up
     -- to Config.Events.twistMaxCash

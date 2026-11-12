@@ -23,7 +23,7 @@
   "err.not_on_duty": "You need to be on duty to use Crimson-Police. Go on duty first.",
   "err.suspended": "You are suspended from Crimson-Police. A supervisor can tell you when it ends.",
   "err.suspended_dispatch": "You are suspended in SC-Dispatch and cannot use Crimson-Police. A supervisor can tell you when it ends.",
-  "err.other_department": "That run does not involve your department, so you can't act on it.",
+  "err.other_department": "That belongs to another department, so you can't act on it.",
   "err.unknown_department": "That department is not known. Pick a department from the list.",
   "err.invalid_period": "That leaderboard period is not known. Pick a period from the list.",
   "err.invalid_filter": "That leaderboard filter is not known. Pick a filter from the list.",

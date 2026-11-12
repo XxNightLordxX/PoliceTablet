@@ -111,6 +111,14 @@ do
     H.ok(menu ~= nil and menu.active == false, 'open: the start (consent) menu')
     H.eq(menu and menu.minutes, 60, 'the window in minutes')
     H.eq(menu and #menu.roles, 3, 'every role offered')
+    H.eq(menu and menu.paid, nil, '(Z14) suspect pay off (shipped): the consent says suspects get nothing')
+    local savedFR = CP.FeatureRewards
+    CP.FeatureRewards = {
+        enabled = function(f) return f == 'suspect' end,
+    }
+    Fire(1, 'open')
+    H.eq(LastMenu(1) and LastMenu(1).paid, true, '(Z14) suspect pay on: the menu says a fair case is paid')
+    CP.FeatureRewards = savedFR
 
     Fire(1, 'join', { roles = { runner = true, driver = 'yes' } })
     H.eq(LastNote(1), 'volunteer.started', 'joined')

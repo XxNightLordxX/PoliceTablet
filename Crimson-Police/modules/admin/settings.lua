@@ -1668,7 +1668,12 @@ local KNOWN = {
         kind = 'optionalText',
     },
     ['Tablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
-    ['Training.command'] = { tpl = Text('^[%w_%-]*$', 32) },
+    -- empty = no command; a name starts with a letter (training.lua registers no other)
+    ['Training.command'] = {
+        tpl = Text('^[%w_%-]*$', 32, function(x)
+            if x ~= '' and not x:match('^%a') then return 'err.setting_text' end
+        end),
+    },
     ['RealPlayers.volunteer.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['RealPlayers.criminalTablet.command'] = { tpl = Text('^%a[%w_%-]*$', 32) },
     ['RealPlayers.criminalTablet.item'] = { tpl = Alts(FALSE, ITEM_NAME), kind = 'optionalText' },
@@ -4192,7 +4197,21 @@ end
 
 local function OnOff(b) return b and 'on' or 'off' end
 
+-- Z14: a whole list setting read, changed in one entry and written back (the mission and location switches, the
+-- desks of sysadmin.lua) runs one at a time per setting, so two changes at once never drop each other's entry. The
+-- same lock as a revert of that setting. fn(...) -> ok, data.
+function Settings._locked(path, fn, ...)
+    local st, ok, data = Settings._revertLock:run(path, Settings._revertWaitMs, fn, ...)
+    if st == 'busy' then return false, 'err.busy' end
+    if st == 'error' then error(ok, 0) end
+    return ok, data
+end
+
 function Settings.setMissionEnabled(src, id, enabled)
+    return Settings._locked('DisabledMissions', Settings._setMissionEnabled, src, id, enabled)
+end
+
+function Settings._setMissionEnabled(src, id, enabled)
     if type(enabled) ~= 'boolean' then return false, 'err.invalid_payload' end
     local def = MissionDef(id)
     if not def then return false, 'err.unknown_mission' end
@@ -4218,6 +4237,10 @@ function Settings.setMissionEnabled(src, id, enabled)
 end
 
 function Settings.setLocationEnabled(src, id, index, enabled)
+    return Settings._locked('DisabledLocations', Settings._setLocationEnabled, src, id, index, enabled)
+end
+
+function Settings._setLocationEnabled(src, id, index, enabled)
     if type(enabled) ~= 'boolean' then return false, 'err.invalid_payload' end
     local def = MissionDef(id)
     if not def then return false, 'err.unknown_mission' end
@@ -4250,6 +4273,12 @@ end
 
 -- The mission and its locations back to config.lua's switches.
 function Settings.resetMission(src, id)
+    return Settings._locked('DisabledMissions', function()
+        return Settings._locked('DisabledLocations', Settings._resetMission, src, id)
+    end)
+end
+
+function Settings._resetMission(src, id)
     local def = MissionDef(id)
     if not def then return false, 'err.unknown_mission' end
     local list = U.copy(Effective('DisabledMissions') or {})

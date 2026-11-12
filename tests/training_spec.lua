@@ -203,6 +203,18 @@ do
     Config.Training.enabled = true
 end
 
+-- (Z14) the command is registered after the saved settings load: a name changed in Settings is used after a restart
+do
+    local savedS, savedC = CP.Settings, Config.Training.command
+    CP.Settings = {
+        waitLoaded = function() Config.Training.command = 'tablethelp' end,
+    }
+    local savedTr = CP.Training
+    H.load('modules/access/training.lua')
+    H.ok(H.commands.tablethelp ~= nil, '(Z14) the saved command name is the one registered')
+    CP.Settings, Config.Training.command, CP.Training = savedS, savedC, savedTr
+end
+
 H.sql('DELETE FROM cp_tours')
 H.sql('DELETE FROM cp_audit WHERE action = \'toursReset\'')
 return H

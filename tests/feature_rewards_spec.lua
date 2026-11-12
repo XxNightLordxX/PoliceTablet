@@ -369,4 +369,23 @@ do
     FC.supAward.enabled = false
 end
 
+-- Z14: after a record move (Corrections: every row of A moves to B, run_uuid unchanged) voiding the award still finds
+-- its money row
+do
+    FC.supAward.enabled = true
+    local award = MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid,
+        department, state, end_reason, points_base) VALUES ('z14-award-1', 'manual_award', 'manual_award',
+        'FR_MOVEA01', 'sast', 'completed', 'completed', 10)]])
+    local paid = FR.pay('supAward', 'FR_MOVEA01', { key = ('sup:%s'):format(award), points = 10 })
+    H.ok(paid and paid.rowId, '(Z14) the award money row')
+    H.sql('UPDATE cp_mission_runs SET citizenid = \'FR_MOVEB01\' WHERE citizenid = \'FR_MOVEA01\'')
+    CP.Hooks.fire('row:voided', award)
+    local r = H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { paid.rowId })[1]
+    H.eq(CP.U.truthy(r.voided), true, '(Z14) voiding the moved award voids its money row too')
+    CP.Hooks.fire('row:restored', award)
+    r = H.sql('SELECT voided FROM cp_mission_runs WHERE id = ?', { paid.rowId })[1]
+    H.eq(CP.U.truthy(r.voided), false, '(Z14) and restoring it brings it back')
+    FC.supAward.enabled = false
+end
+
 return H

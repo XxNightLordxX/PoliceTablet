@@ -906,3 +906,42 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   the free minute) and restart the resource: History still shows the strike. Set the police script to none in Settings
   -> Integrations: the criminal tablet says volunteer suspects are off, Get on the list is refused, and
   `exports['Crimson-Police']:GetAvailablePolice()` answers nil; set it back to sc-police. (WF5D)
+- [ ] Deep sweep (Z14): force a storage copy into the other store and stop MariaDB part way: the other store gets its
+  money state back (Admin UI -> Money shows paid rows still paid after the retry copy). (Z14)
+- [ ] Deep sweep (Z14): force a copy into the store in use and make it fail part way, restart: the maintenance lock is
+  back at the start (console line names the copy); run the copy again with force: it runs, then asks for a restart,
+  and the next start has no lock. (Z14)
+- [ ] Deep sweep (Z14): with Config.RealPlayers.liveCrime.linesOnly = false, go down in a live case: your row shows
+  the lines you earned only (no base points, no fast_finish) and no mission cash; a teammate who finishes scores more.
+  (Z14)
+- [ ] Deep sweep (Z14): award points to an officer, move his record to another citizen ID in Corrections, void the
+  award row: its money row is voided too, and restoring the award brings it back. (Z14)
+- [ ] Deep sweep (Z14): report a live crime, put one crew member on SAST duty before a unit claims it: the case opens
+  with him void and the rs_went_on_duty note; officers cannot score him. (Z14)
+- [ ] Deep sweep (Z14): while you are a suspect of an open live case, go on duty and try to claim another LIVE call
+  or join one as backup: refused (recent suspect); a volunteer case skips your unit too. (Z14)
+- [ ] Deep sweep (Z14): fill a Cross-Department Mission with a waitlist, send one joiner into the arena and press
+  Start: the first waitlisted officer takes his place and is told. (Z14)
+- [ ] Deep sweep (Z14): start a Cross-Department ready check and answer Not ready on one member: the Ready banner
+  closes for everyone. During a team check, invite one member to another unit: his banner stays. (Z14)
+- [ ] Deep sweep (Z14): set Training.command to tablethelp in Settings and restart: /tablethelp opens the tours,
+  /crimsonhelp does not; a name such as 1help is refused. (Z14)
+- [ ] Deep sweep (Z14): two admins switch two missions off at the same moment (or add two desks at once): both
+  changes stay. (Z14)
+- [ ] Deep sweep (Z14): a supervisor changes a Mission control, another resets it within 5 minutes: refused with the
+  change wait. (Z14)
+- [ ] Deep sweep (Z14): start a field_contact objective from far away: the HUD says Waiting for the contacts, then
+  Contacts decided: 0 of N once they appear. (Z14)
+- [ ] Deep sweep (Z14): change two options quickly on the Officer UI Options screen and close it: reopen, both are
+  saved. (Z14)
+- [ ] Deep sweep (Z14): flag a pending payment row in Admin UI -> Money: Pay now is not offered for it. (Z14)
+- [ ] Deep sweep (Z14): set Config.Backups.holdAfterFailedRestore = false and make a restore fail: the toast, the
+  console and the banner say the hold ends at the next restart. (Z14)
+- [ ] Deep sweep (Z14): with the waitlist on, a full department in a Cross-Department Mission is refused without
+  "Join the waitlist"; a supervisor action on another department says it belongs to another department. (Z14)
+- [ ] Deep sweep (Z14): a supervisor pushes a mission to a SAST leader who then joins an FIB unit: that unit cannot
+  claim it. (Z14)
+- [ ] Deep sweep (Z14): a players_only mission held a volunteer at the accept: he is the one asked, and a second
+  players_only accept at the same moment does not take him. (Z14)
+- [ ] Deep sweep (Z14): Settings help for Cash.dailyCap says feature rewards count too; with suspect pay on, the
+  volunteer consent says a fair case is paid. (Z14)

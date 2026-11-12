@@ -261,7 +261,8 @@ end
 -- The next volunteer who fits gets the pop-up; none left (or askTries asked) = NoVolunteer.
 local function AskNext(m)
     m.phase, m.cid, m.src, m.token, m.deadline = 'asking', nil, nil, nil, nil
-    if V.release then V.release(m.runId) end
+    -- Z14: the hold stays while the candidates are read and checked (Candidates asks the held volunteer first, and
+    -- nobody else may reserve him while Fits yields); V.hold moves it to the one asked, NoVolunteer frees it
     local tries = math.floor(Num(CP.RealPlayers('volunteer').askTries, 3, 1, 10))
     if not CP.RealPlayersOn('volunteer') or m.run.state == 'ended' then
         m.why = 'off'
@@ -478,6 +479,8 @@ function V.capsOk(run, cid)
         local oCid = type(p) == 'table' and p.citizenid or nil
         if type(oCid) == 'string' then
             if Opp('suspended', oCid) == true then return false, 'officer_suspended' end
+            -- Z14: a suspect of a case that is still open (lastSuspectAt is written only when it closes)
+            if hop > 0 and Opp('byCid', oCid) ~= nil then return false, 'officer_recent_suspect' end
             local was = tonumber(Opp('lastSuspectAt', oCid))
             if was and os.time() - was < hop then return false, 'officer_recent_suspect' end
             local ok, why = Opp('pairOk', oCid, cid)

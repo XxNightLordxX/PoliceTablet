@@ -502,8 +502,11 @@ local function OfficerOk(crime, o)
     if type(cid) ~= 'string' then return false, 'err.member_unavailable' end
     if crime.members[cid] then return false, 'err.live_case_own_suspect' end
     if Opp('suspended', cid) == true then return false, 'err.live_case_suspended' end
+    local hop = Num(CP.RealPlayers().jobHopMinutes, 30) * 60
+    -- Z14: a suspect of a case that is still open (lastSuspectAt is written only when it closes)
+    if hop > 0 and Opp('byCid', cid) ~= nil then return false, 'err.live_case_recent_suspect' end
     local was = tonumber(Opp('lastSuspectAt', cid))
-    if was and os.time() - was < Num(CP.RealPlayers().jobHopMinutes, 30) * 60 then
+    if was and os.time() - was < hop then
         return false, 'err.live_case_recent_suspect'
     end
     if Opp('selfBlock', o.src, crime.suspects) == true then return false, 'err.live_case_own_suspect' end

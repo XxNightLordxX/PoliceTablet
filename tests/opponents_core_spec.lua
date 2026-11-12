@@ -678,6 +678,16 @@ do
     TriggerEvent('QBCore:Server:OnJobUpdate', src, Copy(players[src].PlayerData.job))
     H.eq(rec.state, 'free', '(i) a job outside Config.Departments changes nothing')
     Opp.close(run)
+
+    -- (Z14) on SAST duty between the alert and the claim: the case opens with him void, and the note
+    nextSrc = nextSrc + 1
+    local srcZ = nextSrc
+    local runZ = NewRun({ 1, 2 })
+    Load(srcZ, 'DUTY0004', vec3(900.0, 0.0, 30.0), 'sast', true)
+    local caseZ = Opp.open(runZ, { kind = 'live', members = { 'DUTY0004' } })
+    H.eq(caseZ.suspects.DUTY0004.state, 'void', '(Z14) a suspect on duty when the case opens: void')
+    H.eq(#NotesOf(caseZ, 'rs_went_on_duty'), 1, '(Z14) with the rs_went_on_duty note')
+    Opp.close(runZ)
 end
 
 -- ============================================================================

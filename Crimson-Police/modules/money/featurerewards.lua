@@ -374,15 +374,17 @@ local function LinkedRewards(rowId, voided)
     local flag = voided and 1 or 0
     local out = {}
     if src.mission_id == 'manual_award' then
-        local uuid = FR.uuidOf('supAward', ('sup:%s'):format(tostring(rowId)), src.citizenid)
+        -- Z14: by the case key the row keeps, not by its run_uuid (built from the citizenid it was paid to, which a
+        -- record move changes)
+        local key = ('sup:%s'):format(tostring(rowId))
         for _, r in
             ipairs(Rows(
-                [[SELECT id, breakdown FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ?
-            AND mission_id = 'reward_supAward' AND voided = ?]],
-                { uuid, src.citizenid, flag }
+                [[SELECT id, breakdown FROM cp_mission_runs WHERE citizenid = ?
+            AND mission_id = 'reward_supAward' AND voided = ? ORDER BY id]],
+                { src.citizenid, flag }
             ) or {})
         do
-            out[#out + 1] = r
+            if Breakdown(r).caseKey == key then out[#out + 1] = r end
         end
     elseif type(src.run_uuid) == 'string' and src.run_uuid ~= '' then
         local prefix = src.run_uuid .. ':'

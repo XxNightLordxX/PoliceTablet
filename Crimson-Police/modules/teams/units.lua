@@ -235,9 +235,17 @@ local function CheckView(check, viewer, now)
     }
 end
 
+-- The pending ready check src is asked in (his unit's or a Cross-Department team's), or nil.
+local function CheckOf(src)
+    for _, c in pairs(readyChecks) do
+        if not c.done and IndexOf(c.members, src) then return c end
+    end
+    return nil
+end
+
 -- Push 'unit' to every member and invitee (plus extra srcs), 'board' to members. invitedSrc (optional)
--- gets its 'unit' push with invited = true (the units client plays the invite cue on it). Members' pushes
--- carry the pending ready check.
+-- gets its 'unit' push with invited = true (the units client plays the invite cue on it). Every push carries
+-- the ready check its receiver is asked in (the banner follows it, so an unrelated push must not hide it).
 local function PushUnit(unit, extra, invitedSrc)
     local sent = {}
     local id = unit and math.type(unit.id) == 'integer' and unit.id or false   -- a team's id is not a unit id
@@ -246,14 +254,19 @@ local function PushUnit(unit, extra, invitedSrc)
         for _, m in ipairs(unit.members) do
             if not sent[m] then
                 sent[m] = true
-                CP.push(m, 'unit', { unitId = id, readyCheck = CheckView(check, m) })
+                local own = (check and not check.done) and check or CheckOf(m)
+                CP.push(m, 'unit', { unitId = id, readyCheck = CheckView(own, m) })
                 CP.push(m, 'board', { unit = true })
             end
         end
         for target in pairs(unit.invites) do
             if not sent[target] then
                 sent[target] = true
-                CP.push(target, 'unit', { unitId = id, invited = target == invitedSrc or nil })
+                CP.push(target, 'unit', {
+                    unitId = id,
+                    invited = target == invitedSrc or nil,
+                    readyCheck = CheckView(CheckOf(target), target),
+                })
             end
         end
     end
@@ -261,7 +274,7 @@ local function PushUnit(unit, extra, invitedSrc)
         for _, s in ipairs(extra) do
             if not sent[s] then
                 sent[s] = true
-                CP.push(s, 'unit', { unitId = false })
+                CP.push(s, 'unit', { unitId = false, readyCheck = CheckView(CheckOf(s), s) })
                 CP.push(s, 'board', { unit = true })
             end
         end
@@ -309,8 +322,11 @@ local function CancelCheck(unit, reasonKey, who, toastKey)
     end
     CP.log(TAG, 'unit %s: ready check for %s cancelled (%s: %s)', tostring(unit.id), tostring(check.typeKey), reasonKey,
         names)
+    -- a team is forgotten by its onCancel, so take whether it is live first: its members still need the push that
+    -- clears the banner
+    local team = teams[unit.id] == unit
     RunCallback(check.onCancel, reasonKey, CP.U.copy(who or {}))
-    if Resolve(unit) then PushUnit(unit) end
+    if team or Resolve(unit) then PushUnit(unit) end
     return true
 end
 

@@ -1223,6 +1223,8 @@ do
     for key, value in pairs(set) do
         H.eq(seen[key], value, ('restart: %s keeps %s'):format(key, tostring(value)))
     end
+    -- Z14: a reset is a change too: it waits for Config.MissionControls.changeWait like a set
+    H.time = H.time + 301
     for key in pairs(set) do
         ok, data = Act('server:sup:resetMissionControl', 3,
             { key = key, reason = 'WF1 sweep done', requestId = RequestId() })

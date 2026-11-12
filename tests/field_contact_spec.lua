@@ -1492,10 +1492,17 @@ do -- scene: a pin until the scene is out, then the people and the car; a runner
     H.ok(mk and mk.kind == 'point' and mk.look == 'objective' and mk.coords.x == 2000.0 and mk.coords.y == 2000.0,
         'fc scene marker: a pin where the scene will be')
     H.eq(mk and mk.label, 'Make contact', 'fc scene marker: named after the objective')
+    H.reset()
     W.place(1, 2000.0, 1940.0, 30.0)
     W.tick(1)
     local p, car = Contact(run, 1, 'person'), Contact(run, 1, 'vehicle')
     H.ok(p and car, 'fc scene marker: the scene is out')
+    local decidedHud = W.count(H.findEvents('crimson-police:client:hud'), function(e)
+        local o = type(e.args[2]) == 'table' and e.args[2].objectives and e.args[2].objectives[1]
+        return o ~= nil and type(o.detail) == 'string'
+            and o.detail:find('block.field_contact.detail\31', 1, true) ~= nil
+    end)
+    H.ok(decidedHud > 0, '(Z14) the HUD leaves Waiting for the contacts once the scene is out')
     mk = impl.marker(ctx)
     H.ok(mk.kind == 'targets' and #mk.targets == 2, 'fc scene marker: the car and the person')
     H.eq(TargetOf(mk, car.netId).look, 'contactVehicle', 'fc scene marker: the car in kinds.contactVehicle')

@@ -37,7 +37,7 @@ end
 local function Start(state)
     local answer = lib.alertDialog({
         header = CP.L('volunteer.consent.title'),
-        content = CP.L('volunteer.consent.content',
+        content = CP.L(state.paid == true and 'volunteer.consent.content_paid' or 'volunteer.consent.content',
             { minutes = tonumber(state.minutes) or 60, strikes = tonumber(state.maxStrikes) or 3 }),
         centered = true,
         cancel = true,

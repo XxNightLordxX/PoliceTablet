@@ -624,6 +624,34 @@ local function DoStart(cur, actorSrc, auto)
         end
         CP.notify(p.src, 'warning', 'officer.op.removed_at_start', { mission = cur.missionLabel })
     end
+    -- Z14: the places freed here go to the waitlist in order, checked as FillFromWaitlist checks them (and the
+    -- ride-along rule against the kept list); joining stays closed meanwhile
+    if #dropped > 0 then
+        local max = MaxFor()
+        while #cur.participants < max and #(cur.waitlist or {}) > 0 do
+            local w = table.remove(cur.waitlist, 1)
+            local o = GetOfficer(w.src)
+            local fits = o and o.citizenid == w.citizenid and not InArena(w.src) and not OnRun(w.src)
+                and not IsOnCall(w.src) and not Banned(w.citizenid) and not DeptRefuses({ participants = valid }, o)
+            if op ~= cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+            if fits and def0 and CP.FieldTraining and CP.FieldTraining.unitCheck then
+                local list = {}
+                for i, v in ipairs(valid) do list[i] = v end
+                list[#list + 1] = o
+                local okF, allowed, _, rookie = pcall(CP.FieldTraining.unitCheck, list, def0.type)
+                if okF and allowed == false and rookie == o.citizenid then fits = false end
+            end
+            if fits then
+                w.joinedAt = os.time()
+                cur.participants[#cur.participants + 1] = w
+                valid[#valid + 1] = o
+                CP.notify(w.src, 'success', 'officer.op.waitlist_promoted', { mission = cur.missionLabel })
+                CP.log(TAG, 'operation %d: %d took a place freed at the start from the waitlist', cur.id, w.src)
+            else
+                CP.notify(w.src, 'warning', 'officer.op.waitlist_skipped', { mission = cur.missionLabel })
+            end
+        end
+    end
 
     local def = MissionDef(cur.missionId)
     local okE = Ops.eligible(def)

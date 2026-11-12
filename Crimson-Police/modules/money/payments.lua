@@ -773,6 +773,8 @@ Kit.action('server:admin:payNow', 'payments', function(ctx)
     local released = st == 'held' and row.state == 'completed' and not U.truthy(row.flagged)
         and not U.truthy(row.voided)
     if st ~= 'pending' and not unpaid and not released then return false, 'err.state_changed' end
+    -- Z14: a flagged or voided row is never paid (CP.Cash.pay refuses it): no audit row, no "paid" toast
+    if U.truthy(row.flagged) or U.truthy(row.voided) then return false, 'err.state_changed' end
     local id = math.floor(U.num(row.id))
     local status = CP.Cash.pay(id)
     ctx.audit('paymentRetry', Target(id, row.citizenid), st, tostring(status or st))

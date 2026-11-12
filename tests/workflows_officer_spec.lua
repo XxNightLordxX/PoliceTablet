@@ -525,6 +525,7 @@ do
     ok, err = Act('server:sup:setMissionControl', 1,
         { key = 'types', value = { patrol = false }, reason = 'WF5A', requestId = W.RequestId() })
     H.eq(ok, false, 'refuse: an officer cannot change a Mission control (' .. tostring(err) .. ')')
+    H.time = H.time + 301                          -- Z14: a reset waits for the change wait like a set
     ok, err = Act('server:sup:resetMissionControl', 3, { key = 'types', reason = 'WF5A', requestId = W.RequestId() })
     H.eq(ok, true, 'refuse: reset to config.lua: ' .. tostring(err))
 

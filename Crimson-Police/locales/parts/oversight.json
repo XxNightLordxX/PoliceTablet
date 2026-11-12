@@ -43,7 +43,7 @@
   "err.recall_own_run": "You took part in this run, so you can't recall anyone from it.",
   "err.rate_limited": "Too many requests. Wait a moment and try again.",
   "err.refused": "The server refused that request. Refresh the screen to see what changed, then try again.",
-  "err.other_department": "That run does not involve your department, so you can't act on it.",
+  "err.other_department": "That belongs to another department, so you can't act on it.",
   "err.not_on_duty": "You need to be on duty to use Crimson-Police. Go on duty first.",
   "err.suspended": "You are suspended from Crimson-Police. A supervisor can tell you when it ends.",
   "err.suspended_dispatch": "You are suspended in SC-Dispatch and cannot use Crimson-Police. A supervisor can tell you when it ends.",

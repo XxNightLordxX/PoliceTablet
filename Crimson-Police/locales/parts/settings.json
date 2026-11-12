@@ -186,7 +186,7 @@
   "settings.help.Tablet.keybind": "The key that opens the tablet for players who never picked their own. Empty = no key; players can still bind one in GTA settings.",
   "settings.help.Tablet.deskDistance": "Metres. An officer who walks further than this from the police desk sees the tablet close.",
   "settings.help.Cash.account": "Where a run's pay goes: the bank account or cash in hand.",
-  "settings.help.Cash.dailyCap": "The most cash one officer can earn from runs in a day. 0 = no limit.",
+  "settings.help.Cash.dailyCap": "The most cash one officer can earn in a day: mission runs and feature rewards (training, awards, suspect pay) are cut by it and count toward it, an admin's manual cash does not. 0 = no limit.",
   "settings.help.Payouts.requireReason": "On: anyone who changes a mission type's payout has to write why. The reason is in the audit log.",
   "settings.help.AdminControl.editBuiltins": "On: admins can open a built-in mission in the Mission Builder and change it. The change is saved as a copy; the original file stays.",
   "settings.help.Spawning.activateRange": "Metres. The people of an objective appear once an officer is this close. Bigger = they appear earlier.",
