@@ -1,0 +1,218 @@
+// Left navigation: one button per visible screen (active item in --cp-primary with an accent edge), each with an
+// optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
+// items of group 'more' fold under one More button that carries the sum of their badges (the Admin UI's rare tools).
+
+// Left navigation: one button per visible screen (active item in --cp-primary with an accent edge), each with an
+// optional count badge or live dot (the 'nav' counts), plus a footer slot for the role switch. With a `more` label,
+// items of group 'more' fold under one More button that carries the sum of their badges (the Admin UI's rare tools).
+// With `sections` each list is ordered by section, with a small heading over each one (the Admin UI's six groups, the
+// Supervisor UI's People / Missions / Rewards); a section may carry a one-line `hint` under its heading, and `search`
+// is a slot under the heading (the Admin UI's screen search). With iconsOnly the sidebar is a narrow strip of icons,
+// each name on hover (Config.Tablet.compactSidebar and supervisorCompact).
+
+import { useEffect, useState, type ReactNode } from 'react';
+import { Icon, type IconName } from '../shared/components';
+import { cx } from '../shared/cx';
+import './access.css';
+
+export interface SidebarItem {
+    key: string;
+    label: string;
+    icon: IconName;
+    badge?: ReactNode;
+    // a pulsing dot instead of a count (Active Mission while on a run)
+    live?: boolean;
+    // 'more' = folded under the More button
+    group?: 'main' | 'more';
+    // the section it is listed under when the sidebar has sections
+    play?: string;
+}
+
+export interface SidebarSection {
+    key: string;
+    label: string;
+    // a one-line description under the heading
+    hint?: string;
+}
+
+// Per viewer: whether More was left open (browser storage; a blocked storage just starts folded).
+const MORE_KEY = 'cp.sidebar.moreOpen';
+
+function readOpen(): boolean {
+    try {
+        return window.localStorage.getItem(MORE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function writeOpen(open: boolean) {
+    try {
+        window.localStorage.setItem(MORE_KEY, open ? '1' : '0');
+    } catch {
+        // storage blocked: the state lasts until the panel closes
+    }
+}
+
+// The More button's badge: the folded items' counts added up ('99+' stays '99+'), so an alert never hides.
+export function sumBadges(items: SidebarItem[]): string | undefined {
+    let total = 0;
+    for (const it of items) {
+        if (it.badge === undefined || it.badge === null) continue;
+        const n = it.badge === '99+' ? 100 : Number(it.badge);
+        if (Number.isFinite(n) && n > 0) total += n;
+    }
+    if (total <= 0) return undefined;
+    return total > 99 ? '99+' : String(total);
+}
+
+// Items in section order (items with no section first, the order inside a section kept), each carrying the heading
+// to show above it when it is the first of its section. No sections: the items as they are.
+export function inSections<T extends { play?: string }>(
+    items: T[],
+    sections?: SidebarSection[],
+): { item: T; heading?: string; hint?: string }[] {
+    if (!sections || !sections.length) return items.map(item => ({ item }));
+    const rank = (it: T) => {
+        const i = it.play === undefined ? -1 : sections.findIndex(s => s.key === it.play);
+        return it.play === undefined ? -1 : i < 0 ? sections.length : i;
+    };
+    const sorted = items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it) - rank(b.it) || a.i - b.i);
+    let last: string | undefined;
+    return sorted.map(({ it }) => {
+        const sec = sections.find(s => s.key === it.play);
+        const heading = sec?.label && it.play !== last ? sec.label : undefined;
+        last = it.play;
+        return { item: it, heading, hint: heading ? sec?.hint : undefined };
+    });
+}
+
+function NavButton({
+    it,
+    on,
+    onClick,
+    iconsOnly,
+}: {
+    it: SidebarItem;
+    on: boolean;
+    onClick: () => void;
+    iconsOnly?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            className={cx('cp-nav-item', on && 'is-active')}
+            aria-current={on ? 'page' : undefined}
+            title={iconsOnly ? it.label : undefined}
+            aria-label={iconsOnly ? it.label : undefined}
+            data-tour={`nav-${it.key}`}
+            onClick={onClick}
+        >
+            <Icon name={it.icon} size={18} className="cp-nav-item__icon" />
+            <span className="cp-nav-item__label">{it.label}</span>
+            {it.live ? <span className="nav-live-dot" aria-hidden /> : null}
+            {it.badge !== undefined && it.badge !== null ? (
+                <span className="cp-nav-item__badge">{it.badge}</span>
+            ) : null}
+        </button>
+    );
+}
+
+export function Sidebar({
+    items,
+    active,
+    onSelect,
+    heading,
+    footer,
+    className,
+    more,
+    sections,
+    iconsOnly,
+    search,
+}: {
+    items: SidebarItem[];
+    active: string;
+    onSelect: (key: string) => void;
+    heading?: ReactNode;
+    footer?: ReactNode;
+    className?: string;
+    // the More button's label; left out = one flat list
+    more?: string;
+    // the sections the items are listed under (left out = no headings)
+    sections?: SidebarSection[];
+    // the icons only, each name on hover (Config.Tablet.compactSidebar, Officer UI)
+    iconsOnly?: boolean;
+    // a slot under the heading (the Admin UI screen search)
+    search?: ReactNode;
+}) {
+    const folded = more ? items.filter(it => it.group === 'more') : [];
+    const shown = folded.length > 0 ? items.filter(it => it.group !== 'more') : items;
+    const activeFolded = folded.some(it => it.key === active);
+    const [open, setOpen] = useState(readOpen);
+    const foldedBadge = sumBadges(folded);
+
+    // Opening a folded screen any other way (a link, a notification) unfolds More.
+    useEffect(() => {
+        if (activeFolded) setOpen(true);
+    }, [activeFolded]);
+
+    const toggle = () => {
+        const next = !open;
+        setOpen(next);
+        writeOpen(next);
+    };
+
+    return (
+        <nav
+            className={cx('cp-sidebar', iconsOnly && 'cp-sidebar--compact', className)}
+            aria-label={typeof heading === 'string' ? heading : undefined}
+        >
+            {heading ? <div className="cp-sidebar__heading">{heading}</div> : null}
+            {search ? <div className="cp-sidebar__search">{search}</div> : null}
+            <ul className="cp-sidebar__list" data-tour="sidebar">
+                {inSections(shown, sections).map(({ item: it, heading: h, hint }) => (
+                    <li key={it.key}>
+                        {h ? <div className="cp-sidebar__section">{h}</div> : null}
+                        {hint ? <div className="cp-sidebar__section-hint">{hint}</div> : null}
+                        <NavButton
+                            it={it}
+                            on={it.key === active}
+                            onClick={() => onSelect(it.key)}
+                            iconsOnly={iconsOnly}
+                        />
+                    </li>
+                ))}
+                {folded.length > 0 ? (
+                    <li>
+                        <button
+                            type="button"
+                            className={cx('cp-nav-item', 'cp-nav-item--more', open && 'is-open')}
+                            aria-expanded={open}
+                            onClick={toggle}
+                        >
+                            <Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} className="cp-nav-item__icon" />
+                            <span className="cp-nav-item__label">{`${more} (${folded.length})`}</span>
+                            {!open && folded.some(it => it.live) ? <span className="nav-live-dot" aria-hidden /> : null}
+                            {!open && foldedBadge ? <span className="cp-nav-item__badge">{foldedBadge}</span> : null}
+                        </button>
+                    </li>
+                ) : null}
+                {open
+                    ? inSections(folded, sections).map(({ item: it, heading: h, hint }) => (
+                          <li key={it.key} className="cp-sidebar__more-item">
+                              {h ? <div className="cp-sidebar__section">{h}</div> : null}
+                              {hint ? <div className="cp-sidebar__section-hint">{hint}</div> : null}
+                              <NavButton
+                                  it={it}
+                                  on={it.key === active}
+                                  onClick={() => onSelect(it.key)}
+                                  iconsOnly={iconsOnly}
+                              />
+                          </li>
+                      ))
+                    : null}
+            </ul>
+            {footer ? <div className="cp-sidebar__footer">{footer}</div> : null}
+        </nav>
+    );
+}

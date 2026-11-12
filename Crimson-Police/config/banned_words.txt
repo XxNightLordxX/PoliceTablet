@@ -1,0 +1,31 @@
+# Words refused in officer bios (Config.Profile.bannedWordsFile). One word or phrase per line; any case;
+# whole words only, so "class" never matches "ass". Lines starting with # are comments. Extend it for your
+# community, or empty it. Config.Profile.bannedWords adds more without editing this file.
+fuck
+fucking
+fucker
+motherfucker
+shit
+bullshit
+bitch
+cunt
+asshole
+bastard
+dickhead
+cock
+pussy
+whore
+slut
+wanker
+twat
+retard
+faggot
+fag
+nigger
+nigga
+kike
+spic
+chink
+tranny
+kys
+kill yourself

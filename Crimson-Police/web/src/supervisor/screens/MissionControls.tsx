@@ -1,0 +1,1131 @@
+// Supervisor UI · Department → Controls (title key 'ui.screen.sup_controls'): the
+
+// Supervisor UI · Department → Controls (title key 'ui.screen.sup_controls'): the
+// controls an admin switched on (sup:getMissionControls), grouped, each with the config value, the value in use, an
+// editor by kind, Back to config, who changed it and when, and the change-wait countdown. Every save asks for a
+// reason (server:sup:setMissionControl / server:sup:resetMissionControl). Live: push 'missionControls'.
+// header and load states from shared/screenHeads.ts and ScreenStatus; each group card has a help
+// line (SUP_GROUP_HELP, sup.controls.group_help.<group>). Review Queue uses the same. Walk: supHead.walk.ts.
+// Inline use (MG3, the old 'Your controls today' card): sup:getMyControls gives each control the supervisor may use
+// now the admin's limits and today's use against its per-day count, shown on its row; the controls used from their
+// own dialogs (Give points, Mission ban ...) are listed in one card with the same (components/MyControlsCard).
+
+import { useEffect, useState } from 'react';
+import {
+    Badge,
+    Button,
+    Card,
+    Countdown,
+    Dialog,
+    EmptyState,
+    Field,
+    Icon,
+    MoreFold,
+    Screen,
+    SegmentedControl,
+    Textarea,
+    Toggle,
+    ScreenStatus,
+} from '../../shared/components';
+import { asArray } from '../../shared/data';
+import { fmtDateTime, formatDuration, formatFactor } from '../../shared/format';
+import { useRequest } from '../../shared/hooks';
+import { hasKey, t } from '../../shared/i18n';
+import { useSession } from '../../shared/session';
+import type {
+    MyControlsView,
+    BoardsValue,
+    CallLaneValue,
+    CrossDeptValue,
+    GoalsValue,
+    MissionControlState,
+    MissionControlValue,
+    MissionControlsView,
+    ReviewRulesValue,
+    TwistsValue,
+    TypeSwitchMission,
+    TypeSwitches,
+} from '../../types/oversight';
+import { controlName, useValueText } from '../../admin/components/MissionControlsCard';
+import { ReasonChips } from '../../admin/components/ReasonChips';
+import { useAdminAction } from '../../admin/components/kit';
+import { ActionControlsCard } from '../components/MyControlsCard';
+import { actionControlRows, myControlRows, type MyControlRow } from '../components/myControls';
+import { screenStateOf } from '../../shared/screenHeads';
+import { SUP_GROUP_HELP } from './supHead';
+import './MissionControls.css';
+
+const REASON_MAX = 255;
+
+// The groups in screen order. A control not listed falls into 'run' (scope run) or 'department'.
+const GROUPS = ['delays', 'run', 'board', 'calls', 'officers', 'department'] as const;
+type GroupKey = (typeof GROUPS)[number];
+const CONTROL_GROUP: Record<string, GroupKey> = {
+    cooldownScale: 'delays',
+    abandonCooldown: 'delays',
+    noRepeat: 'delays',
+    hourlyCap: 'delays',
+    dailyCap: 'delays',
+    happyHour: 'delays',
+    types: 'board',
+    featuredType: 'board',
+    typeOfTheDay: 'board',
+    goals: 'officers',
+    awardPoints: 'officers',
+    callLane: 'calls',
+    staffCallWait: 'calls',
+};
+
+export function groupOf(c: MissionControlState): GroupKey {
+    return CONTROL_GROUP[c.key] ?? (c.scope === 'run' ? 'run' : 'department');
+}
+
+// The controls a supervisor rarely changes fold under More in their group. A control
+// that is set (it has a saved value) always stays open, so a change in force never hides.
+export const ADVANCED_CONTROLS = new Set([
+    'abandonCooldown',
+    'noRepeat',
+    'startTimeout',
+    'readyCheck',
+    'timeLimit',
+    'idleCheck',
+    'unitSize',
+    'staffCallWait',
+    'boards',
+    'reviewRules',
+    'happyHourCash',
+    'twistCash',
+    'happyHourPoints',
+    'twistPoints',
+]);
+
+export function isFolded(c: MissionControlState): boolean {
+    return ADVANCED_CONTROLS.has(c.key) && (c.saved === undefined || c.saved === null);
+}
+
+// Lua sends an empty table as [] or {}: a map either way.
+function asMap(v: unknown): Record<string, number> {
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number>) : {};
+}
+
+const same = (a: MissionControlValue | undefined, b: MissionControlValue | undefined) =>
+    JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+// A value inside [min, max] on the control's step (whole numbers for an integer control).
+function fit(c: MissionControlState, n: number): number {
+    const lo = c.min ?? 0;
+    const hi = c.max ?? Math.max(lo, n);
+    const v = Math.min(hi, Math.max(lo, n));
+    return c.integer ? Math.round(v) : Math.round(v * 100) / 100;
+}
+
+// ============================================================================
+//                                EDITOR BY KIND
+// ============================================================================
+
+// The types control: a switch per mission type and, folded under it, per mission. Only what is off is
+// sent ({ [type]: false, missions: { [id]: false } }); switching back on removes the entry.
+function TypeSwitchesEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const session = useSession();
+    const v: TypeSwitches = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as TypeSwitches) : {};
+    const off = v.missions && typeof v.missions === 'object' && !Array.isArray(v.missions) ? v.missions : {};
+    const missions = asArray<TypeSwitchMission>(c.missions);
+    const setType = (k: string, on: boolean) => {
+        const next: TypeSwitches = { ...v };
+        if (on) delete next[k];
+        else next[k] = false;
+        onChange(next);
+    };
+    const setMission = (id: string, on: boolean) => {
+        const m: Record<string, boolean> = { ...off };
+        if (on) delete m[id];
+        else m[id] = false;
+        const next: TypeSwitches = { ...v };
+        if (Object.keys(m).length > 0) next.missions = m;
+        else delete next.missions;
+        onChange(next);
+    };
+    return (
+        <div className="sup-mc-types">
+            {asArray(session.config?.missionTypes).map(tp => {
+                const list = missions.filter(m => m.type === tp.key);
+                const typeOn = v[tp.key] !== false;
+                return (
+                    <div key={tp.key} className="sup-mc-types__row">
+                        <Toggle
+                            checked={typeOn}
+                            disabled={disabled}
+                            label={tp.label}
+                            onChange={on => setType(tp.key, on)}
+                        />
+                        {list.length > 0 ? (
+                            <details className="sup-mc-types__missions">
+                                <summary>{t('sup.controls.types.missions', { n: list.length })}</summary>
+                                {list.map(m => (
+                                    <Toggle
+                                        key={m.id}
+                                        checked={off[m.id] !== false}
+                                        disabled={disabled || !typeOn}
+                                        label={m.label}
+                                        onChange={on => setMission(m.id, on)}
+                                    />
+                                ))}
+                            </details>
+                        ) : null}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+// The callLane control: the gap range, how many open at once, area chips and a weight per type. A
+// department with no lane starts from the admin's whole gap range, one open call and the server's own weights.
+function laneOf(c: MissionControlState, draft: MissionControlValue): CallLaneValue {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CallLaneValue>) : {};
+    const lo = c.min ?? 120;
+    const hi = c.max ?? Math.max(lo, 600);
+    const types: Record<string, number> = {};
+    for (const tp of asArray(c.laneTypes)) types[tp.key] = tp.weight;
+    return {
+        spawnEvery: Array.isArray(v.spawnEvery) ? [v.spawnEvery[0], v.spawnEvery[1]] : [lo, hi],
+        maxOpen: typeof v.maxOpen === 'number' ? v.maxOpen : 1,
+        areas: asArray<string>(v.areas),
+        types: v.types && typeof v.types === 'object' && !Array.isArray(v.types) ? { ...v.types } : types,
+    };
+}
+
+function CallLaneEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const lane = laneOf(c, draft);
+    const [lo, hi] = lane.spawnEvery;
+    const set = (patch: Partial<CallLaneValue>) => onChange({ ...lane, ...patch });
+    const gap = { ...c, integer: true, key: 'callLaneGap' };
+    const openCap = { ...c, min: 1, max: c.maxOpenCap ?? 1, integer: true, key: 'callLaneOpen' };
+    const weight = { ...c, min: 0, max: c.weightMax ?? 10, integer: true, key: 'callLaneWeight' };
+    const toggleArea = (key: string) =>
+        set({ areas: lane.areas.includes(key) ? lane.areas.filter(a => a !== key) : [...lane.areas, key] });
+    return (
+        <div className="sup-mc-sliders">
+            <Slider
+                c={gap}
+                label={t('sup.lane.gap_from')}
+                value={fit(gap, lo)}
+                disabled={disabled}
+                onChange={n => set({ spawnEvery: [n, Math.max(n, hi)] })}
+            />
+            <Slider
+                c={gap}
+                label={t('sup.lane.gap_to')}
+                value={fit(gap, hi)}
+                disabled={disabled}
+                onChange={n => set({ spawnEvery: [Math.min(lo, n), n] })}
+            />
+            <Slider
+                c={openCap}
+                label={t('sup.lane.max_open')}
+                value={fit(openCap, lane.maxOpen)}
+                disabled={disabled}
+                onChange={n => set({ maxOpen: n })}
+            />
+            <span className="sup-mc-slider__label">{t('sup.lane.areas')}</span>
+            <div className="sup-mc-chips" role="group" aria-label={t('sup.lane.areas')}>
+                {asArray(c.laneAreas).map(a => (
+                    <button
+                        key={a.key}
+                        type="button"
+                        className="sup-mc-chip"
+                        aria-pressed={lane.areas.includes(a.key)}
+                        disabled={disabled}
+                        onClick={() => toggleArea(a.key)}
+                    >
+                        {a.label}
+                    </button>
+                ))}
+            </div>
+            <span className="sup-mc-slider__label">{t('sup.lane.types')}</span>
+            {asArray(c.laneTypes).map(tp => (
+                <Slider
+                    key={tp.key}
+                    c={weight}
+                    label={tp.label}
+                    value={fit(weight, lane.types[tp.key] ?? 0)}
+                    disabled={disabled}
+                    onChange={n => set({ types: { ...lane.types, [tp.key]: n } })}
+                />
+            ))}
+        </div>
+    );
+}
+
+// The crossDept control: whether the department's officers join Cross-Department Missions and how many
+// places they may take in one (0 = no cap).
+function crossOf(draft: MissionControlValue): CrossDeptValue {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<CrossDeptValue>) : {};
+    return { join: v.join !== false, places: typeof v.places === 'number' ? v.places : 0 };
+}
+
+function CrossDeptEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const cd = crossOf(draft);
+    const places = { ...c, min: 0, max: c.placesMax ?? 8, integer: true, key: 'crossDeptPlaces' };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={cd.join}
+                disabled={disabled}
+                label={cd.join ? t('sup.cross.join_on') : t('sup.cross.join_off')}
+                onChange={v => onChange({ ...cd, join: v })}
+            />
+            <Slider
+                c={places}
+                label={t('sup.cross.places')}
+                value={fit(places, cd.places)}
+                disabled={disabled || !cd.join}
+                onChange={n => onChange({ ...cd, places: n })}
+            />
+        </div>
+    );
+}
+
+// A list of names picked with one switch each (boards and reviewRules); fixed names stay on.
+function PickList({
+    names,
+    picked,
+    fixed,
+    label,
+    disabled,
+    onChange,
+}: {
+    names: string[];
+    picked: string[];
+    fixed?: string;
+    label: (name: string) => string;
+    disabled: boolean;
+    onChange: (next: string[]) => void;
+}) {
+    const set = (name: string, on: boolean) =>
+        onChange(names.filter(n => n === fixed || (n === name ? on : picked.includes(n))));
+    return (
+        <div className="sup-mc-picks">
+            {names.map(n => (
+                <Toggle
+                    key={n}
+                    checked={n === fixed || picked.includes(n)}
+                    disabled={disabled || n === fixed}
+                    label={label(n)}
+                    onChange={on => set(n, on)}
+                />
+            ))}
+        </div>
+    );
+}
+
+function asStrings(v: unknown): string[] {
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+// The boards control: names or callsigns for other departments, and the Rank by tabs shown.
+function BoardsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = asStrings(c.metricsAll);
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<BoardsValue>) : {};
+    const b: BoardsValue = { showToOthers: v.showToOthers !== false, metrics: v.metrics ? asStrings(v.metrics) : all };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={b.showToOthers}
+                disabled={disabled}
+                label={b.showToOthers ? t('sup.boards.show_on') : t('sup.boards.show_off')}
+                onChange={on => onChange({ ...b, showToOthers: on })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.boards.metrics')}</span>
+            <PickList
+                names={all}
+                picked={b.metrics}
+                fixed="points"
+                label={m => t(`leaderboard.metric.${m}`)}
+                disabled={disabled}
+                onChange={metrics => onChange({ ...b, metrics })}
+            />
+        </div>
+    );
+}
+
+// The reviewRules control: a second supervisor per Void, and the flag kinds only admins review.
+function ReviewRulesEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<ReviewRulesValue>) : {};
+    const r: ReviewRulesValue = { secondVoid: v.secondVoid === true, adminOnlyKinds: asStrings(v.adminOnlyKinds) };
+    return (
+        <div className="sup-mc-sliders">
+            <Toggle
+                checked={r.secondVoid}
+                disabled={disabled}
+                label={r.secondVoid ? t('sup.rules.second_on') : t('sup.rules.second_off')}
+                onChange={on => onChange({ ...r, secondVoid: on })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.rules.kinds')}</span>
+            <PickList
+                names={asStrings(c.flagKinds)}
+                picked={r.adminOnlyKinds}
+                label={k => t(`mc.flagkind.${k}`)}
+                disabled={disabled}
+                onChange={adminOnlyKinds => onChange({ ...r, adminOnlyKinds })}
+            />
+        </div>
+    );
+}
+
+// The twists control: the twists the department's leaders are offered, and the ones that start ticked.
+function TwistsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = Array.isArray(c.twistsAll) ? c.twistsAll : [];
+    const keys = all.map(x => x.key);
+    const label = (k: string) => all.find(x => x.key === k)?.label ?? k;
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<TwistsValue>) : {};
+    const offered = v.offered ? asStrings(v.offered).filter(k => keys.includes(k)) : keys;
+    const w: TwistsValue = { offered, ticked: asStrings(v.ticked).filter(k => offered.includes(k)) };
+    if (!keys.length) return <p className="sup-mc-picks__label">{t('sup.twists.none')}</p>;
+    return (
+        <div className="sup-mc-sliders">
+            <span className="sup-mc-picks__label">{t('sup.twists.offered')}</span>
+            <PickList
+                names={keys}
+                picked={w.offered}
+                label={label}
+                disabled={disabled}
+                onChange={next => onChange({ offered: next, ticked: w.ticked.filter(k => next.includes(k)) })}
+            />
+            <span className="sup-mc-picks__label">{t('sup.twists.ticked')}</span>
+            <PickList
+                names={w.offered}
+                picked={w.ticked}
+                label={label}
+                disabled={disabled}
+                onChange={ticked => onChange({ ...w, ticked })}
+            />
+        </div>
+    );
+}
+
+// The goals control: which of the admin's daily and weekly goals the department's officers draw from.
+function GoalsEditor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const all = c.goalsAll ?? { daily: [], weekly: [] };
+    const v = draft && typeof draft === 'object' && !Array.isArray(draft) ? (draft as Partial<GoalsValue>) : {};
+    // only the picks are sent; the server adds the week they count from
+    const w: GoalsValue = { daily: asStrings(v.daily), weekly: asStrings(v.weekly) };
+    const kinds = ['daily', 'weekly'] as const;
+    return (
+        <div className="sup-mc-sliders">
+            <span className="sup-mc-picks__label">{t('sup.goals.hint', { min: c.min ?? 1, max: c.max ?? 1 })}</span>
+            {kinds.map(kind => {
+                const list = asArray<{ id: string; label: string }>(all[kind]);
+                return (
+                    <div key={kind}>
+                        <span className="sup-mc-picks__label">{t(`sup.goals.${kind}`)}</span>
+                        <PickList
+                            names={list.map(g => g.id)}
+                            picked={w[kind]}
+                            label={id => list.find(g => g.id === id)?.label ?? id}
+                            disabled={disabled}
+                            onChange={next => onChange({ ...w, [kind]: next })}
+                        />
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function Slider({
+    c,
+    label,
+    value,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    label: string;
+    value: number;
+    disabled: boolean;
+    onChange: (n: number) => void;
+}) {
+    const text = useValueText();
+    const lo = c.min ?? 0;
+    const hi = c.max ?? Math.max(lo, value);
+    return (
+        <label className="sup-mc-slider">
+            <span className="sup-mc-slider__label">{label}</span>
+            <input
+                type="range"
+                aria-label={label}
+                min={lo}
+                max={hi}
+                step={c.integer ? 1 : 0.05}
+                value={value}
+                disabled={disabled}
+                onChange={e => onChange(fit(c, Number(e.target.value)))}
+            />
+            <span className="sup-mc-slider__value cp-num">{text(c.key, value)}</span>
+        </label>
+    );
+}
+
+function Editor({
+    c,
+    draft,
+    disabled,
+    onChange,
+}: {
+    c: MissionControlState;
+    draft: MissionControlValue;
+    disabled: boolean;
+    onChange: (v: MissionControlValue) => void;
+}) {
+    const session = useSession();
+    const text = useValueText();
+    if (c.key === 'types') return <TypeSwitchesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'callLane') return <CallLaneEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'crossDept') return <CrossDeptEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'boards') return <BoardsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'goals') return <GoalsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'twists') return <TwistsEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    if (c.key === 'reviewRules') {
+        return <ReviewRulesEditor c={c} draft={draft} disabled={disabled} onChange={onChange} />;
+    }
+    // a choice control (difficulty; featuredType): the names the admin offers
+    if (c.kind === 'choice') {
+        const offered = asArray<string>(c.offered);
+        return (
+            <SegmentedControl
+                aria-label={controlName(c.key)}
+                items={offered.map(n => ({ key: n, label: text(c.key, n), disabled }))}
+                value={typeof draft === 'string' ? draft : ''}
+                onChange={n => onChange(n)}
+            />
+        );
+    }
+    if (c.kind === 'bool') {
+        return (
+            <Toggle
+                checked={draft === true}
+                disabled={disabled}
+                label={draft === true ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off')}
+                onChange={v => onChange(v)}
+            />
+        );
+    }
+    if (c.kind === 'map') {
+        const map = asMap(draft);
+        const typeLabel = (k: string) =>
+            // twistCash / twistPoints: one slider per enabled twist, by its name
+            (Array.isArray(c.twistsAll) ? c.twistsAll.find(x => x.key === k)?.label : undefined) ??
+            asArray(session.config?.missionTypes).find(m => m.key === k)?.label ??
+            k;
+        return (
+            <div className="sup-mc-sliders">
+                {Object.keys(asMap(c.configValue)).map(k => (
+                    <Slider
+                        key={k}
+                        c={c}
+                        label={typeLabel(k)}
+                        value={fit(c, map[k] ?? asMap(c.configValue)[k] ?? 1)}
+                        disabled={disabled}
+                        onChange={n => onChange({ ...map, [k]: n })}
+                    />
+                ))}
+            </div>
+        );
+    }
+    const slider = (
+        <Slider
+            c={c}
+            label={controlName(c.key)}
+            value={fit(
+                c,
+                typeof draft === 'number' && !(c.canTurnOff === true && draft === 0)
+                    ? draft
+                    : Number(c.value) || c.min || 0,
+            )}
+            disabled={disabled || (c.canTurnOff === true && draft === 0)}
+            onChange={n => onChange(n)}
+        />
+    );
+    // readyCheck: 0 = no ready check, offered only while the admin allows it (canTurnOff)
+    if (c.canTurnOff === true) {
+        return (
+            <div className="sup-mc-sliders">
+                <Toggle
+                    checked={draft !== 0}
+                    disabled={disabled}
+                    label={draft !== 0 ? t('admin.perms.mc.value_on') : t('admin.perms.mc.value_off')}
+                    onChange={v => onChange(v ? fit(c, Number(c.configValue) || c.min || 0) : 0)}
+                />
+                {slider}
+            </div>
+        );
+    }
+    return slider;
+}
+
+// ============================================================================
+//                                 ONE CONTROL
+// ============================================================================
+
+type Pending =
+    { kind: 'set'; c: MissionControlState; value: MissionControlValue } | { kind: 'reset'; c: MissionControlState };
+
+// Happy hour, the timed cooldown change: minutes, the cooldown scale (when the admin allows more than one) and the
+// no-repeat box, Start; while it runs the countdown and End now.
+function HappyHourRow({
+    c,
+    busy,
+    onAsk,
+    onWaitDone,
+}: {
+    c: MissionControlState;
+    busy: boolean;
+    onAsk: (p: Pending) => void;
+    onWaitDone: () => void;
+}) {
+    const text = useValueText();
+    const [minutes, setMinutes] = useState(() => fit(c, 15));
+    const [noRepeat, setNoRepeat] = useState(false);
+    const scaleLo = c.scaleMin ?? 0;
+    const scaleHi = Math.max(scaleLo, c.scaleMax ?? scaleLo);
+    const [scale, setScale] = useState(scaleLo);
+    const pickedScale = Math.min(scaleHi, Math.max(scaleLo, scale));
+    const running = c.saved !== undefined && c.saved !== null && (c.timeLeft ?? 0) > 0;
+    const perDay = c.perDay ?? 1;
+    const usedUp = (c.usedToday ?? 0) >= perDay;
+    const waiting = c.waitLeft > 0;
+    return (
+        <div className="sup-mc-row">
+            <div className="sup-mc-row__head">
+                <div>
+                    <div className="sup-mc-row__title">
+                        <strong>{controlName(c.key)}</strong>
+                        <Badge size="sm" tone="neutral" variant="outline" icon="globe">
+                            {t('sup.controls.whole_server')}
+                        </Badge>
+                    </div>
+                    <p className="sup-mc-row__desc">{t('mc.control_desc.happyHour')}</p>
+                </div>
+            </div>
+            <div className="sup-mc-row__facts">
+                <span>{t('sup.hh.used', { used: c.usedToday ?? 0, perDay })}</span>
+                {running ? (
+                    <span className="sup-mc-row__who">
+                        {t('sup.controls.changed_by', {
+                            who: c.setBy ?? '?',
+                            role: c.setRole ?? '?',
+                            when: fmtDateTime(c.at),
+                        })}
+                    </span>
+                ) : null}
+            </div>
+            {running ? (
+                <div className="sup-mc-row__actions">
+                    <span className="sup-mc-row__wait">
+                        <Icon name="clock" size={13} />
+                        <span>{`${t('sup.hh.running')} `}</span>
+                        <Countdown seconds={c.timeLeft ?? 0} resetKey={c.at} onDone={onWaitDone} />
+                        <span>{` · ${text(c.key, c.value)}`}</span>
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="undo"
+                        disabled={busy}
+                        onClick={() => onAsk({ kind: 'reset', c })}
+                    >
+                        {t('sup.hh.end')}
+                    </Button>
+                </div>
+            ) : (
+                <>
+                    <Slider
+                        c={c}
+                        label={t('sup.hh.minutes')}
+                        value={minutes}
+                        disabled={busy || usedUp}
+                        onChange={setMinutes}
+                    />
+                    {scaleHi > scaleLo ? (
+                        <label className="sup-mc-slider">
+                            <span className="sup-mc-slider__label">{t('sup.hh.scale')}</span>
+                            <input
+                                type="range"
+                                aria-label={t('sup.hh.scale')}
+                                min={scaleLo}
+                                max={scaleHi}
+                                step={0.05}
+                                value={pickedScale}
+                                disabled={busy || usedUp}
+                                onChange={e => setScale(Math.round(Number(e.target.value) * 20) / 20)}
+                            />
+                            <span className="sup-mc-slider__value cp-num">
+                                {pickedScale === 0 ? t('sup.hh.scale_none') : `×${formatFactor(pickedScale)}`}
+                            </span>
+                        </label>
+                    ) : null}
+                    <Toggle
+                        checked={noRepeat}
+                        disabled={busy || usedUp}
+                        label={t('sup.hh.norepeat')}
+                        onChange={v => setNoRepeat(v)}
+                    />
+                    <div className="sup-mc-row__actions">
+                        {usedUp ? <span className="sup-mc-row__wait">{t('sup.hh.used_up')}</span> : null}
+                        {waiting ? (
+                            <span className="sup-mc-row__wait">
+                                <Icon name="clock" size={13} />
+                                <span>{t('sup.controls.wait')}</span>
+                                <Countdown seconds={c.waitLeft} onDone={onWaitDone} />
+                            </span>
+                        ) : null}
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            icon="check"
+                            disabled={busy || waiting || usedUp}
+                            onClick={() =>
+                                onAsk({
+                                    kind: 'set',
+                                    c,
+                                    value: { minutes, scale: pickedScale, noRepeat: noRepeat ? 1 : 0 },
+                                })
+                            }
+                        >
+                            {t('sup.hh.start')}
+                        </Button>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+// A control's admin limits and today's use (sup:getMyControls), on its row: nothing while it is not listed.
+export function InlineUse({ use }: { use?: MyControlRow }) {
+    if (!use) return null;
+    return (
+        <div className="sup-mc-row__facts sup-mc-row__use">
+            <span className="cp-num">
+                {`${t('sup.mine.col.limits')}: `}
+                {use.limits
+                    ? t('sup.mine.limits', { min: use.limits.min, max: use.limits.max })
+                    : t('sup.mine.no_limits')}
+            </span>
+            {use.today === 'none' ? null : (
+                <Badge size="sm" tone={use.today === 'used' ? 'danger' : 'success'}>
+                    {`${t('sup.mine.col.today')}: ${t('sup.mine.used', { used: use.used, n: use.perDay })}`}
+                </Badge>
+            )}
+        </div>
+    );
+}
+
+function ControlRow({
+    c,
+    dept,
+    use,
+    busy,
+    onAsk,
+    onWaitDone,
+}: {
+    c: MissionControlState;
+    dept: string;
+    use?: MyControlRow;
+    busy: boolean;
+    onAsk: (p: Pending) => void;
+    onWaitDone: () => void;
+}) {
+    return (
+        <>
+            {c.key === 'happyHour' ? (
+                <HappyHourRow c={c} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />
+            ) : (
+                <PlainRow c={c} dept={dept} busy={busy} onAsk={onAsk} onWaitDone={onWaitDone} />
+            )}
+            <InlineUse use={use} />
+        </>
+    );
+}
+
+function PlainRow({
+    c,
+    dept,
+    busy,
+    onAsk,
+    onWaitDone,
+}: {
+    c: MissionControlState;
+    dept: string;
+    busy: boolean;
+    onAsk: (p: Pending) => void;
+    onWaitDone: () => void;
+}) {
+    const text = useValueText();
+    const [draft, setDraft] = useState<MissionControlValue>(c.value);
+    const valueKey = JSON.stringify(c.value);
+    useEffect(() => {
+        setDraft(c.value);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [valueKey]);
+    const changed = c.saved !== undefined && c.saved !== null;
+    const waiting = c.waitLeft > 0;
+    const dirty = !same(draft, c.value);
+    const desc = hasKey(`mc.control_desc.${c.key}`) ? t(`mc.control_desc.${c.key}`) : '';
+    return (
+        <div className="sup-mc-row">
+            <div className="sup-mc-row__head">
+                <div>
+                    <div className="sup-mc-row__title">
+                        <strong>{controlName(c.key)}</strong>
+                        <Badge size="sm" tone="neutral" variant="outline" icon={c.serverWide ? 'globe' : 'building'}>
+                            {c.serverWide ? t('sup.controls.whole_server') : dept}
+                        </Badge>
+                    </div>
+                    {desc ? <p className="sup-mc-row__desc">{desc}</p> : null}
+                    {c.key === 'typeOfTheDay' && c.todFor ? (
+                        // the type that counts today and the day a pick made now counts on
+                        <p className="sup-mc-row__desc">
+                            {t('sup.tod.today', {
+                                type: text('typeOfTheDay', c.todToday ?? c.todServer ?? null),
+                                day: c.todFor,
+                            })}
+                        </p>
+                    ) : null}
+                    {c.key === 'goals' && c.goalsFrom ? (
+                        // what counts this week and the week a pick made now counts from
+                        <p className="sup-mc-row__desc">
+                            {t('sup.goals.from', { now: text('goals', c.goalsNow ?? null), day: c.goalsFrom })}
+                        </p>
+                    ) : null}
+                </div>
+            </div>
+            <div className="sup-mc-row__facts">
+                <span>{t('sup.controls.config', { value: text(c.key, c.configValue) })}</span>
+                <span>
+                    <strong>
+                        {c.serverWide
+                            ? t('sup.controls.now_server', { value: text(c.key, c.value) })
+                            : t('sup.controls.now_dept', { dept, value: text(c.key, c.value) })}
+                    </strong>
+                </span>
+                {changed ? (
+                    <span className="sup-mc-row__who">
+                        {t('sup.controls.changed_by', {
+                            who: c.setBy ?? '?',
+                            role: c.setRole ?? '?',
+                            when: fmtDateTime(c.at),
+                        })}
+                        {c.timeLeft !== undefined && c.timeLeft !== null
+                            ? ` · ${t('admin.perms.mc.ends', { left: formatDuration(c.timeLeft) })}`
+                            : ''}
+                    </span>
+                ) : (
+                    <span className="sup-mc-row__who">{t('sup.controls.uses_config')}</span>
+                )}
+            </div>
+            <Editor c={c} draft={draft} disabled={busy || waiting} onChange={setDraft} />
+            <div className="sup-mc-row__actions">
+                {waiting ? (
+                    <span className="sup-mc-row__wait">
+                        <Icon name="clock" size={13} />
+                        <span>{t('sup.controls.wait')}</span>
+                        <Countdown seconds={c.waitLeft} onDone={onWaitDone} />
+                    </span>
+                ) : null}
+                {dirty ? (
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => setDraft(c.value)}>
+                        {t('common.cancel')}
+                    </Button>
+                ) : null}
+                {changed ? (
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="undo"
+                        disabled={busy || waiting}
+                        onClick={() => onAsk({ kind: 'reset', c })}
+                    >
+                        {t('sup.controls.back_to_config')}
+                    </Button>
+                ) : null}
+                <Button
+                    size="sm"
+                    variant="primary"
+                    icon="check"
+                    disabled={busy || waiting || !dirty}
+                    onClick={() => onAsk({ kind: 'set', c, value: draft })}
+                >
+                    {t('sup.controls.save')}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// ============================================================================
+//                                REASON DIALOG
+// ============================================================================
+
+function ReasonDialog({
+    pending,
+    busy,
+    onClose,
+    onConfirm,
+}: {
+    pending: Pending | null;
+    busy: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const text = useValueText();
+    const [reason, setReason] = useState('');
+    useEffect(() => setReason(''), [pending]);
+    if (!pending) return null;
+    const c = pending.c;
+    const next = pending.kind === 'set' ? pending.value : c.configValue;
+    const ok = reason.trim().length > 0 && !busy;
+    const hh = c.key === 'happyHour';
+    const picked = hh && pending.kind === 'set' ? (pending.value as Record<string, number>) : {};
+    const minutes = picked.minutes ?? 0;
+    const scale = picked.scale ?? 0;
+    const title = hh
+        ? pending.kind === 'set'
+            ? t('sup.hh.confirm_start', { minutes })
+            : t('sup.hh.confirm_end')
+        : pending.kind === 'set'
+          ? t('sup.controls.confirm_set', { control: controlName(c.key) })
+          : t('sup.controls.confirm_reset', { control: controlName(c.key) });
+    const description = hh
+        ? pending.kind === 'set'
+            ? scale > 0
+                ? t('sup.hh.confirm_text_scaled', { x: formatFactor(scale) })
+                : t('sup.hh.confirm_text')
+            : t('sup.hh.confirm_end_text')
+        : t('sup.controls.confirm_text', { from: text(c.key, c.value), to: text(c.key, next) });
+    const confirmLabel = hh
+        ? t(pending.kind === 'set' ? 'sup.hh.start' : 'sup.hh.end')
+        : t(pending.kind === 'set' ? 'sup.controls.save' : 'sup.controls.back_to_config');
+    return (
+        <Dialog
+            open
+            onClose={busy ? () => undefined : onClose}
+            title={title}
+            description={description}
+            size="md"
+            footer={
+                <>
+                    <Button variant="ghost" onClick={onClose} disabled={busy}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button
+                        variant="primary"
+                        icon="check"
+                        loading={busy}
+                        disabled={!ok}
+                        onClick={() => onConfirm(reason.trim())}
+                    >
+                        {confirmLabel}
+                    </Button>
+                </>
+            }
+        >
+            {c.serverWide ? <p className="sup-mc-note">{t('sup.controls.server_wide_note')}</p> : null}
+            <Field label={t('sup.controls.reason')} required>
+                <Textarea value={reason} onChange={setReason} maxLength={REASON_MAX} rows={3} />
+            </Field>
+            <ReasonChips value={reason} onChange={setReason} disabled={busy} />
+        </Dialog>
+    );
+}
+
+// ============================================================================
+//                                    SCREEN
+// ============================================================================
+
+export default function MissionControls() {
+    const session = useSession();
+    const { data, loading, error, refetch } = useRequest<MissionControlsView>(
+        'sup:getMissionControls',
+        {},
+        { pushTopic: 'missionControls' },
+    );
+    // each control's admin limits and today's use (CP.DeptControls.mine), live on the same push
+    const mine = useRequest<MyControlsView>('sup:getMyControls', {}, { pushTopic: 'missionControls' });
+    const useRows = myControlRows(mine.data?.controls);
+    const useOf = new Map(useRows.map(r => [r.key, r]));
+    const actions = actionControlRows(useRows);
+    const reload = () => {
+        void refetch();
+        void mine.refetch();
+    };
+    const { run, busy } = useAdminAction();
+    const [pending, setPending] = useState<Pending | null>(null);
+
+    const dept = asArray(data?.departments)[0];
+    const deptShort = dept?.short ?? session.officer?.departmentShort ?? '';
+    // only the controls an admin switched on; an action control is used from its own screen
+    const controls = [...asArray(data?.serverWide), ...asArray(dept?.controls)].filter(
+        c => c.active && c.kind !== 'action',
+    );
+    const groups = GROUPS.map(g => ({ key: g, rows: controls.filter(c => groupOf(c) === g) })).filter(
+        g => g.rows.length > 0,
+    );
+
+    const confirm = async (reason: string) => {
+        if (!pending) return;
+        const res =
+            pending.kind === 'set'
+                ? await run(
+                      'server:sup:setMissionControl',
+                      { key: pending.c.key, value: pending.value, reason },
+                      pending.c.key === 'happyHour'
+                          ? { success: 'sup.hh.started' }
+                          : { success: 'sup.controls.saved', successVars: { control: controlName(pending.c.key) } },
+                  )
+                : await run(
+                      'server:sup:resetMissionControl',
+                      { key: pending.c.key, reason },
+                      pending.c.key === 'happyHour'
+                          ? { success: 'sup.hh.ended' }
+                          : {
+                                success: 'sup.controls.reset_done',
+                                successVars: { control: controlName(pending.c.key) },
+                            },
+                  );
+        if (res.ok) setPending(null);
+        reload();
+    };
+
+    return (
+        <Screen
+            head="sup_controls"
+            subtitle={t('sup.controls.subtitle')}
+            className="sup-mc"
+            actions={
+                <Button size="sm" variant="ghost" icon="refresh" disabled={loading} onClick={reload}>
+                    {t('sup.controls.refresh')}
+                </Button>
+            }
+        >
+            {data?.selfExempt ? (
+                <p className="sup-mc-note">
+                    <Icon name="info" size={14} />
+                    <span>{t('sup.controls.self_note')}</span>
+                </p>
+            ) : null}
+            <ScreenStatus state={screenStateOf(!!data, loading, error)} error={error} onRetry={() => void refetch()} />
+            {data && groups.length === 0 && actions.length === 0 ? (
+                <Card>
+                    <EmptyState icon="clock" title={t('sup.controls.empty')} text={t('sup.controls.empty_text')} />
+                </Card>
+            ) : null}
+            {groups.map(g => {
+                const row = (c: MissionControlState) => (
+                    <ControlRow
+                        key={c.key}
+                        c={c}
+                        dept={deptShort}
+                        use={useOf.get(c.key)}
+                        busy={busy}
+                        onAsk={setPending}
+                        onWaitDone={reload}
+                    />
+                );
+                // folding off: every control in config order, as before
+                const open = g.rows.filter(c => !isFolded(c));
+                const more = g.rows.filter(isFolded);
+                return (
+                    <Card key={g.key} title={t(`sup.controls.group.${g.key}`)} subtitle={t(SUP_GROUP_HELP[g.key])}>
+                        <div className="sup-mc-list">
+                            {open.map(row)}
+                            {more.length > 0 ? (
+                                <MoreFold screen={`sup_controls.${g.key}`} count={more.length}>
+                                    {more.map(row)}
+                                </MoreFold>
+                            ) : null}
+                        </div>
+                    </Card>
+                );
+            })}
+            <ActionControlsCard rows={actions} />
+            <ReasonDialog
+                pending={pending}
+                busy={busy}
+                onClose={() => setPending(null)}
+                onConfirm={reason => void confirm(reason)}
+            />
+        </Screen>
+    );
+}

@@ -1,0 +1,1115 @@
+-- Full admin control, System: departments added, turned off and deleted in game (the same answers from the raw
+-- Settings editor), logo links and uploads, desks, positions, storage status and the storage switch, webhook states,
+-- problems, integrations, Settings history with Revert, Export and Import, the console way back in, Support.
+
+local H = dofile('tests/harness.lua')
+local cjson = require('cjson')
+
+-- ============================================================================
+--                                  THE SERVER
+-- ============================================================================
+-- Real: shared/*, modules/access/permissions, access, admin, adminkit, confighealth, settings, tablet, sysadmin. Stand-in:
+-- CP.Qbx (the players below and their jobs), CP.Runs (the runs going), ox_inventory, the server's KVP.
+
+H.boot({ side = 'server', realLocale = true })
+if not (CP.Storage and CP.Storage.MemSQL) then H.load('modules/system/memsql.lua') end
+
+local hooks = {}
+_G.GetConvar = function(name, default) return hooks[name] or default end
+_G.PerformHttpRequest = function() end
+local kvp = {}
+_G.GetResourceKvpString = function(k) return kvp[k] end
+_G.SetResourceKvp = function(k, v) kvp[k] = v end
+_G.DeleteResourceKvp = function(k) kvp[k] = nil end
+-- database runs: the storage module too (it only reads the in-game choice there)
+if not (CP.Storage and CP.Storage.validFolder) then H.load('modules/system/storage.lua') end
+_G.GetResourceMetadata = function(res, key)
+    return key == 'version' and (res == 'Crimson-Police' and '1.0.0' or '2.0') or nil
+end
+_G.GetEntityHeading = function() return 90.0 end
+local teleports = {}
+_G.SetEntityCoords = function(ped, x, y, z) teleports[#teleports + 1] = { ped = ped, x = x, y = y, z = z } end
+
+-- resource files (logos) stay in memory: the spec never writes into the resource folder
+local files = {}
+local realLoad = _G.LoadResourceFile
+_G.LoadResourceFile = function(res, path)
+    if files[path] ~= nil then return files[path] end
+    return realLoad(res, path)
+end
+_G.SaveResourceFile = function(_, path, data)
+    files[path] = data
+    return true
+end
+
+local people = {
+    [1] = {
+        cid = 'ADM00001',
+        license = 'license:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+        job = 'sast',
+        grade = 4,
+        ace = true,
+    },
+    [2] = { cid = 'SUP00002', license = 'license:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2', job = 'sast', grade = 4 },
+    [7] = { cid = 'OFF00007', license = 'license:7777777777777777777777777777777777777777', job = 'sast', grade = 0 },
+    [8] = { cid = 'BCS00008', license = 'license:8888888888888888888888888888888888888888', job = 'bcso', grade = 1 },
+    [9] = {
+        cid = 'OFF00009',
+        license = 'license:9999999999999999999999999999999999999999',
+        job = 'fib',
+        grade = 0,
+        offduty = true,
+    },
+}
+for src, p in pairs(people) do
+    H.players[src] = {
+        ace = p.ace and { ['crimsonpolice.admin'] = true } or {},
+        coords = vec3(100.0 + src, 200.0, 30.0),
+    }
+end
+
+local function Info(src)
+    local p = people[src]
+    if not p then return nil end
+    return {
+        src = src,
+        citizenid = p.cid,
+        license = p.license,
+        name = 'Player ' .. src,
+        job = { name = p.job, onduty = not p.offduty, gradeLevel = p.grade, gradeName = 'Rank' },
+    }
+end
+local JOBS = {
+    sast = {
+        label = 'SAST',
+        grades = { [0] = { name = 'Trooper' }, [3] = { name = 'Sergeant' }, [4] = { name = 'Lt' } },
+    },
+    fib = { label = 'FIB', grades = { [0] = { name = 'Agent' }, [3] = { name = 'Lead' } } },
+    bcso = {
+        label = 'BCSO',
+        grades = { [0] = { name = 'Deputy' }, [1] = { name = 'Corporal' }, [3] = { name = 'Sgt' } },
+    },
+}
+CP.Qbx = {
+    getInfo = Info,
+    getJobs = function() return JOBS end,
+    getByCitizenId = function(cid)
+        for src, p in pairs(people) do
+            if p.cid == cid then return src end
+        end
+        return nil
+    end,
+    getOnlinePlayers = function()
+        local out = {}
+        for src in pairs(people) do out[#out + 1] = src end
+        table.sort(out)
+        return out
+    end,
+    licenseOf = function(cid)
+        for _, p in pairs(people) do
+            if p.cid == cid then return p.license end
+        end
+        return nil
+    end,
+    citizenidsOfLicense = function() return {} end,
+    characterExists = function() return false end,
+    onDutyChange = function() end,
+    onGroupUpdate = function() end,
+    onJobChange = function() end,
+    onPlayerLoaded = function() end,
+    onPlayerUnload = function() end,
+}
+local runsNow = {}
+CP.Runs = {
+    all = function() return runsNow end,
+    get = function() return nil end,
+}
+CP.Missions = {
+    reload = function() end,
+    get = function() return nil end,
+}
+CP.Schedule = {
+    now = function() return os.time() end,
+    dayStart = function(ts) return ts - ts % 86400 end,
+    weekStart = function(ts) return ts - ts % 604800 end,
+    job = function() return false end,
+}
+local inventory = { [7] = {}, [8] = {} }
+H.exportsMock.ox_inventory = {
+    Items = function() return { label = 'Tablet' } end,
+    Search = function(src, _, name) return (inventory[src] or {})[name] or 0 end,
+    CanCarryItem = function() return true end,
+    AddItem = function(src, name, n)
+        inventory[src] = inventory[src] or {}
+        inventory[src][name] = (inventory[src][name] or 0) + n
+        return true
+    end,
+    GetItemCount = function(src, name) return (inventory[src] or {})[name] or 0 end,
+}
+
+for _, t in ipairs({
+    'cp_audit',
+    'cp_settings',
+    'cp_settings_history',
+    'cp_admin_requests',
+    'cp_officers',
+    'cp_mission_runs',
+    'cp_storage_meta',
+}) do
+    H.sql('DELETE FROM ' .. t)
+end
+
+for _, m in ipairs({
+    'modules/system/integrations/integrations.lua',
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/admin/confighealth.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
+    'modules/admin/sysadmin.lua',
+}) do
+    H.load(m)
+end
+H.step(0)
+CP.Migrations.status = function()
+    return { version = 8, files = { { version = 8, name = '008_admin_control.sql', applied = true } }, pending = 0 }
+end
+
+local Kit, Maint, S, A, Sys = CP.AdminKit, CP.Maintenance, CP.Settings, CP.Access, CP.Sysadmin
+local U = CP.U
+
+local reqSeq = 0
+local function Act(name, src, payload)
+    H.clockMs = H.clockMs + 1100
+    reqSeq = reqSeq + 1
+    local reqId = 's' .. reqSeq
+    H.fire('crimson-police:' .. name, src, payload, reqId)
+    -- an action that waits (Wait(0) between batches) answers after a few steps of fake time
+    for _ = 1, 200 do
+        for i = #H.events, 1, -1 do
+            local e = H.events[i]
+            if e.name == 'crimson-police:client:actionResult' and e.args[1] == reqId then
+                return e.args[2], e.args[3]
+            end
+        end
+        H.step(1)
+    end
+    return nil, 'no reply'
+end
+
+-- the callback's data, or nil and its error key (soon = no time passes before it)
+local function Cb(name, src, args, soon)
+    if not soon then H.clockMs = H.clockMs + 6000 end
+    local r = H.callback('crimson-police:' .. name, src, args)
+    if type(r) ~= 'table' then return nil, 'no reply' end
+    if r.ok then return r.data end
+    return nil, r.error
+end
+
+local function Rid(n) return ('%08x-0000-4000-8000-%012x'):format(n, 55) end
+
+local function Count(sql, params)
+    local r = H.sql(sql, params)[1]
+    if not r then return 0 end
+    for _, v in pairs(r) do return math.floor(tonumber(v) or 0) end
+    return 0
+end
+
+local function Audits(action)
+    return Count('SELECT COUNT(*) AS n FROM cp_audit WHERE action = ?', { action })
+end
+
+-- ============================================================================
+--               1. DEPARTMENTS: ADD, THE SAME CHECKS IN SETTINGS
+-- ============================================================================
+
+do
+    H.eq(A.departmentForJob('bcso'), nil, 'bcso is no department yet')
+    local _, eNP = A.getOfficer(8)
+    H.eq(eNP, 'err.not_police', 'the bcso deputy can\'t open the tablet')
+
+    local ok, e = Act('server:admin:addDepartment', 1,
+        { key = 'bcso', label = 'Sheriff', short = 'BCSO', jobs = { 'nojob' }, supervisorGrade = 3 })
+    H.ok(ok == false and e == 'err.dept_job_unknown', 'a job Qbox does not know is refused: ' .. tostring(e))
+    ok, e = Act('server:admin:addDepartment', 1,
+        { key = 'bcso', label = 'Sheriff', short = 'BCSO', jobs = { 'fib' }, supervisorGrade = 3 })
+    H.ok(ok == false and e == 'err.dept_job_taken', 'a job of another department is refused: ' .. tostring(e))
+    ok, e = Act('server:admin:addDepartment', 1,
+        { key = 'BC SO', label = 'x', short = 'x', jobs = { 'bcso' }, supervisorGrade = 3 })
+    H.ok(ok == false and e == 'err.dept_key', 'a key with spaces is refused')
+    ok, e = Act('server:admin:addDepartment', 1,
+        { key = 'sast', label = 'x', short = 'x', jobs = { 'bcso' }, supervisorGrade = 3 })
+    H.ok(ok == false and e == 'err.dept_exists', 'an existing key is refused')
+    ok, e = Act('server:admin:addDepartment', 2,
+        { key = 'bcso', label = 'Sheriff', short = 'BCSO', jobs = { 'bcso' }, supervisorGrade = 3 })
+    H.ok(ok == false and e == 'err.no_permission', 'a supervisor can\'t add one')
+
+    -- the raw editor gives the same answers
+    local okR, eR = S.set(1, 'Departments.bcso', { label = 'S', short = 'S', jobs = { 'fib' }, supervisorGrade = 3 })
+    H.ok(okR == false and eR == 'err.dept_job_taken', 'the raw Settings editor: the same job check')
+    okR, eR = S.set(1, 'Departments.sast.jobs', { 'sast', 'fib' })
+    H.ok(okR == false and eR == 'err.dept_job_taken', 'a job added to sast that fib has: refused')
+    okR, eR = S.set(1, 'Departments.sast.supervisorGrade', 9)
+    H.ok(okR == false and eR == 'err.dept_grade_unknown', 'a grade the job does not have: refused')
+
+    -- a job moved between departments while a run is going
+    runsNow = { { participants = { [7] = { department = 'sast' } } } }
+    okR, eR = S.setMany(1, {
+        { path = 'Departments.sast.jobs', value = { 'sast', 'fib' } },
+        { path = 'Departments.fib.jobs', value = { 'fibx' } },
+    })
+    H.ok(okR == false, 'moving a job between departments while a run goes is refused: ' .. tostring(eR))
+    runsNow = {}
+
+    ok, e = Act('server:admin:addDepartment', 1, {
+        key = 'bcso',
+        label = 'Blaine County Sheriff',
+        short = 'BCSO',
+        jobs = { 'bcso' },
+        supervisorGrade = 3,
+        themeFrom = 'fib',
+        logo = { url = 'https://example.com/b.png' },
+    })
+    H.ok(ok == true, 'a department is added: ' .. tostring(e))
+    H.eq(A.departmentForJob('bcso'), 'bcso', 'Access rebuilt: the job opens through bcso')
+    local o = A.getOfficer(8)
+    H.ok(o and o.department == 'bcso' and o.isSupervisor == false, 'the deputy opens the tablet as bcso')
+    H.eq(Audits('departmentAdded'), 1, 'audited')
+    H.eq(S._saved()['Departments.bcso'] ~= nil, true, 'saved as one record setting')
+    local setup = Cb('admin:getDepartmentSetup', 1, {})
+    local found = nil
+    for _, d in ipairs(setup and setup.departments or {}) do if d.key == 'bcso' then found = d end end
+    H.ok(found and found.added == true and found.theme.primary == Config.Departments.fib.theme.primary,
+        'the setup lists it as added, with the theme copied from fib')
+    local jobUse = {}
+    for _, j in ipairs(setup.jobs) do jobUse[j.name] = j.usedBy end
+    H.eq(jobUse.bcso, 'bcso', 'the job list says who uses each job')
+
+    -- edit through the form: a config.lua department per field, an added one as its record
+    ok, e = Act('server:admin:saveDepartment', 1, {
+        key = 'sast',
+        fields = {
+            label = 'State Troopers',
+            logo = { url = 'https://example.com/sast.png' },
+            theme = { text = '#ffffff' },
+        },
+    })
+    H.ok(
+        ok == true and Config.Departments.sast.label == 'State Troopers'
+            and Config.Departments.sast.logo.url == 'https://example.com/sast.png'
+            and Config.Departments.sast.theme.text == '#ffffff',
+        'the form saves label, logo link and text colour'
+    )
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'sast', fields = { logo = { url = 'http://x.example/a.png' } } })
+    H.ok(ok == false and e == 'err.dept_logo_url', 'an http logo link is refused')
+    -- the dialog sends every logo field; an emptied link field removes the link (a "not set" change in setMany)
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'sast', fields = { logo = { url = '', file = 'sast.png', watermark = true } } })
+    H.ok(ok == true and Config.Departments.sast.logo.url == nil,
+        'an emptied link field removes the link: ' .. tostring(e))
+    ok = Act('server:admin:saveDepartment', 1, { key = 'bcso', fields = { short = 'BCS' } })
+    H.ok(ok == true and Config.Departments.bcso.short == 'BCS', 'an added department saves its record')
+
+    -- O12: the Officer options panel saves Config.Departments.<key>.officerOptions through the same form
+    local defs = {}
+    for _, d in ipairs(setup.optionDefs or {}) do defs[d.key] = d end
+    H.ok(defs.hudSide and defs.hudSide.kind == 'enum' and defs.hudSide.allow == true,
+        'O12: the setup lists the officer options with the server-wide allow')
+    ok, e = Act('server:admin:saveDepartment', 1, {
+        key = 'fib',
+        fields = { officerOptions = { allow = { hudSide = false }, defaults = { textSize = 'large' } } },
+    })
+    H.ok(
+        ok == true and Config.Departments.fib.officerOptions.allow.hudSide == false
+            and Config.Departments.fib.officerOptions.defaults.textSize == 'large',
+        'O12: a department\'s officer options'
+    )
+    local allow = CP.OptionDefs.resolve('fib')
+    H.eq(allow.hudSide, false, 'O12: an FIB officer may no longer change the HUD side')
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'fib', fields = { officerOptions = { allow = { nope = 1 } } } })
+    H.ok(ok == false, 'O12: an unknown option is refused: ' .. tostring(e))
+    ok = Act('server:admin:saveDepartment', 1, { key = 'fib', fields = { officerOptions = {} } })
+    H.ok(ok == true and Config.Departments.fib.officerOptions == nil, 'O12: back to the server-wide options')
+    ok, e = Act('server:admin:saveDepartment', 1,
+        { key = 'bcso', fields = { officerOptions = { allow = { hudSide = false } } } })
+    H.ok(ok == true and Config.Departments.bcso.officerOptions.allow.hudSide == false,
+        'O12: an added department keeps them in its record: ' .. tostring(e))
+end
+
+-- ============================================================================
+--                 2. TURN OFF, DELETE (TURNED-OFF STILL PAYS)
+-- ============================================================================
+
+do
+    runsNow = { { participants = { [8] = { department = 'bcso' } } } }
+    local ok, e = Act('server:admin:setDepartmentEnabled', 1,
+        { key = 'bcso', enabled = false, reason = 'test', confirm = 'BCS' })
+    H.ok(ok == false and e == 'err.dept_on_run', 'refused while its officers are on a run: ' .. tostring(e))
+    runsNow = {}
+    ok, e = Act('server:admin:setDepartmentEnabled', 1,
+        { key = 'bcso', enabled = false, reason = 'test', confirm = 'X' })
+    H.ok(ok == false and e == 'err.confirm_mismatch', 'the typed short tag is checked')
+    ok, e = Act('server:admin:setDepartmentEnabled', 1,
+        { key = 'bcso', enabled = false, reason = 'test', confirm = 'bcs' })
+    H.ok(ok == true, 'turned off: ' .. tostring(e))
+    H.eq(A.departmentForJob('bcso'), nil, 'its job no longer opens the tablet')
+    local d = A.department('bcso')
+    H.ok(d ~= nil and d.enabled == false and d.societyAccount ~= nil,
+        'A.department still returns it (marked off): its pay still finds the account')
+    local _, eOff = A.getOfficer(8)
+    H.eq(eOff, 'err.department_off', 'the deputy is told the department is off')
+    H.eq(Audits('departmentOff'), 1, 'audited')
+
+    ok = Act('server:admin:setDepartmentEnabled', 1, { key = 'sast', enabled = false, reason = 'r', confirm = 'SAST' })
+    H.ok(ok == true, 'sast off too')
+    local okR, eR = S.set(1, 'Departments.fib.enabled', false)
+    H.ok(okR == false and eR == 'err.dept_last', 'the last department stays on (raw editor)')
+    ok, e = Act('server:admin:setDepartmentEnabled', 1, { key = 'fib', enabled = false, reason = 'r', confirm = 'FIB' })
+    H.ok(ok == false and e == 'err.dept_last', 'and through the screen')
+    Act('server:admin:setDepartmentEnabled', 1, { key = 'sast', enabled = true, reason = 'r' })
+    H.eq(A.departmentForJob('sast'), 'sast', 'sast back on')
+
+    ok, e = Act('server:admin:deleteDepartment', 1, { key = 'sast', reason = 'r', confirm = 'SAST' })
+    H.ok(ok == false and e == 'err.dept_builtin', 'a config.lua department can\'t be deleted')
+    H.sql([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, state, end_reason,
+        points_base) VALUES ('d1', 'patrol', 'p', 'BCS00008', 'bcso', 'completed', 'completed', 10)]])
+    ok, e = Act('server:admin:deleteDepartment', 1, { key = 'bcso', reason = 'r', confirm = 'BCS' })
+    H.ok(ok == false and e == 'err.dept_has_rows', 'a department with history can\'t be deleted')
+    H.sql('DELETE FROM cp_mission_runs WHERE run_uuid = \'d1\'')
+    H.sql([[DELETE FROM cp_dept_controls WHERE department = 'sast']])
+    H.sql([[INSERT INTO cp_dept_controls (department, control_key, value_json, expires_at, set_by, set_role)
+        VALUES ('bcso', 'readyCheck', '{"v": 40}', NULL, 'ADM00001', 'admin'),
+        ('sast', 'readyCheck', '{"v": 20}', NULL, 'ADM00001', 'admin')]])
+    ok, e = Act('server:admin:deleteDepartment', 1, { key = 'bcso', reason = 'r', confirm = 'BCS' })
+    H.ok(ok == true and Config.Departments.bcso == nil, 'deleted when it has no rows: ' .. tostring(e))
+    H.eq(H.sql([[SELECT COUNT(*) AS n FROM cp_dept_controls WHERE department = 'bcso']])[1].n, 0,
+        '(Z12) its Mission control rows are removed too')
+    H.eq(H.sql([[SELECT COUNT(*) AS n FROM cp_dept_controls WHERE department = 'sast']])[1].n, 1,
+        '(Z12) another department keeps its rows')
+    H.sql([[DELETE FROM cp_dept_controls WHERE department = 'sast']])
+    H.eq(S._saved()['Departments.bcso'], nil, 'its setting is gone')
+end
+
+-- ============================================================================
+--                                3. LOGO UPLOAD
+-- ============================================================================
+
+do
+    local function B64(data)
+        local chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        return (
+            (data:gsub('.', function(x)
+                local r, b = '', x:byte()
+                for i = 8, 1, -1 do r = r .. (b % 2 ^ i - b % 2 ^ (i - 1) > 0 and '1' or '0') end
+                return r
+            end) .. '0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+                if #x < 6 then return '' end
+                local c = 0
+                for i = 1, 6 do c = c + (x:sub(i, i) == '1' and 2 ^ (6 - i) or 0) end
+                return chars:sub(c + 1, c + 1)
+            end) .. ({ '', '==', '=' })[#data % 3 + 1]
+        )
+    end
+    H.eq(Sys._b64decode(B64('hello world!')), 'hello world!', 'base64 decodes')
+    local png = '\137PNG\r\n\26\n' .. string.rep('x', 9000)
+    local enc = B64(png)
+    local half = math.floor(#enc / 8) * 4
+    local ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'u1', index = 1, total = 2, data = enc:sub(1, half) })
+    H.ok(ok == true and res.received == 1, 'the first chunk is kept')
+    local ok2, e2 = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'u2', index = 1, total = 1, data = enc:sub(1, half) })
+    H.ok(ok2 == false and e2 == 'err.upload_busy', 'a second upload at the same time is refused')
+    local okS, eS = Act('server:admin:uploadLogo', 2,
+        { department = 'fib', uploadId = 'u1', index = 2, total = 2, data = enc:sub(half + 1) })
+    H.ok(okS == false and eS == 'err.no_permission', 'a chunk from a player who is not an admin is refused')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'u1', index = 2, total = 2, data = enc:sub(half + 1) })
+    H.ok(ok == true and res.file == 'fib.png' and files['logos/fib.png'] == png, 'the last chunk writes logos/fib.png')
+    H.eq(Config.Departments.fib.logo.file, 'fib.png', 'the department points at it')
+    H.eq(Audits('logoUploaded'), 1, 'audited')
+
+    local svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'u3', index = 1, total = 1, data = B64(svg) })
+    H.ok(ok == false and res == 'err.upload_type', 'an SVG is refused')
+    local webp = 'RIFF\0\0\0\0WEBPVP8 ' .. string.rep('y', 100)
+    H.eq(Sys._imageKind(webp), 'webp', 'WebP magic bytes are known')
+    -- more than 1 MB across chunks
+    local big = B64(string.rep('z', 12000))
+    local refused = nil
+    for i = 1, 100 do
+        local okB, eB = Act('server:admin:uploadLogo', 1,
+            { department = 'fib', uploadId = 'big', index = i, total = 100, data = big })
+        if not okB then refused = eB; break end
+    end
+    H.eq(refused, 'err.upload_too_big', 'more than 1 MB across chunks is refused')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'old', index = 1, total = 2, data = enc:sub(1, half) })
+    H.time = H.time + 61
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'old', index = 2, total = 2, data = enc:sub(half + 1) })
+    H.ok(ok == false and res == 'err.upload_expired', 'a partial upload older than 60 s is dropped')
+    -- step OP2: an admin who leaves mid-upload leaves nothing behind (the next player with his id starts clean)
+    ok = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'gone', index = 1, total = 2, data = enc:sub(1, half) })
+    H.eq(ok, true, 'a half upload is kept')
+    H.fire('playerDropped', 1)
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'fresh', index = 1, total = 2, data = enc:sub(1, half) })
+    H.ok(ok == true and res.received == 1, 'after playerDropped a new upload starts: ' .. tostring(res))
+    H.fire('playerDropped', 1)
+    H.eq(S.check('Departments.fib.logo.url', 'https://cdn.example.com/x.png'), true, 'an https link is a valid logo')
+    local okU = S.check('Departments.fib.logo.url', 'https://x.example/a b.png')
+    H.eq(okU, false, 'a link with a space is not')
+
+    -- ---- A LOGO LINK IS SHOWN BEFORE A FILE: the upload removes the link (or the upload would never show) ----
+    local okL = S.set(1, 'Departments.fib.logo.url', 'https://cdn.example.com/fib.png')
+    H.eq(okL, true, 'fib gets a logo link')
+    H.eq(A.department('fib').logo.url, 'https://cdn.example.com/fib.png', 'the link is the logo')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'link', index = 1, total = 1, data = enc })
+    H.ok(ok == true and res.linkRemoved == true, 'the upload says the link was removed: ' .. tostring(res))
+    H.eq(Config.Departments.fib.logo.url, nil, 'the link is gone')
+    H.eq(A.department('fib').logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.png', 'the uploaded file is the logo')
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'nolink', index = 1, total = 1, data = enc })
+    H.ok(ok == true and res.linkRemoved == nil, 'no link: nothing to remove')
+
+    -- ---- THE SETTING IS CHECKED BEFORE THE FILE IS WRITTEN (SaveResourceFile cannot be undone) ----
+    -- (Z13: an unknown job no longer refuses a logo change, so a validator refuses it here)
+    local refuse = true
+    S.registerValidator('Departments', function() return refuse and 'err.dept_job_unknown' or nil end)
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'refused', index = 1, total = 1, data = B64(webp) })
+    refuse = false
+    H.ok(ok == false and res == 'err.dept_job_unknown', 'a refused setting refuses the upload: ' .. tostring(res))
+    H.eq(files['logos/fib.webp'], nil, 'and no file was written')
+    H.eq(Config.Departments.fib.logo.file, 'fib.png', 'the department keeps its logo')
+
+    -- ---- A NEW FILE NAME WAITS FOR THE RESTART: clients only load the logos FXServer packed at the start ----
+    local warned = {}
+    local realWarn = CP.warn
+    CP.warn = function(tag, fmt, ...)
+        warned[#warned + 1] = tostring(fmt)
+        return realWarn(tag, fmt, ...)
+    end
+    ok, res = Act('server:admin:uploadLogo', 1,
+        { department = 'fib', uploadId = 'webp', index = 1, total = 1, data = B64(webp) })
+    H.ok(ok == true and res.file == 'fib.webp' and files['logos/fib.webp'] == webp, 'a WebP is written as fib.webp')
+    H.eq(A.department('fib').logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.webp', 'the setting points at it')
+    H.eq(CP.Tablet.logoFor(A.department('fib')).url, 'https://cfx-nui-Crimson-Police/logos/fib.png',
+        'fib tablets keep the start logo until the restart')
+    local gdep
+    for _, d in ipairs((Cb('admin:getDepartments', 1, {}) or {}).departments or {}) do
+        if d.key == 'fib' then gdep = d end
+    end
+    H.eq(gdep and gdep.logo and gdep.logo.url, 'https://cfx-nui-Crimson-Police/logos/fib.png',
+        'and so does the Departments preview')
+    H.eq(CP.Tablet.logoFor({
+        key = 'newdept',
+        logo = { file = 'newdept.png', url = 'https://cfx-nui-x/logos/newdept.png' },
+    }), nil, 'a department with no logo at the start shows none until the restart')
+    H.fire('crimson-police:server:logoFailed', 7, { department = 'fib' }, 'lf1')
+    CP.warn = realWarn
+    local blamed = false
+    for _, w in ipairs(warned) do
+        if w:find('could not load its logo', 1, true) then blamed = true end
+    end
+    H.eq(blamed, false, 'a pending file is never blamed for a logo the tablet could not load')
+
+    -- ---- FXServer DROPS A PLAYER WHO SENDS MORE THAN 128 KB A SECOND: at most 6 pieces of 16.5 KB a second ----
+    local function ActNow(payload, reqId)
+        H.fire('crimson-police:server:admin:uploadLogo', 1, payload, reqId)
+        for _ = 1, 20 do
+            for i = #H.events, 1, -1 do
+                local e = H.events[i]
+                if e.name == 'crimson-police:client:actionResult' and e.args[1] == reqId then
+                    return e.args[2], e.args[3]
+                end
+            end
+            H.step(1)
+        end
+        return nil, 'no reply'
+    end
+    H.clockMs = H.clockMs + 1100
+    local answers = {}
+    for i = 1, 7 do
+        local okR, r = ActNow({ department = 'fib', uploadId = 'fast', index = i, total = 8, data = big }, 'fast' .. i)
+        answers[i] = okR and 'ok' or r
+    end
+    H.eq(answers[6], 'ok', 'six pieces in one second are taken')
+    H.eq(answers[7], 'err.rate_limited', 'a seventh in the same second is refused')
+    H.time = H.time + 61   -- the unfinished upload is dropped
+end
+
+-- ============================================================================
+--                            4. DESKS AND POSITIONS
+-- ============================================================================
+
+do
+    local before = #Config.Tablet.desks
+    local ok, res = Act('server:admin:addDeskHere', 1,
+        { label = 'Bay desk', size = { x = 1, y = 1, z = 1 }, coords = { x = 0, y = 0, z = 0 } })
+    H.ok(ok == true and res.index == before + 1, 'a desk is added here')
+    local d = Config.Tablet.desks[before + 1]
+    H.ok(d and math.abs(d.coords.x - 101.0) < 0.01 and math.abs(d.coords.y - 200.0) < 0.01,
+        'at the admin\'s server position (the client sends none)')
+    H.eq(Audits('deskAdded'), 1, 'audited')
+    ok, res = Act('server:admin:updateDesk', 1, { index = before + 1, size = { x = 9, y = 1, z = 1 } })
+    H.ok(ok == false and res == 'err.desk_size', 'a 9 m desk is refused')
+    ok, res = Act('server:admin:updateDesk', 1, { index = before + 1, departments = { 'nope' } })
+    H.ok(ok == false and res == 'err.desk_department', 'an unknown department is refused')
+    local list = U.deepcopy(Config.Tablet.desks)
+    while #list <= 50 do list[#list + 1] = U.deepcopy(d) end
+    local okR, eR = S.set(1, 'Tablet.desks', list)
+    H.ok(okR == false and eR == 'err.setting_too_many', 'more than 50 desks are refused (raw editor)')
+    H.eq(S.entry('Tablet.desks').restart, false, 'desks change live (no restart)')
+    H.reset()
+    ok = Act('server:admin:updateDesk', 1, { index = before + 1, label = 'Bay desk 2' })
+    local sync = H.findEvents('crimson-police:client:settings')
+    H.ok(ok == true and #sync >= 1 and sync[1].target == -1, 'every client gets the new desks (zones rebuilt)')
+    teleports = {}
+    ok = Act('server:admin:teleportToDesk', 1, { index = before + 1 })
+    H.ok(ok == true and #teleports == 1 and math.abs(teleports[1].x - 101.0) < 0.01, 'teleport to the desk')
+    ok = Act('server:admin:removeDesk', 1, { index = before + 1 })
+    H.ok(ok == true and #Config.Tablet.desks == before, 'removed')
+
+    local pos = Cb('admin:myPosition', 1, {})
+    H.ok(pos and math.abs(pos.x - 101.0) < 0.01 and pos.heading == 90.0, 'admin:myPosition reads the server ped')
+    teleports = {}
+    H.clockMs = H.clockMs + 6000
+    ok = Act('server:admin:teleportTo', 1, { path = 'Downed.dropOffs', index = 1, x = 0, y = 0 })
+    local drop = Config.Downed.dropOffs[1]
+    H.ok(ok == true and #teleports == 1 and math.abs(teleports[1].x - drop.x) < 0.01,
+        'teleport to a row reads the stored coordinates')
+    local okT, eT = Act('server:admin:teleportTo', 1, { path = 'Downed.dropOffs', index = 1 })
+    H.ok(okT == false and eT == 'err.rate_limited', 'one teleport per 5 s')
+    H.clockMs = H.clockMs + 6000
+    okT, eT = Act('server:admin:teleportTo', 7, { path = 'Downed.dropOffs', index = 1 })
+    H.ok(okT == false and eT == 'err.no_permission', 'officers can\'t teleport')
+end
+
+-- ============================================================================
+--                 5. WEBHOOKS, PROBLEMS, INTEGRATIONS, STORAGE
+-- ============================================================================
+
+do
+    hooks.cp_webhook_audit = 'https://discord.com/api/webhooks/123/SECRETtoken'
+    hooks.cp_webhook_flags = 'https://discord.com.evil.example/api/webhooks/1/x'
+    local w = Cb('admin:getWebhooks', 1, {})
+    local text = cjson.encode(w)
+    H.ok(not text:find('SECRET', 1, true) and not text:find('evil', 1, true) and not text:find('123', 1, true),
+        'no part of a link reaches the NUI')
+    local by = {}
+    for _, r in ipairs(w.webhooks) do by[r.category] = r end
+    H.ok(by.audit.state == 'on' and by.audit.discord == true, 'audit: on, a Discord link')
+    H.ok(by.flags.discord == false, 'a look-alike host is not a Discord link')
+    H.ok(by.board.state == 'off' and by.board.line:find('set cp_webhook_board', 1, true) == 1,
+        'off, with the server.cfg line to paste')
+    H.eq(Cb('admin:getWebhooks', 7, {}), nil, 'officers get nothing')
+
+    CP.warn('webhooktest', 'posting to https://discord.com/api/webhooks/123/SECRETtoken failed')
+    local p = Cb('admin:getProblems', 1, { tag = 'webhooktest' })
+    H.ok(p and #p.lines == 1 and not p.lines[1].text:find('SECRET', 1, true), 'a Problems line shows the link redacted')
+
+    -- A4: the refused mission starts, admins only
+    CP.Refusals.note({
+        citizenid = 'CIDREF',
+        name = 'Ref Used',
+        missionId = 'patrol_a',
+        type = 'patrol',
+        reason = 'err.in_arena',
+    })
+    local refusals = Cb('admin:getRefusals', 1, {})
+    H.ok(refusals and refusals.refusals[1].reason == 'err.in_arena' and refusals.total >= 1,
+        'admins read the refused starts')
+    -- A5: the Live -> Refused tab and Home's "Refused starts today" read the label and the day's count
+    local getMission = CP.Missions.get
+    CP.Missions.get = function(id) return id == 'patrol_a' and { label = 'Patrol A' } or nil end
+    local labelled = Cb('admin:getRefusals', 1, {})
+    CP.Missions.get = getMission
+    H.eq(labelled.refusals[1].missionLabel, 'Patrol A', 'a refused start carries the mission label')
+    H.ok(labelled.today >= 1 and labelled.today <= #labelled.refusals, 'the refused starts of today are counted')
+    local none, noneErr = Cb('admin:getRefusals', 7, {})
+    H.ok(none == nil and noneErr == 'err.no_permission', 'officers cannot read the refused starts')
+
+    -- FIN10: police served by sc-police (named), dispatch by none: the screen marks who serves each job
+    CP.Integrations.register('police', 'sc-police', {})
+    local intsBefore = Config.Integrations
+    Config.Integrations = { dispatch = 'none', ambulance = 'auto', banking = 'auto', police = 'sc-police' }
+    local ints = Cb('admin:getIntegrations', 1, {})
+    Config.Integrations = intsBefore
+    local names = {}
+    for _, r in ipairs(ints.resources) do names[r.name] = r end
+    H.ok(names['qbx_core'] and names['qbx_core'].version == '2.0' and names['sc-police'].required == false,
+        'every dependency with its state and version')
+    H.eq(names['sc-police'].serves and table.concat(names['sc-police'].serves, ','), 'police',
+        'the script row says which job it serves')
+    H.eq(names['sc-dispatch'].serves, nil, 'a script that serves nothing says nothing')
+    local jobs = {}
+    for _, j in ipairs(ints.jobs) do jobs[j.kind] = j end
+    H.ok(jobs.police.active == 'sc-police' and jobs.police.off == nil, 'police: served by sc-police')
+    H.ok(
+        jobs.dispatch.active == nil and jobs.dispatch.setting == 'none' and type(jobs.dispatch.off) == 'string'
+            and #jobs.dispatch.off > 0,
+        'dispatch: none serves it, with the reason'
+    )
+    H.ok(#ints.arena.zones == 2, 'the two Crimson-Arena no-build zones are shown')
+
+    -- the database side of the status reads information_schema (shadow mode compares it with the saves folder
+    -- engine, which has none)
+    if H.storage ~= 'shadow' then
+        local st = Cb('admin:getStorage', 1, {})
+        H.ok(st and st.version == '1.0.0' and type(st.tables) == 'table' and #st.tables > 10 and st.migrations,
+            'storage status with tables, version and migrations')
+        local st2, e2 = Cb('admin:getStorage', 1, {}, true)
+        H.ok(st2 == nil and e2 == 'err.rate_limited', 'one read per 5 s')
+    end
+end
+
+do
+    local V = CP.Storage.validFolder
+    H.ok(V and V('saves') and V('saves/second') and V('saves_b'), 'folders under saves are allowed')
+    for _, bad in ipairs({ 'logos', 'web/dist', '../x', 'saves/../x', '/etc', 'C:/x', 'saves//a', 'saves/' }) do
+        H.eq(V(bad), false, 'refused folder ' .. bad)
+    end
+end
+
+-- ============================================================================
+--            6. SETTINGS: HISTORY, REVERT, EXPORT, IMPORT, CONSOLE
+-- ============================================================================
+
+do
+    H.ok(S.set(1, 'Leaderboard.topN', 15), 'a setting changed')
+    H.ok(S.set(1, 'Leaderboard.topN', 20), 'and again')
+    local h = Cb('admin:getSettingsHistory', 1, { path = 'Leaderboard.topN' })
+    H.ok(
+        h and #h.rows == 2 and h.rows[1].new == 20 and h.rows[1].old == 15 and h.rows[1].latest == true
+            and h.rows[2].latest == false,
+        'the history holds the full values and marks the last change'
+    )
+    local first = h.rows[2]
+    local ok, e = Act('server:admin:revertSetting', 1, { historyId = first.id, reason = 'oops' })
+    H.ok(ok == false and e == 'err.setting_changed_since', 'a row changed since asks again')
+    ok = Act('server:admin:revertSetting', 1, { historyId = first.id, reason = 'oops', again = true })
+    H.ok(ok == true and Config.Leaderboard.topN == S._defaults().Leaderboard.topN,
+        'Revert puts the old (config.lua) value back')
+    H.eq(Audits('settingReverted'), 1, 'audited as a revert')
+    local h2 = Cb('admin:getSettingsHistory', 1, { path = 'Leaderboard.topN' })
+    H.ok(h2.rows[1].action == 'settingReverted' and h2.rows[1].revertsId == first.id, 'the history says what it undid')
+    ok, e = Act('server:admin:revertSetting', 1, { historyId = first.id })
+    H.ok(ok == false and e == 'err.reason_required', 'a reason is required')
+
+    H.ok(S.set(1, 'Leaderboard.topN', 12), 'changed for the export')
+    local ex = Cb('admin:exportSettings', 1, {})
+    local doc = cjson.decode(ex.text)
+    H.ok(doc.kind == 'crimson-police-settings' and ex.count >= 1, 'an export of the changed settings')
+    H.ok(not ex.text:find('webhook', 1, true), 'an export holds no webhook links')
+    S.reset(1, 'Leaderboard.topN')
+    doc.settings[#doc.settings + 1] = { path = 'Tablet.title', value = 'Other' }
+    doc.settings[#doc.settings + 1] = { path = 'No.such.path', value = 1 }
+    doc.settings[#doc.settings + 1] = { path = 'Cash.allowClawback', value = true }
+    local pv = Cb('admin:previewSettingsImport', 1, { text = cjson.encode(doc) })
+    H.ok(
+        pv and pv.previewToken and #pv.locked == 1 and pv.locked[1] == 'Tablet.title' and #pv.unknown == 1
+            and #pv.money == 1,
+        'the import preview lists locked, unknown and money switches (skipped)'
+    )
+    local changed = false
+    for _, c in ipairs(pv.changes) do if c.path == 'Leaderboard.topN' then changed = true end end
+    H.ok(changed, 'and the change it would make')
+    ok, e = Act('server:admin:importSettings', 1,
+        { previewToken = pv.previewToken, reason = 'move', confirm = 'nope', requestId = Rid(1) })
+    H.ok(ok == false and e == 'err.confirm_mismatch', 'the typed word IMPORT')
+    ok = Act('server:admin:importSettings', 1,
+        { previewToken = pv.previewToken, reason = 'move', confirm = 'IMPORT', requestId = Rid(2) })
+    H.ok(ok == true and Config.Leaderboard.topN == 12 and Config.Cash.allowClawback == false,
+        'imported; the money switch stayed off')
+    H.eq(Audits('settingsImport'), 1, 'audited')
+
+    -- the console way back in
+    local lines = {}
+    local realPrint = print
+    _G.print = function(...) lines[#lines + 1] = table.concat({ ... }, ' ') end
+    local okC, key = S._console(0, {})
+    _G.print = realPrint
+    H.ok(okC and key == 'settings.console.listed' and #lines >= 1, 'CrimsonPoliceAdmin settings lists them')
+    okC = S._console(0, { 'reset', 'Leaderboard.topN' })
+    H.ok(okC and Config.Leaderboard.topN == S._defaults().Leaderboard.topN, 'settings reset <path>')
+    S.set(1, 'Leaderboard.topN', 14)
+    okC = S._console(0, { 'reset', 'all' })
+    H.ok(okC and next(S._saved()) == nil or okC, 'settings reset all')
+    H.eq(S._console(1, {}), false, 'only the console')
+
+    -- set cp_settings_safe 1: saved settings ignored for one start, nothing deleted
+    S.set(1, 'Leaderboard.topN', 16)
+    hooks.cp_settings_safe = '1'
+    S._reload()
+    H.eq(Config.Leaderboard.topN, S._defaults().Leaderboard.topN, 'safe start: config.lua\'s value is used')
+    H.ok(S._saved()['Leaderboard.topN'] ~= nil, 'nothing was deleted')
+    local okS, eS = S.set(1, 'Leaderboard.topN', 17)
+    H.ok(okS == false and eS == 'err.settings_safe_mode', 'changes wait until the safe start ends')
+    hooks.cp_settings_safe = nil
+    S._reload()
+    H.eq(Config.Leaderboard.topN, 16, 'next start: the saved value is back')
+    S.reset(1, 'Leaderboard.topN')
+end
+
+do
+    -- validators of this package
+    H.eq((S.check('Retention.auditDays', 7)), false, 'audit retention under 30 days is refused')
+    H.eq((S.check('Retention.auditDays', 0)), true, '0 = keep forever')
+    H.eq((S.check('Retention.runArchiveMonths', 2)), false, 'archive after 2 months is refused')
+    H.eq((S.check('Tablet.access.requireItem', true)), false, 'require the item while no item is set: refused')
+    H.eq((S.check('AdminTheme.text', '#111111')), false, 'dark text on the dark admin theme: refused')
+    H.eq((S.check('Objectives.bounty.objectives', {})), false, 'no bounty kind while the bounty is on: refused')
+    local okG = S.check('Objectives.dailyGoal.goals', { { id = 'a', label = 'A', count = 2, type = 'nosuch' } })
+    H.eq(okG, false, 'a goal with an unknown mission type is refused')
+    H.eq((
+        S.check('Objectives.dailyGoal.goals',
+            { { id = 'a', label = 'A', count = 2, stat = 'arrests', enabled = false } })
+    ), true, 'a goal with a condition and its own switch')
+    local all = S.all()
+    H.ok(all.resets and all.resets.daily and all.resets.weekly and all.resets.daily > os.time(),
+        'the next daily and weekly reset are shown')
+end
+
+-- ============================================================================
+--                                  7. SUPPORT
+-- ============================================================================
+
+do
+    local r = Cb('admin:checkAccess', 1, { src = 7 })
+    H.ok(r and r.ok == true, 'an officer on duty can open it')
+    r = Cb('admin:checkAccess', 1, { src = 9 })
+    local _, real = A.getOfficer(9)
+    H.ok(
+        r and r.ok == false and r.error == 'err.not_on_duty' and r.error == real and r.fix == 'sysadmin.fix.not_on_duty',
+        'off duty: the same reason as a real open attempt, with the fix')
+    local r2, e2 = Cb('admin:checkAccess', 1, { src = 9 }, true)
+    H.ok(r2 == nil and e2 == 'err.rate_limited', 'one check per player per 5 s')
+    r = Cb('admin:checkAccess', 1, { src = 55 })
+    H.eq(r, nil, 'an offline player')
+    Config.Tablet.access = U.copy(Config.Tablet.access)
+    Config.Tablet.access.command = false
+    r = Cb('admin:checkAccess', 1, { src = 7, via = 'command' })
+    H.ok(r and r.error == 'err.access_off', 'a way that is off: the tablet\'s own answer')
+    Config.Tablet.access.command = true
+
+    local ok, e = Act('server:admin:giveTabletItem', 1, { src = 7, reason = 'lost it' })
+    H.ok(ok == false and e == 'err.no_tablet_item_set', 'no tablet item set: refused')
+    Config.Tablet.item = 'police_tablet'
+    ok, e = Act('server:admin:giveTabletItem', 1, { src = 7 })
+    H.ok(ok == false and e == 'err.reason_required', 'a reason is required')
+    ok, e = Act('server:admin:giveTabletItem', 1, { src = 7, reason = 'lost it' })
+    H.ok(ok == true and inventory[7].police_tablet == 1, 'given: ' .. tostring(e))
+    ok, e = Act('server:admin:giveTabletItem', 1, { src = 7, reason = 'again' })
+    H.ok(ok == false and e == 'err.rate_limited', 'once per 60 s for the same player')
+    H.clockMs = H.clockMs + 61000
+    ok, e = Act('server:admin:giveTabletItem', 1, { src = 7, reason = 'again' })
+    H.ok(ok == false and e == 'err.has_tablet_item', 'refused when they already carry one: ' .. tostring(e))
+    H.eq(Audits('tabletItemGive'), 1, 'audited')
+    Config.Tablet.item = false
+
+    H.reset()
+    ok = Act('server:admin:releaseScreen', 1, { citizenid = 'OFF00007' })
+    local ev = H.findEvents('crimson-police:client:diagUnstick')
+    H.ok(ok == true and #ev == 1 and ev[1].target == 7, 'release screen reaches only the target client')
+    H.eq(Audits('screenRelease'), 1, 'audited')
+
+    -- Show state: the server asks the client and waits for its own answer
+    local got = nil
+    CreateThread(function() got = Sys.clientState(7) end)
+    local ask = H.findEvents('crimson-police:client:diagState')
+    local token = ask[#ask] and ask[#ask].args[1]
+    H.fire('crimson-police:server:diagState', 8, token, { screen = 'evil' })
+    H.fire('crimson-police:server:diagState', 7, token,
+        { screen = 'faded in', nuiFocus = true, testFocus = 'controls', extra = 'x' })
+    H.advance(200, 100)
+    H.ok(got and got.screen == 'faded in' and got.nuiFocus == true and got.extra == nil,
+        'the answer of the target client only, known keys only')
+    H.eq(got and got.testFocus, 'controls', 'the test panel\'s focus reaches the Admin UI (Support)')
+end
+
+-- ============================================================================
+--                       8. STORAGE SWITCH AND THE MARKER
+-- ============================================================================
+
+do
+    -- the replies carry the Storage view (step WF3), whose database side reads information_schema: shadow mode compares
+    -- it with the saves folder engine, which has none, so there the view's table counts are left out
+    local realStatus = CP.Admin.storageStatus
+    if H.storage == 'shadow' then CP.Admin.storageStatus = function() return {} end end
+    local eff, ov = CP.Storage.effective({ enabled = true, folder = 'saves' }, function(k) return kvp[k] end)
+    H.ok(eff.enabled == true and ov == nil, 'no in-game choice: config.lua')
+    eff, ov = CP.Storage.effective({ enabled = true, folder = 'saves' }, function(k)
+        return ({ cp_storage_mode = 'files', cp_storage_folder = 'saves/b' })[k]
+    end)
+    H.ok(eff.enabled == false and eff.folder == 'saves/b' and ov.mode == 'files', 'the KVP switch to files wins')
+    eff = CP.Storage.effective({ enabled = false, folder = 'saves' }, function(k)
+        return ({ cp_storage_mode = 'database', cp_storage_folder = '../evil' })[k]
+    end)
+    H.ok(eff.enabled == true and eff.folder == 'saves', 'the KVP switch to the database; a bad folder is ignored')
+
+    -- FXServer cannot create folders on Linux: a folder that is not there would stop the next start, so it is refused
+    -- (os.createdir is never called: tests/harness.lua ends the spec if it is)
+    local ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/nothing',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(9),
+    })
+    H.ok(ok == false and e == 'err.storage_folder_missing',
+        'a folder that is not there yet is refused: ' .. tostring(e))
+    H.eq(kvp.cp_storage_mode, nil, 'and nothing is switched')
+    H.execute(('mkdir -p \'%s/saves/nothing\' \'%s/saves/other\''):format(GetResourcePath(), GetResourcePath()))
+    ok, e = Act('server:admin:setStorageMode', 1,
+        { enabled = false, folder = 'saves/nothing', reason = 'r', confirm = 'SWITCH', requestId = Rid(10) })
+    H.ok(ok == false and e == 'err.storage_target_empty', 'a target with no data needs Start empty: ' .. tostring(e))
+    ok, e = Act('server:admin:setStorageMode', 1,
+        { enabled = false, folder = 'logos', reason = 'r', confirm = 'SWITCH', requestId = Rid(11) })
+    H.ok(ok == false and e == 'err.storage_folder', 'a folder outside saves is refused')
+    runsNow = { { participants = {} } }
+    ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/other',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(12),
+    })
+    H.ok(ok == false and e == 'err.storage_runs_active', 'refused while a run goes')
+    runsNow = {}
+    -- Z9: a run that starts while the switch looks at the target (before the lock) is seen under the lock
+    local realBegin = Maint.begin
+    Maint.begin = function(kind, info)
+        runsNow = { { participants = {} } }
+        return realBegin(kind, info)
+    end
+    ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/other',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(14),
+    })
+    Maint.begin = realBegin
+    runsNow = {}
+    H.ok(ok == false and e == 'err.storage_runs_active', 'Z9: a run started before the lock refuses the switch')
+    H.ok(Maint.active() == nil and kvp.cp_storage_mode == nil and Sys.storageMeta().state ~= 'left_behind',
+        'Z9: and the lock ends with nothing switched or marked')
+    ok, e = Act('server:admin:setStorageMode', 1, {
+        enabled = false,
+        folder = 'saves/other',
+        startEmpty = true,
+        reason = 'r',
+        confirm = 'SWITCH',
+        requestId = Rid(13),
+    })
+    H.ok(ok == true, 'switched: ' .. tostring(e))
+    H.ok(type(e) == 'table' and e.view and e.view.state == 'left_behind' and e.view.maintenance ~= nil,
+        'the reply carries the fresh Storage view (no second request, step WF3)')
+    H.ok(kvp.cp_storage_mode == 'files' and kvp.cp_storage_folder == 'saves/other', 'the choice is in the KVP')
+    H.eq(Sys.storageMeta().state, 'left_behind', 'this store is marked left behind')
+    H.eq((Maint.active()), 'storage', 'the storage lock holds until the restart')
+    H.eq(Maint.view().restart, true, 'and asks the owner to restart')
+    H.eq(Audits('storageSwitch'), 1, 'audited')
+    Maint.finish('storage')
+
+    -- a restart on the store left behind: the left_behind lock
+    Sys._boot()
+    H.eq((Maint.active()), 'left_behind', 'a left-behind store starts locked')
+    local health = Sys._storageHealth()
+    H.ok(health[#health].level == 'error', 'a Config health error says so')
+    ok, e = Act('server:admin:useStoreAgain', 1, { reason = 'other store is gone', confirm = 'USE' })
+    H.ok(ok == true and Maint.active() == nil and Sys.storageMeta().state == 'active', 'Use this store again')
+
+    local okC, key = Sys._consoleStorageMode(0, { 'reset' })
+    H.ok(okC and key == 'sysadmin.console.storagemode_reset' and kvp.cp_storage_mode == nil,
+        'console storagemode reset clears the in-game choice')
+    CP.Admin.storageStatus = realStatus
+end
+
+-- ============================================================================
+--                         8b. THE CONSOLE STORAGE COPY
+-- ============================================================================
+-- Z8: THE SAME GUARDS AS THE UI.
+
+do
+    -- '/CrimsonPoliceAdmin storage copy ... force' goes through Sys.storageCopy: the maintenance lock during the
+    -- copy, the target's money state kept, and the restart prompt when the target is the store in use
+    local mode = CP.Storage.mode()
+    local liveDir = mode == 'files' and 'database-to-files' or 'files-to-database'
+    local otherDir = mode == 'files' and 'files-to-database' or 'database-to-files'
+    local realCopy, realSnap, realReapply = CP.Admin.storageCopy, Sys.moneySnapshot, Sys.moneyReapply
+    local seen, snaps, reapplied, answer = {}, 0, 0, nil
+    CP.Admin.storageCopy = function(src, dir, force)
+        seen[#seen + 1] = { src = src, dir = dir, force = force, lock = (Maint.active()) }
+        return table.unpack(answer)
+    end
+    Sys.moneySnapshot = function() snaps = snaps + 1 return { runs = { { id = 1 } }, items = {} } end
+    Sys.moneyReapply = function() reapplied = reapplied + 1 return { runs = 1 } end
+    answer = { true, 'admin.cmd.storage_copied', { rows = 3 }, true }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
+    H.ok(seen[1] and seen[1].lock == 'storage' and seen[1].force == true, 'Z8: the console copy runs under the lock')
+    H.ok(snaps == 1 and reapplied == 1, 'Z8: a forced console copy keeps the money state (paid stays paid)')
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true,
+        'Z8: into the store in use: the lock holds and asks for a restart')
+    Maint.finish('storage')
+    CP.Admin.command(0, { 'storage', 'copy', otherDir })
+    H.ok(seen[2] and seen[2].lock == 'storage' and Maint.active() == nil, 'Z8: into the other store: the lock ends')
+    -- a copy into the store in use that failed after its writes: never emptied, the lock holds for a restart
+    answer = { false, 'admin.cmd.storage_copy_failed_live', {}, true }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true,
+        'Z8: a live copy that failed part way keeps the lock and asks for a restart')
+    Maint.finish('storage')
+    -- a refusal before any write ends the lock
+    answer = { false, 'admin.cmd.storage_target_has_rows', {}, false }
+    CP.Admin.command(0, { 'storage', 'copy', liveDir })
+    H.eq(Maint.active(), nil, 'Z8: a copy refused before its writes ends the lock')
+    -- another lock is held: refused, the copy never runs
+    Maint.begin('restore', { by = 'test' })
+    local n = #seen
+    CP.Admin.command(0, { 'storage', 'copy', liveDir })
+    H.eq(#seen, n, 'Z8: another maintenance lock refuses the console copy')
+    Maint.finish('restore')
+    -- Z9: a switch's (or a finished live copy's) restart lock is a 'storage' lock too: a copy is refused and the
+    -- lock, with its restart flag, stays
+    Maint.begin('storage', { by = 'test', restart = true })
+    answer = { true, 'admin.cmd.storage_copied', { rows = 3 }, true }
+    CP.Admin.command(0, { 'storage', 'copy', otherDir })
+    H.eq(#seen, n, 'Z9: a copy during a storage restart lock never runs')
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true, 'Z9: and the restart lock stays')
+    Maint.finish('storage')
+    -- Z8B: the Admin UI's refusal with values shows them, never the raw {placeholders}
+    answer = { false, 'admin.cmd.storage_runs_active', { count = 2 }, false }
+    local okU, errU = Act('server:admin:storageCopy', 1, { direction = otherDir, requestId = Rid(81) })
+    H.ok(okU == false and type(errU) == 'string' and errU:find('2', 1, true) and not errU:find('{', 1, true),
+        'Z8B: the storage copy refusal is filled from its values: ' .. tostring(errU))
+    CP.Admin.storageCopy, Sys.moneySnapshot, Sys.moneyReapply = realCopy, realSnap, realReapply
+end
+
+-- ============================================================================
+--                               9. AUDIT EXPORTS
+-- ============================================================================
+
+do
+    -- the tablet sends a reply id: the part comes as a latent actionResult (shared/net.lua)
+    H.clockMs = H.clockMs + 6000
+    local reply, sent = H.callbackLatent('crimson-police:admin:exportAuditPart', 1, { part = 1 }, 'r1')
+    H.ok(reply and reply.ok and reply.latent == 'r1' and reply.data == nil and #sent == 1 and sent[1].args[1] == 'r1',
+        'an export part comes as a latent reply')
+    local part = sent[1] and sent[1].args[3]
+    H.ok(part and part.parts >= 1 and part.csv:find('^id,time', 1) ~= nil, 'an export part with its header')
+    -- saves/exports ships with the resource; a missing one is refused (FXServer cannot create folders on Linux)
+    local dir = GetResourcePath() .. '/saves/exports'
+    H.execute(('rm -rf \'%s\''):format(dir))
+    local resM, eM = Sys.saveAudit({})
+    H.ok(resM == nil and eM == 'err.export_folder', 'a missing exports folder is refused, no crash: ' .. tostring(eM))
+    H.execute(('mkdir -p \'%s\''):format(dir)) -- the owner makes it
+    local ok, res = Act('server:admin:saveAuditExport', 1, { filters = {} })
+    H.ok(ok == true and res.path:match('^saves/exports/audit%-') ~= nil and res.rows >= 1,
+        'Save to server writes saves/exports/audit-<time>.csv')
+    local fh = io.open(GetResourcePath() .. '/' .. res.path, 'r')
+    local text = fh and fh:read('a') or ''
+    if fh then fh:close() end
+    H.ok(text:find('^id,time') ~= nil, 'the file holds the CSV')
+    -- Z8: a write that fails (FS.write answers nil, err without raising) is refused, never reported as saved
+    local fsT = CP.Storage.MemSQL.fs
+    local realWrite = fsT.write
+    fsT.write = function(path, ...)
+        if tostring(path):match('%.csv$') then return nil, 'disk full' end
+        return realWrite(path, ...)
+    end
+    local resF, eF = Sys.saveAudit({})
+    fsT.write = realWrite
+    H.ok(resF == nil and eF == 'err.export_write', 'Z8: a failed write is refused: ' .. tostring(eF))
+    -- Z9: an audit row written while the save reads its pages is not in it (no repeated row, no dropped oldest)
+    local before = tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_audit')[1].n)
+    local realQuery, wrote = MySQL.query.await, false
+    MySQL.query.await = function(sql, ...)
+        if not wrote and type(sql) == 'string' and sql:find('ORDER BY a.created_at DESC', 1, true) then
+            wrote = true
+            H.sql('INSERT INTO cp_audit (actor, role, action) VALUES (\'console\', \'console\', \'z9Late\')')
+        end
+        return realQuery(sql, ...)
+    end
+    local resL = Sys.saveAudit({})
+    MySQL.query.await = realQuery
+    H.ok(wrote, 'Z9: a row was written during the save')
+    H.eq(resL and resL.rows, before, 'Z9: the save holds the rows there when it began')
+    -- Z10: the parts of one export hold to the rows of its first part (maxId), so a row written between two part
+    -- requests shifts nothing
+    local p1 = Sys.auditPart({}, 1)
+    H.ok(p1 and tonumber(p1.maxId) and p1.maxId > 0, 'Z10: a part answers the maxId it holds to')
+    H.sql('INSERT INTO cp_audit (actor, role, action) VALUES (\'console\', \'console\', \'z10Late\')')
+    local p2 = Sys.auditPart({ maxId = p1.maxId }, 1)
+    H.ok(p2 and p2.total == p1.total and p2.maxId == p1.maxId and not p2.csv:find('z10Late', 1, true),
+        'Z10: the next part with that maxId leaves out the row written meanwhile')
+    local p3 = Sys.auditPart({}, 1)
+    H.eq(p3 and p3.total, p1.total + 1, 'Z10: a new export (no maxId) sees it')
+end
+
+-- Z13: the department checks see the whole save (a Setup Finish saves each department's fields as changes of one
+-- save), and a department whose job is no Qbox job can still be turned off.
+do
+    runsNow = {}
+    local on = {}
+    for key, d in pairs(Config.Departments) do
+        if type(d) == 'table' and d.enabled ~= false then on[#on + 1] = key end
+    end
+    table.sort(on)
+    H.ok(#on >= 2, 'Z13: two departments are on: ' .. table.concat(on, ','))
+    local all = {}
+    for _, key in ipairs(on) do all[#all + 1] = { path = ('Departments.%s.enabled'):format(key), value = false } end
+    local ok, e = S.checkMany(all)
+    H.ok(ok == false and e == 'err.dept_last', 'Z13: every department off in one save is refused: ' .. tostring(e))
+    JOBS.z13job = { label = 'Z13', grades = { [0] = { name = 'A' }, [3] = { name = 'B' }, [4] = { name = 'C' } } }
+    local a, b = on[1], on[2]
+    local ja, jb = U.deepcopy(Config.Departments[a].jobs), U.deepcopy(Config.Departments[b].jobs)
+    local function With(list, j)
+        local out = U.deepcopy(list)
+        out[#out + 1] = j
+        return out
+    end
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(a), value = With(ja, 'z13job') },
+        { path = ('Departments.%s.jobs'):format(b), value = With(jb, 'z13job') },
+    })
+    H.ok(ok == false and e == 'err.dept_job_taken',
+        'Z13: one job ticked in two departments of one save: ' .. tostring(e))
+    -- a job moved from a to b in one save
+    Config.Departments[a].jobs = With(ja, 'z13job')
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(a), value = ja },
+        { path = ('Departments.%s.jobs'):format(b), value = With(jb, 'z13job') },
+    })
+    H.ok(ok == true, 'Z13: a job moved between two departments in one save is allowed: ' .. tostring(e))
+    Config.Departments[a].jobs = ja
+    JOBS.z13job = nil
+    -- a department whose job Qbox does not know: off is allowed, on or a new job is not
+    local saved = JOBS[jb[1]]
+    JOBS[jb[1]] = nil
+    ok, e = S.checkMany({ { path = ('Departments.%s.enabled'):format(b), value = false } })
+    H.ok(ok == true, 'Z13: a department whose job is no Qbox job can be turned off: ' .. tostring(e))
+    ok, e = S.checkMany({ { path = ('Departments.%s.label'):format(b), value = 'Renamed' } })
+    H.ok(ok == true, 'Z13: ...and renamed: ' .. tostring(e))
+    ok, e = S.checkMany({
+        { path = ('Departments.%s.jobs'):format(b), value = jb },
+        { path = ('Departments.%s.supervisorGrade'):format(b), value = 1 },
+    })
+    H.ok(ok == false and e == 'err.dept_job_unknown',
+        'Z13: ...but a grade change still checks its job: ' .. tostring(e))
+    JOBS[jb[1]] = saved
+end
+
+return H

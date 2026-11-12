@@ -1,0 +1,53 @@
+/* The one notices card (shared/NoticesCard.tsx): Admin UI Recognition and Supervisor UI Department. */
+
+.cp-notices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cp-notices__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--cp-space-2);
+}
+
+.cp-notices__soft {
+    color: var(--cp-subtle);
+    font-size: var(--cp-fs-sm);
+}
+
+.cp-notices__actions > .cp-notices__soft {
+    margin-right: auto;
+}
+
+.cp-notices__wait {
+    color: var(--cp-warning);
+    font-size: var(--cp-fs-sm);
+}
+
+.cp-notices__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-notices__list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px var(--cp-space-3);
+    padding: var(--cp-space-2) 10px;
+    border-radius: var(--cp-radius-sm);
+    border: 1px solid var(--cp-border);
+}
+
+.cp-notices__list li > span:first-child {
+    flex: 1 1 200px;
+    overflow-wrap: anywhere;
+}

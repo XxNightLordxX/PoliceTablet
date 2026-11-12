@@ -1,0 +1,74 @@
+/* Supervisor UI · Department: today at a glance above the tabs (UI4), one tile per number; a click opens its tab.
+   Only --cp-* variables. */
+
+.sup-today {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--cp-space-2);
+    margin-bottom: var(--cp-space-3);
+}
+
+.sup-today__tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-1);
+    padding: 10px var(--cp-space-3);
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sup-today__tile:hover:not(:disabled) {
+    border-color: var(--cp-primary);
+}
+
+.sup-today__tile:disabled {
+    cursor: default;
+}
+
+.sup-today__tile.is-warn {
+    border-color: var(--cp-warning);
+}
+
+.sup-today__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-subtle);
+    font-size: 12px;
+}
+
+.sup-today__value {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+/* the officer's side panel: the action buttons, then the open action's form */
+.sup-panel__card {
+    margin-bottom: var(--cp-space-3);
+}
+
+.sup-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cp-space-2);
+}
+
+.sup-panel__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+    margin-top: var(--cp-space-3);
+    padding-top: var(--cp-space-3);
+    border-top: 1px solid var(--cp-border);
+}
+
+.sup-panel__buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--cp-space-2);
+}

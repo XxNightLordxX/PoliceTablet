@@ -1,0 +1,359 @@
+-- Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+
+-- Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
+-- for anyone on the server (server-wide, owner decision), the no-repeat rule off when ticked; the abandon type cooldown
+-- stays; the setter and a unit with him in it keep their cooldowns; once a day for supervisors; an admin ends it;
+-- a restart keeps the window; when it ends every cooldown is read against its real end time again.
+
+local H = dofile('tests/harness.lua')
+
+H.boot({ side = 'server', stopped = { ox_inventory = true } })
+
+-- ============================================================================
+--                                  THE SERVER
+-- ============================================================================
+
+local people = {
+    [1] = {
+        cid = 'HHA00001',
+        license = 'license:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+        job = 'sast',
+        grade = 4,
+        ace = true,
+    },
+    [2] = { cid = 'HHS00002', license = 'license:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2', job = 'sast', grade = 4 },
+    [3] = { cid = 'HHO00003', license = 'license:cccccccccccccccccccccccccccccccccccccc3', job = 'sast', grade = 0 },
+    [4] = { cid = 'HHF00004', license = 'license:dddddddddddddddddddddddddddddddddddddd4', job = 'fib', grade = 0 },
+    [5] = { cid = 'HHF00005', license = 'license:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5', job = 'fib', grade = 4 },
+}
+for src, p in pairs(people) do
+    H.players[src] = { ace = p.ace and { ['crimsonpolice.admin'] = true } or {}, coords = vec3(0.0, 0.0, 0.0) }
+end
+local function Info(src)
+    local p = people[src]
+    if not p then return nil end
+    return {
+        src = src,
+        citizenid = p.cid,
+        license = p.license,
+        name = 'Player ' .. src,
+        job = { name = p.job, onduty = true, gradeLevel = p.grade, gradeName = 'Rank' },
+    }
+end
+CP.Qbx = {
+    getInfo = Info,
+    getByCitizenId = function(cid)
+        for src, p in pairs(people) do if p.cid == cid then return src end end
+        return nil
+    end,
+    getOnlinePlayers = function() return { 1, 2, 3, 4, 5 } end,
+    licenseOf = function(cid)
+        for _, p in pairs(people) do if p.cid == cid then return p.license end end
+        return nil
+    end,
+    citizenidsOfLicense = function() return {} end,
+    onDutyChange = function() end,
+    onGroupUpdate = function() end,
+    onJobChange = function() end,
+    onPlayerLoaded = function() end,
+    onPlayerUnload = function() end,
+}
+local mission = { id = 'hh_mission', type = 'tactical', cooldown = 1200 }
+CP.Missions = {
+    reload = function() end,
+    get = function(id) if id == mission.id then return mission end end,
+    all = function() return { [mission.id] = mission } end,
+}
+CP.Alerts = {
+    foreignClearedAt = {},
+    foreignFlag = function() return false end,
+    inArena = function() return false end,
+}
+
+for _, t in ipairs({ 'cp_audit', 'cp_settings', 'cp_officers', 'cp_dept_controls', 'cp_mission_runs' }) do
+    H.sql('DELETE FROM ' .. t)
+end
+H.time = tonumber(H.sql('SELECT UNIX_TIMESTAMP(NOW()) AS t')[1].t)   -- align os.time() with NOW()
+
+for _, m in ipairs({
+    'modules/access/permissions.lua',
+    'modules/access/access.lua',
+    'modules/admin/admin.lua',
+    'modules/admin/adminkit.lua',
+    'modules/supervisor/deptcontrols.lua',
+    'modules/admin/settings.lua',
+    'modules/access/tablet.lua',
+    'modules/supervisor/happyhour.lua',
+    'modules/runs/runs.lua',
+}) do
+    H.load(m)
+end
+H.step(0)
+
+local DC, Runs, HH = CP.DeptControls, CP.Runs, CP.HappyHour
+local CID = {}
+for src, p in pairs(people) do CID[src] = p.cid end
+-- the no-repeat control lives in modules/runs/draw: the same registration, without the draw
+if not DC.def('noRepeat') then
+    DC.register('noRepeat', {
+        kind = 'bool',
+        serverWide = true,
+        master = false,
+        configValue = function() return true end,
+        relaxes = function(v) return v == false end,
+    })
+end
+
+-- a quit of the tactical mission that ended now: a 1200 s mission cooldown and the abandon type cooldown
+local function Quit(cid)
+    MySQL.insert.await([[INSERT INTO cp_mission_runs (run_uuid, mission_type, mission_id, citizenid, department, state,
+        end_reason, points_base) VALUES (?, 'tactical', 'hh_mission', ?, 'sast', 'abandoned', 'quit', 200)]],
+        { 'hh-' .. cid, cid })
+end
+local ended = H.time
+for src = 1, 5 do Quit(CID[src]) end
+local ABANDON = Config.Limits.abandonCooldown or 300
+
+local function Left(src, part, key, reader)
+    local u = Runs.cooldowns(CID[src], reader and { officer = reader } or nil)[part][key]
+    return u and u - ended or nil
+end
+local function Officer(src) return { citizenid = CID[src], department = people[src].job } end
+local function Forget() for src = 1, 5 do Runs._forgetOfficer(CID[src]) end end
+-- the real actions (the screens' path): server:sup:setMissionControl, server:admin:resetMissionControl
+local reqSeq = 0
+local function Act(name, src, payload)
+    H.clockMs = H.clockMs + 1100
+    reqSeq = reqSeq + 1
+    local reqId = 'h' .. reqSeq
+    payload.requestId = ('%08x-0000-4000-8000-%012x'):format(reqSeq, 92)
+    H.fire('crimson-police:' .. name, src, payload, reqId)
+    for i = #H.events, 1, -1 do
+        local e = H.events[i]
+        if e.name == 'crimson-police:client:actionResult' and e.args[1] == reqId then return e.args[2], e.args[3] end
+    end
+    return nil, 'no reply'
+end
+local function Start(src, value, reason)
+    local admin = people[src].ace
+    return Act(admin and 'server:admin:setMissionControl' or 'server:sup:setMissionControl', src,
+        { key = 'happyHour', value = value, reason = reason })
+end
+local changed = {}
+CP.Hooks.on('deptControls:changed', function(e) changed[#changed + 1] = e end)
+
+-- ============================================================================
+--                       1. SHIPPED: ON, NOTHING RUNNING
+-- ============================================================================
+
+do
+    local b = Config.MissionControls.controls.happyHour
+    H.ok(b and b.on == true and b.min == 5 and b.max == 30, 'happyHour ships on, 5-30 minutes')
+    H.ok(b and b.scaleMin == 0 and b.scaleMax == 0 and b.perDay == 1, 'scale 0 (no cooldowns), once a day')
+    H.ok(DC.def('happyHour').serverWide and not DC.def('happyHour').master, 'server-wide, outside the master switch')
+    H.eq(HH.state(nil), nil, 'no happy hour')
+    H.eq(Left(3, 'missions', 'hh_mission'), 1200, 'the config cooldown')
+end
+
+-- ============================================================================
+--                    2. A SAST SUPERVISOR STARTS 15 MINUTES
+-- ============================================================================
+
+local started = ended
+do
+    local ok, err = Start(2, { minutes = 40, noRepeat = true }, 'quiet night')
+    H.ok(ok == false and err == 'err.control_value', 'above the admin max is refused')
+    ok, err = Start(2, { minutes = 15, bonus = 1 }, 'quiet night')
+    H.ok(ok == false and err == 'err.control_value', 'an unknown field is refused')
+    ok = Start(3, { minutes = 15 }, 'quiet night')
+    H.ok(ok == false, 'an officer cannot start one')
+    ok, err = Start(2, { minutes = 15, noRepeat = true }, 'quiet night')
+    H.ok(ok == true, 'a supervisor starts 15 minutes: ' .. tostring(err))
+    local row = H.sql([[SELECT department, set_by, UNIX_TIMESTAMP(expires_at) AS e FROM cp_dept_controls
+        WHERE control_key = 'happyHour']])[1]
+    H.ok(row and row.department == '*' and row.set_by == CID[2], 'one row for the whole server, with who set it')
+    H.eq(tonumber(row and row.e), started + 900, 'it ends 15 minutes later')
+
+    H.eq(Left(3, 'missions', 'hh_mission'), nil, 'a SAST officer\'s cooldown reads 0')
+    H.eq(Runs.onCooldown(CID[3], 'patrol', 'hh_mission'), false, 'he may take the mission again')
+    H.eq(Left(4, 'missions', 'hh_mission'), nil, 'an FIB officer\'s too (server-wide, owner decision)')
+    H.eq(Left(2, 'missions', 'hh_mission'), 1200, 'the setter is not freed')
+    H.eq(Left(4, 'missions', 'hh_mission', { Officer(4), Officer(2) }), 1200, 'nor a unit he is in')
+    H.eq(Left(3, 'types', 'tactical'), ABANDON, 'the abandon type cooldown stays')
+    H.eq(DC.get(nil, 'noRepeat', Officer(3)), false, 'ticked: the no-repeat rule is off')
+    H.eq(DC.get(nil, 'noRepeat', Officer(2)), true, 'but not for the setter')
+
+    local s = HH.state(Officer(3))
+    H.ok(s and s.endsAt == started + 900 and s.minutes == 15 and s.noRepeat == true, 'the state the screens show')
+    H.ok(s and s.by == 'Rank Player 2' and s.self == false, 'set by the sergeant, applies to the officer')
+    H.eq(HH.state(Officer(2)).self, true, 'the setter is told it does not apply to him')
+    H.ok(#changed > 0 and changed[#changed].key == 'happyHour', 'the readers hear the start')
+
+    DC.clearCache()
+    Forget()
+    H.eq(Left(3, 'missions', 'hh_mission'), nil, 'a restart keeps the window')
+
+    ok, err = Start(1, { minutes = 10 }, 'again')
+    H.ok(ok == false and err == 'err.happy_hour_running', 'one at a time, admins too')
+    local view = DC.view(2)
+    local c
+    for _, x in ipairs(view.serverWide) do if x.key == 'happyHour' then c = x end end
+    H.ok(c and c.usedToday == 1 and c.perDay == 1 and c.timeLeft == 900, 'the screen: used today, time left')
+    -- Z8B: today's use on Department -> Controls (DC.mine) counts it too, not 0
+    local mine = DC.mine(2)
+    local m
+    for _, x in ipairs(mine and mine.controls or {}) do if x.key == 'happyHour' then m = x end end
+    H.ok(m and m.perDay == 1 and m.usedToday == 1, 'Z8B: Controls shows the happy hour used today')
+end
+
+-- ============================================================================
+--                   3. IT ENDS; ONCE A DAY; AN ADMIN ENDS IT
+-- ============================================================================
+
+do
+    HH._tick()
+    local before = #changed
+    H.time = started + 901
+    HH._tick()
+    H.ok(#changed == before + 1 and changed[#changed].expired == true, 'the end is heard once')
+    HH._tick()
+    H.eq(#changed, before + 1, 'and only once')
+    H.eq(HH.state(nil), nil, 'no happy hour now')
+    H.eq(Left(3, 'missions', 'hh_mission'), 1200, 'after it: the original end + cooldown')
+    H.ok(Runs.onCooldown(CID[3], 'patrol', 'hh_mission'), 'on cooldown again')
+    H.eq(DC.get(nil, 'noRepeat', Officer(3)), true, 'the no-repeat rule is back')
+
+    local ok, err = Start(5, { minutes = 10 }, 'second one')
+    H.ok(ok == false and err == 'err.happy_hour_used', 'a second one the same day is refused: ' .. tostring(err))
+    ok, err = Start(1, { minutes = 10 }, 'event night')
+    H.ok(ok == true, 'an admin may start another: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), nil, 'running again')
+    ok, err = Act('server:admin:resetMissionControl', 1, { department = '*', key = 'happyHour', reason = 'enough' })
+    H.ok(ok == true, 'an admin ends it now: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), 1200, 'ended: cooldowns count again')
+    H.eq(HH.state(nil), nil, 'no happy hour')
+
+    Config.MissionControls.controls.happyHour.on = false
+    ok, err = Start(1, { minutes = 10 }, 'x')
+    H.ok(ok == false and err == 'err.control_off', 'the admin switch off: none can start')
+    Config.MissionControls.controls.happyHour.on = true
+    H.time = ended
+end
+
+-- ============================================================================
+--               4. THE END CHECK SLEEPS WHILE NO HAPPY HOUR RUNS
+-- ============================================================================
+-- Step LP3.
+-- It woke every 30 s all day; now only while one may be on, at the same 30 s pace, and it still hears the end.
+
+do
+    local wakes = 0
+    local realWait = _G.Wait
+    _G.Wait = function(ms)
+        local info = debug.getinfo(2, 'S')
+        if info.short_src:find('supervisor/happyhour.lua', 1, true) then wakes = wakes + 1 end
+        return realWait(ms)
+    end
+    H.advance(2 * 60 * 1000, 5000)
+    wakes = 0
+    H.advance(10 * 60 * 1000, 5000)
+    H.eq(wakes, 0, 'no happy hour: the end check does not wake (was 20 times in 10 minutes)')
+    H.eq(HH._ticking(), false, 'no loop runs')
+    local at = H.time
+    local ok, err = Start(1, { minutes = 10 }, 'lp3')
+    H.ok(ok == true, 'an admin starts one: ' .. tostring(err))
+    H.eq(HH._ticking(), true, 'starting one starts the check')
+    H.advance(2 * 60 * 1000, 5000)
+    H.ok(wakes >= 3 and wakes <= 5, ('every 30 s while it runs (%d wakes in 2 minutes)'):format(wakes))
+    local before = #changed
+    H.time = at + 601
+    H.advance(31000, 1000)
+    H.ok(#changed == before + 1 and changed[#changed].expired == true, 'the loop hears its end')
+    H.eq(HH._ticking(), false, 'and stops')
+    wakes = 0
+    H.advance(10 * 60 * 1000, 5000)
+    H.eq(wakes, 0, 'over: no wake again')
+    CP.Hooks.fire('settings:changed', { 'MissionControls.controls.happyHour.on' })
+    H.eq(HH._ticking(), true, 'a Settings change looks once')
+    H.advance(31000, 1000)
+    H.eq(HH._ticking(), false, 'nothing on: it stops after that pass')
+    _G.Wait = realWait
+    H.time = ended
+end
+
+-- ============================================================================
+--                                   5. FM10
+-- ============================================================================
+-- A TIMED COOLDOWN CHANGE (LENGTH, SCALE, PER DAY).
+-- Happy hour is the timed change of the cooldown controls: the admin's scaleMin to scaleMax is the scale a starter
+-- picks (shipped 0 to 0: no cooldowns, as before) and perDay lives in the same entry.
+
+do
+    local b = Config.MissionControls.controls.happyHour
+    local function End()
+        return Act('server:admin:resetMissionControl', 1, { department = '*', key = 'happyHour', reason = 'fm10' })
+    end
+    End()   -- section 4's hour reads live again once the clock is back at the start
+    local ok, err = Start(1, { minutes = 10, scale = 0.5 }, 'half')
+    H.ok(ok == false and err == 'err.control_value', 'shipped 0 to 0: a half scale is refused')
+
+    b.scaleMin, b.scaleMax = 0.5, 2
+    ok, err = Start(1, { minutes = 10 }, 'lowest')
+    H.ok(ok == true, 'no scale picked: the lowest the admin allows: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), 600, 'x 0.5: half the mission cooldown for everyone')
+    H.eq(HH.state(nil).scale, 0.5, 'the screens are told the scale')
+    H.eq(Left(1, 'missions', 'hh_mission'), 1200, 'it lowers cooldowns: the one who started it keeps his')
+    local c
+    for _, x in ipairs(DC.view(2).serverWide) do if x.key == 'happyHour' then c = x end end
+    H.ok(c and c.scaleMin == 0.5 and c.scaleMax == 2, 'the supervisor row is given the scales it may pick')
+    H.ok(c and type(c.numbers) == 'table' and c.numbers[1].name == 'scaleMin' and c.numbers[3].name == 'perDay',
+        'the admin card is given the number fields of the entry')
+    End()
+
+    ok, err = Start(1, { minutes = 10, scale = 1.5 }, 'busy night')
+    H.ok(ok == true, 'a scale above 1 slows cooldowns for a while: ' .. tostring(err))
+    H.eq(Left(3, 'missions', 'hh_mission'), 1800, 'x 1.5 for the officers')
+    H.eq(Left(1, 'missions', 'hh_mission'), 1800, 'and the starter too (it relaxes nothing)')
+    H.eq(HH.state(Officer(1)).self, false, 'so the starter is not told it skips him')
+    End()
+    ok, err = Start(1, { minutes = 10, scale = 2.5 }, 'x')
+    H.ok(ok == false and err == 'err.control_value', 'above scaleMax is refused')
+
+    b.perDay = 0
+    H.time = H.time + Config.MissionControls.changeWait + 1   -- past the wait between two changes
+    ok, err = Start(5, { minutes = 10 }, 'none today')
+    H.ok(ok == false and err == 'err.happy_hour_used',
+        'perDay 0 in the entry: supervisors start none: ' .. tostring(err))
+    b.scaleMin, b.scaleMax, b.perDay = 0, 0, 1
+
+    H.eq(DC.checkConfig({ happyHour = { on = true, scaleMin = 3 } }), 'err.control_config', 'a scale above 2')
+    H.eq(DC.checkConfig({ happyHour = { on = true, perDay = 1.5 } }), 'err.control_config', 'a part start a day')
+    H.eq(DC.checkConfig({ happyHour = { on = true, scaleMin = 0.25, scaleMax = 1, perDay = 3 } }), nil,
+        'the entry takes its number fields')
+    H.eq(DC.checkConfig({ cooldownScale = { on = true, perDay = 1 } }), 'err.control_config',
+        'another control does not take them')
+    H.time = ended
+end
+
+H.sql('DELETE FROM cp_dept_controls')
+H.sql('DELETE FROM cp_mission_runs')
+H.sql('DELETE FROM cp_audit')
+
+-- a failed start (CP.Migrations.started() false): the 15 s loop ends quietly instead of logging err.not_started
+do
+    local saved, realErr, lines = CP.Migrations, CP.err, {}
+    CP.Migrations = {
+        started = function() return false end,
+        ready = function() error('err.not_started', 0) end,
+        failed = function() return 'a migration failed' end,
+    }
+    CP.err = function(tag, msg, ...) lines[#lines + 1] = tostring(tag) .. ': ' .. tostring(msg):format(...) end
+    H.killThreads()                                     -- the loop of the start that worked
+    DC.clearCache()
+    H.load('modules/supervisor/happyhour.lua')
+    H.advance(5 * 60 * 1000, 5000)
+    CP.err, CP.Migrations = realErr, saved
+    H.eq(table.concat(lines, ' | '), '', 'no check failed line after a failed start')
+end
+
+return H

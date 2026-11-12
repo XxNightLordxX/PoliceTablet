@@ -1,0 +1,637 @@
+// Shapes of the oversight slice's callbacks (modules/admin, modules/review/disputes). The server side is documented in the
+// header comments of those modules and in docs/dev/ARCHITECTURE.md §5.25.
+
+import type { LiveRun, Logo, Theme } from '../shared/types';
+import type { DebriefPerson, DecisionEntry } from './run_ui';
+
+// ============================================================================
+//                                getMissionList
+// ============================================================================
+
+export interface MissionRunner {
+    runId: string;
+    src: number;
+    name: string;
+    callsign: string | null;
+    departmentShort: string;
+    test: boolean;
+}
+export interface MissionListEntry {
+    id: string;
+    label: string;
+    type: string;
+    typeLabel: string;
+    source: 'builtin' | 'custom';
+    builtin: boolean;
+    version: number | null;
+    difficulty: number;
+    minOfficers: number;
+    maxOfficers: number;
+    basePayout: number;
+    payoutSource: 'admin' | 'type' | 'event';
+    cooldown: number;
+    // seconds as it applies now: cooldown x the supervisors' scale for the type (Mission controls)
+    cooldownNow?: number;
+    timeLimit: number;
+    locations: number;
+    enabled: boolean;
+    isBoss: boolean;
+    departments: string[];
+    runningNow: MissionRunner[];
+    crossDeptEligible: boolean;
+}
+export interface MissionListData {
+    missions: MissionListEntry[];
+    canLaunch: boolean;
+    crossDeptEnabled: boolean;
+    operation: null | { id: number | null; missionId: string | null; missionLabel: string; status: string | null };
+}
+
+// ============================================================================
+//                               sup:getLiveRuns
+// ============================================================================
+
+export type LiveParticipant = LiveRun['participants'][number] & { arrived?: boolean; department?: string | null };
+export interface LiveRunEx extends Omit<LiveRun, 'participants'> {
+    participants: LiveParticipant[];
+    missionId: string;
+    acceptedAt: number | null;
+    startedAt: number | null;
+    isBoss: boolean;
+    departments: string[];
+    // seconds admins and supervisors added so far; own = the viewer is or was on it (no + minutes)
+    timeAdded?: number;
+    own?: boolean;
+}
+// "+ minutes" for this supervisor (Config.MissionControls.controls.addRunTime): minutes per click, seconds
+// per run in all, additions a day and today's
+export interface SupAddTime {
+    min: number;
+    max: number;
+    maxSeconds: number;
+    perDay: number;
+    usedToday: number;
+}
+export interface LiveRunsData {
+    runs: LiveRunEx[];
+    serverTime: number;
+    canRecall: boolean;
+    addTime?: SupAddTime | null;
+}
+
+// ============================================================================
+//                            REVIEW QUEUE / FLAGGED
+// ============================================================================
+
+export interface FlaggedRow {
+    rowId: number;
+    runUuid: string;
+    citizenid: string;
+    name: string;
+    callsign: string | null;
+    department: string;
+    departmentShort: string;
+    missionId: string;
+    missionLabel: string;
+    missionType: string;
+    missionTypeLabel: string;
+    location: string | null;
+    state: 'completed' | 'failed' | 'abandoned';
+    endReason: string;
+    tier: string;
+    participants: number;
+    departments: number;
+    points: number;
+    cash: number;
+    cashStatus: string;
+    flagReason: string;
+    flagDetail: string | null;
+    otherReasons: string[];
+    // Staff notes (CP.AntiCheat.note, audit runNoted) about this officer or the whole case: they hold no points.
+    notes: FlagNote[];
+    durationS: number;
+    createdAt: number;
+    // the first Void waiting for a second supervisor of the department (its reviewRules Mission control)
+    voidPending?: { name?: string; at?: number } | null;
+}
+export interface FlagNote {
+    reason: string;
+    detail: string | null;
+    note: true;
+}
+export type DisputeKind = 'flagged' | 'voided' | 'failed';
+export interface DisputeView {
+    id: number;
+    rowId: number;
+    runUuid: string;
+    citizenid: string;
+    name: string;
+    callsign: string | null;
+    department: string;
+    departmentShort: string;
+    missionId: string;
+    missionLabel: string;
+    missionType: string;
+    missionTypeLabel: string;
+    kind: DisputeKind;
+    state: string;
+    endReason: string;
+    tier: string;
+    participants: number;
+    points: number;
+    cash: number;
+    cashStatus: string;
+    flagged: boolean;
+    voided: boolean;
+    flagReason: string | null;
+    reason: string;
+    goesTo: 'supervisor' | 'admin';
+    status: 'open' | 'approved' | 'rejected';
+    handledBy: string | null;
+    createdAt: number;
+    handledAt: number | null;
+    runAt: number;
+    canHandle: boolean;
+    // The disputed row's debrief (the decision ledger with each fact's time, and the people), when it has one.
+    decisions?: DecisionEntry[] | null;
+    people?: DebriefPerson[] | null;
+}
+// One Review queue item (review:getQueue): a flagged row (id = its row id) or an open dispute (id = the dispute id).
+export type ReviewItem = (FlaggedRow & { type: 'flag'; id: number }) | (DisputeView & { type: 'dispute' });
+export type ReviewItemType = ReviewItem['type'];
+// The admin's queue also lists the correction batches of the last Config.AdminUi.reviewBatchDays days that can still
+// be undone (CP.Corrections.batches): id = the batch id, undo = what its Undo does.
+export interface ReviewBatchItem {
+    type: 'batch';
+    id: string;
+    kind: string;
+    state: string;
+    filter: Record<string, unknown>;
+    done: number;
+    total: number;
+    actor: string;
+    reason: string | null;
+    createdAt: number;
+    undo: 'restoreBatch' | 'unretire' | 'undoRecordMove' | 'undoReopen';
+}
+// review:getQueue { all? }: the supervisor's department, or (all, Admin UI) every department; newest first.
+// canUndo: Undo of a void the admin made here (restoreRun, Config.AdminUi.reviewUndo); canUndoBatch: a batch's Undo.
+export interface ReviewQueueData {
+    items: (ReviewItem | ReviewBatchItem)[];
+    canReview: boolean;
+    canHandle: boolean;
+    canUndo?: boolean;
+    canUndoBatch?: boolean;
+    all?: boolean;
+}
+
+// review:getRunHistory { runUuid } (modules/review/history.lua) and admin:getRun's history: one run's timeline,
+// oldest first. kind: row (a row written), flag, note, decision (a staff decision on a row; action = its audit
+// action), dispute (opened), batch (a correction batch that voided a row).
+export interface RunHistoryEvent {
+    at: number;
+    kind: 'row' | 'flag' | 'note' | 'decision' | 'dispute' | 'batch';
+    action: string;
+    actor?: string | null;
+    role?: string | null;
+    citizenid?: string | null;
+    rowId?: number | null;
+    old?: string | null;
+    new?: string | null;
+    reason?: string | null;
+    detail?: string | null;
+    batch?: string | null;
+}
+export interface RunHistoryData {
+    runUuid: string;
+    events: RunHistoryEvent[];
+}
+
+// ============================================================================
+//                   admin:searchOfficers / admin:getOfficer
+// ============================================================================
+
+export interface OfficerSearchRow {
+    citizenid: string;
+    name: string;
+    callsign: string | null;
+    rank: string | null;
+    department: string | null;
+    departmentShort: string;
+    xp: number;
+    suspendedUntil: number | null;
+    online: boolean;
+    // full admin control: retired, kept off the boards, false = an online character with no row yet
+    retired?: boolean;
+    excluded?: boolean;
+    known?: boolean;
+}
+// admin:searchOfficers filters; every one is optional
+export interface OfficerSearchFilters {
+    department?: string;
+    online?: boolean;
+    suspended?: boolean;
+    retired?: boolean;
+    excluded?: boolean;
+    review?: boolean;
+    dispute?: boolean;
+    flagged?: boolean;
+}
+export interface OfficerSearchData {
+    officers: OfficerSearchRow[];
+    query: string;
+    total?: number;
+    page?: number;
+    pages?: number;
+}
+export interface OfficerRun {
+    id: number;
+    runUuid: string;
+    missionId: string;
+    missionLabel: string;
+    missionType: string;
+    missionTypeLabel: string;
+    state: string;
+    endReason: string;
+    tier: string;
+    participants: number;
+    points: number;
+    cashPaid: number;
+    cash: number;
+    cashStatus: string;
+    flagged: boolean;
+    voided: boolean;
+    flagReason: string | null;
+    createdAt: number;
+    // the Renewed-Banking transaction id of a payment (search it in the bank history)
+    txnId?: string | null;
+}
+export interface OfficerSuspension {
+    id: number;
+    action: 'suspend' | 'unsuspend' | 'autoSuspend';
+    actor: string;
+    actorName: string | null;
+    role: 'supervisor' | 'admin' | 'console';
+    days: number | null;
+    reason: string | null;
+    createdAt: number;
+}
+export interface OfficerDetail {
+    citizenid: string;
+    name: string;
+    callsign: string | null;
+    rank: string | null;
+    department: string | null;
+    departmentShort: string;
+    departmentLabel: string | null;
+    xp: number;
+    level: null | { label: string; badge: string; xp: number; next: number | null };
+    streakDays: number;
+    // how each badge came: earned from the rows, granted or blocked by an admin (cp_badge_overrides)
+    badges: {
+        id: string;
+        label: string;
+        earnedAt?: string | number;
+        source?: 'earned' | 'granted' | 'blocked';
+        by?: string | null;
+        reason?: string | null;
+    }[];
+    cash: { total: number; week: number };
+    stats: { runs: number; completed: number; failed: number; abandoned: number; flagged: number; voided: number };
+    suspension: { suspended: boolean; untilTs: number | null; reason?: string | null };
+    // full admin control: the live streak, the first-run bonus (null when offline), the SC-Dispatch suspension
+    // (view only), automatic-suspension strikes, retirement, the boards exclusion
+    streak?: { days: number; multiplier: number; graceLeft: boolean; stored: number };
+    firstRun?: boolean | null;
+    dispatch?: { suspended: boolean; available: boolean; untilTs?: number | null };
+    strikes?: number;
+    retired?: { at: number; batch: string | null } | null;
+    boardExcluded?: boolean;
+    licenseKnown?: boolean;
+    // The last suspend / unsuspend / automatic suspension entries (cp_audit), newest first.
+    suspensions: OfficerSuspension[];
+    runs: OfficerRun[];
+    disputes: DisputeView[];
+    online: boolean;
+    own: boolean;
+    known: boolean;
+    maxAward: number;
+}
+
+// ============================================================================
+//                             admin:getDepartments
+// ============================================================================
+
+export interface DepartmentView {
+    key: string;
+    label: string;
+    short: string;
+    jobs: string[];
+    supervisorGrade: number;
+    societyAccount: string;
+    theme: Theme;
+    logo: Logo | null;
+    members: number;
+    suspended: number;
+    onDuty: number;
+    societyBalance: number | null;
+}
+export interface DepartmentsData {
+    departments: DepartmentView[];
+    cashSource: 'server' | 'society';
+    showSociety: boolean;
+}
+
+// ============================================================================
+//                             admin:getPermissions
+// ============================================================================
+
+// Config.Permissions.builderTeleport for one department: from a grade up, or only the listed grades (absent = off).
+export type TeleportGrant = { minGrade: number; grades?: undefined } | { grades: number[]; minGrade?: undefined };
+export interface TeleportDepartment {
+    key: string;
+    label: string;
+    short: string;
+    supervisorGrade?: number;
+    // the Qbox grades of the jobs the department lists (0-10 when Qbox names none), lowest first
+    grades: { level: number; name?: string }[];
+    grant?: TeleportGrant;
+}
+export interface PermissionsData {
+    supervisor: { action: string; enabled: boolean }[];
+    adminOnly: string[];
+    always: string[];
+    // Admin UI -> Permissions -> Builder teleport (enabled = Config.Builder.teleport and the builder are on)
+    teleport?: { enabled: boolean; departments: TeleportDepartment[] };
+    // Config.MissionControls.grants by department key (absent = every supervisor of that department)
+    missionGrants?: Record<string, TeleportGrant>;
+    // Admin UI -> Permissions -> Extra grants (Config.Permissions.grants)
+    extra?: ExtraGrantsData;
+}
+
+// One power's extra grant: departments and Qbox gangs from a grade (or these grades), and single citizenids.
+export interface PowerGrant {
+    departments?: Record<string, TeleportGrant>;
+    gangs?: Record<string, TeleportGrant>;
+    citizenids?: string[];
+}
+export interface ExtraGrantsData {
+    // every grantable power; on = its supervisor switch is on (an extra power is always on)
+    powers: { key: string; on: boolean }[];
+    // Config.Permissions.grants as saved (absent = none)
+    grants?: Record<string, PowerGrant>;
+    // Qbox's gangs with their grades, for the gang pickers
+    gangs: { key: string; label: string; grades: { level: number; name?: string }[] }[];
+}
+
+// ============================================================================
+//              admin:getMissionControls / sup:getMissionControls
+// ============================================================================
+
+// One control's bounds: on = the admin switch, min / max = the only values a supervisor may pick.
+// one number field of a control's bounds (DC.register numbers): its admin range
+export interface MissionControlNumber {
+    name: string;
+    range: [number, number];
+    integer?: boolean;
+}
+export interface MissionControlBounds {
+    on?: boolean;
+    min?: number;
+    max?: number;
+    // a registered flag (readyCheck's canTurnOff); a choice control's list (difficulty's presets)
+    [flag: string]: boolean | number | string[] | undefined;
+}
+// the types control: the mission types switched off (false) and, under missions, single missions off
+export interface TypeSwitches {
+    [typeKey: string]: boolean | Record<string, boolean> | undefined;
+    missions?: Record<string, boolean>;
+}
+// one mission the types control may switch off on its own (its viewExtra)
+export interface TypeSwitchMission {
+    id: string;
+    label: string;
+    type: string;
+}
+// a string: a choice control's pick (difficulty; featuredType: a mission type key)
+// callLane: a department's own lane of mission calls; areas empty = every area.
+export interface CallLaneValue {
+    spawnEvery: [number, number];
+    maxOpen: number;
+    areas: string[];
+    types: Record<string, number>;
+}
+// crossDept: join = false keeps the department out of Cross-Department Missions; places caps how many of
+// its officers take part in one (0 = no cap)
+export interface CrossDeptValue {
+    join: boolean;
+    places: number;
+}
+// boards: whether other departments see names (else callsigns only) and the Rank by tabs shown
+export interface BoardsValue {
+    showToOthers: boolean;
+    metrics: string[];
+}
+// reviewRules: a Void needs a second supervisor; flags of these kinds go to admins only
+export interface ReviewRulesValue {
+    secondVoid: boolean;
+    adminOnlyKinds: string[];
+}
+// twists: the twists the department's leaders are offered at the accept step, and the pre-ticked ones
+export interface TwistsValue {
+    offered: string[];
+    ticked: string[];
+}
+// goals: the goal ids of each kind a department's officers draw from (none = every goal); the server adds
+// the week key the lists count from and the lists that count until then
+export interface GoalsValue {
+    daily: string[];
+    weekly: string[];
+    from?: string;
+    prev?: { daily: string[]; weekly: string[] };
+}
+export type MissionControlValue =
+    | number
+    | boolean
+    | string
+    | Record<string, number>
+    | TypeSwitches
+    | CallLaneValue
+    | CrossDeptValue
+    | BoardsValue
+    | ReviewRulesValue
+    | TwistsValue
+    | GoalsValue
+    | null;
+// A registered control as one department (or the whole server) has it now (CP.DeptControls ControlView).
+export interface MissionControlState {
+    key: string;
+    // 'action': a supervisor action with no value (clearCooldown, addRunTime): only its switch and bounds
+    // 'choice': one name from the list the admin's bounds give (difficulty: a Config.NpcDifficulty preset)
+    kind: 'number' | 'bool' | 'map' | 'action' | 'choice';
+    scope: 'between' | 'run';
+    serverWide: boolean;
+    // false = outside the master switch (Config.Permissions.supervisor.missionControls)
+    master: boolean;
+    on: boolean;
+    // on, and the master switch when the control sits under it
+    active: boolean;
+    min?: number;
+    max?: number;
+    value: MissionControlValue;
+    configValue: MissionControlValue;
+    saved?: MissionControlValue;
+    setBy?: string;
+    setRole?: string;
+    at?: number;
+    expiresAt?: number;
+    timeLeft?: number;
+    waitLeft: number;
+    integer?: boolean;
+    // false: no min and max (only the admin switch)
+    bounded?: boolean;
+    // the min and max an admin may set
+    range?: [number, number];
+    // Config.Departments.<key>.missionControls[key] (never for a server-wide control)
+    own?: MissionControlBounds;
+    // happyHour: its perDay (Config.MissionControls.controls.happyHour) and how many started today; clearCooldown
+    // and addRunTime: uses a supervisor may make a day
+    perDay?: number;
+    // happyHour: the cooldown scales a starter may pick (scaleMin to scaleMax)
+    scaleMin?: number;
+    scaleMax?: number;
+    // more number fields the control's bounds take besides min and max (happy hour's scaleMin, scaleMax, perDay)
+    numbers?: MissionControlNumber[];
+    usedToday?: number;
+    // addRunTime: seconds supervisors may add to one run in all
+    maxSeconds?: number;
+    // the true / false bounds this control takes besides on (['canTurnOff'] for readyCheck)
+    flags?: string[];
+    // readyCheck: the admin lets supervisors switch the ready check off (value 0)
+    canTurnOff?: boolean;
+    // a choice control: the bounds field holding its list ('presets'), the names that list offers this
+    // department now and every name it may hold
+    list?: string;
+    offered?: string[];
+    choices?: string[];
+    // the types control: every mission it may switch off on its own
+    missions?: TypeSwitchMission[];
+    // callLane: the callable mission types (their server weight), the areas, the most open calls a lane
+    // may have (Config.MissionCalls.laneMaxOpen) and the highest weight
+    laneTypes?: { key: string; label: string; weight: number }[];
+    laneAreas?: { key: string; label: string }[];
+    maxOpenCap?: number;
+    weightMax?: number;
+    // crossDept: the most places a department may keep (Config.CrossDept.maxParticipants)
+    placesMax?: number;
+    // boards: the Rank by tabs the server offers (Config.Leaderboard.metrics)
+    metricsAll?: string[];
+    // reviewRules: the flag kinds a department may hand to admins
+    flagKinds?: string[];
+    // twists: the twists the admin enabled (Config.Events.twists), with their labels
+    twistsAll?: { key: string; label: string }[];
+    // typeOfTheDay: the day a pick made now counts on, the department's pick for today, the server's type
+    todFor?: string;
+    todToday?: string;
+    todServer?: string;
+    // goals: the admin's goals of each kind, the week a pick made now counts from, the lists that count now
+    goalsAll?: { daily: { id: string; label: string }[]; weekly: { id: string; label: string }[] };
+    goalsFrom?: string;
+    goalsNow?: { daily: string[]; weekly: string[] };
+    // notices: characters a department notice may hold (Config.Notices.department.maxLength)
+    maxLength?: number;
+}
+// sup:getMyControls: the controls this player may use now, for Department -> Controls (each control's limits and
+// today's use inline, MG3). perDay / usedToday: supervisors only, for a control with a day count.
+export interface MyControl {
+    key: string;
+    kind: MissionControlState['kind'];
+    value?: MissionControlValue;
+    configValue?: MissionControlValue;
+    min?: number;
+    max?: number;
+    // a supervisor's change is live (else the config value is in use)
+    changed?: boolean;
+    timeLeft?: number;
+    perDay?: number;
+    usedToday?: number;
+}
+export interface MyControlsView {
+    controls: MyControl[];
+}
+// sup:getToday (UI4): Department's today at a glance. onDuty = the department's officers on duty, running = its runs
+// going (as Live Missions lists them), controls = the viewer's Mission controls with a day count: how many, today's
+// uses and the day counts summed.
+export interface SupToday {
+    onDuty: number;
+    running: number;
+    controls: { counted: number; used: number; perDay: number };
+}
+export interface MissionControlsDepartment {
+    key: string;
+    label: string;
+    short: string;
+    controls: MissionControlState[];
+    // admins: the setting the department's own bounds are saved in (none for a department added in game)
+    boundsPath?: string;
+}
+export interface MissionControlsView {
+    master: boolean;
+    changeWait: number;
+    selfExempt: boolean;
+    departments: MissionControlsDepartment[];
+    serverWide: MissionControlState[];
+    // admins: Config.MissionControls.controls as saved
+    bounds?: Record<string, MissionControlBounds>;
+}
+
+// ============================================================================
+//                      admin:getAudit / admin:exportAudit
+// ============================================================================
+
+export type AuditCategory = 'audit' | 'flags' | 'builder' | 'operations';
+export interface AuditRow {
+    id: number;
+    actor: string;
+    actorName: string | null;
+    role: 'supervisor' | 'admin' | 'console';
+    category: AuditCategory;
+    action: string;
+    target: string | null;
+    oldValue: string | null;
+    newValue: string | null;
+    reason: string | null;
+    // the acting player's license (every character of one player shares it)
+    actorIdent?: string | null;
+    createdAt: number;
+}
+export interface AuditFilters {
+    category?: string;
+    action?: string;
+    // a group of actions (at most 30), e.g. the Cash actions preset; ignored when action is set
+    actions?: string[];
+    actor?: string;
+    target?: string;
+    role?: string;
+    actorIdent?: string;
+    reason?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+}
+export interface AuditPage {
+    rows: AuditRow[];
+    page: number;
+    pages: number;
+    total: number;
+    pageSize: number;
+    actions: string[];
+}
+export interface AuditExport {
+    csv: string;
+    rows: number;
+    truncated: boolean;
+}
+
+// Review tabs of the Supervisor UI: the queue (flagged runs and disputes) and (reviewProfiles) Profiles.
+export type ReviewTab = 'queue' | 'profiles';

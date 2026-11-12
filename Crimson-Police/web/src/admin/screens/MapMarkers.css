@@ -1,0 +1,77 @@
+/* Admin UI → Map markers. Only --cp-* variables; classes prefixed map-markers. */
+
+.map-markers__rows,
+.map-markers__rules,
+.map-markers__rules-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.map-markers__row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+    padding: 10px;
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+}
+
+.map-markers__row.is-off {
+    opacity: 0.75;
+}
+
+.map-markers__row-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.map-markers__row-title {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.map-markers__swatch {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.map-markers__look,
+.map-markers__master,
+.map-markers__rules-row,
+.map-markers__checks,
+.map-markers__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--cp-space-3);
+}
+
+.map-markers__checks {
+    align-items: center;
+    gap: var(--cp-space-2);
+}
+
+.map-markers__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-1);
+    min-width: 150px;
+}
+
+.map-markers__label {
+    font-size: var(--cp-fs-sm);
+    font-weight: 600;
+    color: var(--cp-muted);
+}
+
+.map-markers__muted {
+    font-size: var(--cp-fs-sm);
+    color: var(--cp-muted);
+}

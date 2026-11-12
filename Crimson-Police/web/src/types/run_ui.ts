@@ -1,0 +1,222 @@
+// Response shapes of the run_ui slice (Mission Board and Active Mission screens,
+
+// documented in docs/dev/ARCHITECTURE.md §12.8). BoardData and ActiveMissionView are contract shapes
+// (src/shared/types.ts, ARCHITECTURE §9.4); the types below only add the optional fields the server
+// sends (or may send) on top of them. Every extra field is optional: the screens work without them.
+
+import type {
+    ActiveMissionView,
+    BoardCard,
+    BoardData,
+    Goal,
+    HappyHourState,
+    LevelInfo,
+    TwistCaps,
+} from '../shared/types';
+import type { ContactView } from './custody';
+
+// ============================================================================
+//            getMissionTypes (push topics 'board' and 'operation')
+// ============================================================================
+
+// A mission type card (BoardCard §9.4). `locked.until` is a Unix timestamp (os.time) of the cooldown end.
+export type TypeCard = BoardCard & {
+    // the type the viewer's department command recommends (featuredType): a badge, right after favourites
+    featured?: boolean;
+    // switched off for a department of the unit by command (the types Mission control); locked says so
+    offByCommand?: boolean;
+    // a mission of the pool may be played against a volunteer suspect (Config.RealPlayers.volunteer modes): the
+    // accept dialog offers "Real suspect OK"; required = every mission needs it; available = volunteers free now
+    realSuspect?: { required?: boolean; available?: number } | null;
+};
+
+// The Weekly Boss event card (BoardCard + available). Accepted with the key 'weekly_boss'.
+export type BossCard = NonNullable<BoardData['boss']>;
+
+// BoardData.operation: the §9.4 fields plus the extras CP.Operations.boardCard sends (docs/dev/ARCHITECTURE.md §5.16).
+export type BoardOperation = NonNullable<BoardData['operation']> & {
+    missionType?: string;
+    missionTypeLabel?: string;
+    description?: string | null;
+    // Participants needed to start.
+    min?: number;
+    // State of the operation's run while it exists.
+    runState?: 'accepted' | 'in_progress' | null;
+    // Why this viewer cannot join (the err.* key server:joinOperation would return); missing when canJoin.
+    joinBlocked?: string | null;
+};
+
+// Callback 'getMissionTypes'. Optional extras (requested from modules/runs/draw, docs/dev/ARCHITECTURE.md §12.8):
+// `serverTime` = os.time() when the board was built; `todMultiplier` = Config.Objectives.typeOfTheDay.multiplier (the
+// Type of the Day's points multiplier; the board assumes the default 2 without it).
+export interface MissionBoardData extends Omit<BoardData, 'operation'> {
+    operation: BoardOperation | null;
+    serverTime?: number;
+    todMultiplier?: number;
+    // the caps of stacked twists, for the accept step's bonus line (each card lists its own twists)
+    twistMax?: TwistCaps;
+    // a happy hour running now, false when none
+    happyHour?: HappyHourState | false | null;
+    // a mission ban in force for the viewer or (name) a member of his unit; every card is locked until then
+    missionBan?: { until: number; by: string; reason?: string | null; name?: string | null } | null;
+}
+
+// Reply of server:acceptType (payload: the type key, or { missionType, twists, realSuspect }; realSuspect = true when
+// the leader ticked "Real suspect OK").
+export interface AcceptTypeResult {
+    runId: string;
+    // the twists the run got (the chosen ones that fit the drawn mission)
+    twists?: string[];
+}
+
+// Reply of server:joinOperation.
+export interface JoinOperationResult {
+    id: number;
+    joined: number;
+    max: number;
+}
+
+// ============================================================================
+//                          getRun (push topic 'run')
+// ============================================================================
+
+export type RunPartner = ActiveMissionView['partners'][number];
+export type RunObjective = ActiveMissionView['objectives'][number];
+export type RunRoute = NonNullable<ActiveMissionView['route']>;
+export type RunLog = NonNullable<ActiveMissionView['log']>;
+
+// ActiveMissionView plus optional extras (requested from modules/runs, see docs/dev/ARCHITECTURE.md §12.8).
+export interface ActiveMissionData extends ActiveMissionView {
+    // The viewer's server id (marks "You" in the partners list).
+    me?: number;
+    // The Weekly Boss run (abandoning uses up the week's attempt instead of a type cooldown).
+    isBoss?: boolean;
+    // Cross-Department Mission id when the run belongs to one.
+    operationId?: number | null;
+    // Seconds left to reach the start (Accepted only, this participant).
+    startIn?: number | null;
+    // Street and zone name of the current objective area (shown instead of map details, e.g. Radio Silence).
+    area?: string | null;
+    // The intel line a block set (e.g. hostile_waves spawn sets), already in the player's language.
+    intel?: string | null;
+    // The claimed mission call: its code, the response target and when this viewer arrived (seconds from the claim).
+    missionCall?: null | { code: string; targetS: number; arrivedS: number | null };
+    // The current objective's contacts (field_contact, through CP.Custody.view).
+    contact?: ContactView | null;
+    // The Objective GPS button is on (Config.Markers.objectiveGps; the officer's game refuses it while he drives to the
+    // start or Radio Silence hides the objective's line).
+    objectiveGps?: boolean;
+    // A live case's card (CP.LiveCrime.caseView, Config.RealPlayers.liveCrime.caseCard); absent for any other run.
+    live?: LiveCaseView | null;
+}
+
+// The live case card on Active Mission: the crime, the suspect count, the step (the same for every suspect) and
+// when the "last reported" points were taken, by label. Never a suspect's state or a position.
+export interface LiveCaseView {
+    title?: string | null;
+    street?: string | null;
+    suspects: number;
+    // This officer is the run host (End case is in his radial menu).
+    host?: boolean;
+    phase: 'respond' | 'secure' | 'detain';
+    secureS?: number;
+    secureNeed?: number;
+    // The labels of the last-reported points (free suspects at the last report).
+    reported?: string[];
+    // Seconds since the last report (absent = none yet) and to the next one (absent = none coming).
+    reportedAgoS?: number | null;
+    nextReportS?: number | null;
+    // false = Config.RealPlayers.liveCrime.lastReportedEvery is 0 (no last-reported points on this server).
+    reportsOn?: boolean;
+}
+
+// ============================================================================
+//                   RunResult ADDITIONS (the result screen)
+// ============================================================================
+
+// One graded disposition of the decision ledger. discoverable: whether the truth was lawfully findable;
+// knownAtS: when the deciding fact reached the decider (seconds from the start); factLog: every fact the decider
+// had when choosing, as text, with when it reached them (older rows lack it).
+export interface DecisionEntry {
+    contact: string;
+    kind: 'person' | 'vehicle';
+    choice: string;
+    best: string;
+    verdict: 'best' | 'ok' | 'wrong' | 'critical';
+    by: string;
+    truth: string;
+    facts: string[];
+    factLog?: DecisionFact[];
+    points: number;
+    discoverable: boolean;
+    knownAtS: number | null;
+}
+export interface DecisionFact {
+    key: string;
+    text: string;
+    atS: number | null;
+}
+// The people debrief: each person with a demeanour, and what they did (walked_away, ran, drew, surrendered,
+// feinted, cuffed, escaped, killed; empty = stayed and complied). Only in the result of a run that ended.
+export interface DebriefPerson {
+    contact: string;
+    demeanour: string | null;
+    did: string[];
+}
+// XP before and after this row, the level, a level-up and the goals (pending = XP waits for a review).
+export interface RunProgress {
+    xpBefore: number;
+    xpAfter: number;
+    pending: boolean;
+    level: LevelInfo;
+    levelUp: boolean;
+    goals: { daily: Goal | null; weekly: Goal | null };
+}
+export type RunStatKey =
+    | 'arrests'
+    | 'citations'
+    | 'impounds'
+    | 'rescues'
+    | 'vehicles_stopped'
+    | 'evidence'
+    | 'decisions_ok'
+    | 'decisions_best'
+    | 'decisions_bad';
+export type RunStats = Partial<Record<RunStatKey, number>>;
+export interface RunMissionCall {
+    code: string;
+    responseS: number | null;
+    targetS: number;
+    rapid: boolean;
+}
+export interface RunItem {
+    name: string;
+    label: string;
+    count: number;
+    status: 'given' | 'pending' | 'held';
+}
+
+// Reply of server:abandon.
+export interface AbandonResult {
+    runId: string;
+}
+
+// Reply of the client action recalcRoute.
+export interface RecalcRouteResult {
+    recalcsLeft: number;
+}
+
+// Reply of the client action setGps.
+export interface SetGpsResult {
+    runId: string;
+}
+// Reply of the client action setObjectiveGps (modules/map/markers): the objective the waypoint was put on.
+export interface ObjectiveGpsResult {
+    label: string;
+}
+
+// Payload of the client action logResult (Business Check tablet log).
+export interface LogResultPayload {
+    point: number;
+    choice: string;
+}

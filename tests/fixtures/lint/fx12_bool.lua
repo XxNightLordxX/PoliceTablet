@@ -1,0 +1,54 @@
+-- Server yes/no answers for tools/lint_fivem.py rule FX12, read by tests/foundation_spec.lua (run as a server script
+-- with `--files server`). Never loaded: each line that must be a hit ends with "expect FX12" after two dashes.
+
+local function Direct(e)
+    local a = DoesEntityExist(e) == true                             -- expect FX12
+    local b = DoesEntityExist(e) ~= true                             -- expect FX12
+    local c = true == IsPlayerAceAllowed(e, 'command')               -- expect FX12
+    local d = StateBagHasKey(('entity:%d'):format(e), 'cp') == true  -- expect FX12
+    return a, b, c, d
+end
+
+local function Multiline(e, longArgumentNumberOne, longArgumentNumberTwo, longArgumentNumberThree)
+    return IsPlayerAceAllowed(
+        e,
+        ('%s.%s.%s.%s'):format(longArgumentNumberOne, longArgumentNumberTwo, longArgumentNumberThree, 'command')
+    ) == true -- expect FX12
+end
+
+local function ThroughALocal(e)
+    local found = DoesEntityExist(e)
+    local frozen = IsEntityPositionFrozen(e)
+    local a = found == true     -- expect FX12
+    return a, frozen ~= true    -- expect FX12
+end
+
+-- Correct comparisons only: never a hit.
+local function Right(e)
+    local a = DoesEntityExist(e) and 1 or 2
+    local b = not DoesEntityExist(e)
+    local c = DoesEntityExist(e) == false
+    local d = DoesEntityExist(e) ~= false
+    local f = DoesEntityExist(e) == 1
+    local found = DoesEntityExist(e)
+    local g = found == true or found == 1
+    local t = {}
+    t.found = DoesEntityExist(e)
+    local i = GetEntityModel(e) == true
+    return a, b, c, d, f, g, t, i
+end
+
+-- A real FX12 bug the rule does not see yet: `1 and 1` is 1 on FXServer, so `both == true` is false for a cuffed ped
+-- that exists. Not marked "expect FX12" while the rule cannot see through `and` / `or`; once it can, foundation_spec 24
+-- fails on this line until the mark goes on it.
+local function NotSeenYet(e)
+    local both = DoesEntityExist(e) and IsPedHandcuffed(e)
+    return both == true
+end
+
+local function Shadowed()
+    local DoesPlayerExist = function() return true end
+    return DoesPlayerExist() == true
+end
+
+return Direct, Multiline, ThroughALocal, Right, NotSeenYet, Shadowed

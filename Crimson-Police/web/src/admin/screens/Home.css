@@ -1,0 +1,318 @@
+/* Admin UI · Home (the dashboard): Live now and Alerts side by side, then the shortcut tiles and their quick forms.
+   Only --cp-* variables. */
+
+.admin-home-top {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    gap: var(--cp-space-4);
+    margin-bottom: var(--cp-space-4);
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .admin-home-top {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.admin-home-live > .cp-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-3);
+}
+
+/* Live now: one tile per count, a click opens its screen */
+.admin-home-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--cp-space-2);
+}
+
+.admin-home-stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-1);
+    padding: 10px var(--cp-space-3);
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-stat:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-stat--waiting {
+    border-color: var(--cp-warning);
+}
+
+.admin-home-stat__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--cp-subtle);
+    font-size: 12px;
+}
+
+.admin-home-stat__value {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.admin-home-heading {
+    margin: 0 0 var(--cp-space-3);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.admin-home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+/* counts each use of a tile; the tile itself stays the grid item */
+.admin-home-tile__use {
+    display: contents;
+}
+
+.admin-home-tile {
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-home-tile > .cp-card__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--cp-space-3);
+}
+
+.admin-home-tile__head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cp-space-3);
+}
+
+.admin-home-tile__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: var(--cp-primary);
+}
+
+.admin-home-tile__titles {
+    min-width: 0;
+}
+
+.admin-home-tile__title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.admin-home-tile__text {
+    color: var(--cp-subtle);
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+.admin-home-tile__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: auto;
+}
+
+.admin-home-checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-home-check,
+.admin-home-live__run {
+    display: flex;
+    align-items: center;
+    gap: var(--cp-space-2);
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-check:hover,
+.admin-home-live__run:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-check__label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-home-live__runs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--cp-space-2);
+}
+
+.admin-home-live__run {
+    width: auto;
+}
+
+.admin-home-live__label {
+    font-weight: 600;
+}
+
+.admin-home-live__meta,
+.admin-home-live__more {
+    color: var(--cp-subtle);
+    font-size: 13px;
+}
+
+/* Quick forms */
+
+.admin-home-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-home-form__hint,
+.admin-home-form__meta {
+    color: var(--cp-subtle);
+    font-size: 13px;
+}
+
+.admin-home-form__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-home-form__item {
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+}
+
+.admin-home-form__row,
+.admin-home-form__chosen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cp-space-2);
+}
+
+.admin-home-form__sub {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: var(--cp-space-2) 0 0 var(--cp-space-3);
+}
+
+.admin-home-form__more {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--cp-primary);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.admin-home-form__pick {
+    display: flex;
+    align-items: center;
+    gap: var(--cp-space-2);
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: var(--cp-radius-sm);
+    background: var(--cp-surface-2);
+    border: 1px solid var(--cp-border);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-home-form__pick:hover {
+    border-color: var(--cp-primary);
+}
+
+.admin-home-form__label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-home-form__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.admin-home-form__settings .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--cp-space-2);
+    padding: 10px 0;
+}
+
+/* First-start setup (admin/components/SetupWizard) */
+.admin-setup {
+    margin-bottom: var(--cp-space-4);
+}
+
+.admin-setup__step {
+    margin: 0 0 var(--cp-space-1);
+}
+
+.admin-setup__text {
+    margin: 0 0 var(--cp-space-2);
+    opacity: 0.85;
+}
+
+.admin-setup__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-2);
+}
+
+.admin-setup__label {
+    margin-top: var(--cp-space-2);
+    font-weight: 600;
+}
+
+.admin-setup__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cp-space-1) var(--cp-space-4);
+}
+
+.admin-setup__nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--cp-space-3);
+}

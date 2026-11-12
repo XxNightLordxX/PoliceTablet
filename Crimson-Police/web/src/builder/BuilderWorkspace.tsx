@@ -1,0 +1,145 @@
+// The Mission Builder as one block: the mission list, or the editor of the open mission. Used by Supervisor UI →
+// Mission Builder and Admin UI → Missions → Builder. The open mission and step live in the module store (store.ts), so
+// the editor comes back after a tool closed and reopened the tablet.
+
+import { useEffect, useRef, useState } from 'react';
+import { Button, EmptyState, ErrorState, LoadingBlock } from '../shared/components';
+import { t } from '../shared/i18n';
+import { BuilderEditor } from './BuilderEditor';
+import { MissionList } from './MissionList';
+import { QuickMissionStart } from './QuickMission';
+import { editorMemory, hasResults, setEditorMemory, subscribeBuilder, currentTool, type BuilderScope } from './store';
+import { useBuilderConfig } from './useBuilderConfig';
+
+export interface BuilderWorkspaceProps {
+    scope: BuilderScope;
+    // called when a mission is opened or closed (the admin screen switches tabs)
+    onOpenChange?: (id: string | null) => void;
+    // counts "New mission" presses outside the list (the Missions header, Home's tile): each new value opens the
+    // wizard at once
+    newRequest?: number;
+}
+
+export function BuilderWorkspace({ scope, onOpenChange, newRequest = 0 }: BuilderWorkspaceProps) {
+    const { config, error, retry } = useBuilderConfig(scope);
+    const [openId, setOpenId] = useState<string | null>(() => editorMemory(scope).openId);
+    // a new editor for every opened mission; a save that renames the draft keeps the same editor (and its lock)
+    const [editorKey, setEditorKey] = useState(0);
+    // the New mission wizard's first step, and the New mission dialog its "Open the full editor" opens
+    const [starting, setStarting] = useState(false);
+    const [classic, setClassic] = useState(false);
+    const handledNew = useRef(0);
+
+    // a tool result for a mission that is not open (e.g. the NUI reloaded): open it so it can be applied
+    useEffect(
+        () =>
+            subscribeBuilder(() => {
+                const mem = editorMemory(scope);
+                const tool = currentTool();
+                if (!mem.openId && tool && tool.scope === scope && hasResults(tool.missionId)) {
+                    setEditorMemory(scope, { openId: tool.missionId, step: 'locations', location: tool.location });
+                    setOpenId(tool.missionId);
+                    onOpenChange?.(tool.missionId);
+                }
+            }),
+        [scope, onOpenChange],
+    );
+
+    const open = (id: string) => {
+        setEditorMemory(scope, { openId: id, quick: null });
+        setEditorKey(k => k + 1);
+        setOpenId(id);
+        onOpenChange?.(id);
+    };
+    const close = () => {
+        setEditorMemory(scope, { openId: null, step: 'blocks', location: 1, objective: 1, quick: null });
+        setOpenId(null);
+        onOpenChange?.(null);
+    };
+
+    // an outside "New mission" press: leave an open mission (its lock is released, an unsaved change kept) and open
+    // the wizard once builder:config has arrived
+    useEffect(() => {
+        if (!config || config.enabled === false || newRequest <= handledNew.current) return;
+        handledNew.current = newRequest;
+        if (openId) close();
+        setClassic(false);
+        setStarting(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config, newRequest]);
+
+    if (!config) {
+        return error ? <ErrorState error={error} onRetry={retry} /> : <LoadingBlock />;
+    }
+    if (config.enabled === false) {
+        return (
+            <EmptyState
+                icon="tool"
+                title={t('builder.disabled_title')}
+                text={t('err.builder_disabled')}
+                action={
+                    <Button variant="secondary" icon="refresh" onClick={retry}>
+                        {t('builder.retry')}
+                    </Button>
+                }
+            />
+        );
+    }
+    if (openId) {
+        return (
+            <BuilderEditor
+                key={editorKey}
+                id={openId}
+                scope={scope}
+                config={config}
+                onClose={close}
+                onOpen={open}
+                onRenamed={id => {
+                    setEditorMemory(scope, { openId: id });
+                    setOpenId(id);
+                    onOpenChange?.(id);
+                }}
+            />
+        );
+    }
+    if (starting) {
+        return (
+            <QuickMissionStart
+                config={config}
+                onCancel={() => setStarting(false)}
+                onFullEditor={() => {
+                    setStarting(false);
+                    setClassic(true);
+                }}
+                onCreated={(id, base) => {
+                    setStarting(false);
+                    setEditorMemory(scope, {
+                        openId: id,
+                        step: 'locations',
+                        location: 1,
+                        objective: 1,
+                        quick: { step: 'where', base },
+                    });
+                    setEditorKey(k => k + 1);
+                    setOpenId(id);
+                    onOpenChange?.(id);
+                }}
+            />
+        );
+    }
+    return (
+        <MissionList
+            scope={scope}
+            config={config}
+            onOpen={id => {
+                setClassic(false);
+                open(id);
+            }}
+            onNew={() => {
+                setClassic(false);
+                setStarting(true);
+            }}
+            createOpen={classic}
+        />
+    );
+}

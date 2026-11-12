@@ -1,0 +1,713 @@
+-- CP.AntiCheat (server): objective-event checks, run flags, outside help, presence sampling, the idle check and the
+-- voids -> suspension rule.
+
+-- Owns
+--   * checkEvent: every client objective event (after CP.Runs' own run/participant checks) must come from
+--     an active participant of an in-progress run, for the CURRENT objective (an event for a later
+--     objective flags the run 'unexpected_event'; an earlier/finished one is dropped silently as lag),
+--     within a per-src rate limit (10/s), and must not be an exact duplicate of the same src's last
+--     events (same objective, same evidence fields apart from coords/time) within 1 s. Between two
+--     events of one participant the server-side ped coordinates must not move faster than
+--     Config.AntiCheat.maxSpeed (distance / max(1 s, elapsed)); faster flags the whole run 'speed'.
+--     In-arena srcs (CP.Alerts.inArena) are refused with err.in_arena and never flagged or sampled
+--     (Crimson-Arena rule 6); a position pair across a routing-bucket change is discarded.
+--   * flags: run-level (src nil -> run.flagged) or participant-level (p.flagged) { reason, detail };
+--     the rows CP.Runs writes afterwards are flagged with that reason. The first reason is kept; every
+--     distinct (reason, participant) is recorded once in cp_audit (category flags, action runFlagged,
+--     target = run id, old_value = citizenid for a participant flag, new_value = reason,
+--     reason = detail) and posted to the flags webhook. The Review Queue reads the detail (e.g. who
+--     helped) from there. Test runs are never flagged. Only an officer's own conduct is flagged.
+--   * notes (AC.note): a staff note about a participant or the case (something a suspect did himself,
+--     or a fact to check, such as stun_unproven) is recorded the same way with action runNoted, once
+--     per (reason, participant) in its own list; it never sets p.flagged or run.flagged, so no row is
+--     held for it. The Review run detail lists the notes of a held run. Test runs only log them.
+--   * stunMode / stunReport: Config.AntiCheat.stunNeedsProof ('flag' shipped, 'hold', 'strict', 'off';
+--     an old true reads as 'strict', false as 'off') applied to a 'stunned' report the server did not
+--     see: a note, a flag on that officer, a refusal, or nothing.
+--   * onNpcKilled: kills of mission NPCs by players who are not active participants; at
+--     Config.AntiCheat.outsideKillsToFlag the run is flagged 'outside_help' naming the killer(s).
+--   * presence sampling every 5 s for in-progress runs that have had 2+ participants: each active
+--     participant's distance from the current objective (its block's presence(ctx, src, coords) with the
+--     engine's ctx from CP.Runs.ctx when available, else the location start) against the objective's
+--     presenceRange (fallback Config.AntiCheat.presenceRadius);
+--     p.presence = { inRange, total } in seconds.
+--   * the idle check: Config.AntiCheat.idleCheck s after the run moved to In progress, active participants
+--     who have not reached the start are removed with end reason 'idle'.
+--   * onVoided: Config.AntiCheat.voidsToSuspend voided mission rows created within voidWindowDays (and
+--     after the officer's last automatic suspension) suspend the officer for suspendDays
+--     (CP.Access.suspend(citizenid, days, 0, 'auto') + audit 'autoSuspend').
+--
+-- Public API (docs/dev/ARCHITECTURE.md §5.26)
+--   CP.AntiCheat.checkEvent(run, src, index, evidence) -> ok, reasonKey
+--   CP.AntiCheat.flag(run, src|nil, reason, detail) -> boolean (true when newly recorded)
+--   CP.AntiCheat.onNpcKilled(run, killerSrc)
+--   CP.AntiCheat.presenceOk(run, p) -> boolean      share >= Config.AntiCheat.presenceShare (true for solo
+--                                                   runs and when nothing was sampled); a failing participant is
+--                                                   flagged 'presence' with the share as detail (once)
+--   CP.AntiCheat.presenceShare(p) -> number|nil     inRange / total
+--   CP.AntiCheat.onVoided(citizenid) -> suspended (boolean)
+--   CP.AntiCheat.evidenceSignature(evidence) -> string   (pure; coords/time excluded, keys sorted)
+--   CP.AntiCheat._sample(), _idleCheck(), _trackBuckets()  loop bodies (tests)
+
+CP.AntiCheat = CP.AntiCheat or {}
+local AC = CP.AntiCheat
+local U = CP.U
+local TAG = 'anticheat'
+
+local EVENT_RATE = 10           -- objective events per src per second
+local DUP_WINDOW_MS = 1000      -- identical evidence within this window is a duplicate
+local MIN_SPEED_DT = 1.0        -- seconds: the speed check never divides by less
+local PRESENCE_EVERY_MS = 5000
+local TICK_MS = 2000            -- buckets and idle checks (seconds); presence sampling every PRESENCE_EVERY_MS
+local SIGNATURE_MAX = 512
+
+local state = {}                 -- runId -> { idleDone, kills, killers = { [src] = { name, n } }, recorded = { [key] = true }, noted = { [key] = true }, recent = { [src] = { [sig] = ms } } }
+local STUN_MODES = { flag = true, hold = true, strict = true, off = true }
+local StunPending = {}  -- { ['<run id>|<src>|<net id>'] = true } while an unseen stun waits for its re-check
+local lastPresenceMs = nil
+
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+-- Clip to at most n characters without cutting a UTF-8 sequence in half, dropping bytes that are not valid
+-- UTF-8 first. The cp_* columns are utf8mb4 (VARCHAR(n) counts characters) and MariaDB's strict mode
+-- refuses a broken sequence (error 1366), so a byte clip (CP.U.clip) of an accented reason could make
+-- the whole insert fail.
+local function Clip(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    for _ = 1, 64 do
+        local len, bad = utf8.len(s)
+        if len then break end
+        s = s:sub(1, bad - 1) .. s:sub(bad + 1)
+    end
+    if not utf8.len(s) then s = s:gsub('[\128-\255]', '?') end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
+
+local Has = CP.Has
+
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
+
+local Num = CP.Num
+
+local function Cfg()
+    return Config.AntiCheat or {}
+end
+
+local function StateOf(run)
+    local st = state[run.id]
+    if not st then
+        st = { idleDone = false, kills = 0, killers = {}, recorded = {}, noted = {}, recent = {} }
+        state[run.id] = st
+    end
+    return st
+end
+
+local function InArena(src)
+    if CP.Alerts and CP.Alerts.inArena then
+        local ok, v = pcall(CP.Alerts.inArena, src)
+        return ok and v == true
+    end
+    return false
+end
+
+local function BucketOf(src)
+    if not GetPlayerRoutingBucket then return 0 end
+    local ok, b = pcall(GetPlayerRoutingBucket, src)
+    return ok and tonumber(b) or 0
+end
+
+local function PedCoords(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    local c = GetEntityCoords(ped)
+    if not c then return nil end
+    return c
+end
+
+local function ActiveSrcs(run)
+    if Has('Runs', 'activeSrcs') then
+        local ok, list = Call('Runs', 'activeSrcs', run)
+        if ok and type(list) == 'table' then return list end
+    end
+    local out = {}
+    for _, s in ipairs(run.order or {}) do
+        local p = run.participants and run.participants[s]
+        if p and p.status == 'active' then out[#out + 1] = s end
+    end
+    return out
+end
+
+local function NameOf(src)
+    local ok, info = Call('Qbx', 'getInfo', src)
+    if ok and type(info) == 'table' and info.name then
+        return ('%s [%s]'):format(info.name, tostring(info.citizenid))
+    end
+    local n = GetPlayerName and GetPlayerName(src)
+    return n and ('%s [#%d]'):format(n, src) or ('#' .. tostring(src))
+end
+
+-- ============================================================================
+--                          EVIDENCE SIGNATURE (pure)
+-- ============================================================================
+
+local IGNORED_KEYS = { coords = true, time = true }
+
+local function Encode(v, depth)
+    local t = type(v)
+    if t == 'table' then
+        if depth > 3 then return '{…}' end
+        local keys = {}
+        for k in pairs(v) do
+            if not (depth == 0 and IGNORED_KEYS[k]) then keys[#keys + 1] = k end
+        end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        local parts = {}
+        for _, k in ipairs(keys) do parts[#parts + 1] = tostring(k) .. '=' .. Encode(v[k], depth + 1) end
+        return '{' .. table.concat(parts, ',') .. '}'
+    end
+    if t == 'vector3' or t == 'vector4' or t == 'vector2' then
+        return ('v(%.1f,%.1f,%.1f)'):format(v.x or 0, v.y or 0, v.z or 0)
+    end
+    if t == 'number' then
+        -- '%d' only takes a value with an integer form: a whole float past 2^63 (1e19) would throw
+        local i = math.tointeger(v)
+        if i then return ('%d'):format(i) end
+        return ('%.3f'):format(v)
+    end
+    return tostring(v)
+end
+
+function AC.evidenceSignature(evidence)
+    local s = Encode(type(evidence) == 'table' and evidence or { value = evidence }, 0)
+    if #s > SIGNATURE_MAX then s = U.hashHex(s) .. ':' .. #s end
+    return s
+end
+
+-- ============================================================================
+--                                    FLAGS
+-- ============================================================================
+
+-- Two classes (docs/dev/ARCHITECTURE.md 5.26): a flag (runFlagged) is about an officer's own conduct and holds his
+-- points (or every participant's with src nil) until a supervisor approves; a note (runNoted) is for staff only.
+local function RecordFlag(run, p, reason, detail, action)
+    if not Has('Admin', 'audit') then return end
+    local citizenid = p and p.citizenid or nil
+    CreateThread(function()
+        Call('Admin', 'audit', 'console', 'console', 'flags', action or 'runFlagged', run.id, citizenid, reason, detail)
+    end)
+end
+
+-- The checks flag and note share: nil when the call is refused, else run, participant (or nil), reason, detail.
+local function Mark(run, src, reason, detail, verb)
+    if type(run) ~= 'table' or type(reason) ~= 'string' or reason == '' then return nil end
+    reason = Clip(reason, 64)
+    if detail ~= nil then detail = Clip(tostring(detail), 255) end
+    if run.test then
+        CP.log(TAG, 'test run %s would be %s %s (%s)', tostring(run.id), verb, reason, tostring(detail))
+        return nil
+    end
+    local p = nil
+    if src ~= nil then
+        local n = U.toSrc(src)
+        p = n and run.participants and run.participants[n] or nil
+        if not p then return nil end
+    end
+    return run, p, reason, detail
+end
+
+-- A flag raised after the participant's row was stored (the pair-repeat check runs on run:ended, after every row
+-- settled): the stored row is flagged too, so it reaches the Review Queue. Cash not paid yet is held, paid cash
+-- stays paid (as Flag for review); the counted XP and the item rewards not given yet wait for the review.
+local function FlagStoredRow(p, reason)
+    local id = math.tointeger(tonumber(p.rowId))
+    if not id then return end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local ok, n = pcall(MySQL.update.await, [[UPDATE cp_mission_runs SET flagged = 1, flag_reason = ?,
+        cash_status = IF(state = 'completed' AND cash_status IN ('none', 'pending'), 'held', cash_status)
+        WHERE id = ? AND flagged = 0 AND voided = 0 AND mission_type NOT IN ('manual_award', 'goal')]], { reason, id })
+    if not ok then
+        CP.err(TAG, 'flagging the stored row %d (%s) failed: %s', id, reason, tostring(n))
+        return
+    end
+    if (tonumber(n) or 0) < 1 then return end
+    Call('Scoring', 'onRowFlagged', id)
+    Call('Rewards', 'holdRow', id)
+end
+
+function AC.flag(run, src, reason, detail)
+    local p
+    run, p, reason, detail = Mark(run, src, reason, detail, 'flagged')
+    if not run then return false end
+    local st = StateOf(run)
+    local key = reason .. '|' .. (p and tostring(p.citizenid) or '*')
+    if st.recorded[key] then return false end
+    st.recorded[key] = true
+    if p then
+        if not p.flagged then p.flagged = { reason = reason, detail = detail } end
+    else
+        if not run.flagged then run.flagged = { reason = reason, detail = detail } end
+    end
+    CP.warn(TAG, 'run %s (%s) flagged %s%s: %s', tostring(run.id), tostring(run.missionId), reason,
+        p and (' for ' .. tostring(p.citizenid)) or '', tostring(detail or ''))
+    RecordFlag(run, p, reason, detail)
+    if p and p.rowId then FlagStoredRow(p, reason) end
+    return true
+end
+
+-- True when this run raised a flag of this reason, for any participant or the run itself (the feature pay of
+-- a run with rs_linked_accounts waits for nobody's review, so it is not paid).
+---@param run table
+---@param reason string
+---@return boolean
+function AC.flaggedWith(run, reason)
+    if type(run) ~= 'table' or run.id == nil or type(reason) ~= 'string' or reason == '' then return false end
+    local st = state[run.id]
+    if not st then return false end
+    local prefix = reason .. '|'
+    for key in pairs(st.recorded) do
+        if key:sub(1, #prefix) == prefix then return true end
+    end
+    return false
+end
+
+-- A staff note: something a suspect did himself, or a fact staff should check, about one participant (src) or the
+-- case (src nil). Audited (runNoted) and shown in the Review run detail, but it never sets p.flagged or
+-- run.flagged, so nobody's points or items are held for it. Once per reason and participant per run (its own
+-- list, apart from the flags), and per `about` when one is given (a case note about one suspect: his citizenid);
+-- a test run only logs it.
+function AC.note(run, src, reason, detail, about)
+    local p
+    run, p, reason, detail = Mark(run, src, reason, detail, 'noted')
+    if not run then return false end
+    local st = StateOf(run)
+    local key = reason .. '|' .. (p and tostring(p.citizenid) or '*')
+    if type(about) == 'string' and about ~= '' then key = key .. '|' .. Clip(about, 64) end
+    if st.noted[key] then return false end
+    st.noted[key] = true
+    CP.log(TAG, 'run %s (%s) note %s%s: %s', tostring(run.id), tostring(run.missionId), reason,
+        p and (' for ' .. tostring(p.citizenid)) or '', tostring(detail or ''))
+    RecordFlag(run, p, reason, detail, 'runNoted')
+    return true
+end
+
+-- ============================================================================
+--                        STUN REPORTS (stunNeedsProof)
+-- ============================================================================
+
+-- Config.AntiCheat.stunNeedsProof read now: 'flag', 'hold', 'strict' or 'off'. A true from before it was a choice
+-- reads as 'strict', a false as 'off'; a missing or unknown value as 'flag' (the shipped one).
+function AC.stunMode()
+    local v = Cfg().stunNeedsProof
+    if v == true then return 'strict' end
+    if v == false then return 'off' end
+    if type(v) == 'string' and STUN_MODES[v] then return v end
+    return 'flag'
+end
+
+-- The note ('flag') or flag ('hold') on an officer whose stun report the server did not see.
+-- The window named in the detail is the real one: the 1 s proof window plus Config.AntiCheat.stunRecheck.
+local function StunVerdict(run, src, netId, objective, mode)
+    local recheck = math.max(0, tonumber(Cfg().stunRecheck) or 0)
+    local seconds = recheck + 1
+    if seconds == math.floor(seconds) then seconds = math.tointeger(seconds) end
+    local detail = CP.L('admin.anticheat.stun_detail', { objective = objective, netId = netId, seconds = seconds })
+    if mode == 'hold' then
+        AC.flag(run, src, 'stun_unproven', detail)
+    else
+        AC.note(run, src, 'stun_unproven', detail)
+    end
+end
+
+-- A participant's 'stunned' report (flee_arrest, pursuit, search_area, field_contact) about the person netId, given
+-- whether the server saw him fall (CP.Npc.stunCheck): true when it counts. One the server did not see counts in
+-- 'flag' (with a staff note) and 'hold' (with a flag on that officer: his points wait for review), never in
+-- 'strict'; 'off' takes every report with no note. The note or flag waits Config.AntiCheat.stunRecheck seconds
+-- (one timer per run, officer and person) and is dropped when the server saw the fall by then: the report often
+-- arrives before the server's copy of the ped shows it, and the suspect gives up at once, so no report follows.
+function AC.stunReport(run, src, seen, netId)
+    local mode = AC.stunMode()
+    if mode == 'off' or seen then return true end
+    if mode == 'strict' then return false end
+    local objective = type(run) == 'table' and math.tointeger(tonumber(run.objectiveIndex)) or 0
+    local id = math.tointeger(tonumber(netId)) or '?'
+    local waitMs = math.floor((tonumber(Cfg().stunRecheck) or 0) * 1000)
+    if waitMs <= 0 or type(run) ~= 'table' or run.id == nil then
+        StunVerdict(run, src, id, objective, mode)
+        return true
+    end
+    local key = tostring(run.id) .. '|' .. tostring(src) .. '|' .. tostring(id)
+    if StunPending[key] then return true end
+    StunPending[key] = true
+    local at = GetGameTimer()
+    SetTimeout(waitMs, function()
+        StunPending[key] = nil
+        local Npc = CP.Npc
+        local ok, later = false, false
+        if Npc and type(Npc.stunSeenSince) == 'function' then
+            ok, later = pcall(Npc.stunSeenSince, netId, GetGameTimer() - at)
+        end
+        if ok and later then return end
+        StunVerdict(run, src, id, objective, mode)
+    end)
+    return true
+end
+
+-- ============================================================================
+--                               OBJECTIVE EVENTS
+-- ============================================================================
+
+function AC.checkEvent(run, src, index, evidence)
+    src = U.toSrc(src)
+    if type(run) ~= 'table' or not src then return false, 'err.invalid_run' end
+    if run.state ~= 'in_progress' then return false, 'err.run_not_active' end
+    local p = run.participants and run.participants[src]
+    if not p or p.status ~= 'active' then return false, 'err.not_participant' end
+    if InArena(src) then
+        p.lastEvent = nil
+        return false, 'err.in_arena'
+    end
+    if not CP.Net.rateOk(src, 'anticheat:event', EVENT_RATE, 1000) then return false, 'err.rate_limited' end
+
+    index = math.tointeger(tonumber(index) or -1)
+    local current = run.objectiveIndex
+    if not index or index < 1 then return false, 'err.invalid_event' end
+    if index > (current or 0) then
+        AC.flag(run, nil, 'unexpected_event',
+            ('objective %d reported by %s while %s is current'):format(index, NameOf(src), tostring(current)))
+        return false, 'err.unexpected_event'
+    end
+    local o = run.objectives and run.objectives[index]
+    if index < current or not o or o.status ~= 'active' then return false, 'err.stale_event' end
+
+    local now = GetGameTimer()
+    local st = StateOf(run)
+    local recent = st.recent[src]
+    if not recent then recent = {}; st.recent[src] = recent end
+    local sig = index .. '|' .. AC.evidenceSignature(evidence)
+    for k, at in pairs(recent) do
+        if now - at > DUP_WINDOW_MS then recent[k] = nil end
+    end
+    if recent[sig] then return false, 'err.duplicate_event' end
+    recent[sig] = now
+
+    local coords = PedCoords(src)
+    if coords then
+        local bucket = BucketOf(src)
+        local last = p.lastEvent
+        if last and last.coords and (last.bucket == nil or last.bucket == bucket) then
+            local dt = math.max(MIN_SPEED_DT, (now - (last.at or now)) / 1000)
+            local dist = U.dist(coords, last.coords)
+            local speed = dist / dt
+            local maxSpeed = Num(Cfg().maxSpeed, 80.0)
+            if speed > maxSpeed then
+                AC.flag(run, nil, 'speed',
+                    ('%s moved %.0f m in %.1f s (%.0f m/s, max %.0f)'):format(NameOf(src), dist, dt, speed, maxSpeed))
+            end
+        end
+        p.lastEvent = { coords = coords, at = now, bucket = bucket }
+    end
+    return true
+end
+
+-- ============================================================================
+--                                 OUTSIDE HELP
+-- ============================================================================
+
+function AC.onNpcKilled(run, killerSrc)
+    local k = U.toSrc(killerSrc)
+    if type(run) ~= 'table' or not k or run.test or run.state == 'ended' then return end
+    local p = run.participants and run.participants[k]
+    if p and p.status == 'active' then return end
+    -- the crimsonArena flag is client-writable: only a killer in another bucket is really in a match
+    if InArena(k) and BucketOf(k) ~= 0 then return end
+    local st = StateOf(run)
+    st.kills = st.kills + 1
+    local entry = st.killers[k]
+    if not entry then
+        entry = { name = NameOf(k), n = 0 }
+        st.killers[k] = entry
+    end
+    entry.n = entry.n + 1
+    local threshold = math.max(1, math.floor(Num(Cfg().outsideKillsToFlag, 1)))
+    if st.kills >= threshold then
+        local names = {}
+        for _, e in pairs(st.killers) do names[#names + 1] = e.n > 1 and ('%s ×%d'):format(e.name, e.n) or e.name end
+        table.sort(names)
+        AC.flag(run, nil, 'outside_help',
+            CP.L('admin.anticheat.outside_detail', { names = table.concat(names, ', '), kills = st.kills }))
+    end
+end
+
+-- ============================================================================
+--                                   PRESENCE
+-- ============================================================================
+-- The block's presence(ctx, src, coords) gets the engine's own ctx of that objective (CP.Runs.ctx, the table
+-- every block hook gets). Without it: a read-only objective context with the same fields and helpers as
+-- ARCHITECTURE §7.1 (spawning refused).
+local function ReadOnlyCtx(run, i)
+    local o = run.objectives and run.objectives[i]
+    local base = run.mission and run.mission.objectives and run.mission.objectives[i]
+    local ctx = {
+        run = run,
+        index = i,
+        obj = (o and o.obj) or base,
+        base = base,
+        mission = run.mission,
+        location = run.location,
+        tier = run.tier,
+        state = (o and o.state) or {},
+        rng = U.rng((tonumber(run.seed) or 1) + i),
+    }
+    ctx.participants = function() return ActiveSrcs(run) end
+    ctx.coords = function(s) local n = U.toSrc(s); return n and PedCoords(n) or nil end
+    ctx.isHost = function(s) return U.toSrc(s) == run.host end
+    ctx.host = function() return run.host end
+    ctx.combat = function(acc, armour)
+        if Has('Scaling', 'combat') then return CP.Scaling.combat(acc, armour, run.tier, run) end
+        return acc, armour
+    end
+    ctx.complete = function() return false end
+    ctx.fail = function() end
+    ctx.award = function(id, opts) if Has('Runs', 'award') then return CP.Runs.award(run, id, opts) end end
+    ctx.penalize = function(id, opts) if Has('Runs', 'penalize') then return CP.Runs.penalize(run, id, opts) end end
+    ctx.send = function() end
+    ctx.hud = function() end
+    ctx.canSpawn = function() return false end
+    ctx.spawnPed = function() return nil end
+    ctx.spawnVehicle = function() return nil end
+    ctx.spawnObject = function() return nil end
+    ctx.delete = function() end
+    return ctx
+end
+
+local function PresenceCtx(run, i)
+    if Has('Runs', 'ctx') then
+        local ok, ctx = Call('Runs', 'ctx', run, i)
+        if ok and type(ctx) == 'table' then return ctx end
+    end
+    return ReadOnlyCtx(run, i)
+end
+
+local function PresenceRange(obj)
+    local r = tonumber(obj and obj.presenceRange)
+    if r and r > 0 then return r end
+    local blockCfg = obj and obj.block and Config.Blocks and Config.Blocks[obj.block]
+    local pr = blockCfg and blockCfg.presenceRange
+    if type(pr) == 'table' and tonumber(pr[3]) then return tonumber(pr[3]) end
+    return Num(Cfg().presenceRadius, 150.0)
+end
+
+-- Distance of src from objective i of run (metres), or nil when it cannot be measured.
+local function DistanceFor(run, i, src, coords)
+    local o = run.objectives and run.objectives[i]
+    local obj = (o and o.obj) or (run.mission and run.mission.objectives and run.mission.objectives[i])
+    local impl = obj and obj.block and CP.Blocks.get(obj.block)
+    if impl and type(impl.presence) == 'function' then
+        local ok, d = pcall(impl.presence, PresenceCtx(run, i), src, coords)
+        if ok and tonumber(d) then return tonumber(d), obj end
+        if not ok then
+            CP.err(TAG, 'presence of %s (run %s) failed: %s', tostring(obj.block), tostring(run.id), tostring(d))
+        end
+    end
+    local start = run.location and run.location.start and run.location.start.coords
+    if start then return U.dist(coords, start), obj end
+    return nil, obj
+end
+
+function AC._sample(intervalS)
+    intervalS = intervalS or (PRESENCE_EVERY_MS / 1000)
+    if not Has('Runs', 'all') then return end
+    local ok, list = Call('Runs', 'all')
+    if not ok or type(list) ~= 'table' then return end
+    for _, run in ipairs(list) do
+        if run.state == 'in_progress' and #(run.order or {}) >= 2 then
+            local i = run.objectiveIndex
+            local o = i and run.objectives and run.objectives[i]
+            if o and o.status == 'active' then
+                for _, s in ipairs(ActiveSrcs(run)) do
+                    local p = run.participants[s]
+                    if p and not InArena(s) then
+                        local coords = PedCoords(s)
+                        if coords then
+                            local d, obj = DistanceFor(run, i, s, coords)
+                            if d then
+                                p.presence = p.presence or { inRange = 0, total = 0 }
+                                p.presence.total = (p.presence.total or 0) + intervalS
+                                if d <= PresenceRange(obj) then
+                                    p.presence.inRange = (p.presence.inRange or 0) + intervalS
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function AC.presenceShare(p)
+    local pr = type(p) == 'table' and p.presence or nil
+    local total = pr and Num(pr.total, 0) or 0
+    if total <= 0 then return nil end
+    return Num(pr.inRange, 0) / total
+end
+
+function AC.presenceOk(run, p)
+    if type(run) ~= 'table' or type(p) ~= 'table' then return true end
+    if #(run.order or {}) < 2 then return true end
+    local share = AC.presenceShare(p)
+    if share == nil then return true end
+    local need = Num(Cfg().presenceShare, 0.70)
+    if share >= need then return true end
+    -- Record why (once per participant) so the Review Queue can show the share.
+    if p.src and not run.test then
+        AC.flag(run, p.src, 'presence', CP.L('admin.anticheat.presence_detail', {
+            share = math.floor(share * 100 + 0.5),
+            need = math.floor(need * 100 + 0.5),
+        }))
+    end
+    return false
+end
+
+-- ============================================================================
+--                        IDLE CHECK AND BUCKET TRACKING
+-- ============================================================================
+
+function AC._idleCheck(nowTs)
+    if not Has('Runs', 'all') then return end
+    nowTs = nowTs or os.time()
+    local ok, list = Call('Runs', 'all')
+    if not ok or type(list) ~= 'table' then return end
+    local after = Num(Cfg().idleCheck, 180)
+    for _, run in ipairs(list) do
+        if run.state == 'in_progress' and run.startedAt then
+            local st = StateOf(run)
+            -- a department's stricter idle check, locked at accept in run.controls
+            local own = type(run.controls) == 'table' and tonumber(run.controls.idleCheck) or nil
+            local limit = (own and own > 0) and math.min(own, after) or after
+            if not st.idleDone and nowTs - run.startedAt >= limit then
+                st.idleDone = true
+                for _, s in ipairs(ActiveSrcs(run)) do
+                    local p = run.participants[s]
+                    -- a late officer who follows the action (CP.Runs.extendStart) keeps his extended deadline; the
+                    -- start timeout removes him there
+                    local following = tonumber(p and p.followUntil) and p.followUntil > nowTs
+                    if p and p.status == 'active' and not p.arrived and not following then
+                        CP.log(TAG, 'run %s: %d never reached the start: idle', tostring(run.id), s)
+                        Call('Runs', 'removeParticipant', run, s, 'idle', { notify = 'admin.anticheat.idle_notice' })
+                        if run.state == 'ended' then break end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Drop the speed-check position of anyone whose routing bucket changed (or who is in the arena).
+function AC._trackBuckets()
+    if not Has('Runs', 'all') then return end
+    local ok, list = Call('Runs', 'all')
+    if not ok or type(list) ~= 'table' then return end
+    local live = {}
+    for _, run in ipairs(list) do
+        live[run.id] = true
+        for _, s in ipairs(ActiveSrcs(run)) do
+            local p = run.participants[s]
+            if p and p.lastEvent then
+                local b = BucketOf(s)
+                if b ~= 0 or (p.lastEvent.bucket ~= nil and p.lastEvent.bucket ~= b) or InArena(s) then
+                    p.lastEvent = nil
+                end
+            end
+        end
+    end
+    for id in pairs(state) do
+        -- Z10: a run that just ended keeps its state until it is forgotten: its participants are settled and its
+        -- run:ended hooks (volunteer and talk-down pay) read flaggedWith after CleanupRun took it out of Runs.all
+        local kept = (Has('Runs', 'get') and CP.Runs.get(id)) or (Has('Runs', 'ended') and CP.Runs.ended(id))
+        if not live[id] and not kept then state[id] = nil end
+    end
+end
+
+-- ============================================================================
+--                             VOIDS -> suspension
+-- ============================================================================
+
+-- Only strikes count: an admin's void kind 'correction' (a bug, a retired officer) never suspends anyone.
+function AC.onVoided(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    local c = Cfg()
+    local needed = math.floor(Num(c.voidsToSuspend, 3))
+    local days = math.floor(Num(c.voidWindowDays, 30))
+    local suspendDays = math.floor(Num(c.suspendDays, 7))
+    if needed <= 0 or suspendDays <= 0 then return false end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local now = os.time()
+    local since = now - days * 86400
+    local okL, last = pcall(MySQL.scalar.await,
+        'SELECT UNIX_TIMESTAMP(MAX(created_at)) AS ts FROM cp_audit WHERE action = \'autoSuspend\' AND target = ?',
+        { citizenid })
+    if okL and tonumber(last) and tonumber(last) > since then since = math.floor(tonumber(last)) end
+    local okC, n = pcall(MySQL.scalar.await,
+        [[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND voided = 1
+        AND (void_kind IS NULL OR void_kind = 'strike')
+        AND mission_type NOT IN ('manual_award', 'goal') AND created_at >= FROM_UNIXTIME(?)]], { citizenid, since })
+    if not okC then
+        CP.err(TAG, 'void count for %s failed: %s', citizenid, tostring(n))
+        return false
+    end
+    n = math.floor(Num(n, 0))
+    if n < needed then return false end
+    if Has('Access', 'isSuspended') then
+        local okS, suspended = Call('Access', 'isSuspended', citizenid)
+        if okS and suspended then return false end
+    end
+    local okA, done, e = Call('Access', 'suspend', citizenid, suspendDays, 0, 'auto')
+    if not okA or not done then
+        CP.err(TAG, 'automatic suspension of %s failed: %s', citizenid, tostring(e))
+        return false
+    end
+    if Has('Admin', 'audit') then
+        Call('Admin', 'audit', 'console', 'console', 'audit', 'autoSuspend', citizenid, nil, ('%d'):format(suspendDays),
+            CP.L('admin.anticheat.auto_suspend_reason', { count = n, days = days }))
+    end
+    CP.warn(TAG, '%s suspended for %d days after %d voided runs', citizenid, suspendDays, n)
+    return true
+end
+
+-- The officer's strikes in the window (the Officers screen shows them).
+function AC.strikeCount(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return 0 end
+    if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
+    local days = math.floor(Num(Cfg().voidWindowDays, 30))
+    local okC, n = pcall(MySQL.scalar.await, [[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ?
+        AND voided = 1 AND (void_kind IS NULL OR void_kind = 'strike') AND mission_type NOT IN ('manual_award', 'goal')
+        AND created_at >= FROM_UNIXTIME(?)]], { citizenid, os.time() - days * 86400 })
+    return okC and math.floor(Num(n, 0)) or 0
+end
+
+-- ============================================================================
+--                                     LOOP
+-- ============================================================================
+
+CreateThread(function()
+    while true do
+        Wait(TICK_MS)
+        local now = GetGameTimer()
+        local ok, err = pcall(AC._trackBuckets)
+        if not ok then CP.err(TAG, 'bucket tracking failed: %s', tostring(err)) end
+        ok, err = pcall(AC._idleCheck)
+        if not ok then CP.err(TAG, 'idle check failed: %s', tostring(err)) end
+        if lastPresenceMs == nil then lastPresenceMs = now end
+        if now - lastPresenceMs >= PRESENCE_EVERY_MS then
+            local interval = (now - lastPresenceMs) / 1000
+            lastPresenceMs = now
+            ok, err = pcall(AC._sample, math.min(interval, 10))
+            if not ok then CP.err(TAG, 'presence sampling failed: %s', tostring(err)) end
+        end
+    end
+end)

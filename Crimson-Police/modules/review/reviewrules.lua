@@ -1,0 +1,197 @@
+-- CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
+
+-- CP.ReviewRules (server): a department's stricter review rules for flagged runs (the Mission control
+-- reviewRules). { secondVoid = true }: a supervisor's Void of a flagged row of that department only marks it pending;
+-- a second supervisor of that department confirms it. { adminOnlyKinds = { kind, ... } }: flags of those kinds leave
+-- the supervisors' Review queue and only admins approve or void them. It never relaxes a rule (Config.AntiCheat's
+-- flag triggers are not offered) and admins are never bound by it.
+
+CP.ReviewRules = CP.ReviewRules or {}
+local RR = CP.ReviewRules
+local TAG = 'reviewrules'
+
+local KEY = 'reviewRules'
+local KINDS_MAX = 16
+
+-- The flag kinds a supervisor may hand to admins (cp_mission_runs.flag_reason; the locale names them flag.<kind>).
+local FLAG_KINDS = {
+    'outside_help',
+    'too_fast',
+    'speed',
+    'presence',
+    'unexpected_event',
+    'stun_unproven',
+    'manual',
+    'rs_excessive_force',
+    'rs_unarmed_shot',
+    'rs_vdm',
+    'rs_bad_seize',
+    'rs_linked_accounts',
+    'rs_pair_repeat',
+}
+
+local pending = {}   -- row id -> { citizenid, name, department, at }: the first Void of a row waiting for a second
+
+-- ============================================================================
+--                                 THE CONTROL
+-- ============================================================================
+
+-- The control's value: { secondVoid = true | false, adminOnlyKinds = { kind, ... } }. strict: anything else is
+-- refused (a supervisor's change); else a saved value keeps only the kinds still known.
+local function Clean(v, strict)
+    if type(v) ~= 'table' or type(v.secondVoid) ~= 'boolean' then return nil end
+    for k in pairs(v) do
+        if strict and k ~= 'secondVoid' and k ~= 'adminOnlyKinds' then return nil end
+    end
+    if v.adminOnlyKinds ~= nil and type(v.adminOnlyKinds) ~= 'table' then return nil end
+    local known = {}
+    for _, k in ipairs(FLAG_KINDS) do known[k] = true end
+    local picked, n = {}, 0
+    for _, k in pairs(v.adminOnlyKinds or {}) do
+        n = n + 1
+        if type(k) ~= 'string' or not known[k] or n > KINDS_MAX then
+            if strict then return nil end
+        else
+            picked[k] = true
+        end
+    end
+    local kinds = {}
+    for _, k in ipairs(FLAG_KINDS) do
+        if picked[k] then kinds[#kinds + 1] = k end
+    end
+    return { secondVoid = v.secondVoid, adminOnlyKinds = kinds }
+end
+RR._clean = Clean
+
+function RR.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(KEY, {
+        kind = 'map',
+        bounded = false,
+        configValue = function() return { secondVoid = false, adminOnlyKinds = {} } end,
+        check = function(v)
+            local clean = Clean(v, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v) return Clean(v, false) end,
+        -- stricter only: it applies to the supervisor who set it too
+        relaxes = function() return false end,
+        viewExtra = function() return { flagKinds = FLAG_KINDS } end,
+    })
+    return true
+end
+RR.registerControls()
+
+-- The rules of a department: { secondVoid, adminOnlyKinds } (the config value, nothing stricter, while off).
+function RR.rules(dept)
+    local dc = CP.DeptControls
+    if not (dc and dc.get) or type(dept) ~= 'string' then return nil end
+    local ok, v = pcall(dc.get, dept, KEY)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', KEY, dept, tostring(v))
+        return nil
+    end
+    return type(v) == 'table' and v or nil
+end
+
+-- True when a flag of this kind on a row of dept goes to admins only.
+function RR.adminOnly(dept, kind)
+    local r = RR.rules(dept)
+    if not r or type(r.adminOnlyKinds) ~= 'table' then return false end
+    for _, k in ipairs(r.adminOnlyKinds) do
+        if k == kind then return true end
+    end
+    return false
+end
+
+-- ============================================================================
+--                                 SECOND VOID
+-- ============================================================================
+
+local function SameUser(a, b)
+    if a == b then return true end
+    local Access = CP.Access
+    if not (Access and Access.licenseOf) then return false end
+    local okA, la = pcall(Access.licenseOf, a)
+    local okB, lb = pcall(Access.licenseOf, b)
+    if not okA or not okB or not la or not lb then return false end
+    if Access.sameUser then return Access.sameUser(la, lb) == true end
+    return la == lb
+end
+
+-- A supervisor's Void of row (checks done by the caller): 'void' (go ahead; first = the pending Void it confirms, if
+-- any), 'pending' (the first Void: the row waits for a second supervisor) or nil, errKey.
+function RR.voidStep(officer, row)
+    if type(officer) ~= 'table' or type(row) ~= 'table' then return nil, 'err.invalid_payload' end
+    local r = RR.rules(row.department)
+    if not r or r.secondVoid ~= true then return 'void' end
+    local p = pending[row.id]
+    if not p then
+        pending[row.id] = {
+            citizenid = officer.citizenid,
+            name = officer.name,
+            department = officer.department,
+            at = os.time(),
+        }
+        return 'pending'
+    end
+    if SameUser(officer.citizenid, p.citizenid) then return nil, 'err.void_second_needed' end
+    if officer.department ~= row.department then return nil, 'err.void_second_dept' end
+    pending[row.id] = nil
+    return 'void', p
+end
+
+-- The first Void a row waits on ({ name, at }) | nil.
+function RR.pendingOf(rowId)
+    local p = pending[rowId]
+    if not p then return nil end
+    return { name = p.name, at = p.at }
+end
+
+-- The row was voided or approved: a waiting Void is gone.
+function RR.clear(rowId) pending[rowId] = nil end
+
+-- ============================================================================
+--                       A RESTART KEEPS THE FIRST VOIDS
+-- ============================================================================
+-- Every first Void is in the audit log (voidPending, target '#<row id> <citizenid>'). At the start the ones still
+-- waiting are read back: a voidPending that is the newest audit row of its target (no approval, void or restore
+-- came after it), of the last KEEP_DAYS days.
+
+local KEEP_DAYS = 90
+
+local function Restore()
+    if not (CP.Migrations and CP.Migrations.started and CP.Migrations.started()) then return end
+    CP.Db()
+    local ok, rows = pcall(MySQL.query.await, [[SELECT target, actor, UNIX_TIMESTAMP(created_at) AS ts FROM cp_audit
+        WHERE action = 'voidPending' AND created_at >= FROM_UNIXTIME(?) ORDER BY id]],
+        { os.time() - KEEP_DAYS * 86400 })
+    if not ok then
+        CP.err(TAG, 'reading the waiting first Voids failed: %s', tostring(rows))
+        return
+    end
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local id = math.tointeger(tonumber(tostring(r.target or ''):match('^#(%d+) ')))
+        if id and not pending[id] then
+            local okL, last = pcall(MySQL.single.await,
+                'SELECT action FROM cp_audit WHERE target = ? ORDER BY id DESC LIMIT 1', { r.target })
+            if okL and type(last) == 'table' and last.action == 'voidPending' then
+                local cid = tostring(r.actor)
+                local okN, name = pcall(MySQL.scalar.await, 'SELECT display_name FROM cp_officers WHERE citizenid = ?',
+                    { cid })
+                pending[id] = {
+                    citizenid = cid,
+                    name = okN and type(name) == 'string' and name ~= '' and name or cid,
+                    at = math.tointeger(tonumber(r.ts)) or os.time(),
+                }
+            end
+        end
+    end
+end
+
+CreateThread(Restore)
+
+-- Test hooks (not part of the contract).
+RR._reset = function() pending = {} end

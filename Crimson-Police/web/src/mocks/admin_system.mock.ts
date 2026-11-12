@@ -1,0 +1,515 @@
+// Browser mocks for full admin control, System: storage, backups, webhooks, problems, integrations, timed jobs,
+// departments added in game, desks and Support (the shapes of modules/admin/sysadmin).
+
+import { registerMock } from '../shared/nui';
+import type {
+    BackupView,
+    BackupsData,
+    CheckAccessResult,
+    ClientStateView,
+    DepartmentSetup,
+    IntegrationsData,
+    JobsView,
+    AdminHomeData,
+    ProblemsData,
+    RestorePreview,
+    SetupReply,
+    SetupView,
+    StorageView,
+    WebhookView,
+} from '../types/admin_system';
+
+const now = () => Math.floor(Date.now() / 1000);
+
+const backups: BackupView[] = [
+    {
+        name: '20261004-180000-daily',
+        kind: 'daily',
+        createdAt: now() - 86400,
+        by: 'console',
+        rows: 4210,
+        bytes: 912000,
+        files: 3,
+    },
+    {
+        name: '20261005-090000-manual',
+        kind: 'manual',
+        createdAt: now() - 3600,
+        by: 'ABC12345',
+        rows: 4380,
+        bytes: 948000,
+        files: 3,
+        protected: true,
+    },
+];
+
+const storageView = (): StorageView => ({
+    mode: 'files',
+    folder: 'saves',
+    tables: [
+        { name: 'cp_audit', rows: 812 },
+        { name: 'cp_mission_runs', rows: 3120 },
+        { name: 'cp_officers', rows: 46 },
+        { name: 'cp_settings', rows: 12 },
+    ],
+    totalRows: 3990,
+    bytes: 1830000,
+    files: 21,
+    version: '1.0.0',
+    migrations: {
+        version: 8,
+        pending: 0,
+        files: Array.from({ length: 8 }, (_, i) => ({ version: i + 1, name: `00${i + 1}.sql`, applied: true })),
+    },
+    override: null,
+    state: 'active',
+    runsGoing: 0,
+    backups: backups.length,
+});
+registerMock('request', 'admin:getStorage', storageView);
+
+// like the server, each Storage action's reply carries the fresh Storage view
+registerMock('action', 'server:admin:storageCopy', () => ({
+    message: 'admin.cmd.storage_copied',
+    restart: false,
+    view: storageView(),
+}));
+registerMock('action', 'server:admin:setStorageMode', () => ({ mode: 'database', restart: true, view: storageView() }));
+registerMock('action', 'server:admin:useStoreAgain', () => ({ state: 'active', view: storageView() }));
+
+const backupsView = (): BackupsData => ({
+    backups: [...backups].reverse(),
+    keep: 7,
+    daily: false,
+    folder: 'saves/_backups',
+});
+
+registerMock('request', 'admin:getBackups', backupsView);
+
+registerMock('action', 'server:admin:backupNow', () => {
+    const b: BackupView = {
+        name: `mock-${now()}-manual`,
+        kind: 'manual',
+        createdAt: now(),
+        by: 'ABC12345',
+        rows: 4400,
+        bytes: 950000,
+        files: 3,
+    };
+    for (const x of backups) x.protected = false;
+    b.protected = true;
+    backups.push(b);
+    // the reply carries the fresh list, as the server's does
+    return { ...b, view: backupsView() };
+});
+
+registerMock('request', 'admin:previewRestore', (a: { name?: string }): RestorePreview => ({
+    backup: { name: a?.name ?? '', kind: 'manual', createdAt: now() - 3600, by: 'ABC12345', rows: 4380 },
+    replaced: [
+        { name: 'cp_mission_runs', now: 3120, backup: 3080 },
+        { name: 'cp_officers', now: 46, backup: 45 },
+    ],
+    kept: ['cp_audit', 'cp_settings_history', 'cp_dept_funding'],
+    keptSettings: ['AdminControl.', 'Cash.allow', 'Retention.auditDays'],
+    files: ['missions/custom/my_mission.lua'],
+    moneyRuns: 211,
+    moneyItems: 4,
+    runsGoing: 0,
+    previewToken: 'mock-restore',
+    expiresAt: now() + 120,
+}));
+
+registerMock('action', 'server:admin:restoreBackup', () => ({ restart: true, view: backupsView() }));
+registerMock('action', 'server:admin:deleteBackup', (p: { name?: string }) => {
+    const i = backups.findIndex(b => b.name === p?.name);
+    if (i >= 0) backups.splice(i, 1);
+    return { name: p?.name, view: backupsView() };
+});
+
+registerMock('request', 'admin:getWebhooks', (): { webhooks: WebhookView[] } => ({
+    webhooks: (['audit', 'flags', 'board', 'builder', 'operations'] as const).map((c, i) => ({
+        category: c,
+        convar: `cp_webhook_${c}`,
+        state: i < 2 ? 'on' : 'off',
+        discord: i < 2,
+        line: `set cp_webhook_${c} "https://discord.com/api/webhooks/<id>/<token>"`,
+    })),
+}));
+
+// The First-start setup (modules/admin/setup): a fresh city with qbx_core's three police jobs, one department set
+// up and the owner's scripts missing. ?setup turns it on; finish or skip turns it off.
+let setupDone = false;
+function setupPending(): boolean {
+    return !setupDone && typeof window !== 'undefined' && /[?&]setup\b/.test(window.location.search);
+}
+const LADDER = [
+    { level: 0, name: 'Recruit', boss: false },
+    { level: 1, name: 'Officer', boss: false },
+    { level: 2, name: 'Sergeant', boss: false },
+    { level: 3, name: 'Lieutenant', boss: false },
+    { level: 4, name: 'Chief', boss: true },
+];
+registerMock('request', 'admin:getSetup', (): SetupView => ({
+    pending: setupPending(),
+    departments: [
+        {
+            key: 'police',
+            label: 'Los Santos Police Department',
+            short: 'LSPD',
+            jobs: ['police'],
+            supervisorGrade: 3,
+            enabled: true,
+            added: false,
+        },
+    ],
+    jobs: [
+        { name: 'bcso', label: 'BCSO', police: true, grades: LADDER, department: null },
+        { name: 'police', label: 'LSPD', police: true, grades: LADDER, department: 'police' },
+        { name: 'sasp', label: 'SASP', police: true, grades: LADDER, department: null },
+    ],
+    desks: [
+        { index: 1, label: 'Mission Row PD front desk', coords: { x: 441.0, y: -977.3, z: 30.69 } },
+        { index: 2, label: 'Sandy Shores office', coords: { x: 1853.2, y: 3689.6, z: 34.27 } },
+        { index: 3, label: 'Paleto Bay sheriff front desk', coords: { x: -448.55, y: 6011.92, z: 31.82 } },
+    ],
+    storage: { database: false, folder: 'saves', oxmysql: true, copyCommand: '/CrimsonPoliceAdmin storage copy' },
+    integrations: [
+        {
+            kind: 'dispatch',
+            setting: 'auto',
+            active: 'ps-dispatch',
+            options: ['auto', 'sc-dispatch', 'ps-dispatch', 'none'],
+        },
+        {
+            kind: 'ambulance',
+            setting: 'auto',
+            active: 'qbx_ambulancejob',
+            options: ['auto', 'sc-ambulance', 'qbx_ambulancejob', 'none'],
+        },
+        {
+            kind: 'banking',
+            setting: 'auto',
+            active: null,
+            why: 'missing',
+            options: ['auto', 'Renewed-Banking', 'none'],
+        },
+        {
+            kind: 'police',
+            setting: 'auto',
+            active: 'qbx_policejob',
+            options: ['auto', 'sc-police', 'qbx_policejob', 'none'],
+        },
+    ],
+    presets: [
+        { key: 'casual', name: 'Casual', help: 'Easier, friendlier play', count: 4 },
+        { key: 'serious', name: 'Serious RP', help: 'The route rule on, no hints', count: 4 },
+        { key: 'golive', name: 'Go-live', help: 'Ready for players', count: 4 },
+    ],
+}));
+registerMock('action', 'server:admin:finishSetup', (p: { skip?: boolean; preset?: string }): SetupReply => {
+    setupDone = true;
+    if (p.skip) return { changed: 0 };
+    const changed = Object.keys(p).filter(k => k !== 'preset' && k !== 'requestId').length;
+    return p.preset ? { changed, preset: { key: p.preset, changed: 4 } } : { changed };
+});
+
+// admin:getHome: Admin UI -> Home's dashboard (?homeCalm: nothing waiting, ?homeNoShortcuts: homeShortcuts = {},
+// ?homeByUse: homeShortcutsByUse = true, ?setup: the First-start setup shows until finished or skipped)
+registerMock('request', 'admin:getHome', (): AdminHomeData => {
+    const calm = typeof window !== 'undefined' && /[?&]homeCalm\b/.test(window.location.search);
+    const none = typeof window !== 'undefined' && /[?&]homeNoShortcuts\b/.test(window.location.search);
+    return {
+        live: {
+            onDuty: 5,
+            departments: [
+                { key: 'lspd', label: 'LSPD', n: 3 },
+                { key: 'bcso', label: 'BCSO', n: 2 },
+                { key: 'sast', label: 'SAST', n: 0 },
+            ],
+            runs: {
+                n: 2,
+                rows: [
+                    { runId: 'run-1', missionLabel: 'Downtown Patrol', people: 2, test: false },
+                    { runId: 'run-2', missionLabel: 'Bank Alarm', people: 1, test: true },
+                ],
+            },
+        },
+        queues: { flagged: calm ? 0 : 3, profiles: calm ? 0 : 1, disputes: 0, payments: 0, rsCases: 0 },
+        alerts: {
+            problems: calm ? 0 : 2,
+            refusedToday: calm ? 0 : 2,
+            health: { warn: calm ? 0 : 1, error: 0 },
+            load: { loaded: 42, refused: 0, error: false },
+        },
+        shortcuts: none ? [] : ['newMission', 'missionSwitch', 'pay', 'points', 'settings'],
+        shortcutsByUse: typeof window !== 'undefined' && /[?&]homeByUse\b/.test(window.location.search),
+        setup: setupPending(),
+        // the Setup checklist as shipped: storage on the saves folder, no preset applied yet, Debug on
+        checklist: [
+            { key: 'departments', done: true },
+            { key: 'grades', done: true },
+            { key: 'desks', done: true },
+            { key: 'storage', done: calm },
+            { key: 'scripts', done: true },
+            { key: 'money', done: calm, n: 0 },
+            { key: 'presets', done: calm },
+            { key: 'debug', done: calm },
+        ],
+        serverTime: now(),
+    };
+});
+
+registerMock('request', 'admin:getProblems', (): ProblemsData => ({
+    lines: [
+        {
+            at: now() - 120,
+            level: 'warn',
+            tag: 'confighealth',
+            text: 'items: the tablet item police_tablet is not an ox_inventory item',
+        },
+        { at: now() - 900, level: 'error', tag: 'admin', text: 'webhook audit failed: <webhook link> answered 404' },
+    ],
+    total: 2,
+    tags: ['admin', 'confighealth'],
+}));
+
+registerMock('request', 'admin:getIntegrations', (): IntegrationsData => ({
+    resources: [
+        { name: 'qbx_core', state: 'started', version: '1.20.0', required: true },
+        { name: 'ox_inventory', state: 'started', version: '2.41.0', required: true },
+        { name: 'sc-dispatch', state: 'started', version: '3.2.1', required: false, serves: ['dispatch'] },
+        { name: 'sc-police', state: 'started', required: false, serves: ['police'] },
+        { name: 'Renewed-Banking', state: 'missing', required: false },
+        { name: 'Crimson-Arena', state: 'missing', required: false },
+    ],
+    jobs: [
+        { kind: 'dispatch', setting: 'auto', active: 'sc-dispatch' },
+        { kind: 'ambulance', setting: 'none', off: 'ambulance: none (Crimson-Police picks up and revives itself)' },
+        { kind: 'banking', setting: 'auto', off: 'banking: no banking script is running' },
+        { kind: 'police', setting: 'auto', active: 'sc-police' },
+    ],
+    checklist: ['sysadmin.checklist.dispatch_jobs', 'sysadmin.checklist.police_jobs', 'sysadmin.checklist.arena'],
+    arena: {
+        state: 'missing',
+        players: 0,
+        zones: [{ label: 'Crimson-Arena (Maze Bank Arena)', coords: { x: -324, y: -1968, z: 66 }, radius: 220 }],
+    },
+}));
+
+const setup: DepartmentSetup = {
+    departments: [
+        {
+            key: 'sast',
+            added: false,
+            enabled: true,
+            label: 'San Andreas State Troopers',
+            short: 'SAST',
+            jobs: ['sast'],
+            supervisorGrade: 3,
+            societyAccount: 'sast',
+            theme: { primary: '#1f4e8c', accent: '#f2c230', background: '#0d1522', surface: '#152235' },
+        },
+        {
+            key: 'fib',
+            added: false,
+            enabled: true,
+            label: 'Federal Investigation Bureau',
+            short: 'FIB',
+            jobs: ['fib'],
+            supervisorGrade: 3,
+            societyAccount: 'fib',
+            theme: { primary: '#1c2541', accent: '#c9a227', background: '#0b0c10', surface: '#1a1b24' },
+            officerOptions: { allow: { hudSide: false }, defaults: { textSize: 'large' } },
+        },
+    ],
+    jobs: [
+        {
+            name: 'sast',
+            label: 'SAST',
+            grades: [
+                { level: 0, name: 'Trooper' },
+                { level: 3, name: 'Sergeant' },
+            ],
+            usedBy: 'sast',
+        },
+        {
+            name: 'fib',
+            label: 'FIB',
+            grades: [
+                { level: 0, name: 'Agent' },
+                { level: 3, name: 'Lead' },
+            ],
+            usedBy: 'fib',
+        },
+        {
+            name: 'bcso',
+            label: 'BCSO',
+            grades: [
+                { level: 0, name: 'Deputy' },
+                { level: 3, name: 'Sergeant' },
+            ],
+        },
+    ],
+    cashSource: 'server',
+    runsGoing: 0,
+    optionsEnabled: true,
+    optionDefs: [
+        { key: 'hudSide', kind: 'enum', group: 'hud', values: ['right', 'left'], allow: true, default: 'right' },
+        {
+            key: 'hudScale',
+            kind: 'number',
+            group: 'hud',
+            allow: true,
+            default: 1,
+            bounds: { min: 0.5, max: 2 },
+        },
+        { key: 'textSize', kind: 'enum', group: 'look', values: ['normal', 'large'], allow: true, default: 'normal' },
+        { key: 'skipAcceptConfirm', kind: 'bool', group: 'missions', allow: true, default: false },
+        { key: 'favouriteTypes', kind: 'list', group: 'missions', values: ['pursuit'], allow: true, default: [] },
+    ],
+};
+
+registerMock('request', 'admin:getDepartmentSetup', (): DepartmentSetup => setup);
+registerMock(
+    'action',
+    'server:admin:addDepartment',
+    (p: { key?: string; label?: string; short?: string; jobs?: string[] }) => {
+        setup.departments.push({
+            key: p.key ?? 'x',
+            added: true,
+            enabled: true,
+            label: p.label ?? '',
+            short: p.short ?? '',
+            jobs: p.jobs ?? [],
+            supervisorGrade: 3,
+        });
+        return { key: p.key };
+    },
+);
+registerMock('action', 'server:admin:saveDepartment', () => ({}));
+registerMock('action', 'server:admin:setDepartmentEnabled', (p: { key?: string; enabled?: boolean }) => {
+    const d = setup.departments.find(x => x.key === p.key);
+    if (d) d.enabled = !!p.enabled;
+    return { key: p.key, enabled: p.enabled };
+});
+registerMock('action', 'server:admin:deleteDepartment', (p: { key?: string }) => {
+    setup.departments = setup.departments.filter(x => x.key !== p.key);
+    return { key: p.key };
+});
+registerMock('action', 'server:admin:uploadLogo', (p: { index?: number; total?: number; department?: string }) =>
+    p.index === p.total ? { file: `${p.department}.png`, restart: true } : { received: p.index, total: p.total },
+);
+
+registerMock('action', 'server:admin:addDeskHere', () => ({ index: 3 }));
+registerMock('action', 'server:admin:updateDesk', (p: { index?: number }) => ({ index: p.index }));
+registerMock('action', 'server:admin:removeDesk', (p: { index?: number }) => ({ index: p.index }));
+registerMock('action', 'server:admin:teleportToDesk', () => ({}));
+registerMock('request', 'admin:myPosition', () => ({ x: 441.2, y: -978.9, z: 30.69, heading: 90 }));
+registerMock('action', 'server:admin:teleportTo', () => ({}));
+
+registerMock('request', 'admin:checkAccess', (): CheckAccessResult => ({
+    ok: false,
+    error: 'err.not_on_duty',
+    fix: 'sysadmin.fix.not_on_duty',
+    via: 'command',
+    steps: [
+        { check: 'job', ok: true, vars: { job: 'sast' } },
+        { check: 'department_on', ok: true, vars: { department: 'sast' } },
+        { check: 'duty', ok: false },
+        { check: 'suspended', ok: true },
+    ],
+}));
+registerMock('request', 'admin:getClientState', (): ClientStateView => ({
+    screen: 'faded in',
+    nuiFocus: true,
+    tabletOpen: false,
+    scriptCam: false,
+    playerControl: true,
+    frozen: false,
+}));
+registerMock('action', 'server:admin:giveTabletItem', () => ({ item: 'police_tablet' }));
+registerMock('action', 'server:admin:releaseScreen', () => ({}));
+
+registerMock('request', 'admin:exportAuditPart', (a: { part?: number }) => ({
+    csv: 'id,time,actor,actor_name,role,category,action,target,old_value,new_value,reason\n1,2026-10-05 09:00:00,ABC12345,John,admin,audit,settingChanged,Tablet.deskDistance,3,4.5,',
+    rows: 1,
+    part: a?.part ?? 1,
+    parts: 2,
+    total: 6200,
+}));
+registerMock('action', 'server:admin:saveAuditExport', () => ({
+    path: 'saves/exports/audit-20261005-090000.csv',
+    rows: 6200,
+    truncated: false,
+}));
+
+// System → Jobs
+const jobs: JobsView = {
+    resetHour: 0,
+    weekStartsOn: 'monday',
+    runNowMinutes: 10,
+    requestDays: 7,
+    jobs: [
+        {
+            id: 'backup',
+            when: 'daily',
+            on: false,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 18 * 3600,
+            settings: [
+                { path: 'Backups.daily', value: false },
+                { path: 'Backups.keep', value: 7 },
+            ],
+        },
+        {
+            id: 'cleanup',
+            when: 'daily',
+            on: true,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 18 * 3600,
+            last: {
+                at: now() - 6 * 3600,
+                by: null,
+                durationMs: 840,
+                result: { archived: 120, kept: 3, auditDeleted: 40, requestsDeleted: 12, historyDeleted: 0 },
+            },
+            settings: [
+                { path: 'Retention.runArchiveMonths', value: 12 },
+                { path: 'Retention.auditDays', value: 180 },
+            ],
+        },
+        {
+            id: 'board_week',
+            when: 'weekly',
+            on: true,
+            manual: false,
+            running: false,
+            nextRunAt: now() + 4 * 86400,
+            settings: [{ path: 'Leaderboard.weekStartsOn', value: 'monday' }],
+        },
+        {
+            id: 'cash_forfeiture',
+            when: 'every',
+            every: 600,
+            on: true,
+            manual: true,
+            running: false,
+            nextRunAt: now() + 300,
+            last: { at: now() - 300, by: null, durationMs: 4, result: { n: 0 } },
+            settings: [{ path: 'Disputes.windowHours', value: 48 }],
+        },
+    ],
+};
+registerMock('request', 'admin:getJobs', (): JobsView => jobs);
+registerMock('action', 'server:admin:runJobNow', (p: unknown) => {
+    const a = (p ?? {}) as { id?: string; reason?: string };
+    if (!a.reason) throw new Error('err.reason_required');
+    const job = jobs.jobs.find(j => j.id === a.id);
+    if (!job) throw new Error('err.job_unknown');
+    if (!job.manual) throw new Error('err.job_not_manual');
+    if (!job.on) throw new Error('err.job_off');
+    job.last = { at: now(), by: 'ADM00001', durationMs: 12, result: { n: 0 } };
+    return jobs;
+});

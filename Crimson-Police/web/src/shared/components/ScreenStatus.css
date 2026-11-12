@@ -1,0 +1,11 @@
+/* Screen load states (every tablet): the stale line under the header. */
+.cp-screen-stale {
+    display: flex;
+    align-items: center;
+    gap: var(--cp-space-2);
+    padding: 6px var(--cp-space-3);
+    border: 1px solid var(--cp-border);
+    border-radius: var(--cp-radius-sm);
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}

@@ -1,0 +1,169 @@
+/* The criminal tablet: the frame, header and side tabs of its dark street look. Everything inside is the shared
+   components in the street theme (.cp-theme-street, styles/base.css: its colours, corners and font), with the few
+   street touches below. No blur and no running animation (CEF cost); the frame is the police tablet's size and
+   scale. */
+
+.crim-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.crim-frame {
+    pointer-events: auto;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--cp-bg);
+    color: var(--cp-text);
+    border: 14px solid #050506;
+    border-radius: 28px;
+    box-shadow:
+        0 0 0 2px #1d1d22,
+        0 30px 80px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+}
+
+.crim-header {
+    display: flex;
+    align-items: center;
+    gap: var(--cp-space-4);
+    padding: 14px 22px;
+    border-bottom: 1px dashed var(--cp-border);
+    background: repeating-linear-gradient(135deg, #111114 0 12px, #0d0d10 12px 24px);
+}
+
+.crim-brand {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--cp-primary);
+}
+
+.crim-signal {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--cp-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+}
+
+.crim-close {
+    background: none;
+    border: 1px solid var(--cp-border);
+    color: var(--cp-text);
+    border-radius: 6px;
+    padding: var(--cp-space-1) 6px;
+    cursor: pointer;
+}
+
+.crim-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+.crim-nav {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cp-space-1);
+    padding: var(--cp-space-4) 10px;
+    border-right: 1px dashed var(--cp-border);
+}
+
+.crim-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px var(--cp-space-3);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--cp-muted);
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.crim-tab:hover {
+    color: var(--cp-text);
+    border-color: var(--cp-border);
+}
+
+.crim-tab.is-on {
+    color: var(--cp-bg);
+    background: var(--cp-primary);
+}
+
+.crim-tab__badge {
+    margin-left: auto;
+}
+
+.crim-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--cp-space-5) var(--cp-space-6);
+}
+
+/* street touches on the shared components: the edge on the left, titles and buttons in capitals */
+.cp-theme-street .cp-card--hl-primary {
+    border-top: 1px solid var(--cp-border);
+    border-left: 3px solid var(--cp-primary);
+}
+
+.cp-theme-street .cp-card__title,
+.cp-theme-street .cp-btn {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.crim-main .cp-card p {
+    margin: 6px 0;
+    line-height: 1.45;
+}
+
+.crim-big {
+    font-size: var(--cp-fs-xl);
+    color: var(--cp-primary);
+}
+
+.crim-muted {
+    color: var(--cp-muted);
+    font-size: var(--cp-fs-sm);
+}
+
+.crim-warn {
+    color: var(--cp-warning);
+    margin: 0;
+}
+
+.crim-timer {
+    font-size: var(--cp-fs-xl);
+    color: var(--cp-warning);
+}
+
+.crim-bad {
+    color: var(--cp-danger);
+}
+
+.crim-facts,
+.crim-roles,
+.crim-agree {
+    margin: var(--cp-space-2) 0;
+}
+
+.crim-actions {
+    margin-top: var(--cp-space-3);
+}
+
+.crim-list {
+    margin: 6px 0;
+    padding-left: var(--cp-space-5);
+    line-height: 1.6;
+}

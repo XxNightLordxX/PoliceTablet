@@ -1,0 +1,164 @@
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/realplayers/staff.lua answers.
+
+// Admin UI · Real suspects (screen key 'admin_rs'): what modules/realplayers/staff.lua answers.
+// Callbacks (antiFarmOverride key): admin:getRsCases, admin:getRsCase { runUuid }, admin:getRsPairs { citizenid? }.
+// Actions (a reason, 1-3650 days): server:admin:rsBlockPair { officer, suspect, days, reason },
+// server:admin:rsExclude / server:admin:rsSuspend { citizenid, days, reason }.
+
+export type RsKind = 'live' | 'volunteer';
+export type RsState = 'free' | 'cuffed' | 'detained' | 'booked' | 'lost' | 'left' | 'void';
+
+export interface RsPerson {
+    citizenid: string;
+    name?: string | null;
+}
+
+export interface RsOfficer extends RsPerson {
+    callsign?: string | null;
+    status?: string | null;
+}
+
+// A volunteer case's part (CP.Volunteers.staffView): the suspect he plays, the mode, the match phase, why he
+// dropped out (a void) and whether an officer reached him. Never a server id or a position.
+export interface RsVolunteerInfo {
+    role: string;
+    mode?: string | null;
+    phase?: string | null;
+    why?: string | null;
+    engaged?: boolean;
+}
+
+// One volunteer on the list now (CP.Volunteers.staffList); playing = the phase of the run he is asked for or
+// plays.
+export interface RsListedVolunteer {
+    citizenid: string;
+    name?: string | null;
+    roles: string[];
+    since: number;
+    untilAt: number;
+    strikes: number;
+    playing?: string | null;
+}
+
+// One line of admin:getRsCases (the open cases newest first, then the kept closed ones).
+export interface RsCaseLine {
+    runId: string;
+    kind: RsKind;
+    open: boolean;
+    openedAt?: number | null;
+    closedAt?: number | null;
+    missionId?: string | null;
+    suspects: number;
+    detained: number;
+    booked: number;
+    flags: number;
+    notes: number;
+    officers: RsOfficer[];
+    // a volunteer case: what he plays and how far the match got
+    volunteer?: RsVolunteerInfo | null;
+    // a case of one of the admin's own characters or accounts: it can't be opened (err.own_run)
+    own?: boolean;
+}
+
+export interface RsCasesData {
+    enabled: boolean;
+    liveCrime: boolean;
+    volunteers: boolean;
+    cases: RsCaseLine[];
+    // Config.AdminUi.pageSize: cases holds one page (asked for with page)
+    casesPage?: { page: number; pages: number; total: number } | null;
+    // the volunteers on the list now (empty while volunteers are off)
+    listed?: RsListedVolunteer[];
+    // the Volunteers tab offers Clear strikes (Config.RealPlayers.volunteer.staffClearStrikes)
+    clearStrikes?: boolean;
+    // blocks, exclusions and suspensions can be lifted early (Config.RealPlayers.staff.lift)
+    lift?: boolean;
+    serverTime: number;
+}
+
+export interface RsSuspect {
+    citizenid: string;
+    name?: string | null;
+    label: string;
+    state: RsState;
+    outcome?: string | null;
+    online: boolean;
+    share?: number | null;
+    everArmed: boolean;
+    afk: boolean;
+    down: boolean;
+    byLeave: boolean;
+    // seconds from the case's open
+    contactS?: number | null;
+    cuffedS?: number | null;
+    detainedS?: number | null;
+    bookedS?: number | null;
+    jailTime?: number | null;
+    notes: number;
+}
+
+// One timeline entry as text (os.time() t); flag = an officer-conduct flag, note = a suspect note.
+export interface RsLine {
+    t: number;
+    what: string;
+    label?: string | null;
+    who?: RsPerson | null;
+    by?: RsPerson | null;
+    text: string;
+    flag?: boolean;
+    note?: boolean;
+    kind?: string | null;
+}
+
+// One damage-ledger entry: dir 'officer' = an officer hit a suspect, 'suspect' = a suspect hit an officer.
+export interface RsLedgerLine {
+    t: number;
+    dir: 'officer' | 'suspect';
+    officer?: RsOfficer | null;
+    label?: string | null;
+    weapon?: number | null;
+    // the weapon's name (Config.RealPlayers.staff.weaponNames), absent for a weapon not in shared/weapons.lua
+    weaponName?: string | null;
+    n: number;
+    willKill: boolean;
+    state?: RsState | null;
+    down: boolean;
+    rules?: string[];
+}
+
+// admin:getRsCase: the line's counts, plus the suspects (the list, in place of the count), the timeline as text, the
+// flag lines and the damage ledger. No position is ever answered.
+export interface RsCaseData extends Omit<RsCaseLine, 'own' | 'suspects'> {
+    crimeEnded: boolean;
+    suspects: RsSuspect[];
+    lines: RsLine[];
+    flagLines: RsLine[];
+    ledger: RsLedgerLine[];
+    serverTime: number;
+}
+
+export interface RsPairLine {
+    officer: string;
+    suspect: string;
+    cases: number;
+    scored: number;
+    lastAt: number;
+    lastOutcome?: string | null;
+    kinds: string[];
+}
+
+export interface RsPairsData {
+    enabled: boolean;
+    pairs: RsPairLine[];
+    // os.time() of the oldest ledger row read at start (nil = none)
+    from?: number | null;
+    // character names by citizen ID for the pairs (Config.RealPlayers.staff.names; an empty list when there are
+    // none). The running blocks, exclusions and suspensions are rows of admin:getRestrictions.
+    names?: Record<string, string> | unknown[] | null;
+    serverTime: number;
+    citizenid?: string;
+    excludedUntil?: number | null;
+    suspendedUntil?: number | null;
+}
+
+export type RsTool = 'block' | 'exclude' | 'suspend';

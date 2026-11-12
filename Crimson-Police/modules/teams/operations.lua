@@ -1,0 +1,1802 @@
+-- CP.Operations (server): Cross-Department Missions, a team of every department: the join list, waitlist and start.
+
+-- modules/teams/operations.lua · CP.Operations (server): Cross-Department Missions.
+--
+-- Owns: the one active Cross-Department Mission ("operation"), the board lock for every department
+-- while it is active, its join window, the start of its run through CP.Runs.create, fail → relaunch /
+-- cancel, the idle auto-cancel, the server-wide launch cooldown, the cp_operations rows, the
+-- operation notifications (client:operation to every on-duty officer, CP.Tablet.notify to the people
+-- concerned, pushes 'operation' and 'board') and the operations audit / webhook entries.
+-- SPEC "Cross-Department Missions", "Supervisor & admin actions" (launch row), "Data model" cp_operations.
+--
+-- Life cycle (cp_operations.status):
+--   joining  launched (or relaunched): officers of every department join, up to Config.CrossDept.maxParticipants;
+--            joining closes when the launcher taps Start now or after Config.CrossDept.joinWindow seconds.
+--            At window end the run starts by itself with enough participants, otherwise → waiting.
+--   running  the run exists (accepted → in progress). Operation runs ignore cooldowns, the no-repeat rule,
+--            the hourly cap and the server cap and roll no modifier (CP.Runs / CP.Events decide that from
+--            run.operationId). Nobody can join any more.
+--   waiting  the run failed, every participant left, or the window closed without enough participants /
+--            without a free location: still active (the board stays locked); any supervisor may relaunch
+--            (a new join window) or cancel. Config.CrossDept.idleCancel seconds with no run (counted from the
+--            launch or the end of the last run; a relaunch does not reset it) → auto-cancel once no join
+--            window is open.
+--   completed  the run was Completed: the lock lifts.            (final, ended_at set)
+--   cancelled  cancelled by a supervisor/admin, by the idle rule, or by a restart.   (final, ended_at set)
+-- The board lock (isLocked) holds for joining, running and waiting. Cancelling a running operation ends
+-- every participant still on the run with end reason 'cancelled' (no cooldown, no penalty).
+-- A launch starts the server-wide cooldown Config.CrossDept.cooldown, counted from cp_operations.created_at
+-- of the last launch (persisted, so a restart keeps it); a relaunch is not a new launch.
+-- Restart safety: rows left joining/running/waiting by a previous server start are marked cancelled.
+--
+-- Public API (docs/dev/ARCHITECTURE.md §5.17)
+--   CP.Operations.active() -> op|nil       the live operation table (read only):
+--       op = { id, missionId, missionLabel, missionType, status, launchedBy (citizenid), launcher (name),
+--              createdAt, joinEndsAt|nil, participants = { { src, citizenid, name, callsign, department,
+--              departmentShort, rank, joinedAt } }, runId|nil, idleSince, waitingReason|nil, attempt }
+--   CP.Operations.isLocked() -> boolean     an operation is joining, running or waiting
+--   CP.Operations.boardCard(src) -> card|nil   BoardData.operation (§9.4) + missionType, missionTypeLabel,
+--       description, min, runState, joinBlocked (the err.* key a Join would return while canJoin is false)
+--   CP.Operations.launch(src, missionId) -> ok, data|errKey      (permission launchCrossDept)
+--   CP.Operations.startNow(src) -> ok, data|errKey               (the one who opened the join window, an admin,
+--                                                                 or anyone allowed when that person is offline)
+--   CP.Operations.relaunch(src) -> ok, data|errKey
+--   CP.Operations.cancel(src, reason) -> ok, data|errKey         src 0 = the server (no permission check)
+--   CP.Operations.join(src, opId) -> ok, data|errKey             officers of any department (server:joinOperation)
+--   CP.Operations.invite(src, target) / respondInvite(src, accepted) / cancelInvite(src, target) -> ok, data|errKey
+--       Config.CrossDept.invites: a joined officer invites as a unit does (server:unitInvite { team = 'operation' },
+--       units.lua); an accept is Ops.join
+--   CP.Operations.officerCard(src) -> the Unit screen's operation card (members and waitlist with
+--       Config.CrossDept.memberList; canInvite, invitable, sent, inviteTtl with invites) | nil
+--   CP.Operations.inviteFor(src) -> { id, missionLabel, from, fromCallsign, departmentShort, joined, max, expiresIn }|nil
+--   CP.Operations.onRunEnded(run, state)                         (hook, CP.Runs) state 'completed' | other
+--   CP.Operations.view(src) -> OperationView (callback sup:getOperation, shape below)
+--   CP.Operations.cooldownLeft() -> seconds until the next launch is allowed (0 = now)
+--   CP.Operations.eligible(def) -> ok, errKey   launchable: published and enabled, departments empty
+--       (open to every department), maxOfficers >= 2, never the Weekly Boss
+-- Net (CP.Net; every sup/admin action checks CP.can(src, 'launchCrossDept') first, the admin
+-- ones also require an admin)
+--   actions server:sup:opLaunch / server:admin:opLaunch   { missionId }  -> { id }
+--           server:sup:opStart / server:admin:opStart     -              -> { runId, participants }
+--           server:sup:opRelaunch / server:admin:opRelaunch -            -> { id }
+--           server:sup:opCancel / server:admin:opCancel   { reason }     -> { id }   (reason 1-200 characters)
+--           (leaving before the start is the teams' one leave: server:teamLeave { team = 'operation' }, units.lua)
+--           Start with Config.CrossDept.readyCheck: the kept participants answer the unit ready check
+--           (CP.Units.teamReadyCheck, everyone asked, no Auto-Ready) -> { readyCheck = true, participants }; all
+--           Ready starts the run, anyone else leaves the join list and joining opens again
+--           server:joinOperation                          operationId | { operationId } -> { id, joined, max }
+--                   (the operation state is checked again after the checks that may yield, so a join never
+--                   passes the cap or lands after Start now copied the list)
+--   callback sup:getOperation -> OperationView
+--       { operation = null | { id, missionId, missionLabel, missionType, missionTypeLabel, difficulty,
+--           launcher, launcherCallsign, launcherDepartment, launchedAt, status, runState, runId,
+--           participants = { { src, name, callsign, departmentShort, department, status, arrived } },
+--           departments = { { short, count } }, joined, max, min, joinEndsIn, idleCancelIn, tier,
+--           tierExpected, remaining, waitingReason, attempt, canStart, startBlocked, canRelaunch, canCancel },
+--         cooldownLeft, cooldown, joinWindow, idleCancel, maxParticipants, crossBonus (Config.CrossDepartmentPoints),
+--         enabled, canLaunch, launchBlocked, serverTime,
+--         eligibleMissions = { { id, label, type, typeLabel, difficulty, minOfficers, maxOfficers } } (no operation only) }
+-- Client event: crimson-police:client:operation (state 'launched'|'started'|'ended'|'cancelled', missionLabel,
+-- extra = { id, relaunched }) to every on-duty officer. Pushes: 'operation' and 'board' ({ id|false, status|false })
+-- to every department member online (and 'operation' to online admins).
+
+CP.Operations = CP.Operations or {}
+local Ops = CP.Operations
+local TAG = 'operations'
+
+local BOSS_ID = 'weekly_boss_kingpin'
+local REASON_MAX = 200
+local TICK_ACTIVE_MS = 2000      -- an operation is joining, running or waiting
+local TICK_IDLE_MS = 10000       -- no operation (scaled by Config.Performance.loopScale)
+local RUN_MISSING_GRACE = 60     -- seconds a running operation's run may be missing before it counts as ended
+local ACTIVE = { joining = true, running = true, waiting = true }
+
+local op = nil                   -- the active operation (status joining | running | waiting)
+local lastLaunchAt = nil         -- os.time() of the last launch (MAX(cp_operations.created_at))
+local ready = false
+local busy = false               -- a launch / start / cancel is being processed
+local dbQueue, dbWorker = {}, false
+
+-- ============================================================================
+--                                   HELPERS
+-- ============================================================================
+
+local function Call(modName, fnName, ...) return CP.Call(TAG, modName, fnName, ...) end
+local GetOfficer, OnRun, InArena = CP.Teams.officer, CP.Teams.onRun, CP.Teams.inArena
+local OnlinePlayers, MaybeOfficer = CP.Teams.onlinePlayers, CP.Teams.maybeOfficer
+
+local function Cfg()
+    return type(Config.CrossDept) == 'table' and Config.CrossDept or {}
+end
+
+local function CfgInt(key, default)
+    local v = tonumber(Cfg()[key])
+    if not v or v ~= v or v < 0 or v == math.huge then return default end
+    return math.floor(v)
+end
+
+local function IsAdmin(src)
+    if src == 0 then return true end
+    local ok, v = Call('Access', 'isAdmin', src)
+    return ok and v == true
+end
+
+local function IsOnCall(src)
+    local ok, v = Call('Calls', 'isOnCall', src)
+    return ok and v == true
+end
+
+-- A supervisor's mission ban in force (CP.MissionBan): no joins until it ends.
+local function Banned(citizenid)
+    local ok, ban = Call('MissionBan', 'get', citizenid)
+    return ok and type(ban) == 'table'
+end
+
+local function BannedSrc(src)
+    local ok, info = Call('Qbx', 'getInfo', src)
+    return ok and type(info) == 'table' and Banned(info.citizenid)
+end
+
+-- ============================================================================
+--                        CROSS-DEPARTMENT PARTICIPATION
+-- ============================================================================
+-- A department's crossDept Mission control: { join = false } keeps its officers out of Cross-Department Missions;
+-- places caps how many of them take part in one (0 = no cap, never above Config.CrossDept.maxParticipants). The
+-- launch wait and the Hard rule lock (every board shows only the operation) stay server-wide.
+
+local CROSS_KEY = 'crossDept'
+
+local function CfgMax() return math.max(2, math.floor(tonumber(Cfg().maxParticipants) or 8)) end
+
+-- The control's value: { join = true | false, places = 0 .. maxParticipants }. strict: anything else is refused (a
+-- supervisor's change); else a saved value is moved inside (places past today's maximum become the maximum).
+local function CleanCross(v, strict)
+    if type(v) ~= 'table' or type(v.join) ~= 'boolean' then return nil end
+    for k in pairs(v) do
+        if k ~= 'join' and k ~= 'places' then
+            if strict then return nil end
+        end
+    end
+    local places = v.places == nil and 0 or math.tointeger(tonumber(v.places))
+    if not places or places < 0 then return nil end
+    if places > CfgMax() then
+        if strict then return nil end
+        places = CfgMax()
+    end
+    return { join = v.join, places = places }
+end
+Ops._cleanCross = CleanCross
+
+local function CrossRule(officer)
+    local dc = CP.DeptControls
+    if not (dc and dc.get) or type(officer) ~= 'table' or type(officer.department) ~= 'string' then return nil end
+    local ok, v = pcall(dc.get, officer.department, CROSS_KEY, officer)
+    if not ok then
+        CP.err(TAG, 'reading the %s control of %s failed: %s', CROSS_KEY, officer.department, tostring(v))
+        return nil
+    end
+    return type(v) == 'table' and v or nil
+end
+
+-- Why this officer's department keeps him out of the operation (errKey), or nil.
+local function DeptRefuses(cur, officer)
+    local rule = CrossRule(officer)
+    if not rule then return nil end
+    if rule.join == false then return 'err.op_department_out' end
+    local places = math.tointeger(tonumber(rule.places) or 0) or 0
+    if places <= 0 or not cur then return nil end
+    local n = 0
+    for _, p in ipairs(cur.participants or {}) do
+        if p.department == officer.department then n = n + 1 end
+    end
+    if n >= places then return 'err.op_department_full' end
+    return nil
+end
+
+function Ops.registerControls()
+    local dc = CP.DeptControls
+    if not (dc and dc.register) then return false end
+    dc.register(CROSS_KEY, {
+        kind = 'map',
+        bounded = false,
+        configValue = function() return { join = true, places = 0 } end,
+        check = function(v)
+            local clean = CleanCross(v, true)
+            if not clean then return nil, 'err.control_value' end
+            return clean
+        end,
+        clamp = function(v) return CleanCross(v, false) end,
+        -- it only keeps officers out or caps places: it applies to the supervisor who set it too
+        relaxes = function() return false end,
+        viewExtra = function() return { placesMax = CfgMax() } end,
+    })
+    return true
+end
+Ops.registerControls()
+
+local function RunGet(runId)
+    if not runId then return nil end
+    local ok, run = Call('Runs', 'get', runId)
+    if ok and type(run) == 'table' then return run end
+    return nil
+end
+
+local function ActiveSrcs(run)
+    local ok, list = Call('Runs', 'activeSrcs', run)
+    if ok and type(list) == 'table' then return list end
+    local out = {}
+    for _, s in ipairs(run.order or {}) do
+        local p = run.participants and run.participants[s]
+        if p and p.status == 'active' then out[#out + 1] = s end
+    end
+    return out
+end
+
+-- The same toast for a list of players: CP.Tablet.notifyMany (deduplicated; never a -1 broadcast), else one
+-- CP.Tablet.notify per player.
+local function NotifyMany(srcs, kind, key, vars)
+    if type(srcs) ~= 'table' or #srcs == 0 then return end
+    if CP.Tablet and type(CP.Tablet.notifyMany) == 'function' then
+        Call('Tablet', 'notifyMany', srcs, kind, key, vars)
+        return
+    end
+    for _, s in ipairs(srcs) do CP.notify(s, kind, key, vars) end
+end
+
+-- Clip to at most n characters without ending inside a UTF-8 sequence (the cp_audit columns count
+-- characters; a byte clip of an accented reason would lose text or break the sequence).
+local function ClipChars(s, n)
+    if s == nil then return nil end
+    s = tostring(s)
+    if not utf8.len(s) then return CP.U.clip(s, n) end
+    if utf8.len(s) <= n then return s end
+    return s:sub(1, utf8.offset(s, n + 1) - 1)
+end
+
+local function MissionDef(id)
+    local ok, def = Call('Missions', 'get', id)
+    if ok and type(def) == 'table' then return def end
+    return nil
+end
+
+local function TypeLabel(key)
+    local t = Config.MissionTypes and Config.MissionTypes[key]
+    return type(t) == 'table' and t.label or tostring(key or '')
+end
+
+local function TierName(n)
+    local ok, row = Call('Scaling', 'tierFor', n)
+    if ok and type(row) == 'table' then return row.tier end
+    local list = Config.Scaling or {}
+    for _, r in ipairs(list) do
+        if (tonumber(r.maxParticipants) or 0) >= n then return r.tier end
+    end
+    return list[#list] and list[#list].tier or 'standard'
+end
+
+local function MinFor(def)
+    local min = math.max(2, CfgInt('minParticipants', 2), math.tointeger(tonumber(def and def.minOfficers) or 1) or 1)
+    return math.min(min, math.max(2, CfgInt('maxParticipants', 8)))
+end
+
+local function MaxFor()
+    return math.max(2, CfgInt('maxParticipants', 8))
+end
+
+local function CleanReason(reason)
+    if type(reason) ~= 'string' then return nil, 'err.op_reason_required' end
+    reason = CP.U.trim((reason:gsub('%c', ' ')))
+    if reason == '' then return nil, 'err.op_reason_required' end
+    -- Characters, not bytes (the UI counts characters; accented text is multi-byte).
+    local len = utf8.len(reason)
+    if not len then return nil, 'err.invalid_payload' end
+    if len > REASON_MAX then return nil, 'err.op_reason_too_long' end
+    return reason
+end
+
+-- ============================================================================
+--              DATABASE (ordered, never blocks the state machine)
+-- ============================================================================
+
+local function DbRun(sql, params)
+    dbQueue[#dbQueue + 1] = { sql = sql, params = params }
+    if dbWorker then return end
+    dbWorker = true
+    CreateThread(function()
+        while #dbQueue > 0 do
+            local q = table.remove(dbQueue, 1)
+            local ok, err = pcall(MySQL.update.await, q.sql, q.params)
+            if not ok then
+                CP.err(TAG, '%s write failed: %s', CP.Storage and CP.Storage.name() or 'database', tostring(err))
+            end
+        end
+        dbWorker = false
+    end)
+end
+
+local function DbStatus(id, status, final)
+    if final then
+        DbRun('UPDATE cp_operations SET status = ?, ended_at = FROM_UNIXTIME(?) WHERE id = ?',
+            { status, os.time(), id })
+    else
+        DbRun('UPDATE cp_operations SET status = ? WHERE id = ?', { status, id })
+    end
+end
+
+-- ============================================================================
+--                              AUDIT AND WEBHOOK
+-- ============================================================================
+
+local function RoleOf(src)
+    if src == 0 then return 'console' end
+    return IsAdmin(src) and 'admin' or 'supervisor'
+end
+
+local function Audit(src, cur, action, oldV, newV, reason)
+    local target = ClipChars(('#%s %s'):format(tostring(cur.id), tostring(cur.missionId)), 64)
+    Call('Admin', 'audit', src == 0 and 'console' or src, RoleOf(src), 'operations', action, target,
+        oldV ~= nil and ClipChars(tostring(oldV), 64) or nil, newV ~= nil and ClipChars(tostring(newV), 64) or nil,
+        reason ~= nil and ClipChars(tostring(reason), 255) or nil)
+end
+
+local function Webhook(kind, cur, extra)
+    local vars = { mission = cur.missionLabel, id = cur.id, launcher = cur.launcher or '?' }
+    local fields = {
+        {
+            name = CP.L('sup.crossdept.webhook_field_mission'),
+            value = ('%s (%s)'):format(cur.missionLabel, cur.missionId),
+            inline = true,
+        },
+        { name = CP.L('sup.crossdept.webhook_field_launcher'), value = tostring(cur.launcher or '?'), inline = true },
+    }
+    if type(extra) == 'table' then
+        for _, f in ipairs(extra) do fields[#fields + 1] = f end
+    end
+    Call('Admin', 'webhook', 'operations', CP.L('sup.crossdept.webhook_' .. kind .. '_title', vars),
+        CP.L('sup.crossdept.webhook_' .. kind .. '_text', vars), fields)
+end
+
+-- ============================================================================
+--                                NOTIFICATIONS
+-- ============================================================================
+
+local function PushData()
+    return { id = op and op.id or false, status = op and op.status or false }
+end
+
+-- Pushes 'operation' + 'board' to every department member online ('operation' to admins too) and, with a
+-- state, client:operation to every on-duty officer. Runs in its own thread (getOfficer may wait). A player whose job
+-- is in no department is asked only the admin ace (no Qbox lookup).
+local function Broadcast(state, label, extra)
+    local data = PushData()
+    CreateThread(function()
+        for _, p in ipairs(OnlinePlayers()) do
+            p = CP.U.toSrc(p)
+            if p and not MaybeOfficer(p) then
+                if IsAdmin(p) then CP.push(p, 'operation', data) end
+            elseif p then
+                local okI, info = Call('Qbx', 'getInfo', p)
+                local job = okI and type(info) == 'table' and type(info.job) == 'table' and info.job or nil
+                local okD, dept = false, nil
+                if job then okD, dept = Call('Access', 'departmentForJob', job.name) end
+                if okD and dept then
+                    CP.push(p, 'operation', data)
+                    CP.push(p, 'board', data)
+                    if state and job.onduty and GetOfficer(p) then
+                        TriggerClientEvent(CP.e('client:operation'), p, state, label, extra)
+                    end
+                elseif IsAdmin(p) then
+                    CP.push(p, 'operation', data)
+                end
+            end
+        end
+    end)
+end
+
+-- A toast for every online player who may launch / relaunch / cancel (supervisors with the permission, admins). The
+-- permission is asked only for an admin or a player whose job may be in a department.
+local function NotifySupervisors(kind, key, vars)
+    CreateThread(function()
+        local targets = {}
+        for _, p in ipairs(OnlinePlayers()) do
+            p = CP.U.toSrc(p)
+            if p and (IsAdmin(p) or MaybeOfficer(p)) then
+                if CP.can(p, 'launchCrossDept') then targets[#targets + 1] = p end
+            end
+        end
+        NotifyMany(targets, kind, key, vars)
+    end)
+end
+
+-- ============================================================================
+--                                 ELIGIBILITY
+-- ============================================================================
+
+function Ops.eligible(def)
+    if type(def) ~= 'table' or type(def.id) ~= 'string' then return false, 'err.op_mission_unknown' end
+    if def.isBoss == true or def.id == BOSS_ID then return false, 'err.op_mission_boss' end
+    if def.status ~= nil and def.status ~= 'published' then return false, 'err.op_mission_disabled' end
+    if CP.Missions and CP.Missions.isEnabled then
+        local ok, enabled = Call('Missions', 'isEnabled', def.id)
+        if not ok or not enabled then return false, 'err.op_mission_disabled' end
+    end
+    if type(def.departments) == 'table' and next(def.departments) ~= nil then
+        return false, 'err.op_mission_departments'
+    end
+    if (tonumber(def.maxOfficers) or 1) < 2 then return false, 'err.op_mission_solo' end
+    return true
+end
+
+local function EligibleMissions()
+    local out = {}
+    local ok, list = Call('Missions', 'list')
+    if not ok or type(list) ~= 'table' then return out end
+    for _, def in ipairs(list) do
+        if Ops.eligible(def) then
+            out[#out + 1] = {
+                id = def.id,
+                label = def.label or def.id,
+                type = def.type,
+                typeLabel = TypeLabel(def.type),
+                difficulty = tonumber(def.difficulty) or 1,
+                minOfficers = MinFor(def),
+                maxOfficers = MaxFor(),
+            }
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.label ~= b.label then return tostring(a.label) < tostring(b.label) end
+        return a.id < b.id
+    end)
+    return out
+end
+
+-- ============================================================================
+--                                    STATE
+-- ============================================================================
+
+function Ops.active()
+    return op
+end
+
+function Ops.isLocked()
+    return op ~= nil and ACTIVE[op.status] == true
+end
+
+function Ops.cooldownLeft()
+    if not lastLaunchAt then return 0 end
+    local left = lastLaunchAt + CfgInt('cooldown', 1800) - os.time()
+    return left > 0 and left or 0
+end
+
+local function ActorOf(src)
+    local officer = GetOfficer(src)
+    local okI, info = Call('Qbx', 'getInfo', src)
+    info = okI and type(info) == 'table' and info or nil
+    local citizenid = (officer and officer.citizenid) or (info and info.citizenid)
+    local name = (officer and officer.name) or (info and info.name) or (GetPlayerName and GetPlayerName(src))
+        or ('#' .. tostring(src))
+    return {
+        src = src,
+        citizenid = citizenid,
+        name = CP.U.clip(name, 64),
+        callsign = officer and officer.callsign or nil,
+        departmentShort = officer and officer.departmentShort or nil,
+    }
+end
+
+-- May src tap Start now? The person who opened this join window, an admin, or (when that person is
+-- offline) anyone with the permission.
+local function MayStart(src, cur)
+    if src == 0 or IsAdmin(src) then return true end
+    local okI, info = Call('Qbx', 'getInfo', src)
+    local cid = okI and type(info) == 'table' and info.citizenid or nil
+    if cid and cid == cur.windowBy then return true end
+    local okS, ownerSrc = Call('Qbx', 'getByCitizenId', cur.windowBy)
+    return not (okS and ownerSrc)
+end
+
+-- fromRun: the operation's run just ended (the idle clock starts now). Otherwise (a join window closed
+-- without a run) the clock keeps counting from the launch or the end of the last run.
+local function ToWaiting(cur, reason, fromRun)
+    cur.status = 'waiting'
+    cur.runId = nil
+    cur.runMissingSince = nil
+    cur.joinEndsAt = nil
+    cur.joinClosed = nil
+    cur.waitingReason = reason
+    if fromRun or not cur.idleSince then cur.idleSince = os.time() end
+    DbStatus(cur.id, 'waiting', false)
+    Broadcast(nil)
+    NotifySupervisors('warning', 'sup.crossdept.notify_waiting_' .. reason, { mission = cur.missionLabel })
+    CP.log(TAG, 'operation %d waiting (%s)', cur.id, reason)
+end
+
+local function Finish(cur)
+    if op ~= cur then return end
+    op = nil
+    cur.status = 'completed'
+    cur.runId = nil
+    DbStatus(cur.id, 'completed', true)
+    Broadcast('ended', cur.missionLabel, { id = cur.id })
+    Webhook('completed', cur)
+    CP.log(TAG, 'operation %d completed', cur.id)
+end
+
+local function CancelInternal(cur, actorSrc, reason, auto)
+    if op ~= cur then return false, 'err.op_none' end
+    local before = cur.status
+    op = nil                                   -- the board lock lifts at once
+    cur.status = 'cancelled'
+    if before == 'joining' then
+        Call('Units', 'dropTeam', 'op:' .. cur.id)
+    end -- a pending ready check ends
+    local affected, seen = {}, {}
+    local run = RunGet(cur.runId)
+    cur.runId = nil
+    if run then
+        for _, s in ipairs(ActiveSrcs(run)) do
+            if not seen[s] then seen[s] = true; affected[#affected + 1] = s end
+        end
+    elseif before == 'joining' then
+        for _, p in ipairs(cur.participants) do
+            if not seen[p.src] then seen[p.src] = true; affected[#affected + 1] = p.src end
+        end
+    end
+    DbStatus(cur.id, 'cancelled', true)
+    if run then
+        -- Everyone still on the run leaves it: Abandoned, end reason cancelled (no cooldown, no penalty).
+        for _, s in ipairs(affected) do
+            Call('Runs', 'removeParticipant', run, s, 'cancelled')
+        end
+    end
+    Broadcast('cancelled', cur.missionLabel, { id = cur.id })
+    NotifyMany(affected, 'warning', 'officer.op.cancelled_participant', { mission = cur.missionLabel, reason = reason })
+    Audit(actorSrc, cur, auto and 'opAutoCancel' or 'opCancel', before, 'cancelled', reason)
+    CP.log(TAG, 'operation %d cancelled (%s)', cur.id, tostring(reason))
+    return true, { id = cur.id }
+end
+
+-- ============================================================================
+--                                    START
+-- ============================================================================
+
+local ReadyDone, ReadyFailed   -- the ready check's answers (below, after the join list helpers)
+local StartRun
+
+-- Config.CrossDept.readyCheck: the kept participants confirm through the unit ready check before the run starts.
+local function ReadyCheckOn()
+    return Cfg().readyCheck == true
+end
+
+-- Asks the kept participants (valid officers) through CP.Units.teamReadyCheck. true = the check runs (joining stays
+-- closed until it ends); false = no check could start (the run starts at once, as with the check off).
+local function AskReady(cur, def, valid, actorSrc, auto)
+    local team = { id = 'op:' .. cur.id, leader = valid[1].src, members = {}, info = {} }
+    for i, o in ipairs(valid) do
+        team.members[i] = o.src
+        team.info[o.src] = { name = CP.U.clip(o.name or '?', 64), departmentShort = o.departmentShort or '' }
+    end
+    local ok, started = Call('Units', 'teamReadyCheck', team, def.type, function()
+        ReadyDone(cur, actorSrc, auto)
+    end, function(_, who) ReadyFailed(cur, who) end, { leaderName = cur.launcher })
+    return ok and started == true
+end
+
+local function DoStart(cur, actorSrc, auto)
+    cur.joinClosed = true                      -- nobody joins while the participants are checked
+    local valid, dropped = {}, {}
+    for _, p in ipairs(CP.U.copy(cur.participants)) do
+        local o = GetOfficer(p.src)
+        -- a mission ban or the department's crossDept rule (join off, places counted over the kept list) set after
+        -- he joined counts too, as on a join
+        if o and o.citizenid == p.citizenid and not OnRun(p.src) and not InArena(p.src) and not IsOnCall(p.src)
+            and not Banned(o.citizenid) and not DeptRefuses({ participants = valid }, o) then
+            valid[#valid + 1] = o
+        else
+            dropped[#dropped + 1] = p
+        end
+    end
+    -- Z13: field training's ride-along rule (requireTrainerFor), as a unit's accept checks it: a rookie whose trainer
+    -- is not among the kept participants is dropped
+    local def0 = MissionDef(cur.missionId)
+    if def0 and CP.FieldTraining and CP.FieldTraining.unitCheck then
+        for _ = 1, #valid do
+            local okF, allowed, _, rookie = pcall(CP.FieldTraining.unitCheck, valid, def0.type)
+            if not okF or allowed ~= false or type(rookie) ~= 'string' then break end
+            local gone = false
+            for i = #valid, 1, -1 do
+                if valid[i].citizenid == rookie then
+                    for _, p in ipairs(cur.participants) do
+                        if p.src == valid[i].src then dropped[#dropped + 1] = p end
+                    end
+                    table.remove(valid, i)
+                    gone = true
+                end
+            end
+            if not gone then break end
+        end
+    end
+    if op ~= cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+    for _, p in ipairs(dropped) do
+        for i = #cur.participants, 1, -1 do
+            if cur.participants[i].src == p.src then table.remove(cur.participants, i) end
+        end
+        CP.notify(p.src, 'warning', 'officer.op.removed_at_start', { mission = cur.missionLabel })
+    end
+
+    local def = MissionDef(cur.missionId)
+    local okE = Ops.eligible(def)
+    if not okE then
+        cur.joinClosed = nil
+        if auto then CancelInternal(cur, 0, CP.L('sup.crossdept.reason_mission_unavailable'), true) end
+        return false, 'err.op_mission_unavailable'
+    end
+    if #valid < MinFor(def) then
+        cur.joinClosed = nil
+        if auto then ToWaiting(cur, 'not_enough') elseif #dropped > 0 then Broadcast(nil) end
+        return false, 'err.op_not_enough'
+    end
+    if ReadyCheckOn() and not cur.readyPassed and AskReady(cur, def, valid, actorSrc, auto) then
+        Broadcast(nil)
+        CP.log(TAG, 'operation %d: ready check for %d participant(s)', cur.id, #valid)
+        return true, { readyCheck = true, participants = #valid }
+    end
+
+    local srcs = {}
+    for i, o in ipairs(valid) do srcs[i] = o.src end
+    local seed = (os.time() ~ (GetGameTimer and GetGameTimer() or 0) ~ (cur.id * 7919)) & 0x7FFFFFFF
+    local okP, index = Call('Draw', 'pickLocation', def, srcs, CP.U.rng(seed))
+    if not okP or not index then
+        cur.joinClosed = nil
+        if auto then ToWaiting(cur, 'no_location') end
+        return false, 'err.no_location'
+    end
+    if op ~= cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+
+    local okC, run, createErr = Call('Runs', 'create', {
+        mission = def,
+        locationIndex = index,
+        missionType = def.type,
+        members = valid,
+        leaderSrc = srcs[1],                   -- the first joiner leads the run
+        operationId = cur.id,
+        test = nil,
+        isBoss = false,
+    })
+    if not okC or type(run) ~= 'table' then
+        cur.joinClosed = nil
+        if op == cur and auto then ToWaiting(cur, 'start_failed') end
+        return false, createErr or 'err.run_create_failed'
+    end
+    if op ~= cur then
+        -- Cancelled while the run was being created: nobody may stay on it.
+        for _, s in ipairs(ActiveSrcs(run)) do Call('Runs', 'removeParticipant', run, s, 'cancelled') end
+        return false, 'err.op_not_joining'
+    end
+
+    cur.status = 'running'
+    cur.runId = run.id
+    -- The waitlist closes with the start: nobody on it gets a place any more.
+    local waiters = {}
+    for _, w in ipairs(cur.waitlist or {}) do waiters[#waiters + 1] = w.src end
+    cur.waitlist = {}
+    NotifyMany(waiters, 'info', 'officer.op.waitlist_closed', { mission = cur.missionLabel })
+    cur.runMissingSince = nil
+    cur.joinEndsAt = nil
+    cur.joinClosed = nil
+    cur.waitingReason = nil
+    cur.startedAt = os.time()
+    cur.idleSince = nil                        -- a run exists: not idle
+    DbStatus(cur.id, 'running', false)
+    Broadcast('started', cur.missionLabel, { id = cur.id })
+    NotifyMany(srcs, 'success', 'officer.op.started_participant', { mission = cur.missionLabel })
+    if actorSrc then
+        Audit(actorSrc, cur, 'opStart', cur.attempt, #valid, nil)
+    else
+        Webhook('started', cur,
+            { { name = CP.L('sup.crossdept.webhook_field_participants'), value = tostring(#valid), inline = true } })
+    end
+    CP.log(TAG, 'operation %d started run %s with %d participant(s)', cur.id, tostring(run.id), #valid)
+    return true, { runId = run.id, participants = #valid }
+end
+
+-- The maintenance lock (a storage copy or switch, a restore): no operation launches or starts until the restart.
+local function Locked()
+    return CP.Maintenance ~= nil and CP.Maintenance.active ~= nil and CP.Maintenance.active() ~= nil
+end
+
+function StartRun(actorSrc, auto)
+    local cur = op
+    if not cur or cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+    if Locked() then return false, 'err.maintenance' end
+    if cur.joinClosed or busy then return false, 'err.busy' end
+    busy = true
+    local okCall, ok, data = pcall(DoStart, cur, actorSrc, auto)
+    busy = false
+    if not okCall then
+        CP.err(TAG, 'start of operation %d failed: %s', cur.id, tostring(ok))
+        cur.joinClosed = nil
+        if auto and op == cur and cur.status == 'joining' then ToWaiting(cur, 'start_failed') end
+        return false, 'err.internal'
+    end
+    return ok, data
+end
+
+-- ============================================================================
+--                     ACTIONS (permission already checked)
+-- ============================================================================
+
+-- opts = { skipCooldown = true, reason }: an admin launching during the server-wide cooldown (audited).
+local function DoLaunch(src, missionId, opts)
+    opts = type(opts) == 'table' and opts or {}
+    if not ready then return false, 'err.op_not_ready' end
+    if Locked() then return false, 'err.maintenance' end
+    if Cfg().enabled == false then return false, 'err.op_disabled' end
+    if op then return false, 'err.op_active' end
+    if busy then return false, 'err.busy' end
+    local cooldownLeft = Ops.cooldownLeft()
+    if cooldownLeft > 0 and not opts.skipCooldown then return false, 'err.op_cooldown' end
+    local def = MissionDef(missionId)
+    if not def then return false, 'err.op_mission_unknown' end
+    local okE, why = Ops.eligible(def)
+    if not okE then return false, why end
+
+    busy = true
+    local okCall, ok, data = pcall(function()
+        local actor = ActorOf(src)
+        if not actor.citizenid then return false, 'err.not_in_game' end
+        if op then return false, 'err.op_active' end
+        local now = os.time()
+        local id = MySQL.insert.await(
+            'INSERT INTO cp_operations (mission_id, launched_by, status, created_at) VALUES (?, ?, ?, FROM_UNIXTIME(?))',
+            { def.id, CP.U.clip(actor.citizenid, 50), 'joining', now })
+        id = math.tointeger(tonumber(id))
+        if not id or id <= 0 then return false, 'err.internal' end
+        lastLaunchAt = now
+        op = {
+            id = id,
+            missionId = def.id,
+            missionLabel = def.label or def.id,
+            missionType = def.type,
+            difficulty = tonumber(def.difficulty) or 1,
+            launchedBy = actor.citizenid,
+            launcher = actor.name,
+            launcherCallsign = actor.callsign,
+            launcherDepartment = actor.departmentShort,
+            windowBy = actor.citizenid,
+            status = 'joining',
+            createdAt = now,
+            joinEndsAt = now + CfgInt('joinWindow', 300),
+            participants = {},
+            waitlist = {},
+            runId = nil,
+            idleSince = now,
+            waitingReason = nil,
+            attempt = 1,
+        }
+        Broadcast('launched', op.missionLabel, { id = id, relaunched = false })
+        Audit(src, op, 'opLaunch', nil, def.id, nil)
+        if cooldownLeft > 0 then
+            Audit(src, op, 'opLaunchSkipCooldown', ('%ds left'):format(cooldownLeft), def.id, opts.reason)
+        end
+        CP.log(TAG, 'operation %d launched by %s: %s', id, tostring(actor.citizenid), def.id)
+        return true, { id = id }
+    end)
+    busy = false
+    if not okCall then
+        CP.err(TAG, 'launch failed: %s', tostring(ok))
+        return false, 'err.internal'
+    end
+    return ok, data
+end
+
+local function DoStartNow(src)
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if cur.status ~= 'joining' then return false, 'err.op_not_joining' end
+    if not MayStart(src, cur) then return false, 'err.op_not_launcher' end
+    return StartRun(src, false)
+end
+
+local function DoRelaunch(src)
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if Locked() then return false, 'err.maintenance' end
+    if cur.status ~= 'waiting' then return false, 'err.op_not_waiting' end
+    if busy then return false, 'err.busy' end
+    local okE = Ops.eligible(MissionDef(cur.missionId))
+    if not okE then return false, 'err.op_mission_unavailable' end
+    local actor = ActorOf(src)
+    if op ~= cur or cur.status ~= 'waiting' then return false, 'err.op_not_waiting' end
+    local now = os.time()
+    local before = cur.waitingReason
+    cur.status = 'joining'
+    cur.participants = {}
+    cur.waitlist = {}
+    cur.runId = nil
+    cur.joinEndsAt = now + CfgInt('joinWindow', 300)
+    cur.joinClosed = nil
+    cur.waitingReason = nil
+    cur.windowBy = actor.citizenid or cur.windowBy
+    -- The idle clock (no run since ...) keeps running: a relaunch opens a join window, it is not a run.
+    cur.idleSince = cur.idleSince or now
+    cur.attempt = (cur.attempt or 1) + 1
+    DbStatus(cur.id, 'joining', false)
+    Broadcast('launched', cur.missionLabel, { id = cur.id, relaunched = true })
+    Audit(src, cur, 'opRelaunch', before, cur.attempt, nil)
+    return true, { id = cur.id }
+end
+
+local function DoCancel(src, reason, auto)
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if busy and not auto then return false, 'err.busy' end
+    return CancelInternal(cur, src, reason, auto)
+end
+
+-- ============================================================================
+--                               PUBLIC WRAPPERS
+-- ============================================================================
+-- Permission checked here for callers from other modules.
+
+local function Allowed(src)
+    if src == 0 then return true end
+    return CP.can(src, 'launchCrossDept')
+end
+
+local function WaitlistOn()
+    return Cfg().waitlist ~= false
+end
+
+-- A join-list (or waitlist) entry for an officer.
+local function Entry(officer, src)
+    return {
+        src = src,
+        citizenid = officer.citizenid,
+        name = CP.U.clip(officer.name or '?', 64),
+        callsign = officer.callsign and CP.U.clip(officer.callsign, 32) or nil,
+        department = officer.department,
+        departmentShort = officer.departmentShort or '',
+        rank = officer.rank or '',
+        joinedAt = os.time(),
+    }
+end
+
+function Ops.launch(src, missionId)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    return DoLaunch(src, missionId)
+end
+
+function Ops.startNow(src)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    return DoStartNow(src)
+end
+
+function Ops.relaunch(src)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    return DoRelaunch(src)
+end
+
+function Ops.cancel(src, reason)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    local text, rErr = CleanReason(reason)
+    if not text then return false, rErr end
+    return DoCancel(src, text, false)
+end
+
+function Ops.join(src, opId)
+    src = CP.U.toSrc(src)
+    if not src then return false, 'err.invalid_payload' end
+    local officer, errKey = GetOfficer(src)
+    if not officer then return false, errKey or 'err.not_police' end
+    local max = MaxFor()
+    -- The operation's state; run once before and once after the checks that may yield.
+    local function stateCheck()
+        local c = op
+        if not c then return nil, 'err.op_none' end
+        if opId ~= nil and opId ~= c.id then return nil, 'err.op_not_found' end
+        if c.status ~= 'joining' or c.joinClosed or not c.joinEndsAt or os.time() >= c.joinEndsAt then
+            return nil, 'err.op_join_closed'
+        end
+        for _, p in ipairs(c.participants) do
+            if p.src == src or p.citizenid == officer.citizenid then return nil, 'err.op_already_joined' end
+        end
+        for _, w in ipairs(c.waitlist or {}) do
+            if w.src == src or w.citizenid == officer.citizenid then return nil, 'err.op_waitlisted' end
+        end
+        if #c.participants >= max and not WaitlistOn() then return nil, 'err.op_full' end
+        return c
+    end
+    local cur, why = stateCheck()
+    if not cur then return false, why end
+    if Banned(officer.citizenid) then return false, 'err.mission_banned' end
+    local deptErr = DeptRefuses(cur, officer)
+    if deptErr then return false, deptErr end
+    if InArena(src) then return false, 'err.in_arena' end
+    if OnRun(src) then return false, 'err.already_on_run' end
+    if IsOnCall(src) then
+        return false, 'err.on_call'
+    end -- may yield (active-call lookup)
+    -- No yields below: the state is checked again and the change happens with it.
+    cur, why = stateCheck()
+    if not cur then return false, why end
+    if OnRun(src) then return false, 'err.already_on_run' end
+    deptErr = DeptRefuses(cur, officer)
+    if deptErr then return false, deptErr end
+    local entry = Entry(officer, src)
+    -- (while anyone waits, a freed place is theirs: new joiners queue behind them)
+    if #cur.participants >= max or #(cur.waitlist or {}) > 0 then
+        -- Every place is taken: the waitlist (Config.CrossDept.waitlist); a freed place goes to the first.
+        cur.waitlist = cur.waitlist or {}
+        cur.waitlist[#cur.waitlist + 1] = entry
+        Broadcast(nil)
+        CP.log(TAG, 'operation %d: %d waitlisted (#%d)', cur.id, src, #cur.waitlist)
+        return true, { id = cur.id, joined = #cur.participants, max = max, waitlisted = true, position = #cur.waitlist }
+    end
+    cur.participants[#cur.participants + 1] = entry
+    Broadcast(nil)
+    CP.log(TAG, 'operation %d: %d joined (%d/%d)', cur.id, src, #cur.participants, max)
+    return true, { id = cur.id, joined = #cur.participants, max = max }
+end
+
+-- A place freed before the start goes to the first on the waitlist who can still take it (re-checked
+-- like a join; CP.Calls may wait on the database, so the state is checked again afterwards).
+local function FillFromWaitlist(cur)
+    if cur.filling then return end
+    cur.filling = true
+    local max = MaxFor()
+    while op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max
+        and #(cur.waitlist or {}) > 0 do
+        local w = table.remove(cur.waitlist, 1)
+        local o = GetOfficer(w.src)
+        local fits = o and o.citizenid == w.citizenid and not InArena(w.src) and not OnRun(w.src)
+            and not IsOnCall(w.src) and not Banned(w.citizenid) and not DeptRefuses(cur, o)
+        if fits and op == cur and cur.status == 'joining' and not cur.joinClosed and #cur.participants < max then
+            w.joinedAt = os.time()
+            cur.participants[#cur.participants + 1] = w
+            CP.notify(w.src, 'success', 'officer.op.waitlist_promoted', { mission = cur.missionLabel })
+            CP.log(TAG, 'operation %d: %d took a freed place from the waitlist', cur.id, w.src)
+        elseif not fits then
+            CP.notify(w.src, 'warning', 'officer.op.waitlist_skipped', { mission = cur.missionLabel })
+        elseif op == cur and cur.status == 'joining' and not cur.joinClosed then
+            table.insert(cur.waitlist, 1, w)      -- the place went meanwhile: keep the first place in line
+            break
+        end
+    end
+    cur.filling = nil
+    Broadcast(nil)
+end
+
+-- Takes src off the join list or the waitlist. Returns 'joined' | 'waitlist' | nil.
+local function TakeOut(cur, src)
+    for i = #cur.participants, 1, -1 do
+        if cur.participants[i].src == src then
+            table.remove(cur.participants, i)
+            return 'joined'
+        end
+    end
+    for i = #(cur.waitlist or {}), 1, -1 do
+        if cur.waitlist[i].src == src then
+            table.remove(cur.waitlist, i)
+            return 'waitlist'
+        end
+    end
+    return nil
+end
+
+-- Everyone answered Ready: the start goes on (the participants are checked again, as on any start).
+function ReadyDone(cur, actorSrc, auto)
+    if op ~= cur or cur.status ~= 'joining' then return end
+    cur.joinClosed = nil
+    cur.readyPassed = true
+    local ok, why = StartRun(actorSrc, auto)
+    cur.readyPassed = nil
+    if not ok then
+        if actorSrc and actorSrc > 0 then CP.notify(actorSrc, 'warning', why) end
+        Broadcast(nil)
+    end
+end
+
+-- A decline, a timeout, or a participant who took a call or entered the arena: those officers leave the join list
+-- (a freed place goes to the waitlist) and joining opens again. With the join window over, the next tick starts again
+-- with the officers left (fewer than needed: the operation waits, as any start).
+function ReadyFailed(cur, who)
+    if op ~= cur or cur.status ~= 'joining' then return end
+    local gone = {}
+    for _, s in ipairs(type(who) == 'table' and who or {}) do
+        if TakeOut(cur, s) == 'joined' then gone[#gone + 1] = s end
+    end
+    NotifyMany(gone, 'warning', 'officer.op.removed_not_ready', { mission = cur.missionLabel })
+    cur.joinClosed = nil
+    CP.log(TAG, 'operation %d: ready check cancelled, %d left the join list', cur.id, #gone)
+    if #gone > 0 then FillFromWaitlist(cur) else Broadcast(nil) end
+end
+
+-- An officer leaves before the start (no penalty); once the run exists, leaving is the run's own quit.
+function Ops.leave(src)
+    src = CP.U.toSrc(src)
+    if not src then return false, 'err.invalid_payload' end
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if cur.status ~= 'joining' or cur.joinClosed then
+        local run = RunGet(cur.runId)
+        local onIt = false
+        if run then
+            for _, s in ipairs(ActiveSrcs(run)) do if s == src then onIt = true end end
+        end
+        return false, onIt and 'err.op_leave_started' or 'err.op_not_joined'
+    end
+    local was = TakeOut(cur, src)
+    if not was then return false, 'err.op_not_joined' end
+    CP.notify(src, 'info', 'officer.op.left', { mission = cur.missionLabel })
+    CP.log(TAG, 'operation %d: %d left before the start (%s)', cur.id, src, was)
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
+    return true, { left = true }
+end
+
+-- A supervisor with launchCrossDept removes a joiner (or a waitlisted officer) before the start; audited.
+local function DoRemoveJoiner(actorSrc, target, reason)
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if cur.status ~= 'joining' or cur.joinClosed then return false, 'err.op_remove_started' end
+    local entry
+    for _, p in ipairs(cur.participants) do if p.src == target then entry = p end end
+    for _, w in ipairs(cur.waitlist or {}) do if w.src == target then entry = w end end
+    if not entry then return false, 'err.op_not_joined' end
+    local was = TakeOut(cur, target)
+    CP.notify(target, 'warning', 'officer.op.removed_by_supervisor', { mission = cur.missionLabel, reason = reason })
+    Audit(actorSrc, cur, 'opRemoveJoiner', ('%s (%s)'):format(entry.name or '?', tostring(entry.citizenid)), was,
+        reason)
+    CP.log(TAG, 'operation %d: %s removed %d (%s)', cur.id, tostring(actorSrc), target, tostring(was))
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
+    return true, { removed = target }
+end
+
+function Ops.removeJoiner(src, target, reason)
+    local ok, errKey = Allowed(src)
+    if not ok then return false, errKey end
+    target = CP.U.toSrc(target)
+    if not target then return false, 'err.invalid_payload' end
+    local text, rErr = CleanReason(reason)
+    if not text then return false, rErr end
+    return DoRemoveJoiner(src, target, text)
+end
+
+-- ============================================================================
+--                  INVITES AND THE MEMBER LIST (Unit screen)
+-- ============================================================================
+-- Config.CrossDept.invites: an officer on the join list invites others the way a unit invites (Unit screen,
+-- server:unitInvite { team = 'operation' }); the invitee answers on his own Unit screen (server:unitRespond
+-- { team = 'operation' }) and an accept is an ordinary join (every join rule, the waitlist when full). An invite
+-- stays open INVITE_TTL seconds and only while joining is open. Config.CrossDept.memberList: the operation card
+-- lists who joined (and who waits), as the unit card lists its members.
+
+local INVITE_TTL = 120           -- seconds an operation invite stays open (as a unit invite)
+local INVITABLE_MAX = 30         -- officers the invite picker lists at most
+
+local function InvitesOn() return Cfg().invites == true end
+local function MemberListOn() return Cfg().memberList == true end
+
+local function JoinOpen(cur)
+    return cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and os.time() < cur.joinEndsAt
+end
+
+local function Placed(cur, src)
+    for _, p in ipairs(cur.participants) do if p.src == src then return 'joined' end end
+    for _, w in ipairs(cur.waitlist or {}) do if w.src == src then return 'waitlist' end end
+    return nil
+end
+
+-- The open invite to src (expired ones are dropped), or nil.
+local function OpenInvite(cur, src)
+    local inv = cur.invites and cur.invites[src]
+    if not inv then return nil end
+    if inv.expiresAt <= os.time() or not JoinOpen(cur) then
+        cur.invites[src] = nil
+        return nil
+    end
+    return inv
+end
+
+-- Why target can not be invited (errKey) or nil. May yield (officer and call lookups).
+local function InviteRefused(cur, target)
+    local o = GetOfficer(target)
+    if not o then return 'err.op_invite_unavailable' end
+    if Placed(cur, target) or InArena(target) or OnRun(target) or Banned(o.citizenid) or DeptRefuses(cur, o) then
+        return 'err.op_invite_unavailable'
+    end
+    return nil, o
+end
+
+function Ops.invite(src, target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
+    if not src or not target or src == target then return false, 'err.invalid_payload' end
+    if not InvitesOn() then return false, 'err.op_invites_off' end
+    local cur = op
+    if not cur then return false, 'err.op_none' end
+    if not JoinOpen(cur) then return false, 'err.op_join_closed' end
+    if Placed(cur, src) ~= 'joined' then return false, 'err.op_not_joined' end
+    if OpenInvite(cur, target) then return false, 'err.op_already_invited' end
+    local me = GetOfficer(src)
+    if not me then return false, 'err.not_police' end
+    local why, o = InviteRefused(cur, target)
+    if why then return false, why end
+    -- the checks above may yield: the state again, then the change with it
+    if op ~= cur or not JoinOpen(cur) then return false, 'err.op_join_closed' end
+    if Placed(cur, src) ~= 'joined' then return false, 'err.op_not_joined' end
+    if Placed(cur, target) then return false, 'err.op_invite_unavailable' end
+    if OpenInvite(cur, target) then return false, 'err.op_already_invited' end
+    cur.invites = cur.invites or {}
+    cur.invites[target] = {
+        expiresAt = os.time() + INVITE_TTL,
+        from = {
+            src = src,
+            name = CP.U.clip(me.name or '?', 64),
+            callsign = me.callsign and CP.U.clip(me.callsign, 32) or nil,
+            departmentShort = me.departmentShort or '',
+        },
+        targetName = CP.U.clip(o.name or ('#' .. target), 64),
+    }
+    CP.notify(target, 'info', 'officer.op.invite_received', { name = me.name or '?', mission = cur.missionLabel })
+    CP.push(target, 'unit', { unitId = false, invited = true })
+    CP.push(src, 'unit', { unitId = false })
+    CP.log(TAG, 'operation %d: %d invited %d', cur.id, src, target)
+    return true, { id = cur.id, expiresIn = INVITE_TTL }
+end
+
+-- The invitee's answer: an accept is a join (Ops.join: every rule, the waitlist when full).
+function Ops.respondInvite(src, accepted)
+    src = CP.U.toSrc(src)
+    if not src or type(accepted) ~= 'boolean' then return false, 'err.invalid_payload' end
+    local cur = op
+    local inv = cur and OpenInvite(cur, src)
+    if not inv then return false, 'err.op_no_invite' end
+    cur.invites[src] = nil
+    CP.push(inv.from.src, 'unit', { unitId = false })
+    if not accepted then
+        CP.notify(inv.from.src, 'info', 'officer.op.invite_declined', { name = inv.targetName })
+        return true, { declined = true }
+    end
+    return Ops.join(src, cur.id)
+end
+
+-- The officer who sent it withdraws an open invite.
+function Ops.cancelInvite(src, target)
+    src, target = CP.U.toSrc(src), CP.U.toSrc(target)
+    if not src or not target then return false, 'err.invalid_payload' end
+    local cur = op
+    local inv = cur and OpenInvite(cur, target)
+    if not inv then return false, 'err.op_no_invite' end
+    if inv.from.src ~= src then return false, 'err.op_not_inviter' end
+    cur.invites[target] = nil
+    CP.notify(target, 'info', 'officer.op.invite_withdrawn', { name = inv.from.name, mission = cur.missionLabel })
+    CP.push(target, 'unit', { unitId = false })
+    return true, { withdrawn = target }
+end
+
+-- The open invite for src, as the Unit screen shows it (nil when there is none).
+function Ops.inviteFor(src)
+    src = CP.U.toSrc(src)
+    local cur = op
+    local inv = src and cur and OpenInvite(cur, src)
+    if not inv then return nil end
+    return {
+        id = cur.id,
+        missionLabel = cur.missionLabel,
+        from = inv.from.name,
+        fromCallsign = inv.from.callsign,
+        departmentShort = inv.from.departmentShort,
+        joined = #cur.participants,
+        max = MaxFor(),
+        expiresIn = math.max(0, inv.expiresAt - os.time()),
+    }
+end
+
+local function Person(e, me)
+    return {
+        src = e.src,
+        name = e.name,
+        callsign = e.callsign,
+        departmentShort = e.departmentShort or '',
+        rank = e.rank or '',
+        me = e.src == me or nil,
+    }
+end
+
+-- The invite picker: on-duty officers who could join now (not placed, not invited, not on a run). May yield.
+local function Invitable(cur, src)
+    local out = {}
+    for _, p in ipairs(OnlinePlayers()) do
+        p = CP.U.toSrc(p)
+        if #out >= INVITABLE_MAX then break end
+        if p and p ~= src and not Placed(cur, p) and not OpenInvite(cur, p) and MaybeOfficer(p) then
+            local why, o = InviteRefused(cur, p)
+            if not why then
+                out[#out + 1] = {
+                    src = p,
+                    name = o.name or ('#' .. p),
+                    callsign = o.callsign,
+                    rank = o.rank or '',
+                    departmentShort = o.departmentShort or '',
+                }
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        if a.departmentShort ~= b.departmentShort then
+            return tostring(a.departmentShort) < tostring(b.departmentShort)
+        end
+        if a.name ~= b.name then return tostring(a.name) < tostring(b.name) end
+        return a.src < b.src
+    end)
+    return out
+end
+
+-- The Unit screen's operation card for an officer on the join list or the waitlist (nil otherwise).
+function Ops.officerCard(src)
+    src = CP.U.toSrc(src)
+    local cur = op
+    if not src or not cur then return nil end
+    local placed = Placed(cur, src)
+    if not placed then return nil end
+    local position = nil
+    for i, w in ipairs(cur.waitlist or {}) do if w.src == src then position = i end end
+    local open = cur.status == 'joining' and not cur.joinClosed
+    local card = {
+        id = cur.id,
+        missionLabel = cur.missionLabel,
+        status = cur.status,
+        joined = #cur.participants,
+        max = MaxFor(),
+        waitlistPosition = position,
+        joinEndsIn = open and cur.joinEndsAt and math.max(0, cur.joinEndsAt - os.time()) or nil,
+        canLeave = open,
+    }
+    if MemberListOn() then
+        card.members, card.waitlist = {}, {}
+        for _, p in ipairs(cur.participants) do card.members[#card.members + 1] = Person(p, src) end
+        for _, w in ipairs(cur.waitlist or {}) do card.waitlist[#card.waitlist + 1] = Person(w, src) end
+    end
+    if InvitesOn() and placed == 'joined' and JoinOpen(cur) then
+        card.sent = {}
+        local now = os.time()
+        for target, inv in pairs(cur.invites or {}) do
+            if inv.from.src == src and inv.expiresAt > now then
+                card.sent[#card.sent + 1] = { src = target, name = inv.targetName, expiresIn = inv.expiresAt - now }
+            end
+        end
+        table.sort(card.sent, function(a, b) return a.src < b.src end)
+        local list = Invitable(cur, src)
+        -- the operation changed while the list was built (officer lookups may wait on the database)
+        if op == cur and JoinOpen(cur) then
+            card.canInvite = true
+            card.invitable = list
+            card.inviteTtl = INVITE_TTL
+        end
+    end
+    return card
+end
+
+-- A joiner who drops, unloads or no longer qualifies leaves the join list (runs handle the run itself).
+local function RemoveJoiner(src)
+    src = CP.U.toSrc(src)
+    local cur = op
+    if not src or not cur or cur.status ~= 'joining' then return end
+    local was = TakeOut(cur, src)
+    if not was then return end
+    CP.log(TAG, 'operation %d: %d left the join list (%s)', cur.id, src, was)
+    if was == 'joined' then FillFromWaitlist(cur) else Broadcast(nil) end
+end
+
+function Ops.onRunEnded(run, state)
+    local cur = op
+    if not cur or type(run) ~= 'table' then return end
+    if not cur.runId or run.id ~= cur.runId then return end
+    if run.operationId ~= nil and run.operationId ~= cur.id then return end
+    cur.runId = nil
+    cur.runMissingSince = nil
+    cur.lastRun = { runId = run.id, state = state, endedAt = os.time() }
+    if state == 'completed' then
+        Finish(cur)
+    else
+        local reason = state == 'failed' and 'failed' or 'abandoned'
+        Webhook(reason, cur)
+        ToWaiting(cur, reason, true)
+    end
+end
+
+-- ============================================================================
+--                                    VIEWS
+-- ============================================================================
+
+function Ops.boardCard(src)
+    local cur = op
+    if not cur then return nil end
+    src = CP.U.toSrc(src)
+    local now = os.time()
+    local def = MissionDef(cur.missionId)
+    local max = MaxFor()
+    local joined, mine = 0, false
+    local position = nil
+    for i, w in ipairs(cur.waitlist or {}) do if w.src == src then position = i end end
+    local run = RunGet(cur.runId)
+    if run then
+        for _, s in ipairs(ActiveSrcs(run)) do
+            joined = joined + 1
+            if s == src then mine = true end
+        end
+    else
+        joined = #cur.participants
+        for _, p in ipairs(cur.participants) do
+            if p.src == src then mine = true end
+        end
+    end
+    local open = cur.status == 'joining' and not cur.joinClosed and cur.joinEndsAt ~= nil and cur.joinEndsAt > now
+    -- joinBlocked (extra, docs/dev/ARCHITECTURE.md §12.8): why this viewer cannot join, the error key Join would return.
+    local joinBlocked = nil
+    -- his department opted out or its places are taken (the card still shows: the lock applies to all)
+    local deptErr = nil
+    if open and src ~= nil and not mine and not position then deptErr = DeptRefuses(cur, (GetOfficer(src))) end
+    if not open then
+        joinBlocked = 'err.op_join_closed'
+    elseif mine then
+        joinBlocked = 'err.op_already_joined'
+    elseif position then
+        joinBlocked = 'err.op_waitlisted'
+    elseif joined >= max and not WaitlistOn() then
+        joinBlocked = 'err.op_full'
+    elseif src == nil then
+        joinBlocked = 'err.invalid_payload'
+    elseif BannedSrc(src) then
+        joinBlocked = 'err.mission_banned'
+    elseif deptErr then
+        joinBlocked = deptErr
+    elseif InArena(src) then
+        joinBlocked = 'err.in_arena'
+    elseif OnRun(src) then
+        joinBlocked = 'err.already_on_run'
+    elseif IsOnCall(src) then
+        joinBlocked = 'err.on_call'
+    end
+    return {
+        id = cur.id,
+        missionLabel = cur.missionLabel,
+        launcher = cur.launcher or '?',
+        status = cur.status,
+        joined = joined,
+        max = max,
+        joinedByMe = mine,
+        canJoin = joinBlocked == nil,
+        joinBlocked = joinBlocked,
+        joinEndsIn = open and (cur.joinEndsAt - now) or nil,
+        missionType = cur.missionType,
+        missionTypeLabel = TypeLabel(cur.missionType),
+        description = def and def.description or nil,
+        min = MinFor(def),
+        runState = run and run.state or nil,
+        waitlist = #(cur.waitlist or {}),
+        waitlistPosition = position,
+        waitlistOpen = open and WaitlistOn() and (joined >= max or #(cur.waitlist or {}) > 0),
+    }
+end
+
+local function OpView(cur, viewer, now)
+    local def = MissionDef(cur.missionId)
+    local min, max = MinFor(def), MaxFor()
+    local participants = {}
+    local run = RunGet(cur.runId)
+    local runState, tier, tierExpected, remaining = nil, nil, true, nil
+    if run then
+        runState = run.state
+        for _, s in ipairs(run.order or {}) do
+            local p = run.participants and run.participants[s]
+            if p then
+                participants[#participants + 1] = {
+                    src = s,
+                    name = p.name or ('#' .. s),
+                    callsign = p.callsign,
+                    departmentShort = p.departmentShort or '',
+                    department = p.department,
+                    status = p.status == 'active' and 'active' or 'left',
+                    arrived = p.arrived == true,
+                }
+            end
+        end
+        if run.state == 'in_progress' and type(run.tier) == 'table' and run.tier.tier then
+            tier, tierExpected = run.tier.tier, false
+        else
+            tier = run.expectedTier or TierName(#participants)
+        end
+        local okR, left = Call('Runs', 'remaining', run)
+        remaining = okR and tonumber(left) or nil
+    else
+        for _, p in ipairs(cur.participants) do
+            participants[#participants + 1] = {
+                src = p.src,
+                name = p.name,
+                callsign = p.callsign,
+                departmentShort = p.departmentShort or '',
+                department = p.department,
+                status = cur.status == 'joining' and 'joined' or 'waiting',
+                arrived = false,
+                canRemove = cur.status == 'joining' and not cur.joinClosed,
+            }
+        end
+        tier = TierName(math.max(#participants, min))
+    end
+    local waitlist = {}
+    for i, w in ipairs(cur.waitlist or {}) do
+        waitlist[#waitlist + 1] = {
+            src = w.src,
+            name = w.name,
+            callsign = w.callsign,
+            departmentShort = w.departmentShort or '',
+            position = i,
+            canRemove = cur.status == 'joining' and not cur.joinClosed,
+        }
+    end
+    local counts, order = {}, {}
+    local joined = 0
+    for _, p in ipairs(participants) do
+        if p.status ~= 'left' then
+            joined = joined + 1
+            local k = p.departmentShort ~= '' and p.departmentShort or '?'
+            if not counts[k] then counts[k] = 0; order[#order + 1] = k end
+            counts[k] = counts[k] + 1
+        end
+    end
+    table.sort(order)
+    local departments = {}
+    for _, k in ipairs(order) do departments[#departments + 1] = { short = k, count = counts[k] } end
+
+    local joining = cur.status == 'joining'
+    local canStart, startBlocked = false, nil
+    if joining then
+        if cur.joinClosed then
+            startBlocked = 'sup.crossdept.start_blocked_starting'
+        elseif #cur.participants < min then
+            startBlocked = 'sup.crossdept.start_blocked_min'
+        elseif not MayStart(viewer, cur) then
+            startBlocked = 'sup.crossdept.start_blocked_launcher'
+        else
+            canStart = true
+        end
+    end
+    return {
+        id = cur.id,
+        missionId = cur.missionId,
+        missionLabel = cur.missionLabel,
+        missionType = cur.missionType,
+        missionTypeLabel = TypeLabel(cur.missionType),
+        difficulty = cur.difficulty,
+        launcher = cur.launcher or '?',
+        launcherCallsign = cur.launcherCallsign,
+        launcherDepartment = cur.launcherDepartment,
+        launchedAt = cur.createdAt,
+        status = cur.status,
+        runState = runState,
+        runId = run and run.id or nil,
+        participants = participants,
+        departments = departments,
+        joined = joined,
+        max = max,
+        min = min,
+        joinEndsIn = joining and cur.joinEndsAt and math.max(0, cur.joinEndsAt - now) or nil,
+        idleCancelIn = (cur.status == 'waiting')
+                and math.max(0, (cur.idleSince or now) + CfgInt('idleCancel', 1800) - now)
+            or nil,
+        tier = tier,
+        tierExpected = tierExpected,
+        remaining = remaining,
+        waitingReason = cur.waitingReason,
+        attempt = cur.attempt or 1,
+        canStart = canStart,
+        startBlocked = startBlocked,
+        canRelaunch = cur.status == 'waiting',
+        canCancel = true,
+        waitlist = waitlist,
+        waitlistEnabled = WaitlistOn(),
+    }
+end
+
+function Ops.view(src)
+    local now = os.time()
+    local out = {
+        operation = nil,
+        cooldownLeft = Ops.cooldownLeft(),
+        cooldown = CfgInt('cooldown', 1800),
+        joinWindow = CfgInt('joinWindow', 300),
+        idleCancel = CfgInt('idleCancel', 1800),
+        maxParticipants = MaxFor(),
+        crossBonus = tonumber(Config.CrossDepartmentPoints) or 1.10,
+        enabled = Cfg().enabled ~= false,
+        canLaunch = false,
+        launchBlocked = nil,
+        serverTime = now,
+    }
+    if op then out.operation = OpView(op, src, now) end
+    if not ready then
+        out.launchBlocked = 'err.op_not_ready'
+    elseif Cfg().enabled == false then
+        out.launchBlocked = 'err.op_disabled'
+    elseif op then
+        out.launchBlocked = 'err.op_active'
+    elseif out.cooldownLeft > 0 then
+        out.launchBlocked = 'err.op_cooldown'
+    else
+        out.canLaunch = true
+    end
+    if not op then out.eligibleMissions = EligibleMissions() end
+    return out
+end
+
+-- ============================================================================
+--                                     NET
+-- ============================================================================
+
+local function ParseMissionId(payload)
+    if type(payload) == 'table' then payload = payload.missionId end
+    if type(payload) ~= 'string' or #payload == 0 or #payload > 40 or not payload:match('^[%a][%w_]*$') then
+        return nil
+    end
+    return payload
+end
+
+local function ParseOpId(payload)
+    if type(payload) == 'table' then payload = payload.operationId or payload.id end
+    if payload == nil then return nil, true end
+    if type(payload) ~= 'number' and type(payload) ~= 'string' then return nil, false end
+    if type(payload) == 'string' and #payload > 12 then return nil, false end
+    local n = math.tointeger(tonumber(payload))
+    if not n or n <= 0 then return nil, false end
+    return n, true
+end
+
+local function Guarded(scope, handler)
+    return function(src, payload)
+        local ok, errKey = CP.can(src, 'launchCrossDept')
+        if not ok then return false, errKey end
+        if scope == 'admin' and not IsAdmin(src) then return false, 'err.no_permission' end
+        return handler(src, payload)
+    end
+end
+
+for _, scope in ipairs({ 'sup', 'admin' }) do
+    CP.Net.action(('server:%s:opLaunch'):format(scope), Guarded(scope, function(src, payload)
+        local missionId = ParseMissionId(payload)
+        if not missionId then return false, 'err.invalid_payload' end
+        -- admins may launch during the cooldown, with a reason (audited, posted to the operations webhook)
+        if scope == 'admin' and type(payload) == 'table' and payload.skipCooldown == true then
+            local reason, errKey = CleanReason(payload.reason)
+            if not reason then return false, errKey end
+            return DoLaunch(src, missionId, { skipCooldown = true, reason = reason })
+        end
+        return DoLaunch(src, missionId)
+    end), { rate = 2 })
+
+    CP.Net.action(('server:%s:opStart'):format(scope), Guarded(scope, function(src)
+        return DoStartNow(src)
+    end), { rate = 2 })
+
+    CP.Net.action(('server:%s:opRelaunch'):format(scope), Guarded(scope, function(src)
+        return DoRelaunch(src)
+    end), { rate = 2 })
+
+    CP.Net.action(('server:%s:opCancel'):format(scope), Guarded(scope, function(src, payload)
+        if type(payload) ~= 'table' then return false, 'err.op_reason_required' end
+        local reason, errKey = CleanReason(payload.reason)
+        if not reason then return false, errKey end
+        return DoCancel(src, reason, false)
+    end), { rate = 2 })
+end
+
+for _, scope in ipairs({ 'sup', 'admin' }) do
+    CP.Net.action(('server:%s:opRemoveJoiner'):format(scope), Guarded(scope, function(src, payload)
+        if type(payload) ~= 'table' then return false, 'err.invalid_payload' end
+        local target = CP.U.toSrc(payload.src)
+        if not target then return false, 'err.invalid_payload' end
+        local reason, errKey = CleanReason(payload.reason)
+        if not reason then return false, errKey end
+        return DoRemoveJoiner(src, target, reason)
+    end), { rate = 2 })
+end
+
+CP.Net.action('server:joinOperation', function(src, payload)
+    local opId, valid = ParseOpId(payload)
+    if not valid then return false, 'err.invalid_payload' end
+    return Ops.join(src, opId)
+end, { rate = 3 })
+
+CP.Net.callback('sup:getOperation', function(src)
+    local ok, errKey = CP.can(src, 'launchCrossDept')
+    if not ok then return nil, errKey end
+    return Ops.view(src)
+end, { rate = 4 })
+
+AddEventHandler('playerDropped', function()
+    local src = source
+    RemoveJoiner(src)
+end)
+
+-- ============================================================================
+--           TICK: join window, idle auto-cancel, a run that vanished
+-- ============================================================================
+
+function Ops._tick()
+    local cur = op
+    if not cur then return end
+    local now = os.time()
+    if cur.status == 'joining' then
+        if not busy and not cur.joinClosed and cur.joinEndsAt and now >= cur.joinEndsAt then
+            StartRun(nil, true)
+        end
+    elseif cur.status == 'running' then
+        if RunGet(cur.runId) then
+            cur.runMissingSince = nil
+        elseif not cur.runMissingSince then
+            cur.runMissingSince = now
+        elseif now - cur.runMissingSince >= RUN_MISSING_GRACE then
+            CP.warn(TAG, 'operation %d: run %s ended without a report; treating it as failed', cur.id,
+                tostring(cur.runId))
+            Ops.onRunEnded({ id = cur.runId, operationId = cur.id }, 'failed')
+        end
+    elseif cur.status == 'waiting' then
+        if now - (cur.idleSince or now) >= CfgInt('idleCancel', 1800) then
+            DoCancel(0, CP.L('sup.crossdept.reason_idle'), true)
+        end
+    end
+end
+
+-- ============================================================================
+--                   OPERATION HISTORY (ARCHITECTURE §8.4.2)
+-- ============================================================================
+-- Past Cross-Department Missions with their participants and points from the run rows (live and archived: the union
+-- sits in a derived table, as the saves folder engine needs). Read-only; admins only.
+
+local HISTORY_PAGE = 20
+local HISTORY_STATUSES = { joining = true, running = true, waiting = true, completed = true, cancelled = true }
+
+function Ops.history(args)
+    args = type(args) == 'table' and args or {}
+    local to = math.tointeger(tonumber(args.to)) or os.time()
+    local from = math.tointeger(tonumber(args.from)) or (to - 30 * 86400)
+    if from >= to or to - from > 366 * 86400 then return nil, 'err.invalid_range' end
+    local page = math.max(1, math.tointeger(tonumber(args.page)) or 1)
+    local where = 'created_at >= FROM_UNIXTIME(?) AND created_at < FROM_UNIXTIME(?)'
+    local params = { from, to }
+    if args.status ~= nil and args.status ~= '' then
+        if not HISTORY_STATUSES[args.status] then return nil, 'err.invalid_payload' end
+        where = where .. ' AND status = ?'
+        params[#params + 1] = args.status
+    end
+    CP.Migrations.ready()
+    local okC, total = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_operations WHERE ' .. where, params)
+    if not okC then return nil, 'err.internal' end
+    total = math.floor(CP.U.num(total))
+    local owhere = 'o.created_at >= FROM_UNIXTIME(?) AND o.created_at < FROM_UNIXTIME(?)'
+    if args.status ~= nil and args.status ~= '' then owhere = owhere .. ' AND o.status = ?' end
+    local okR, rows = pcall(
+        MySQL.query.await,
+        ([[SELECT o.id, o.mission_id, o.launched_by, o.status,
+        UNIX_TIMESTAMP(o.created_at) AS created_ts, UNIX_TIMESTAMP(o.ended_at) AS ended_ts, f.display_name
+        FROM cp_operations o LEFT JOIN cp_officers f ON f.citizenid = o.launched_by WHERE %s
+        ORDER BY o.id DESC LIMIT %d OFFSET %d]]):format(owhere, HISTORY_PAGE, (page - 1) * HISTORY_PAGE),
+        params
+    )
+    if not okR then
+        CP.err(TAG, 'operation history failed: %s', tostring(rows))
+        return nil, 'err.internal'
+    end
+    local list, byId, ids, marks = {}, {}, {}, {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do
+        local id = math.tointeger(CP.U.num(r.id))
+        local def = MissionDef(r.mission_id)
+        local e = {
+            id = id,
+            missionId = tostring(r.mission_id),
+            missionLabel = def and def.label or tostring(r.mission_id),
+            launchedBy = tostring(r.launched_by),
+            launchedByName = r.display_name and tostring(r.display_name) or nil,
+            status = tostring(r.status),
+            createdAt = math.floor(CP.U.num(r.created_ts)),
+            endedAt = r.ended_ts and math.floor(CP.U.num(r.ended_ts)) or nil,
+            participants = {},
+            points = 0,
+        }
+        list[#list + 1] = e
+        if id then
+            byId[id] = e
+            ids[#ids + 1] = id
+            marks[#marks + 1] = '?'
+        end
+    end
+    if #ids > 0 then
+        local inList = table.concat(marks, ', ')
+        local cols = 'operation_id, citizenid, department, state, final_points, voided'
+        local params2 = {}
+        for _, v in ipairs(ids) do params2[#params2 + 1] = v end
+        for _, v in ipairs(ids) do params2[#params2 + 1] = v end
+        local okP, prow = pcall(
+            MySQL.query.await,
+            ([[SELECT x.operation_id, x.citizenid, x.department, x.state,
+            x.final_points, x.voided, f.display_name FROM (SELECT %s FROM cp_mission_runs WHERE operation_id IN (%s)
+            UNION ALL SELECT %s FROM cp_mission_runs_archive WHERE operation_id IN (%s)) x
+            LEFT JOIN cp_officers f ON f.citizenid = x.citizenid]]):format(cols, inList, cols, inList),
+            params2
+        )
+        if okP then
+            for _, r in ipairs(type(prow) == 'table' and prow or {}) do
+                local e = byId[math.tointeger(CP.U.num(r.operation_id))]
+                if e then
+                    local voided = CP.U.truthy(r.voided)
+                    e.participants[#e.participants + 1] = {
+                        citizenid = tostring(r.citizenid),
+                        name = r.display_name and tostring(r.display_name) or nil,
+                        department = tostring(r.department),
+                        state = tostring(r.state),
+                        points = math.floor(CP.U.num(r.final_points)),
+                        voided = voided,
+                    }
+                    if not voided then e.points = e.points + math.floor(CP.U.num(r.final_points)) end
+                end
+            end
+        end
+    end
+    return { rows = list, page = page, pages = math.max(1, math.ceil(total / HISTORY_PAGE)), total = total }
+end
+
+do
+    local Kit = CP.AdminKit or {
+        callback = function() return false end,
+    }
+    Kit.callback('admin:getOperations', 'openAdmin', function(ctx)
+        return Ops.history(ctx.args)
+    end, { rate = 2 })
+end
+
+-- ============================================================================
+--                                   START-UP
+-- ============================================================================
+-- Restart safety, the last launch, listeners, the tick loop.
+
+function Ops._init()
+    CP.Migrations.ready()
+    local ok, err = pcall(function()
+        local n = MySQL.update.await(
+            'UPDATE cp_operations SET status = \'cancelled\', ended_at = FROM_UNIXTIME(?) WHERE status IN (\'joining\', \'running\', \'waiting\')',
+            { os.time() })
+        if (tonumber(n) or 0) > 0 then
+            CP.log(TAG, '%d operation(s) left active by the last server start marked cancelled', tonumber(n))
+        end
+        local ts = MySQL.scalar.await('SELECT UNIX_TIMESTAMP(MAX(created_at)) AS last_ts FROM cp_operations')
+        lastLaunchAt = tonumber(ts)
+    end)
+    if not ok then CP.err(TAG, 'could not read cp_operations: %s', tostring(err)) end
+    ready = true
+end
+
+CreateThread(function()
+    Wait(0)
+    -- a start that failed: no operations and no tick (the thread ends quietly)
+    if CP.Migrations and CP.Migrations.started and not CP.Migrations.started() then return end
+    Ops._init()
+    if CP.Qbx and CP.Qbx.onPlayerUnload then CP.Qbx.onPlayerUnload(RemoveJoiner) end
+    if CP.Access and CP.Access.onLost then CP.Access.onLost(function(src) RemoveJoiner(src) end) end
+    while true do
+        Wait(op and TICK_ACTIVE_MS or CP.Perf.ms(TICK_IDLE_MS))
+        local okT, errT = pcall(Ops._tick)
+        if not okT then CP.err(TAG, 'tick failed: %s', tostring(errT)) end
+    end
+end)
+
+-- Test hooks (tests/teams_spec.lua).
+function Ops._reset()
+    op, lastLaunchAt, busy = nil, nil, false
+end
+Ops._INVITE_TTL = INVITE_TTL
+function Ops._setLastLaunch(ts) lastLaunchAt = ts end
