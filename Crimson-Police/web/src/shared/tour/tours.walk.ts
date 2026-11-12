@@ -3,7 +3,8 @@
 // The guided tours (Config.Training) against the browser mocks (node walk.mjs, a gate step): every step's
 // element exists in the sources (a data-tour id renamed or dropped in a UI change fails here), every step has its
 // text, every screen a step opens is a screen (and tab) of its tablet, the versions match modules/access/training.lua,
-// a tour shows once and a new version shows only its new steps, and the card always stays inside the window.
+// a tour shows once and a new version shows only its new steps, and the card always stays inside the window. The
+// tips of the first mission run: each waits for its part of the HUD, shows once in order, and is saved at the result.
 
 import '../../mocks/index';
 import trainingLua from '../../../../modules/access/training.lua?raw';
@@ -21,11 +22,15 @@ import {
     endRun,
     moveRun,
     normalizeTraining,
+    finishHints,
+    hintShown,
     setTrainingView,
     takeAsked,
+    takeHintsAgain,
     tourState,
     type TrainingView,
 } from './store';
+import { hintCond, hintsFinished, hintsToShow, nextHint } from './runHints';
 import { tourStatus } from './TourButtons';
 import {
     TOURS,
@@ -66,6 +71,7 @@ const SCREENS_OF: Record<string, string[]> = {
     supervisor: SUPERVISOR_SCREENS.map(s => s.key),
     admin: ADMIN_SCREENS.map(s => s.key),
     criminal: [],
+    hud: [],
 };
 
 // The data-tour ids written out in the sources, and the generated ones: nav-<screen>, crim-nav-<screen>,
@@ -110,14 +116,20 @@ const FULL_CTX: TourCtx = {
 
 async function steps(): Promise<void> {
     // ---- EVERY TOUR, EVERY STEP --------------------------------------------
-    ok(TOUR_IDS.join(',') === 'officer,supervisor,admin,criminal', 'four tours, one per tablet');
+    ok(TOUR_IDS.join(',') === 'officer,supervisor,admin,criminal,run', 'four tablet tours and the run tips');
     const known = targetsKnown();
     ok(known.generated.nav && known.generated.crimNav && known.generated.screen, 'the generated data-tour ids exist');
     ok(known.fixed.has('tour-help'), "every tablet's '?' button carries tour-help");
     for (const id of TOUR_IDS) {
         const tour = TOURS[id];
         ok(toursOf(tour.tablet).includes(id), `${id}: its tablet offers it`);
-        ok(tour.steps.length >= 5, `${id}: a real tour (${tour.steps.length} steps)`);
+        ok(tour.steps.length >= (tour.tablet === 'hud' ? 3 : 5), `${id}: a real tour (${tour.steps.length} steps)`);
+        // the run tips have no focus: no screen, no click, and each waits for its part of the HUD
+        for (const s of tour.steps)
+            ok(
+                tour.tablet === 'hud' ? !!s.when && !!s.target && !s.screen && !s.crim && !s.waitFor : !s.when,
+                `${id}.${s.id}: ${tour.tablet === 'hud' ? 'a run tip waits for its part of the HUD' : 'no run tip'}`,
+            );
         const seen = new Set<string>();
         for (const s of tour.steps) {
             ok(!seen.has(s.id), `${id}.${s.id}: one step id once`);
@@ -145,7 +157,7 @@ async function steps(): Promise<void> {
     const block = /Tr\.TOURS = \{([^}]*)\}/.exec(trainingLua)?.[1] ?? '';
     const lua: Record<string, number> = {};
     for (const m of block.matchAll(/(\w+) = (\d+)/g)) lua[m[1]] = Number(m[2]);
-    ok(Object.keys(lua).sort().join(',') === [...TOUR_IDS].sort().join(','), `the server knows the four tours`);
+    ok(Object.keys(lua).sort().join(',') === [...TOUR_IDS].sort().join(','), `the server knows every tour`);
     for (const id of TOUR_IDS) ok(lua[id] === tourVersion(TOURS[id]), `${id}: version ${lua[id]} on both sides`);
 
     // ---- A STEP A PLAYER MAY NOT SEE IS LEFT OUT ---------------------------
@@ -216,6 +228,63 @@ async function steps(): Promise<void> {
     setTrainingView(view({}, { enabled: false }));
     askTour('officer');
     ok(tourState().asked === null, 'tours off: nothing is asked');
+    setTrainingView(null);
+
+    // ---- THE TIPS OF THE FIRST MISSION RUN ---------------------------------
+    for (const target of ['hud', 'hud-objectives', 'hud-route', 'result-card'])
+        ok(known.fixed.has(target), `the run tips point at ${target}`);
+    ok(TEXT['tour.ui.hint_auto'] && TEXT['tour.ui.state.queued'] && TEXT['tour.ui.run_next'], 'the run tips: texts');
+    const hud = {
+        runId: 'r1',
+        phase: 'route',
+        objectives: [],
+        route: { status: 'on', distance: 300 },
+    } as unknown as Parameters<typeof hintCond>[0];
+    const first = view({});
+    const tips = hintsToShow(first, false);
+    ok(tips.map(s => s.id).join(',') === 'hud,objectives,gps,result', 'a new officer gets every tip');
+    ok(hintsToShow(view({ run: tourVersion(TOURS.run) }), false).length === 0, 'finished: no tip again');
+    ok(hintsToShow(view({ run: tourVersion(TOURS.run) }), true).length === tips.length, 'asked again: every tip');
+    ok(hintsToShow(view({}, { autoStart: { run: false } }), false).length === 0, 'autoStart.run = false: none');
+    ok(hintsToShow(view({}, { autoStart: { run: false } }), true).length === tips.length, 'but asked for: shown');
+    ok(hintsToShow(view({}, { enabled: false }), true).length === 0 && hintsToShow(null, false).length === 0, 'off');
+    const shown = new Set<string>();
+    ok(nextHint(tips, shown, hintCond(null, false)) === null, 'no HUD on screen (the tablet over it): no tip');
+    ok(nextHint(tips, shown, hintCond(hud, false))?.id === 'hud', 'the HUD shows: its tip first');
+    shown.add('hud');
+    ok(nextHint(tips, shown, hintCond(hud, false))?.id === 'gps', 'no objectives yet: the GPS tip next');
+    shown.add('gps');
+    ok(nextHint(tips, shown, hintCond(hud, false)) === null, 'then it waits for the objectives');
+    const working = { ...hud, phase: 'objectives', route: null, objectives: [{ label: 'Go', done: false }] };
+    ok(nextHint(tips, shown, hintCond(working as typeof hud, false))?.id === 'objectives', 'the objectives tip');
+    ok(!hintCond({ ...working, target: null } as typeof hud, false).gps, 'no route and no pointer: no GPS line');
+    ok(hintCond({ ...working, target: { label: 'x', distance: 5 } } as typeof hud, false).gps, 'the pointer is GPS');
+    shown.add('objectives');
+    ok(!hintsFinished(tips, shown), 'not finished before the result card');
+    ok(nextHint(tips, shown, hintCond(null, true))?.id === 'result', 'the result card: its tip');
+    ok(hintsFinished(tips, new Set(['hud', 'result'])), 'finished at the result tip, a missed tip not waited for');
+    ok(!hintsFinished([], shown), 'nothing to show: nothing to save');
+    const later: TourDef = {
+        ...TOURS.run,
+        steps: [...TOURS.run.steps, { id: 'x', target: 'hud', when: 'hud', since: 2 }],
+    };
+    ok(
+        stepsToShow(later, 1, false, FULL_CTX)
+            .map(s => s.id)
+            .join() === 'x',
+        'a new tip version: only the new tip',
+    );
+    setTrainingView(first);
+    askTour('run');
+    ok(tourState().hintsAgain && tourState().asked === null, 'Tours -> run: shown on the next run, no tablet asked');
+    ok(takeHintsAgain() && tourState().hints.again && !tourState().hintsAgain, 'the next HUD takes it');
+    hintShown('hud');
+    hintShown('hud');
+    ok(tourState().hints.shown.join() === 'hud', 'a tip counts once');
+    finishHints();
+    ok(tourState().view?.seen.run === tourVersion(TOURS.run), 'finished: saved with its version');
+    ok(!tourState().hints.again && tourState().hints.shown.length === 0, 'and reset');
+    ok(tourStatus('run', tourState().view?.seen) === 'done', 'Tours: the run tips finished');
     setTrainingView(null);
 
     // ---- THE CARD STAYS INSIDE THE WINDOW, AT ANY SIZE ---------------------

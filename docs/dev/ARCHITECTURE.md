@@ -2652,8 +2652,8 @@ shipped false, each with a default money amount).
   missionType })` pays the type's amount for that outcome when set, else `money.got_away` / `money.caught`.
 
 ### 5.53 CP.Training — modules/access/training.lua (tours)
-Steps: `web/src/shared/tour/tours.ts`. `cp_tours` (018): `{"<tour>": <version>}` per citizenid; `Tr.TOURS` = the
-versions; only steps above the saved one show. `training:get`, `server:training:done`, `server:admin:resetTours`,
+Steps: `web/src/shared/tour/tours.ts` (`run`: RunHints.tsx). `cp_tours` (018): `{"<tour>": <version>}` per cid;
+`Tr.TOURS` = the versions; only newer steps show. `training:get`, `server:training:done`, `server:admin:resetTours`,
 `/crimsonhelp` -> `client:startTour`; `CP.Setup.checklist()` -> `admin:getHome.checklist`.
 
 ## 6. Cross-cutting conventions

@@ -1,6 +1,9 @@
 -- CP.Training (client): /crimsonhelp (Config.Training.command, modules/access/training.lua) lands here with the tour
+
+-- CP.Training (client): /crimsonhelp (Config.Training.command, modules/access/training.lua) lands here with the tour
 -- of the player's role. The tablet of that tour opens (or stays open) and the NUI gets { type = 'tour', tour }; the
--- NUI starts it once that tablet shows. Nothing runs between commands.
+-- NUI starts it once that tablet shows. The run tips ('run') open no tablet: the NUI shows them beside the HUD on the
+-- next mission run (or now, during one). Nothing runs between commands.
 
 CP.Training = CP.Training or {}
 local TAG = 'training'
@@ -15,7 +18,7 @@ local function OpenFor(tour)
         if CP.Tablet.openUi() == tour then return true end
         return CP.Tablet.open(tour, { via = 'command' }) == true
     end
-    return tour == 'admin'
+    return tour == 'admin' or tour == 'run'
 end
 
 RegisterNetEvent(CP.e('client:startTour'), function(tour)

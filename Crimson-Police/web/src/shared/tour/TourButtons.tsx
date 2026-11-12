@@ -30,8 +30,9 @@ export function tourStatus(tour: TourId, seen: Partial<Record<TourId, number>> |
 }
 
 // tours: the tours offered; onStart (optional) runs after a tour is asked for (e.g. a switch to its tablet).
+// The run tips (no tablet) show on the next mission run once asked for: the list says so until they show.
 export function ToursCard({ tours, onStart }: { tours: TourId[]; onStart?: (tour: TourId) => void }) {
-    const { view } = useTourState();
+    const { view, hintsAgain } = useTourState();
     if ((view && !view.enabled) || tours.length === 0) return null;
     return (
         <Card title={t('tour.ui.list_title')} subtitle={t('tour.ui.list_help')} icon="help">
@@ -40,7 +41,11 @@ export function ToursCard({ tours, onStart }: { tours: TourId[]; onStart?: (tour
                     <li key={id} className="cp-tours__row">
                         <span className="cp-tours__name">
                             <strong>{t(`tour.name.${id}`)}</strong>
-                            <span className="cp-tours__state">{t(`tour.ui.state.${tourStatus(id, view?.seen)}`)}</span>
+                            <span className="cp-tours__state">
+                                {t(
+                                    `tour.ui.state.${id === 'run' && hintsAgain ? 'queued' : tourStatus(id, view?.seen)}`,
+                                )}
+                            </span>
                         </span>
                         <Button
                             size="sm"

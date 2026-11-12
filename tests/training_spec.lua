@@ -80,9 +80,10 @@ do
     H.eq(T.allowSkip, true, 'Skip and Don\'t show again ship on')
     H.eq(T.command, 'crimsonhelp', 'the command ships as /crimsonhelp')
     H.eq(T.setupChecklist, true, 'the Setup checklist ships on')
-    for _, id in ipairs({ 'officer', 'supervisor', 'admin', 'criminal' }) do
+    for _, id in ipairs({ 'officer', 'supervisor', 'admin', 'criminal', 'run' }) do
         H.eq(T.autoStart[id], true, id .. ': starts by itself on its first open')
     end
+    H.eq(T.hintSeconds, 12, 'each first run tip shows 12 s')
     H.ok(H.commands.crimsonhelp ~= nil and H.commands.crimsonhelp.restricted == false, '/crimsonhelp for everyone')
 end
 
@@ -97,6 +98,14 @@ do
     H.eq(view.data.versions.officer, Tr.TOURS.officer, 'the versions go with it')
     H.eq(view.data.allowSkip, true, 'allowSkip goes with it')
     H.eq(Get(6).ok, false, 'a player with no character loaded gets no view')
+    H.eq(view.data.versions.run, Tr.TOURS.run, 'the first run tips have a version too')
+    H.eq(view.data.autoStart.run, true, 'and start by themselves')
+    H.eq(view.data.hintSeconds, 12, 'each tip for hintSeconds')
+    Config.Training.hintSeconds = 1
+    H.eq(Get(1).data.hintSeconds, 4, 'a tip shows at least 4 s')
+    Config.Training.hintSeconds = 600
+    H.eq(Get(1).data.hintSeconds, 60, 'and at most 60 s')
+    Config.Training.hintSeconds = 12
 
     local ok, res = Done(1, { tour = 'officer', version = 1 })
     H.eq(ok, true, 'the Officer tour finished')
@@ -120,6 +129,8 @@ do
     H.eq(bad, false, 'an unknown tour is refused')
     H.eq(err, 'err.invalid_payload', 'as a bad payload')
     H.eq((Done(1, 'officer')), false, 'a payload that is not a table is refused')
+    H.eq((Done(1, { tour = 'run', version = 1 })), true, 'the first run tips finished')
+    H.eq(Tr.seen('TRN00001').run, 1, 'saved like a tour')
     H.eq((Done(4, { tour = 'criminal', version = 1 })), true, 'a criminal tablet user saves his tour too')
     H.eq(Tr.seen('TRN00004').criminal, 1, 'by his citizenid')
 end
@@ -139,7 +150,7 @@ do
             CP.AdminKit.run('server:admin:resetTours', 3, { citizenid = 'TRN00001', reason = 'New player' }))
     end)
     H.eq(res[1], true, 'an admin resets the tours of a character')
-    H.eq(res[2].cleared, 1, 'and is told how many were saved')
+    H.eq(res[2].cleared, 2, 'and is told how many were saved')
     H.eq(next(Tr.seen('TRN00001')), nil, 'every tour starts again on his next open')
     H.eq(Tr.seen('TRN00004').criminal, 1, 'other characters keep theirs')
     local audit = H.sql('SELECT target FROM cp_audit WHERE action = \'toursReset\'')
@@ -159,6 +170,8 @@ do
     H.eq(select(2, Tr.roleTour(5)), 'err.training_none', 'no tablet: no tour')
     H.eq(select(2, Tr.roleTour(1, 'admin')), 'err.training_not_yours', 'an officer cannot ask for the Admin tour')
     H.eq(select(2, Tr.roleTour(1, 'nope')), 'err.training_unknown', 'an unknown name')
+    H.eq(Tr.roleTour(1, 'run'), 'run', 'an officer may ask for the first run tips by name')
+    H.eq(select(2, Tr.roleTour(4, 'run')), 'err.training_not_yours', 'not without a police job')
 
     local function Command(src, args)
         H.clockMs = H.clockMs + 2100
@@ -172,6 +185,9 @@ do
     H.eq(Command(3), 'admin', '/crimsonhelp for an admin')
     H.eq(admins[1], 3, 'opens the Admin UI first')
     H.eq(Command(2, { 'officer' }), 'officer', '/crimsonhelp officer')
+    H.eq(Command(1, { 'run' }), 'run', '/crimsonhelp run: the tips go to the NUI')
+    H.eq(notes[1] and notes[1].key, 'tour.ui.run_next', 'he is told they show on his next run')
+    H.eq(#admins, 0, 'no tablet opens for them')
     H.eq(Command(5), nil, 'no tour: nothing opens')
     H.eq(notes[1] and notes[1].key, 'err.training_none', 'he is told why')
     H.clockMs = H.clockMs + 2100

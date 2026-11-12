@@ -179,6 +179,7 @@ export function ResultScreen({ result, onDismiss }: { result: RunResult; onDismi
         <section
             className={cx('cp-result', `is-${kind}`, closing && 'is-leaving')}
             aria-label={t(`result.title.${kind}`)}
+            data-tour="result-card"
         >
             <div className="cp-result__head">
                 <span className="cp-result__icon">
