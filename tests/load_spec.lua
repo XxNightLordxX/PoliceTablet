@@ -312,6 +312,9 @@ end
 --                      1. SHIPPED CONFIG: 12 RUNS AT ONCE
 -- ============================================================================
 
+-- a fixed draw seed for the whole spec: with 16 runs at once a random seed can leave one type with no free
+-- location (a right answer, but not the one the switches phase checks)
+CP.Draw._setRng(CP.U.rng(4242))
 Phase('shipped')
 H.time = H.time + 7200
 local UNITS = {}                     -- 8 units of two: leaders 8..15, members 16..23

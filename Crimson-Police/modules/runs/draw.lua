@@ -87,6 +87,8 @@ local function Rng()
     end
     return drawRng
 end
+-- tests only: a fixed seed, so a spec's draws repeat (nil goes back to the time seed)
+Draw._setRng = function(r) drawRng = r end
 
 local function Safe(fn, ...)
     if type(fn) ~= 'function' then return false, nil end
