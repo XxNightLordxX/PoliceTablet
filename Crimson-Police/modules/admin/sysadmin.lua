@@ -262,11 +262,10 @@ local function MigrationNames()
             return out
         end
     end
-    local src = LoadResourceFile(CP.resource, 'modules/system/migrations.lua') or ''
-    local body = src:match('local FILES = (%b{})') or ''
-    local out = {}
-    for name in body:gmatch('\'([^\']+%.sql)\'') do out[#out + 1] = name end
-    return out
+    -- H7: never read the runner's own source (modules/system/migrations.lua is escrowed: LoadResourceFile gives
+    -- ciphertext on a Tebex build), so without CP.Migrations.status a backup has no table list and says so
+    CP.warnOnce(TAG, 'schema.noMigrations', 'the migrations list is not available: backups and restores have no tables')
+    return {}
 end
 
 local function Split(sql)

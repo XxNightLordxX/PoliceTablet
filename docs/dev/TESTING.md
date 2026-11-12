@@ -785,8 +785,14 @@ Until these gaps are closed, look for them in review.
 - **A file listed twice in fxmanifest runs twice.** FXServer runs every entry (a file named by itself and matched
   again by a glob loads twice). fxmanifest lists every file once; only storage keeps a load guard, because
   the harness boots it before the manifest's list;
-  tests/module_layout_spec.lua checks the list and tests/adminkit_spec.lua expands the manifest the way FXServer
-  does (`H.manifestScripts`) and fails on a repeated file.
+  tests/module_layout_spec.lua checks the list (every listed script exists and runs once, and `H.boot` loads
+  `shared/*.lua` from `H.manifestScripts` in the manifest's order) and tests/adminkit_spec.lua expands the manifest
+  the way FXServer does (`H.manifestScripts`) and fails on a repeated file.
+- **Escrow seals every .lua file `escrow_ignore` does not list.** FXServer still runs those scripts, but
+  `LoadResourceFile` of one gives ciphertext on an escrowed build, while the harness serves the plain file from
+  disk. So never read a script's own source (or any other escrowed `.lua`) as data; read config, locales, missions
+  and `.sql` / `.txt` / `.json` files only. tests/escrow_boot_spec.lua boots the server and client lists with every
+  escrowed `.lua` sealed (`H.escrowIgnored` reads `escrow_ignore`) and fails on any read of one.
 - **FXServer's debug library is five functions.** getinfo, getmetatable, setmetatable, getupvalue and traceback
   only: no `debug.sethook`, so text cannot be run under a step or memory budget. Never run text that comes from a
   file an admin can edit or from the Admin UI; read it as data (mission files: `CP.U.parseMissionFile`). The

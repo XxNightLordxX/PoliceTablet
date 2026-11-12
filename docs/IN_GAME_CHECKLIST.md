@@ -997,3 +997,6 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Security and anonymity (H5): set Recognition -> commendations -> announce on, turn Hide name on for an officer with
   no callsign, then commend him: the board channel in Discord shows "Hidden officer" (the hidden name), never his
   real name or citizen id. (H5)
+- [ ] Escrow and start-up (H7): on the escrowed (Tebex) build, start the resource: the console shows no "could not
+  be read" line, every built-in mission is on the Mission Board, and Admin UI -> System -> Make a backup lists every
+  cp_ table. (H7)

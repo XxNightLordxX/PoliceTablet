@@ -311,6 +311,39 @@ end
 H.ok(not (Read('modules/map/client/markers.lua') or ''):find('pcall(CP.Tablet.hud', 1, true),
     'markers: the HUD line goes through CP.Call')
 
+-- H7: H.boot loads shared/*.lua as fxmanifest does (every file, in the glob's sorted order), so a spec runs the
+-- shared files in the game's order and a new shared file is never left out of the specs
+do
+    local booted, realLoad = {}, H.load
+    H.load = function(rel)
+        if rel:match('^shared/') then booted[#booted + 1] = rel end
+        return realLoad(rel)
+    end
+    local ok, err = pcall(H.boot, { side = 'server' })
+    H.load = realLoad
+    H.ok(ok, 'H7: H.boot runs (' .. tostring(err) .. ')')
+    local listed = {}
+    for _, f in ipairs(H.manifestScripts('shared_scripts')) do
+        if f:match('^shared/') then listed[#listed + 1] = f end
+    end
+    H.ok(#listed >= 10, 'H7: fxmanifest shared_scripts matches the shared files (' .. #listed .. ')')
+    H.eq(table.concat(booted, ', '), table.concat(listed, ', '), 'H7: H.boot loads shared/*.lua in fxmanifest order')
+end
+
+-- H7: every path the three script lists name exists, and no .lua file of the manifest lists runs twice
+do
+    local count, missing, twice = {}, {}, {}
+    for _, key in ipairs({ 'shared_scripts', 'server_scripts', 'client_scripts' }) do
+        for _, f in ipairs(H.manifestScripts(key)) do
+            count[f] = (count[f] or 0) + 1
+            if count[f] == 1 and not Read(f) then missing[#missing + 1] = f end
+            if count[f] == 2 then twice[#twice + 1] = f end
+        end
+    end
+    H.eq(table.concat(missing, ', '), '', 'H7: every script fxmanifest lists exists')
+    H.eq(table.concat(twice, ', '), '', 'H7: fxmanifest runs every script once')
+end
+
 -- the shared ones answer as the private copies did
 H.boot({ side = 'server' })
 CP.Probe = {

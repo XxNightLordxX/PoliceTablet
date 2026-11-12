@@ -552,6 +552,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/engine_a_spec.lua`: Modules/missions, draw, scaling, schedule, events (slice engine_a).
 - `tests/engine_b_spec.lua`: The run engine (modules/runs/runs.lua) against stubs of the other modules, with every SQL statement of the engine run on the MariaDB test database.
 - `tests/escort_director_spec.lua`: Armored Truck Escort through the spawn director (Config.Spawning) on the real engine, the real block and
+- `tests/escrow_boot_spec.lua`: H7: the resource starts on an escrowed (Tebex) build.
 - `tests/failed_start_spec.lua`: A start that fails.
 - `tests/feature_rewards_spec.lua`: Feature rewards (Config.FeatureRewards): money and items for the volunteer suspect, the officer who talks a
 - `tests/field_contact_director_spec.lua`: field_contact through the spawn director (Config.Spawning) on the real engine, the real block and the
