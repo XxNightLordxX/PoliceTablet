@@ -1,3 +1,5 @@
+// Buttons: Button, IconButton and ConfirmButton (a two-step confirm).
+
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cx } from '../cx';
 import { Icon, type IconName } from './Icon';

@@ -1,3 +1,5 @@
+// The Vite build of the NUI: web/src to web/dist, with relative asset paths and no external URLs.
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 

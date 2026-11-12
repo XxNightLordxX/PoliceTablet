@@ -1,3 +1,5 @@
+// Containers: Card, Section and Screen (a screen with its translated heading).
+
 import type { HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { cx } from '../cx';
 import { t } from '../i18n';

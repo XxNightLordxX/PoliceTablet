@@ -1,3 +1,5 @@
+// Department logos: DeptLogo and the Watermark behind a screen.
+
 import { useState, type CSSProperties } from 'react';
 import { cx } from '../cx';
 import { clientAction } from '../nui';

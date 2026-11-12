@@ -1756,7 +1756,8 @@ NOTES_INTRO = """# File notes
 
 One line per source file: what it is for, the first sentence of its header. tools/restyle.py writes this file;
 the full header, with the details, stays at the top of the file itself (docs/dev/STYLE.md). The module APIs are in
-docs/dev/ARCHITECTURE.md.
+docs/dev/ARCHITECTURE.md. Not listed: Crimson-Police/missions/builtin and Crimson-Police/sql/migrations (data, in
+ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the build); tests/docs_spec.lua checks the rest.
 """
 
 NOTE_RE = re.compile(r'^- `([^`]+)`: (.*)$')

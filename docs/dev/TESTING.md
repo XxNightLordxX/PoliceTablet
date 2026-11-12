@@ -697,7 +697,14 @@ Run `tools/check_all.sh` once, right before the commit (its steps are listed at 
 - **Contract docs change in the same commit as the code**: ARCHITECTURE §5, §8, §9 and §10, the Crimson-Arena
   rules. The SPEC copies no config: it links to `config/config.lua`, and `tests/docs_spec.lua` checks that every
   Config key the SPEC names exists there.
-  A protocol name without its §8 or §9 entry is a finding.
+  A protocol name without its §8 or §9 entry is a finding, and `tests/docs_spec.lua` fails on one: every event,
+  callback, action and NUI callback of the capability inventory is named in ARCHITECTURE (or INTEGRATIONS for another
+  resource's event; a grouped row may name the rest of its actions without their prefix), every other resource's
+  client-sendable event in §8.2 and every key mapping in §8.3.
+- **The map keeps up with the code** (`tests/docs_spec.lua`): FILE_NOTES has a line for every tracked source file
+  (`.lua`, `.ts`, `.tsx`, `.py`, `.sh`, `.mjs`, `.cjs`, `.sql`; not missions/builtin, sql/migrations or web/dist, which
+  its intro names), ARCHITECTURE names every `CP.X = CP.X or` table, §1 lists every shared and config file and owner
+  document and the full shared load order, and every file LOOPS names exists, with the anticheat interval of the code.
 - **What an owner sees or sets** (install, a setting, a command, a console line) goes in the root `README.md` when
   it is install, admins, what ships off, commands or troubleshooting, else in `docs/OWNER_GUIDE.md`, and in the folder
   README that covers it. The README stays under 60 KB (`tests/docs_spec.lua`).

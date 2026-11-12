@@ -1,4 +1,4 @@
--- CP.Tablet (client): the NUI. The only file that calls SendNUIMessage.
+-- CP.Tablet (client): the NUI. Every NUI message but `crimtab` (modules/realplayers/client/crimtab.lua) is sent here.
 
 -- Owns: /CrimsonPolice (Config.Tablet.command), the key mapping crimsonpolice_tablet (default key
 -- Config.Tablet.keybind; '' = unbound, players can bind it in GTA settings), the optional ox_inventory

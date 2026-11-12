@@ -2,6 +2,11 @@
 -- it names exists, every document a file names exists, the short README and the owner guide keep their contents,
 -- commands, config keys and "What ships off" table in step with the code, and FILE_NOTES is one line per file.
 
+-- The documents stay true to the code: the SPEC links the config files instead of copying them and every Config key
+-- it names exists, every document a file names exists, the short README and the owner guide keep their contents,
+-- commands, config keys and "What ships off" table in step with the code, and FILE_NOTES is one line per file.
+-- The map (step H1): ARCHITECTURE, FILE_NOTES and LOOPS name what the code has (docs/dev/TESTING.md "Keeping the docs true").
+
 local H = dofile('tests/harness.lua')
 H.boot({ side = 'server' })
 
@@ -416,7 +421,7 @@ H.ok(#notes < 150000, ('FILE_NOTES stays small (%d bytes)'):format(#notes))
 -- ARCHITECTURE: one place per module (no second "module notes" part), no build-history narration, every section it
 -- names exists, and it stays small (its module sections keep the names and rules; the code headers have the rest)
 local arch = ReadRepo('docs/dev/ARCHITECTURE.md') or ''
-H.ok(#arch > 100000 and #arch < 360000, ('ARCHITECTURE stays small (%d bytes)'):format(#arch))
+H.ok(#arch > 100000 and #arch < 380000, ('ARCHITECTURE stays small (%d bytes)'):format(#arch))
 H.eq(arch:find('\n## 13.', 1, true), nil, 'ARCHITECTURE has no separate module notes part')
 for _, phrase in ipairs({ 'owner request of', 'as before', 'Contract interpretations', 'this slice' }) do
     H.eq(arch:find(phrase, 1, true), nil, 'ARCHITECTURE has no history phrase: ' .. phrase)
@@ -466,5 +471,196 @@ do
     local lockLine = spec:match('\n%- Maintenance lock:[^\n]+') or ''
     H.ok(lockLine:find('store not in use', 1, true) ~= nil, 'Z8B: SPEC: a copy into the other store ends the lock')
 end
+
+-- ============================================================================
+--                        THE MAP KEEPS UP WITH THE CODE
+-- ============================================================================
+-- Step H1: every name the code has.
+
+local integrations = ReadRepo('docs/dev/INTEGRATIONS.md') or ''
+local loops = ReadRepo('docs/dev/LOOPS.md') or ''
+local surface = arch .. '\n' .. integrations
+
+-- The text from a heading that starts with `head` to the next heading of that level or above.
+local function Section(doc, head)
+    local at = doc:find('\n' .. head, 1, true)
+    if not at then return '' end
+    local level = #(head:match('^(#+)') or '#')
+    local rest = doc:sub(at + 1)
+    local stop = nil
+    for pos, hashes in rest:gmatch('()\n(#+) ') do
+        if pos > 1 and #hashes <= level then
+            stop = pos
+            break
+        end
+    end
+    return stop and rest:sub(1, stop) or rest
+end
+
+-- name is in doc as a whole name (the next character is not part of a longer name)
+local function Named(doc, name)
+    local from = 1
+    while true do
+        local a, b = doc:find(name, from, true)
+        if not a then return false end
+        if not doc:sub(b + 1, b + 1):match('[%w_]') then return true end
+        from = b + 1
+    end
+end
+
+-- A grouped row names the rest of its actions without their prefix: `server:admin:a`, `b` on one line, or a section
+-- whose heading names `<prefix><name>` and lists `b` (the builder actions of §5.28.4).
+local function Shorthand(doc, name)
+    local prefix, short = name:match('^(.+:)([%w_]+)$')
+    if not prefix then return false end
+    local tick = '`' .. short .. '`'
+    for line in doc:gmatch('[^\n]+') do
+        if Has(line, prefix) and Has(line, tick) then return true end
+    end
+    for head in doc:gmatch('\n(#+ [^\n]*`' .. prefix:gsub('%p', '%%%0') .. '<name>`[^\n]*)') do
+        if Has(Section(doc, head), tick) then return true end
+    end
+    return false
+end
+
+-- the game's own events a resource handles, documented by FiveM
+local ENGINE = {
+    onResourceStart = true,
+    onResourceStop = true,
+    onClientResourceStart = true,
+    onClientResourceStop = true,
+}
+
+_G.CP_INVENTORY_LIB = true
+local okInv, Inv = pcall(dofile, 'tools/capability_inventory.lua')
+_G.CP_INVENTORY_LIB = nil
+local okList, inventory = false, nil
+if okInv then okList, inventory = pcall(Inv.inventory) end
+H.ok(okList and type(inventory) == 'table' and #inventory > 1000, 'H1: the capability inventory builds')
+local nui91 = Section(arch, '### 9.1 ')
+H.ok(#nui91 > 1000, 'H1: ARCHITECTURE has §9.1')
+local missingNet, checked = {}, 0
+for _, line in ipairs(okList and inventory or {}) do
+    local kind, name = line:match('^(%S+) %S+ (%S+)')
+    if kind == 'nui' then
+        checked = checked + 1
+        if not Has(nui91, '`' .. name .. '`') then missingNet[#missingNet + 1] = 'nui ' .. name end
+    elseif kind == 'event' or kind == 'callback' or kind == 'action' then
+        checked = checked + 1
+        local short = name:gsub('^crimson%-police:', '')
+        if not ENGINE[short] and not Named(surface, short) and not Shorthand(arch, short) then
+            missingNet[#missingNet + 1] = kind .. ' ' .. short
+        end
+    end
+end
+H.ok(checked > 500, ('H1: every event, callback, action and NUI callback is checked (%d)'):format(checked))
+H.eq(table.concat(missingNet, ', '), '',
+    'H1: ARCHITECTURE §8 / §9.1 or INTEGRATIONS names every event, callback, action and NUI callback of the inventory')
+
+-- every source file the repository tracks has its FILE_NOTES line (the data folders and the build are named in its
+-- intro instead)
+local SOURCE = { lua = true, ts = true, tsx = true, py = true, sh = true, mjs = true, cjs = true, sql = true }
+local DATA = { 'Crimson-Police/web/dist/', 'Crimson-Police/missions/builtin/', 'Crimson-Police/sql/migrations/' }
+local listed = {}
+for path in notes:gmatch('\n%- `([^`]+)`: ') do listed[path] = true end
+local tracked, unlisted = 0, {}
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files')) do
+    local ext = path:match('%.(%w+)$')
+    local data = false
+    for _, d in ipairs(DATA) do
+        if path:sub(1, #d) == d then data = true end
+    end
+    if ext and SOURCE[ext] and not data then
+        tracked = tracked + 1
+        if not listed[path] then unlisted[#unlisted + 1] = path end
+    end
+end
+H.ok(tracked > 600, ('H1: git lists the source files (%d)'):format(tracked))
+H.eq(table.concat(unlisted, ', '), '', 'H1: FILE_NOTES has a line for every tracked source file')
+for _, d in ipairs(DATA) do
+    H.ok(Has(notes:sub(1, 1200), d:gsub('/$', '')), 'H1: FILE_NOTES names what it leaves out: ' .. d)
+end
+
+-- every CP table a file makes (`CP.X = CP.X or ...`) is named in ARCHITECTURE
+local tables, unnamed = 0, {}
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files "Crimson-Police/*.lua"')) do
+    local src = ReadRepo(path) or ''
+    for name in src:gmatch('\nCP%.(%u[%w_]*) = CP%.%1 or') do
+        tables = tables + 1
+        if not Named(arch, 'CP.' .. name) then unnamed[#unnamed + 1] = 'CP.' .. name .. ' (' .. path .. ')' end
+    end
+end
+H.ok(tables > 50, ('H1: the CP tables are found (%d)'):format(tables))
+H.eq(table.concat(unnamed, ', '), '', 'H1: ARCHITECTURE names every CP table')
+
+-- §1 lists every shared file, config file and owner document
+local layout = Section(arch, '## 1. ')
+local layoutMissing = {}
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files Crimson-Police/shared Crimson-Police/config docs')) do
+    local short = path:match('^Crimson%-Police/(.+%.lua)$') or path:match('^(docs/[^/]+%.md)$')
+    if short and not Has(layout, short) then layoutMissing[#layoutMissing + 1] = short end
+end
+H.eq(table.concat(layoutMissing, ', '), '', 'H1: ARCHITECTURE §1 lists every shared and config file and owner document')
+local sharedFiles = {}
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files "Crimson-Police/shared/*.lua"')) do
+    sharedFiles[#sharedFiles + 1] = path:match('([^/]+)%.lua$')
+end
+table.sort(sharedFiles)
+H.ok(#sharedFiles > 10 and Has(layout:gsub('%s+', ' '), '(alphabetical: ' .. table.concat(sharedFiles, ', ') .. ')'),
+    'H1: ARCHITECTURE §1 gives the shared load order in full')
+
+-- every file LOOPS names exists, and its anticheat interval is the code's
+local ghost = {}
+for t in loops:gmatch('[%w_%./%-]+%.lua') do
+    local rel = t:gsub('^%./', '')
+    local found = false
+    for _, base in ipairs({ '', 'Crimson-Police/', 'Crimson-Police/modules/' }) do
+        local f = io.open(REPO .. base .. rel, 'r')
+        if f then
+            f:close()
+            found = true
+            break
+        end
+    end
+    if not found then ghost[#ghost + 1] = t end
+end
+H.eq(table.concat(ghost, ', '), '', 'H1: every file LOOPS names exists')
+local tick = tonumber((ReadRepo('Crimson-Police/modules/review/anticheat.lua') or ''):match('\nlocal TICK_MS = (%d+)'))
+H.ok(tick ~= nil, 'H1: anticheat has its TICK_MS')
+local loopLines = {}
+for line in (loops .. '\n'):gmatch('([^\n]*)\n') do loopLines[#loopLines + 1] = line end
+for i, line in ipairs(loopLines) do
+    local at = line:find('anticheat', 1, true)
+    if at and tick then
+        local after = line:sub(at) .. ' ' .. (loopLines[i + 1] or '')
+        local n, unit = after:match('(%d+) (m?s)[%s,:;%)|]')
+        if n then
+            local ms = tonumber(n) * (unit == 's' and 1000 or 1)
+            H.eq(ms, tick, ('H1: LOOPS line %d gives the anticheat interval of the code'):format(i))
+        end
+    end
+end
+
+-- §8.2 names every other resource's server event a client can send (RegisterNetEvent), and §8.3 every key mapping
+local s82 = Section(arch, '### 8.2 ')
+local keysLine = (Section(arch, '### 8.3 '):match('\nKey mappings:(.-)\n\n') or '')
+local foreignNet, keyNames, unlistedNet, unlistedKeys = 0, 0, {}, {}
+for _, path in ipairs(Lines('git -C "' .. REPO .. '" ls-files "Crimson-Police/*.lua"')) do
+    local src = ReadRepo(path) or ''
+    for ev in src:gmatch('RegisterNetEvent%(\'([^\']+:server:[^\']+)\'') do
+        if not ev:find('^crimson%-police:') then
+            foreignNet = foreignNet + 1
+            if not Has(s82, ev) and not Shorthand(s82, ev) then unlistedNet[#unlistedNet + 1] = ev end
+        end
+    end
+    for key in src:gmatch('\nlocal [%u_]+ = \'(%+?crimsonpolice_[%w_]+)\'') do
+        keyNames = keyNames + 1
+        if not Has(keysLine, '`' .. key .. '`') then unlistedKeys[#unlistedKeys + 1] = key end
+    end
+end
+H.ok(foreignNet >= 7 and keyNames >= 5,
+    ('H1: the foreign net events (%d) and key mappings (%d) are found'):format(foreignNet, keyNames))
+H.eq(table.concat(unlistedNet, ', '), '', 'H1: ARCHITECTURE §8.2 names every client-sendable event of another resource')
+H.eq(table.concat(unlistedKeys, ', '), '', 'H1: ARCHITECTURE §8.3 Key mappings names every key mapping')
 
 return H

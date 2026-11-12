@@ -2,7 +2,8 @@
 
 One line per source file: what it is for, the first sentence of its header. tools/restyle.py writes this file;
 the full header, with the details, stays at the top of the file itself (docs/dev/STYLE.md). The module APIs are in
-docs/dev/ARCHITECTURE.md.
+docs/dev/ARCHITECTURE.md. Not listed: Crimson-Police/missions/builtin and Crimson-Police/sql/migrations (data, in
+ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the build); tests/docs_spec.lua checks the rest.
 
 - `Crimson-Police/blocks/_kit/client.lua`: The objective blocks' client kit (CP.BlockKit): what every block client did with its own copy of the code.
 - `Crimson-Police/blocks/checkpoint_route/client.lua`: Objective block "checkpoint_route" (client half)
@@ -32,6 +33,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/config/blocks.lua`: Mission Builder ranges and defaults.
 - `Crimson-Police/config/config.lua`: Every Crimson-Police setting.
 - `Crimson-Police/config/examples/generic.lua`: GENERIC STARTING CONFIG for a fresh Qbox city (SALE3).
+- `Crimson-Police/fxmanifest.lua`: The Crimson-Police resource manifest: its dependencies, the scripts in load order and the NUI files.
 - `Crimson-Police/items/ox_inventory_items.lua`: The Crimson-Police tablet item for ox_inventory.
 - `Crimson-Police/modules/access/access.lua`: CP.Access (server): departments, roles, duty, active job, rank and callsign, suspension checks.
 - `Crimson-Police/modules/access/client/access.lua`: CP.Access (client): the latest officer and department the server sent.
@@ -380,13 +382,27 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/officer/screens/screenHead2.walk.ts`: Officer screens tidy, part 2 against the browser mocks (node walk.mjs, a gate step): Unit, Profile, Leaderboard and My options share the part 1 header (title, one line of help) and load states; the field training card counts the tasks ready to sign; the live case card says which step of three the case is on.
 - `Crimson-Police/web/src/shared/NoticesCard.tsx`: The one notices card (modules/supervisor/notices.lua), the same for both kinds: post a notice, the notices running
 - `Crimson-Police/web/src/shared/components/Avatar.tsx`: An officer's picture: a preset image, an approved link (the initials when it fails to load) or the initials, in a ring of their XP level badge colour.
+- `Crimson-Police/web/src/shared/components/Badge.tsx`: Small labels: Badge (a tone and an optional icon), TierBadge (a mission tier) and XpBadge.
+- `Crimson-Police/web/src/shared/components/Button.tsx`: Buttons: Button, IconButton and ConfirmButton (a two-step confirm).
+- `Crimson-Police/web/src/shared/components/Card.tsx`: Containers: Card, Section and Screen (a screen with its translated heading).
+- `Crimson-Police/web/src/shared/components/Dialog.tsx`: Modal dialogs: Dialog and ConfirmDialog, rendered into the layer root (LayerRoot.ts).
+- `Crimson-Police/web/src/shared/components/ErrorBoundary.tsx`: ErrorBoundary: shows an error state with a retry button when a part of the UI crashes.
+- `Crimson-Police/web/src/shared/components/Feedback.tsx`: Feedback parts: Spinner, LoadingBlock, ProgressBar, Stat, EmptyState and ErrorState.
+- `Crimson-Police/web/src/shared/components/Form.tsx`: Form inputs: Field, TextInput, SearchInput, NumberInput, Select, Textarea, Toggle and Checkbox.
 - `Crimson-Police/web/src/shared/components/Icon.tsx`: Inline stroke icons (24×24 grid).
+- `Crimson-Police/web/src/shared/components/LayerRoot.ts`: LayerRootContext: the element dialogs and dropdown lists render into.
+- `Crimson-Police/web/src/shared/components/Layout.tsx`: Layout helpers: Grid, Stack, Row, Spacer, Divider and KeyValue.
+- `Crimson-Police/web/src/shared/components/Logo.tsx`: Department logos: DeptLogo and the Watermark behind a screen.
 - `Crimson-Police/web/src/shared/components/MaintenanceBanner.tsx`: The maintenance banner: shown on every UI while CP.Maintenance holds the lock (a storage copy or switch, a backup
 - `Crimson-Police/web/src/shared/components/MoreFold.tsx`: The More fold: the rarely changed options of a settings-heavy dialog or screen sit under a More button.
+- `Crimson-Police/web/src/shared/components/Numbers.tsx`: Formatted numbers: Money, MoneyRange, Points and Countdown.
 - `Crimson-Police/web/src/shared/components/Pager.tsx`: Pager: previous / next and "page n of m" for every paged list (the Admin UI's server pages of at most 50 rows, and a Table with pageSize).
 - `Crimson-Police/web/src/shared/components/QuietBoundary.tsx`: An error boundary that drops only the broken part (it renders nothing) and says so in the NUI console, so a crashed HUD, result card, overlay or toast list never unmounts the whole NUI. onError lets the tablet hand the focus back.
 - `Crimson-Police/web/src/shared/components/ScreenStatus.tsx`: The loading, error, empty and stale lines of a screen, one look on every screen of every tablet.
 - `Crimson-Police/web/src/shared/components/TabbedScreen.tsx`: TabbedScreen: one screen made of tabs (Admin Money, Admin Review, Supervisor Department).
+- `Crimson-Police/web/src/shared/components/Table.tsx`: Table with sorting, filtering and paging (sortRows, filterRows, pageRows) over a row window.
+- `Crimson-Police/web/src/shared/components/Tabs.tsx`: Tabs and SegmentedControl, with keyboard navigation.
+- `Crimson-Police/web/src/shared/components/Toasts.tsx`: Toasts: the Crimson-Police notifications stacked on screen.
 - `Crimson-Police/web/src/shared/components/index.ts`: Src/shared/components · the one component set of all four tablets (officer, supervisor, admin, criminal):
 - `Crimson-Police/web/src/shared/countdown.walk.ts`: HUD countdowns (docs/dev/LOOPS.md): useCountdown wakes once a second, just after each whole second, instead of polling every 200 ms (node walk.mjs, a gate step).
 - `Crimson-Police/web/src/shared/cx.ts`: Tiny className joiner (clsx-style): cx('a', cond && 'b', { c: true }).
@@ -477,6 +493,8 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/types/teams.ts`: Response shapes of units and operations (modules/teams; docs/dev/ARCHITECTURE.md §5.16).
 - `Crimson-Police/web/src/types/testing.ts`: Admin test mode shapes (modules/missions/testing.lua, docs/dev/ARCHITECTURE.md §5.27).
 - `Crimson-Police/web/src/vite-env.d.ts`: / <reference types="vite/client" />
+- `Crimson-Police/web/vite.config.ts`: The Vite build of the NUI: web/src to web/dist, with relative asset paths and no external URLs.
+- `Crimson-Police/web/walk.mjs`: Runs every src/**/*.walk.ts against the browser mocks and prints one line per walk.
 - `tests/access_spec.lua`: Tablet access and the UI shell: the ways and their switches, mission desks, requireItem, the sidebar badge counts and their 'nav' push, Config health, and the client's desk zones, desk pose and item and distance watchers.
 - `tests/admin_backup_spec.lua`: Full admin control, System → Backups: a backup holds every table and the resource files, keep N never prunes the newest or the latest automatic one, and a restore moves money forward only (paid stays paid, given stays given, money rows made after the backup are kept), keeps the audit log and the money switches, and raises no id twice.
 - `tests/admin_boards_spec.lua`: Full admin control, boards: keeping an officer off the boards, past windows, ranking by any metric,
@@ -541,6 +559,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/fixtures/admin_live_world.lua`: The world of tests/admin_live_spec.lua, tests/admin_runctl_spec.lua and tests/sup_actions_spec.lua: the real
 - `tests/fixtures/admin_missions/boot.lua`: The real server side of Crimson-Police for the Missions and Mission Builder admin specs (tests/builtin_override_spec.lua, tests/admin_missions_spec.lua): every module and block loaded in fxmanifest order, the outside resources stubbed the way tests/e2e_spec.lua stubs them.
 - `tests/fixtures/adminctl/p1_world.lua`: The world of the officers-and-boards specs (tests/admin_officers_spec.lua, tests/admin_boards_spec.lua): the real officers, points and boards modules of full admin control on one server, with Qbox stood in for.
+- `tests/fixtures/core/mdt_dispatch.sql`: sc-dispatch's mdt_dispatch table with sample calls, for CP.Dispatch.lookupActiveCall.
 - `tests/fixtures/custody/world.lua`: The shared world of tests/custody_spec.lua, field_contact_spec.lua and process_scene_spec.lua: the real engine (runs, npc, scoring, scaling), CP.Custody, the two blocks and the sc-police listener on H.entity, with spies.
 - `tests/fixtures/engine_b/client_spec.lua`: The client half of the run engine (modules/runs/client/runs.lua).
 - `tests/fixtures/foreign_sites.lua`: The fixed world places of other public scripts (Qbox and overextended), for tests/foreign_sites_spec.lua.
@@ -655,6 +674,7 @@ docs/dev/ARCHITECTURE.md.
 - `tests/shadow/fuzz_funcs.lua`: Random expressions, compared in shadow mode (lua5.4 tests/run.lua --fuzz): arithmetic on
 - `tests/shadow/fuzz_rows.lua`: Random row queries and writes, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
 - `tests/shadow/fuzz_store.lua`: Storing values into typed columns, compared in shadow mode (lua5.4 tests/run.lua --fuzz):
+- `tests/shadow/twin.cjs`: The MariaDB twin of CP_TEST_STORAGE=shadow (started by tests/harness.lua, one per spec).
 - `tests/shared_spec.lua`: The shared layer, the migrations splitter and the harness itself.
 - `tests/soak_spec.lua`: WF6A: a seeded random action soak across every workflow (the owner: "do extensive workflow testing on everything").
 - `tests/spawn_check_spec.lua`: Check spawn points (modules/missions/testing server and client, each block's pointKinds): the server lists every
@@ -697,3 +717,16 @@ docs/dev/ARCHITECTURE.md.
 - `tests/workflows_system_generic_spec.lua`: WF5E: the generic example config on the real server, with its first-start setup.
 - `tests/workflows_system_spec.lua`: WF5E: the system and its integrations, extensively (the owner: "do extensive workflow testing on everything").
 - `tests/zone_lint_spec.lua`: Zone lint: new built-in missions keep Config.Draw.zoneClearance from every other mission's locations (250 m for Drug Lab Raid); existing close pairs are only reported, from tests/zone_lint_baseline.txt.
+- `tools/boot_smoke.sh`: Boots a real FXServer headless with Crimson-Police for a while and says PASS or FAIL.
+- `tools/boot_smoke_setup.sh`: Makes (or brings up to date) a clean FXServer test folder for tools/boot_smoke.sh.
+- `tools/capability_inventory.lua`: The capability inventory: every command, event, callback, NUI callback, export, admin action, setting, feature and Config key Crimson-Police has, one sorted line each (dev tooling, not shipped).
+- `tools/check_all.sh`: Every check of the repository in one command, in order, with a PASS/FAIL summary.
+- `tools/check_contracts.py`: Static cross-checks for Crimson-Police: CP calls, net events, NUI names and locale keys (dev tooling, not shipped).
+- `tools/clickthrough.mjs`: The click-through of every tablet in a real browser (Playwright, the built web UI in its mock mode).
+- `tools/gen_collation.py`: Prints the utf8mb4_general_ci tables of modules/system/memsql.lua from a running MariaDB.
+- `tools/gen_foreign_sites.py`: Writes tests/fixtures/foreign_sites.lua, the fixed world places of other scripts.
+- `tools/lint_fivem.py`: FiveM pitfall lint for Crimson-Police (dev tooling, not shipped).
+- `tools/lint_lua.py`: General Lua lint for Crimson-Police and its tests: luacheck at warning level (dev tooling, not shipped).
+- `tools/lua_flow.py`: Control flow of Lua loops, for tools/lint_fivem.py rule FX10 (dev tooling, not shipped).
+- `tools/restyle.py`: Restyles Crimson-Police to the owner's style (docs/dev/STYLE.md) and writes docs/dev/FILE_NOTES.md (dev tooling, not shipped).
+- `tools/setup_test_env.sh`: Checks what tools/check_all.sh needs on Debian/Ubuntu, and installs it on request.

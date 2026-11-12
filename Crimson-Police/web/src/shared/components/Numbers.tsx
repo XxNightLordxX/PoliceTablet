@@ -1,3 +1,5 @@
+// Formatted numbers: Money, MoneyRange, Points and Countdown.
+
 import { cx } from '../cx';
 import { formatDuration, formatMoney, formatNumber } from '../format';
 import { useCountdown } from '../hooks';

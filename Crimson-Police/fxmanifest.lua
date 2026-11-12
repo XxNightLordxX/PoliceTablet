@@ -1,3 +1,5 @@
+-- The Crimson-Police resource manifest: its dependencies, the scripts in load order and the NUI files.
+
 fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'

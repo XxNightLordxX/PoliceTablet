@@ -1,3 +1,5 @@
+// Tabs and SegmentedControl, with keyboard navigation.
+
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { cx } from '../cx';
 import { Icon, type IconName } from './Icon';
