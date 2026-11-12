@@ -200,6 +200,16 @@ function D.goesTo(kind)
     return nil
 end
 
+-- The end of a window that starts at startTs: Config.Disputes.windowHours on, moved on by a maintenance lock.
+local function WindowEnd(startTs)
+    local ends = startTs + WindowSeconds()
+    if CP.Maintenance and CP.Maintenance.windowEnd then
+        local ok, e = pcall(CP.Maintenance.windowEnd, startTs, WindowSeconds())
+        if ok and tonumber(e) then ends = tonumber(e) end
+    end
+    return ends
+end
+
 function D.eligible(row, citizenid, nowTs)
     if type(row) ~= 'table' then return false, 'err.row_not_found' end
     if type(citizenid) ~= 'string' or row.citizenid ~= citizenid then return false, 'err.not_your_run' end
@@ -208,18 +218,14 @@ function D.eligible(row, citizenid, nowTs)
     if not kind then return false, 'err.not_disputable' end
     -- the window stands still while the officer is suspended (row.suspended_ts, the end of his last suspension) and
     -- while a maintenance lock holds (CP.Maintenance.windowEnd): he gets all of it afterwards. Only a suspension that
-    -- started while the window was open holds it (row.suspended_from_ts): a later one never reopens a closed window.
+    -- started while the window was open (its end moved on by a maintenance lock) holds it (row.suspended_from_ts): a
+    -- later one never reopens a closed window.
     local now = nowTs or os.time()
     local start = Num(row.created_ts, 0)
     local susp = Num(row.suspended_ts, 0)
     local from = Num(row.suspended_from_ts, 0)
-    if susp > start and from > 0 and from <= start + WindowSeconds() then start = math.min(susp, now) end
-    local ends = start + WindowSeconds()
-    if CP.Maintenance and CP.Maintenance.windowEnd then
-        local ok, e = pcall(CP.Maintenance.windowEnd, start, WindowSeconds())
-        if ok and tonumber(e) then ends = tonumber(e) end
-    end
-    if now > ends then return false, 'err.dispute_window' end
+    if susp > start and from > 0 and from <= WindowEnd(start) then start = math.min(susp, now) end
+    if now > WindowEnd(start) then return false, 'err.dispute_window' end
     return true, nil, kind
 end
 
