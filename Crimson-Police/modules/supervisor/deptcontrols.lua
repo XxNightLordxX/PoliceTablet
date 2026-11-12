@@ -738,6 +738,11 @@ function DC.reset(src, dept, key, reason)
     if not cleanReason then return false, errR end
     local row = Rows(where)[key]
     if not row then return false, 'err.control_not_set' end
+    -- Z14: a reset is a change too (SPEC: change or reset once per changeWait)
+    if role == 'supervisor' then
+        local left = WaitLeft(where, key, row)
+        if left > 0 then return false, 'err.control_wait', { waitLeft = left } end
+    end
     CP.Db()
     local okD, errD = pcall(MySQL.update.await, 'DELETE FROM cp_dept_controls WHERE department = ? AND control_key = ?',
         { where, key })

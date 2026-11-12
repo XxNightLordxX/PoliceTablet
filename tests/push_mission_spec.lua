@@ -277,6 +277,22 @@ local last = created[#created]
 H.eq(last.mission.id, 'pm_patrol_a', 'the pushed mission, not a draw')
 H.eq(last.missionCall.staff, true, 'a staff call: never rapid response')
 
+-- (Z14) the paged leader joins a unit of another department: that unit can not claim the supervisor's push
+do
+    units[2].locked = false
+    local okZ, dZ = Page(9, 13, 'pm_patrol_b')
+    H.eq(okZ, true, '(Z14) pushed to the solo officer 13')
+    local savedUnits = units
+    units = { savedUnits[1], savedUnits[2], { id = 3, leader = 21, members = { 21, 13 } } }
+    H.eq(select(2, MC.claim(21, dZ.id)), 'err.mc_paged', '(Z14) an FIB unit with the paged officer can not claim it')
+    units = savedUnits
+    -- the next checks count the pushes from here: this one is not counted
+    for i = #audits, 1, -1 do
+        if audits[i].action == 'mcPush' then table.remove(audits, i) break end
+    end
+    MC._calls()[dZ.id] = nil
+end
+
 -- ============================================================================
 --                           DECLINE, PER DAY, ADMINS
 -- ============================================================================

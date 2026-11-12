@@ -109,6 +109,7 @@ end
 
 local DOCS = {
     'IN_GAME_CHECKLIST.md',
+    'IN_GAME_TEST_PLAN.md',
     'OWNER_GUIDE.md',
     'dev/ARCHITECTURE.md',
     'dev/FILE_NOTES.md',
@@ -140,6 +141,42 @@ for _, rel in ipairs(files) do
 end
 H.ok(named > 100, ('files name the docs (%d times)'):format(named))
 H.eq(table.concat(missing, '; '), '', 'every docs/*.md a file names exists')
+
+-- the short test plan: linked from the README, a smoke test first, then the risky changes, each line with a result
+local plan = ReadRepo('docs/IN_GAME_TEST_PLAN.md') or ''
+H.ok(Has(readme, '(docs/IN_GAME_TEST_PLAN.md)'), 'README links the in-game test plan')
+H.ok(Has(plan, '## Session 1: smoke test (60 minutes)') and Has(plan, '## Session 2: the risky changes, in this order'),
+    'the test plan has the 60-minute smoke test, then the risky changes')
+local checks = {}
+for ln in (plan .. '\n'):gmatch('(.-)\n') do
+    if ln:match('^%- %[ %] ') then
+        checks[#checks + 1] = ln
+    elseif ln:match('^  %S') and #checks > 0 then
+        checks[#checks] = checks[#checks] .. ' ' .. ln
+    end
+end
+local steps, unseen = #checks, {}
+for _, item in ipairs(checks) do
+    if not item:find('->', 1, true) then unseen[#unseen + 1] = item:sub(7, 50) end
+end
+H.ok(steps >= 40, ('the test plan has its checks (%d)'):format(steps))
+H.eq(table.concat(unseen, '; '), '', 'every test plan check says what you should see')
+for _, part in ipairs({
+    'restart Crimson-Police',
+    'resmon',
+    'tour',
+    'Payments',
+    'Supervisor',
+    '/CrimsonPoliceAdmin',
+    'moved mission points',
+    'mission desks',
+    'Teams',
+    'money engine',
+    'Real players',
+    'Your other scripts',
+}) do
+    H.ok(Has(plan, part), 'the test plan covers ' .. part)
+end
 
 -- no scratch paths or lost design files in the documents
 for _, rel in ipairs(files) do

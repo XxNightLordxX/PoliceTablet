@@ -352,6 +352,8 @@ do
     H.eq(E('Training.command').default, 'crimsonhelp', 'the command ships as crimsonhelp')
     H.eq(E('Training.command').restart, true, 'a new command name needs a restart')
     H.ok(Check('Training.command', '') and not Check('Training.command', 'two words'), 'command: a name or none')
+    H.ok(Check('Training.command', 'tablethelp') and not Check('Training.command', '1help'),
+        '(Z14) command: a name starts with a letter (training.lua registers no other)')
     H.eq(E('Training.setupChecklist').default, true, 'setupChecklist ships true')
     H.ok((E('Training.setupChecklist').desc or ''):find('Setup checklist', 1, true) ~= nil, 'setupChecklist: described')
     H.eq(E('Training.autoStart.run').default, true, 'autoStart.run ships true')
@@ -1915,6 +1917,26 @@ do
     H.ok(okN == true and not M.isLocationEnabled('beat_patrol', 1), 'admins can, through the net action')
     Act('server:admin:resetMissionSwitches', 1, { missionId = 'beat_patrol' })
     H.ok(M.isLocationEnabled('beat_patrol', 1), 'and reset them')
+
+    -- (Z14) two missions switched off at the same moment (each switch writes the whole list): both stay off
+    do
+        local other = nil
+        for _, d in ipairs(M.list and M.list() or {}) do
+            if d.id ~= 'beat_patrol' and M.isEnabled(d.id) then other = d.id break end
+        end
+        other = other or 'traffic_stop'
+        H.ok(M.get(other) ~= nil, '(Z14) a second mission: ' .. tostring(other))
+        H.interleave(true)
+        local r1, r2
+        CreateThread(function() r1 = table.pack(S.setMissionEnabled(1, 'beat_patrol', false)) end)
+        CreateThread(function() r2 = table.pack(S.setMissionEnabled(1, other, false)) end)
+        H.advance(2000, 50)
+        H.interleave(false)
+        H.ok(r1 and r1[1] and r2 and r2[1], '(Z14) both switches answer ok')
+        H.ok(not M.isEnabled('beat_patrol') and not M.isEnabled(other), '(Z14) and both missions are off')
+        S.setMissionEnabled(1, 'beat_patrol', true)
+        S.setMissionEnabled(1, other, true)
+    end
 
     -- a location label used twice is saved by its number
     local twin = U.deepcopy(def)

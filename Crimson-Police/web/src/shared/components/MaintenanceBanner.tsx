@@ -21,9 +21,11 @@ const TITLE: Record<Kind, () => string> = {
 };
 
 // What admins read: while the copy or restore runs, and once it is done and only the owner's restart ends the lock.
-function adminText(kind: Kind, done: boolean, automatic: string): string {
+function adminText(kind: Kind, done: boolean, automatic: string, endsAtRestart: boolean): string {
     if (kind === 'storage') return done ? t('ui.maintenance.admin.storage_done') : t('ui.maintenance.admin.storage');
     if (kind === 'restore') return done ? t('ui.maintenance.admin.restore_done') : t('ui.maintenance.admin.restore');
+    if (kind === 'restore_failed' && endsAtRestart)
+        return t('ui.maintenance.admin.restore_failed_restart', { automatic });
     if (kind === 'restore_failed') return t('ui.maintenance.admin.restore_failed', { automatic });
     return t('ui.maintenance.admin.left_behind');
 }
@@ -50,7 +52,7 @@ export function MaintenanceBanner({ admin = false }: { admin?: boolean }) {
             <Icon name="alert" size={16} />
             <div className="cp-maintenance__text">
                 <strong>{TITLE[kind]()}</strong>
-                <span>{admin ? adminText(kind, done, m.automatic ?? '') : officerText(kind)}</span>
+                <span>{admin ? adminText(kind, done, m.automatic ?? '', !!m.endsAtRestart) : officerText(kind)}</span>
                 {admin && done ? <span className="cp-maintenance__restart">{t('ui.maintenance.restart')}</span> : null}
             </div>
         </div>

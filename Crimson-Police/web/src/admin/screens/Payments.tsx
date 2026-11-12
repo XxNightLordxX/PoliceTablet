@@ -83,7 +83,8 @@ function rowActions(r: PaymentRow, v: PaymentsView): RowAction[] {
     const sw = v.switches;
     if (r.status === 'paying') out.push('resolve');
     // a 'held' row no longer flagged or voided: an approval whose release did not run
-    if (r.status === 'pending' || (r.status === 'held' && !r.flagged && !r.voided)) out.push('payNow');
+    // a flagged or voided 'pending' row is never paid (Z14: the server refuses it)
+    if ((r.status === 'pending' || r.status === 'held') && !r.flagged && !r.voided) out.push('payNow');
     if (r.status === 'unfunded' && sw.unfundedRetry && !r.voided && !r.flagged) out.push('unfunded');
     if (r.status === 'capped' && r.cut > 0 && !r.restPaid && sw.capTopUp && !r.voided && !r.flagged)
         out.push('capRest');

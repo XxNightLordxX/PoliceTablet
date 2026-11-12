@@ -251,9 +251,14 @@ local function OnCommand(src, args)
 end
 Tr._onCommand = OnCommand
 
-local command = Cfg().command
-if type(command) == 'string' and command:match('^%a[%w_%-]*$') then
-    RegisterCommand(command, function(src, args) OnCommand(src, args) end, false)
-end
+-- Z14: a name changed in game (Admin UI -> Settings) is used from the next start: wait for the saved settings first,
+-- as admin.lua does for its own command
+CreateThread(function()
+    if CP.Settings and CP.Settings.waitLoaded then CP.Settings.waitLoaded(15000) end
+    local command = Cfg().command
+    if type(command) == 'string' and command:match('^%a[%w_%-]*$') then
+        RegisterCommand(command, function(src, args) OnCommand(src, args) end, false)
+    end
+end)
 
 AddEventHandler('playerDropped', function() lastCommand[source] = nil end)

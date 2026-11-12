@@ -953,6 +953,8 @@ local function MaintView()
         failed = maintenance.info and maintenance.info.failed == true or nil,
         automatic = maintenance.info and type(maintenance.info.automatic) == 'string' and maintenance.info.automatic
             or nil,
+        -- Z14: Config.Backups.holdAfterFailedRestore = false: the hold of a failed restore ends at the next start
+        endsAtRestart = maintenance.info and maintenance.info.endsAtRestart == true or nil,
     }
 end
 

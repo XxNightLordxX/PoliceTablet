@@ -17,6 +17,8 @@ export interface MaintenanceView {
     // automatic names the backup that holds the data from before it
     failed?: boolean;
     automatic?: string;
+    // Config.Backups.holdAfterFailedRestore = false: the hold of a failed restore ends at the next restart
+    endsAtRestart?: boolean;
 }
 
 // ============================================================================

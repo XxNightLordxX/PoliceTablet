@@ -64,6 +64,17 @@ do
     local roles = join and join.args[2].roles or {}
     H.ok(roles.runner == nil and roles.driver == true and roles.fugitive == true, 'the ticked roles')
 
+    -- (Z14) suspect pay on: the consent says a fair case is paid
+    answers.alert = { 'cancel' }
+    Menu({ active = false, minutes = 60, roles = { 'runner' }, paid = true })
+    local paidText = shown.alerts[#shown.alerts].content
+    H.ok(
+        paidText:find('pays a suspect for a fair case', 1, true) ~= nil
+            and paidText:find('gives suspects nothing', 1, true) == nil,
+        '(Z14) the paid consent text'
+    )
+    H.ok(shown.alerts[1].content:find('gives suspects nothing', 1, true) ~= nil, '(Z14) shipped: suspects get nothing')
+
     -- consent declined: nothing is sent
     answers.alert = { 'cancel' }
     Menu({ active = false, minutes = 60, roles = { 'runner' } })

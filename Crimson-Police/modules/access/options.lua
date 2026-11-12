@@ -99,6 +99,9 @@ local function Write(officer, saved)
 end
 
 -- server:options:set { key = value, ... }: the on-duty officer's own options. true, { values } | false, errKey.
+local optionLock = CP.Lock.new()  -- citizenid -> an options save in flight
+local LOCK_WAIT_MS = 5000
+
 function Options.set(src, patch)
     local officer, errKey = CP.Access.getOfficer(src)
     if not officer then return false, errKey or 'err.not_police' end
@@ -116,15 +119,25 @@ function Options.set(src, patch)
         if refused then return false, refused end
         clean[key] = v
     end
-    local saved = Options.decode(ReadRaw(officer.citizenid))
-    for key, v in pairs(clean) do
-        if Defs.same(v, defaults[key]) then
-            saved[key] = nil
-        else
-            saved[key] = v
+    -- Z14: the read, merge and write of the row run one at a time per character (the screen saves each key on its
+    -- own, and flush() sends every pending key at once: two saves must not drop each other's key)
+    local st, okW, saved = optionLock:run(officer.citizenid, LOCK_WAIT_MS, function()
+        local row = Options.decode(ReadRaw(officer.citizenid))
+        for key, v in pairs(clean) do
+            if Defs.same(v, defaults[key]) then
+                row[key] = nil
+            else
+                row[key] = v
+            end
         end
+        return Write(officer, row), row
+    end)
+    if st == 'busy' then return false, 'err.busy' end
+    if st ~= 'ok' then
+        CP.err(TAG, 'saving the options of %s failed: %s', officer.citizenid, tostring(okW))
+        return false, 'err.internal'
     end
-    if not Write(officer, saved) then return false, 'err.internal' end
+    if not okW then return false, 'err.internal' end
     local values = Options.effective(officer.citizenid, officer.department, saved)
     CP.log(TAG, '%s changed their options', officer.citizenid)
     -- the call pop-ups (callAlerts, favouriteTypes) apply to the next call, not after the 30 s cache

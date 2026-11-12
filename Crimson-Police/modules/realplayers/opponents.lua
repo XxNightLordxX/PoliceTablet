@@ -685,6 +685,8 @@ function Opp.open(run, spec)
             rec.md = Mirror(info.metadata)
             rec.afk = afkOf[cid] ~= nil and afkOf[cid].afk == true
             Timeline(case, { what = 'suspect', label = rec.label, src = src })
+            -- Z14: on department duty since the alert (OnDuty finds no case before the open): void, as at a login
+            if OnDeptDuty(info.job) then WentOnDuty(case, rec, info.job.name) end
         else
             rec.dropAt, rec.leftAt, rec.offlineAtOpen = now, now, true
             offline[#offline + 1] = cid

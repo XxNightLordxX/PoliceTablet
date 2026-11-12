@@ -582,6 +582,24 @@ do
     H.eq(n, 0, 'and nobody is paid twice')
 end
 
+-- (Z14) Config.Backups.holdAfterFailedRestore = false: the texts say the hold ends at the next restart
+do
+    Clear()
+    RunX(181, 'f-181', 'OFF00007', 'pending', 0)
+    local b = Backup()
+    local savedHold = Config.Backups.holdAfterFailedRestore
+    Config.Backups.holdAfterFailedRestore = false
+    local undo = Breaking(function(sql) return sql == 'DELETE FROM `cp_seasons`' end)
+    local ok, e = Restore(b)
+    undo()
+    H.ok(ok == false and e == 'err.restore_failed_restart', '(Z14) the restart text: ' .. tostring(e))
+    H.ok(CP.L(e):find('also after a restart', 1, true) == nil, '(Z14) it never says the hold outlives a restart')
+    H.eq(CP.Maintenance.view().endsAtRestart, true, '(Z14) the banner is told the hold ends at the restart')
+    Restart(function() Config.Backups.holdAfterFailedRestore = false end)
+    H.eq(CP.Maintenance.active(), nil, '(Z14) and the next start lifts it')
+    Config.Backups.holdAfterFailedRestore = savedHold
+end
+
 -- ============================================================================
 --                6. STOPPED BEFORE THE MONEY STATE WAS PUT BACK
 -- ============================================================================

@@ -164,6 +164,16 @@ do
     Config.RealPlayers.liveCrime.linesOnly = false
     b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
     H.ok(b.subtotal > 200 and not b.linesOnly, 'linesOnly = false: P plus the lines and the end-of-run lines')
+    -- Z14: an officer who went down in the case (downed_case) leaves with what he earned so far: lines only, no
+    -- end-of-run lines, no mission cash
+    p.endReason = 'downed_case'
+    b = CP.Scoring.compute(run, p, 'completed', { durationS = 60, departments = 1 })
+    H.ok(b.linesOnly == true and b.subtotal == 100 and not Has(b.bonuses, 'fast_finish'),
+        '(Z14) linesOnly = false: a downed_case officer still scores the lines only')
+    Config.RealPlayers.liveCrime.cash = true
+    H.eq((CP.Cash.compute(run, p)), 0, '(Z14) and gets no mission cash')
+    Config.RealPlayers.liveCrime.cash = false
+    p.endReason = nil
     Config.RealPlayers.liveCrime.linesOnly = true
 
     local m, mp = Run(false)

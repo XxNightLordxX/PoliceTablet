@@ -197,6 +197,9 @@ do
     opp.lastSuspect.OF1 = os.time() - 31 * 60
     H.eq(LC.claimCheck(crime, OFFICERS), true, 'longer ago is fine')
     opp.lastSuspect = {}
+    opp.inCase.OF1 = true
+    H.eq(Check(), 'err.live_case_recent_suspect', '(Z14) a suspect of a case that is still open')
+    opp.inCase.OF1 = nil
     opp.selfBlocked[2] = true
     H.eq(Check(), 'err.live_case_own_suspect', 'the self rule (own character, license or linked account)')
     opp.selfBlocked = {}

@@ -93,11 +93,13 @@ local function SetControl(src, key, value, reason)
     return Act('server:sup:setMissionControl', src,
         { key = key, value = value, reason = reason or 'WF5B', requestId = W.RequestId() })
 end
-local function ResetControl(src, key)
-    return Act('server:sup:resetMissionControl', src, { key = key, reason = 'WF5B done', requestId = W.RequestId() })
-end
 -- The change wait of every control is over.
 local function AfterWait() H.time = H.time + (tonumber(Config.MissionControls.changeWait) or 0) + 5 end
+-- Z14: a reset is a change too (it waits for the change wait like a set)
+local function ResetControl(src, key)
+    AfterWait()
+    return Act('server:sup:resetMissionControl', src, { key = key, reason = 'WF5B done', requestId = W.RequestId() })
+end
 
 -- ============================================================================
 --                             1. THE SUPERVISOR UI

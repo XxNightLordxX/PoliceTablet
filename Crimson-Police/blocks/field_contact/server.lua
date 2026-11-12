@@ -1407,14 +1407,16 @@ local function Flush(ctx, st)
     -- the contacts the objective will have (a parked car still waiting for an officer to get near counts)
     total = total + StillToCome(st) + StillWaiting(st)
     local text
+    local waiting = not st.spawned and #st.order == 0
     if st.escaping then
         text = CP.Lt('block.field_contact.escaping', { seconds = st.escaping })
-    elseif not st.spawned and #st.order == 0 then
+    elseif waiting then
         text = CP.Lt('block.field_contact.detail_wait')
     else
         text = CP.Lt('block.field_contact.detail', { done = done, total = total })
     end
-    local key = ('%s:%d:%d'):format(tostring(st.escaping), done, total)
+    -- Z14: the text branch is part of the key (the contacts appearing changes the text, not the counts)
+    local key = ('%s:%s:%d:%d'):format(tostring(st.escaping), waiting and 'w' or 'd', done, total)
     if key ~= st.hudKey then
         st.hudKey = key
         ctx.hud({ detail = text, value = done, max = total })

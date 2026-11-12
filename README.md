@@ -243,8 +243,8 @@ result. On a good install the console shows lines like these (the order can diff
   creating or upgrading its own tables.
 - The number of checks on the last line depends on your setup.
 - The copy you downloaded has `Config.Debug = true`, so you also see many extra lines that start with
-  `[crimson-police:`. They are normal and help
-  while you test. Before go-live, set `Config.Debug = false` in `config/config.lua` for a quiet console (see
+  `[crimson-police:`. They are normal while you test.
+  Before go-live, set `Config.Debug = false` in `config/config.lua` for a quiet console (see
   [5.1](#51-the-two-switches-at-the-top-debug-and-storage)).
 
 **If something needs fixing**, you see yellow or red lines instead, one per problem, each with the fix. Then the
@@ -274,13 +274,13 @@ Section [8](#8-troubleshooting) lists every message and what to do.
 
 ### 3.5 Open the tablet in game
 
-- **Officers**: be on duty in a department job (SAST or FIB by default), then type `/CrimsonPolice`. Press **Esc**,
-  or **X** to close it. **Me** holds Profile, Leaderboard and Challenge as tabs.
+- **Officers**: be on duty in a department job (SAST or FIB by default), then type `/CrimsonPolice`. **Esc** or **X**
+  closes it. **Me** holds Profile, Leaderboard and Challenge as tabs.
 - **Supervisors**: open the tablet, then press **Supervisor** at the bottom of the left sidebar.
-- **Admins**: type `/CrimsonPoliceAdmin`. Admins don't need a police job and don't need to be on duty. **Esc**
-  closes the Admin UI too.
+- **Admins**: type `/CrimsonPoliceAdmin`. Admins need no police job and no duty. **Esc** closes
+  the Admin UI too.
 
-Quick test as a Qbox admin (these are Qbox commands, not Crimson-Police ones):
+Quick test as a Qbox admin (with Qbox's own commands):
 
 1. Type `/optin` (Qbox's admin commands need it). It switches on and off: if Qbox says "out", type it again.
 2. Type `/id` to see your server ID.
@@ -832,7 +832,7 @@ Crimson-Police too, or save a Rewards setting in Admin UI → **Settings** (that
 | Document | What is in it |
 |---|---|
 | [docs/OWNER_GUIDE.md](docs/OWNER_GUIDE.md) | Every detail for owners: supervisor permissions, settings, optional extras, how it plays, real suspects, go-live, updates, backups, more console lines and the exports |
-| [docs/IN_GAME_CHECKLIST.md](docs/IN_GAME_CHECKLIST.md) | What to check in game, one section per feature |
+| [docs/IN_GAME_TEST_PLAN.md](docs/IN_GAME_TEST_PLAN.md), [docs/IN_GAME_CHECKLIST.md](docs/IN_GAME_CHECKLIST.md) | Test in game: a 60-minute plan, then every feature |
 | [docs/dev/README.md](docs/dev/README.md) | For developers: building the web UI, the checks, and every document and tool in this repository |
 | [docs/dev/SPEC.md](docs/dev/SPEC.md) | The product spec: every rule (its Hard rules win over everything) and feature |
 | [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md) | The code contracts: module APIs, the run model, the block interface, events and the NUI protocol |

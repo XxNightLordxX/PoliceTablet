@@ -800,6 +800,36 @@ do
     U._reset()
 end
 
+-- (Z14) a team check cancelled by Not ready pushes 'unit' to its members (the banner clears), and a unit push of a
+-- member's own unit during the team check carries the team check (the banner stays)
+do
+    U._reset()
+    Act('server:unitInvite', 1, 2)
+    Act('server:unitRespond', 2, true)
+    local team = {
+        id = 'op:z14',
+        leader = 2,
+        members = { 2, 3 },
+        info = { [2] = { name = 'A' }, [3] = { name = 'B' } },
+    }
+    H.ok(U.teamReadyCheck(team, 'patrol', function() end, function() end), '(Z14) a team check starts')
+    pushes = {}
+    Act('server:unitInvite', 1, 4)
+    local seenZ = nil
+    for _, p in ipairs(pushes) do
+        if p.src == 2 and p.topic == 'unit' then seenZ = p.data.readyCheck end
+    end
+    H.ok(seenZ and seenZ.waitingForMe == true, '(Z14) a push of his own unit carries the team check')
+    pushes = {}
+    U.ready(3, false)
+    local clearedZ = false
+    for _, p in ipairs(pushes) do
+        if p.src == 3 and p.topic == 'unit' and p.data.readyCheck == nil then clearedZ = true end
+    end
+    H.ok(clearedZ, '(Z14) Not ready on a team check pushes the cleared check to the members')
+    U._reset()
+end
+
 -- ============================================================================
 --                                  OPERATIONS
 -- ============================================================================
@@ -2128,6 +2158,28 @@ H.eq(data, 'err.op_full', 'waitlist off: full is full')
 H.eq(O.boardCard(4).joinBlocked, 'err.op_full', 'the board card says so')
 O.cancel(0, 'End of the waitlist-off check')
 Config.CrossDept.waitlist = true
+Config.CrossDept.maxParticipants = 8
+
+-- (Z14) a place freed at the start (a joiner now in the arena) goes to the first on the waitlist
+H.time = H.time + 1800
+Config.CrossDept.maxParticipants = 3
+ok, data = Act('server:sup:opLaunch', 1, { missionId = 'gang_shootout' })
+H.eq(ok, true, '(Z14) launch for the start refill')
+Act('server:joinOperation', 2, data.id)
+Act('server:joinOperation', 3, data.id)
+Act('server:joinOperation', 4, data.id)
+ok, data = Act('server:joinOperation', 5, data.id)
+H.eq(data.waitlisted, true, '(Z14) the fourth waits')
+arena[3] = true
+Clear()
+ok = Act('server:sup:opStart', 1)
+arena[3] = nil
+H.eq(ok, true, '(Z14) started')
+ids = {}
+for _, p in ipairs(O.active().participants) do ids[#ids + 1] = p.src end
+H.eq(table.concat(ids, ','), '2,4,5', '(Z14) the waitlisted officer took the place freed at the start')
+H.ok(HasNote(5, 'officer.op.waitlist_promoted'), '(Z14) and was told')
+O.cancel(0, 'End of the start refill check')
 Config.CrossDept.maxParticipants = 8
 
 -- ============================================================================

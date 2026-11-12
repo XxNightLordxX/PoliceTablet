@@ -4695,7 +4695,8 @@ local function ExpectedFor(run, p)
     -- Z13: the real-player rules settlement applies (CP.Scoring, CP.Cash): a lines-only case has no base points, and
     -- a live or volunteer case gets the Type of the Day and mission cash only with its mode's switches
     local okL, liveLines = Call('LiveCrime', 'linesOnly', run)
-    local linesOnly = run.keepEarned == true or (okL and liveLines == true)
+    local downedCase = type(p) == 'table' and p.endReason == 'downed_case'
+    local linesOnly = run.keepEarned == true or downedCase or (okL and liveLines == true)
     local pts = math.min(cap, ((linesOnly and 0 or P) + modPts) * Num(tier and tier.points, 1.0) * mCross)
     local todCfg, todOn = CP.Objective('typeOfTheDay')
     if todOn and CP.RealPlayersTakePart(run, 'typeOfTheDay') then
@@ -4708,7 +4709,7 @@ local function ExpectedFor(run, p)
     if Has('Scoring', 'bonusOf') then pts = pts * CP.Scoring.bonusOf(run) end
     local mBonus = Has('Cash', 'bonusOf') and CP.Cash.bonusOf(run) or 1.0
     local cash = U.round(Num(run.cashBase, 0) * Num(tier and tier.cash, 1.0) * bonus.cash * mBonus)
-    if run.keepEarned == true or not CP.RealPlayersTakePart(run, 'cash') then cash = 0 end
+    if run.keepEarned == true or downedCase or not CP.RealPlayersTakePart(run, 'cash') then cash = 0 end
     return { cash = cash, points = math.floor(pts) }
 end
 

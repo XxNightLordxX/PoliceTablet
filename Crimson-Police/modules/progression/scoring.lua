@@ -147,7 +147,9 @@ end
 -- Only the lines earned score (no base points, no end-of-run lines): a live case with
 -- Config.RealPlayers.liveCrime.linesOnly, or a volunteer case ended early by Config.RealPlayers.volunteer.voidRun =
 -- 'keep_earned' (run.keepEarned).
-local function LinesOnly(run)
+local function LinesOnly(run, p)
+    -- Z14: a live-case officer who went down ('downed_case') leaves with what he earned so far: the lines only
+    if type(p) == 'table' and p.endReason == 'downed_case' then return true end
     return run.keepEarned == true or LiveCall('linesOnly', run) == true
 end
 
@@ -609,7 +611,7 @@ local function ScoreLines(run, p, P, opts)
     local bonuses, penalties = {}, {}
     local total = 0
     local mission = run.mission or {}
-    local linesOnly = LinesOnly(run)
+    local linesOnly = LinesOnly(run, p)
     local common = CommonCfg()
     local listed, order = ListedEntries(mission)
     local stats = run.stats or {}
@@ -779,7 +781,7 @@ function Scoring.compute(run, p, result, opts)
 
     local bonuses, penalties, total = ScoreLines(run, p, P, opts)
     -- a live case with Config.RealPlayers.liveCrime.linesOnly: the lines only, P stays the base of their shares
-    local linesOnly = LinesOnly(run)
+    local linesOnly = LinesOnly(run, p)
     local subtotal = linesOnly and total or P + total
     local mTeam = Num(TierRow(run).points, 1.0)
     local nDepts = Num(opts.departments, nil) or DepartmentsOf(run, p)

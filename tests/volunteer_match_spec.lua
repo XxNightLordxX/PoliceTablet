@@ -526,6 +526,36 @@ do
     H.eq(V.matchView(run, 2), nil, 'and the match is gone')
 end
 
+-- (Z14) the volunteer a players_only accept held is asked first even when he is not the first one listed
+do
+    Reset()
+    local list = V.available(RUNNER)
+    H.ok(#list >= 2, '(Z14) two volunteers or more are free: ' .. #list)
+    local last = list[#list]
+    H.ok(V.hold('pending-z14', last), '(Z14) the accept holds the last one listed')
+    runN = runN + 1
+    local id = 'vm-run-' .. runN
+    V.rekey('pending-z14', id)
+    local run = {
+        id = id,
+        state = 'accepted',
+        mission = WARRANT,
+        locationIndex = 1,
+        location = WARRANT.locations[1],
+        volunteer = { mode = 'players_only', role = 'runner', obj = 2 },
+    }
+    CP.Hooks.fire('run:created', run)
+    H.step(0)
+    H.ok(LastAsk(srcOfCid[last]) ~= nil and LastAsk(srcOfCid[list[1]]) == nil,
+        '(Z14) the held volunteer is asked first')
+    H.eq(V.reservedFor(id), last, '(Z14) and stays held while he is asked')
+    Answer(srcOfCid[last], LastAsk(srcOfCid[last]), false)
+    H.step(0)
+    H.advance(70000, 1000)
+    H.step(0)
+    H.eq(V.reservedFor(id), nil, '(Z14) nobody said yes: the hold is gone')
+end
+
 -- ============================================================================
 --                                  THE GATES
 -- ============================================================================
@@ -548,6 +578,10 @@ do
     caps.lastSuspect.OFG00001 = os.time() - 60
     H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'officer_recent_suspect', 'an officer was a suspect within jobHop')
     caps.lastSuspect.OFG00001 = nil
+    recs.OFG00001 = { cid = 'OFG00001', label = 'B', state = 'void' }
+    H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'officer_recent_suspect',
+        '(Z14) an officer is a suspect of a case that is still open')
+    recs.OFG00001 = nil
     caps.pair['OFG00001|VMG00001'] = 'blocked'
     H.eq(select(2, V.capsOk(probe, 'VMG00001')), 'pair_blocked', 'an admin pair block')
     caps.pair['OFG00001|VMG00001'] = 'suspect_cooldown'

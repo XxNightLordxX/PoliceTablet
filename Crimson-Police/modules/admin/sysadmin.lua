@@ -28,6 +28,10 @@ local MIGRATIONS_TABLE = 'cp_schema_migrations'
 -- restore that has not finished (it failed part way, or the server stopped during it), until a restore works. While it
 -- is set the restore lock outlives a restart.
 local META_RESTORE_OPEN = 'restore_open'
+-- Z14: cp_storage_meta key (in the store in use; a copy never replaces that table): a copy into the store in use that
+-- has not finished (it failed part way). While it is set, payments, runs and claims stay held, also after a restart,
+-- until a copy into it works.
+local META_COPY_OPEN = 'copy_open'
 
 -- Tables a restore never replaces: the audit trail, the settings history, the storage marker, request ids, jobs and
 -- the department funding ledger (money only moves forward).
@@ -1202,14 +1206,18 @@ function Sys.restore(src, name, reason)
         if not okR then CP.err(TAG, 'putting the money state back failed too: %s', tostring(errR)) end
         -- that failed too: the store may hold the backup's money state, so the admin is not told it was kept (payments
         -- stay held, and the fix restore takes its money state from the automatic backup: nobody is paid twice)
-        CP.err(TAG, '%s', CP.L(okR and 'sysadmin.console.restore_failed' or 'sysadmin.console.restore_failed_money', {
-            backup = name,
-            error = tostring(res[2]),
-            automatic = open,
-        }))
+        -- Z14: with Config.Backups.holdAfterFailedRestore = false the hold ends at the next start (the texts say so)
+        local tail = (type(Config.Backups) == 'table' and Config.Backups.holdAfterFailedRestore == false) and '_restart'
+            or ''
+        CP.err(TAG, '%s',
+            CP.L((okR and 'sysadmin.console.restore_failed' or 'sysadmin.console.restore_failed_money') .. tail, {
+                backup = name,
+                error = tostring(res[2]),
+                automatic = open,
+            }))
         Kit.auditSync(src, 'audit', 'backupRestoreFailed', name, nil, open, reason, { critical = true })
-        Maint.mark('restore', { failed = true, automatic = open })
-        return false, okR and 'err.restore_failed' or 'err.restore_failed_money'
+        Maint.mark('restore', { failed = true, automatic = open, endsAtRestart = tail ~= '' or nil })
+        return false, (okR and 'err.restore_failed' or 'err.restore_failed_money') .. tail
     end
     SetOpenRestore(nil)
     -- a fix restore: the data from before is in the first unfinished restore's backup, so that one is named and kept
@@ -1686,6 +1694,12 @@ local function SaveDesks(src, list, reason)
     return CP.Settings.set(src, 'Tablet.desks', list, false, { reason = reason })
 end
 
+-- Z14: a desk action reads the list and writes it back whole (desks by index): one at a time (CP.Settings._locked)
+local function DeskLocked(fn)
+    if CP.Settings and CP.Settings._locked then return CP.Settings._locked('Tablet.desks', fn) end
+    return fn()
+end
+
 -- The admin's own ped position (server coordinates; the client sends none).
 local function MyPosition(src)
     local ped = PedOf(src)
@@ -1920,8 +1934,11 @@ function Sys.storageCopy(src, direction, force)
     force = force == true
     if RunsGoing() > 0 then return false, 'err.storage_runs_active', nil, { refused = true } end
     -- any lock already on (a switch's or a live copy's restart lock included): Maint.begin would take a 'storage'
-    -- lock over and the copy's end would then finish it while the server still runs on the old store
-    if Maint.active() then return false, 'err.maintenance', nil, { refused = true } end
+    -- lock over and the copy's end would then finish it while the server still runs on the old store. Z14: the lock
+    -- a start took for a live copy that did not finish is the one exception (its fix is the next copy)
+    local heldKind, heldInfo = Maint.active()
+    local resume = heldKind == 'storage' and type(heldInfo) == 'table' and heldInfo.copyOpen == true
+    if heldKind and not resume then return false, 'err.maintenance', nil, { refused = true } end
     local okM, errM = Maint.begin('storage', { by = ActorOf(src), copy = direction })
     if not okM then return false, errM, nil, { refused = true } end
     local mode = CP.Storage and CP.Storage.mode and CP.Storage.mode() or 'database'
@@ -1935,11 +1952,29 @@ function Sys.storageCopy(src, direction, force)
         local target = OpenStore(targetKind, folder)
         if target then snap = Sys.moneySnapshot(target) end
     end
+    -- Z14: a live copy marks the store in use before its first write; only a copy that works clears the mark
+    if live then pcall(MySQL.update.await, META_UPSERT, { META_COPY_OPEN, direction }) end
     local okC, ok, key, vars, wrote = Call('Admin', 'storageCopy', src, direction, force)
     if not okC or not ok then
-        if live and wrote then Maint.askRestart('storage') else Maint.finish('storage') end
+        -- Z14: a forced copy that failed part way may have emptied the target: its money state goes back, so the copy
+        -- the message asks for (it finds an empty target, no force, no snapshot) never pays a paid run again
+        if wrote and snap and (#snap.runs > 0 or #snap.items > 0) then
+            local target = OpenStore(targetKind, folder)
+            if target then pcall(Sys.moneyReapply, target, snap, { ahead = true }) end
+        end
+        if live and not wrote and not resume then
+            pcall(MySQL.update.await, 'DELETE FROM cp_storage_meta WHERE meta_key = ?', { META_COPY_OPEN })
+        end
+        if live and wrote then
+            Maint.askRestart('storage')
+        elseif resume then
+            Maint.begin('storage', { by = 'start', failed = true, copyOpen = true })   -- still half copied: held
+        else
+            Maint.finish('storage')
+        end
         return false, key or 'err.refused', vars, { restart = live and wrote == true }
     end
+    if live then pcall(MySQL.update.await, 'DELETE FROM cp_storage_meta WHERE meta_key = ?', { META_COPY_OPEN }) end
     local money = nil
     if snap and (#snap.runs > 0 or #snap.items > 0) then
         local target = OpenStore(targetKind, folder)
@@ -1969,6 +2004,8 @@ end, {
     requestId = true,
     confirm = function(p) return p.force == true and 'REPLACE' or nil end,
     rate = 1,
+    -- Z14: the copy that ends the hold of a live copy that did not finish (Sys.storageCopy refuses any other lock)
+    maintenance = true,
 })
 
 Kit.action('server:admin:setStorageMode', 'storageAdmin', function(ctx)
@@ -2280,52 +2317,58 @@ Kit.action('server:admin:uploadLogo', 'departmentsAdmin', UploadChunk, { reason 
 -- ============================================================================
 
 Kit.action('server:admin:addDeskHere', 'departmentsAdmin', function(ctx)
-    local pos = MyPosition(ctx.src)
-    if not pos then return false, 'err.no_position' end
-    local p = ctx.payload
-    local desk = DeskFrom(p, {
-        label = 'Desk',
-        size = vector3(1.2, 0.8, 1.0),
-        rotation = pos.heading + 0.0,
-        prop = false,
-    })
-    desk.coords = vector3(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
-    local list = Desks()
-    list[#list + 1] = desk
-    local ok, err = SaveDesks(ctx.src, list, ctx.reason)
-    if not ok then return false, err end
-    ctx.audit('deskAdded', desk.label, nil, ('%.1f, %.1f, %.1f'):format(pos.x, pos.y, pos.z))
-    return true, { index = #list }
+    return DeskLocked(function()
+        local pos = MyPosition(ctx.src)
+        if not pos then return false, 'err.no_position' end
+        local p = ctx.payload
+        local desk = DeskFrom(p, {
+            label = 'Desk',
+            size = vector3(1.2, 0.8, 1.0),
+            rotation = pos.heading + 0.0,
+            prop = false,
+        })
+        desk.coords = vector3(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
+        local list = Desks()
+        list[#list + 1] = desk
+        local ok, err = SaveDesks(ctx.src, list, ctx.reason)
+        if not ok then return false, err end
+        ctx.audit('deskAdded', desk.label, nil, ('%.1f, %.1f, %.1f'):format(pos.x, pos.y, pos.z))
+        return true, { index = #list }
+    end)
 end, { reason = 'optional', rate = 2 })
 
 Kit.action('server:admin:updateDesk', 'departmentsAdmin', function(ctx)
-    local p = ctx.payload
-    local list = Desks()
-    local i = CP.Int(p.index)
-    if not list[i] then return false, 'err.desk_unknown' end
-    local desk = DeskFrom(p, list[i])
-    if p.moveHere == true then
-        local pos = MyPosition(ctx.src)
-        if not pos then return false, 'err.no_position' end
-        desk.coords = vector3(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
-    end
-    list[i] = desk
-    local ok, err = SaveDesks(ctx.src, list, ctx.reason)
-    if not ok then return false, err end
-    ctx.audit('deskChanged', desk.label, nil, p.moveHere == true and 'moved' or nil)
-    return true, { index = i }
+    return DeskLocked(function()
+        local p = ctx.payload
+        local list = Desks()
+        local i = CP.Int(p.index)
+        if not list[i] then return false, 'err.desk_unknown' end
+        local desk = DeskFrom(p, list[i])
+        if p.moveHere == true then
+            local pos = MyPosition(ctx.src)
+            if not pos then return false, 'err.no_position' end
+            desk.coords = vector3(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
+        end
+        list[i] = desk
+        local ok, err = SaveDesks(ctx.src, list, ctx.reason)
+        if not ok then return false, err end
+        ctx.audit('deskChanged', desk.label, nil, p.moveHere == true and 'moved' or nil)
+        return true, { index = i }
+    end)
 end, { reason = 'optional', rate = 2 })
 
 Kit.action('server:admin:removeDesk', 'departmentsAdmin', function(ctx)
-    local list = Desks()
-    local i = CP.Int(ctx.payload.index)
-    if not list[i] then return false, 'err.desk_unknown' end
-    local label = list[i].label
-    table.remove(list, i)
-    local ok, err = SaveDesks(ctx.src, list, ctx.reason)
-    if not ok then return false, err end
-    ctx.audit('deskRemoved', label)
-    return true, { index = i }
+    return DeskLocked(function()
+        local list = Desks()
+        local i = CP.Int(ctx.payload.index)
+        if not list[i] then return false, 'err.desk_unknown' end
+        local label = list[i].label
+        table.remove(list, i)
+        local ok, err = SaveDesks(ctx.src, list, ctx.reason)
+        if not ok then return false, err end
+        ctx.audit('deskRemoved', label)
+        return true, { index = i }
+    end)
 end, { reason = 'optional', rate = 2 })
 
 Kit.action('server:admin:teleportToDesk', 'departmentsAdmin', function(ctx)
@@ -2465,9 +2508,15 @@ Sys._storageHealth = StorageHealth
 
 -- The start-up locks: a store a storage switch left behind, a restore that did not finish.
 local function StartLocks()
-    if Sys.storageMeta().state == 'left_behind' then
+    local meta = Sys.storageMeta()
+    if meta.state == 'left_behind' then
         Maint.begin('left_behind', { by = 'start' })
         CP.err(TAG, '%s', CP.L('sysadmin.console.left_behind'))
+    end
+    -- Z14: a copy into this store that failed part way: held until a copy into it works
+    if type(meta[META_COPY_OPEN]) == 'string' and meta[META_COPY_OPEN] ~= ''
+        and Maint.begin('storage', { by = 'start', failed = true, copyOpen = true }) then
+        CP.err(TAG, '%s', CP.L('sysadmin.console.storage_copy_open', { direction = meta[META_COPY_OPEN] }))
     end
     -- a restore that did not finish (it failed part way, or the server stopped during it): the store may be half put
     -- back, so payments, runs and claims stay held until a restore works

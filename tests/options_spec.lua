@@ -417,6 +417,22 @@ end
 -- the column the step adds, in every storage mode (files mode: the saves folder engine)
 H.ok(pcall(H.sql, 'SELECT options FROM cp_officers LIMIT 1'), 'migration 010: cp_officers.options exists')
 
+-- (Z14) two saves of different keys at the same moment (MyOptions saves each key on its own) both stay saved
+do
+    H.sql('UPDATE cp_officers SET options = NULL WHERE citizenid = \'OPT00001\'')
+    Tick()
+    H.reset()
+    H.interleave(true)
+    H.fire('crimson-police:server:options:set', 1, { t_enum = 'large' }, 'rqA')
+    H.fire('crimson-police:server:options:set', 1, { t_num = 70 }, 'rqB')
+    for _ = 1, 40 do H.step(50) end
+    H.interleave(false)
+    local saved = Saved('OPT00001')
+    H.ok(saved and saved.t_enum == 'large' and saved.t_num == 70,
+        '(Z14) two option saves at once keep both keys: ' .. cjson.encode(saved or {}))
+    Act(1, { t_enum = 'medium', t_num = 50 })
+end
+
 for _, k in ipairs({ 't_bool', 't_enum', 't_list', 't_num', 't_local' }) do Defs.remove(k) end
 H.sql('DELETE FROM cp_officers WHERE citizenid LIKE \'OPT%\'')
 

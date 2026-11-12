@@ -2,6 +2,7 @@
   "volunteer.title": "Volunteer suspect",
   "volunteer.consent.title": "Volunteer as a suspect",
   "volunteer.consent.content": "For the next {minutes} minutes, police running a tablet mission may ask you to play its suspect instead of an NPC. You get a yes or no question every time and nothing starts without your yes.\n\n- Server rules on force, combat logging and staging apply.\n- Crimson-Police gives suspects nothing: no points, cash or items.\n- Officers never see your live position.\n- Saying yes and then not showing up or walking away is a strike; {strikes} strikes stop you volunteering for a while.\n- Use the same command any time to renew or stop.",
+  "volunteer.consent.content_paid": "For the next {minutes} minutes, police running a tablet mission may ask you to play its suspect instead of an NPC. You get a yes or no question every time and nothing starts without your yes.\n\n- Server rules on force, combat logging and staging apply.\n- Crimson-Police pays a suspect for a fair case (the criminal tablet shows it); there are no points or items.\n- Officers never see your live position.\n- Saying yes and then not showing up or walking away is a strike; {strikes} strikes stop you volunteering for a while.\n- Use the same command any time to renew or stop.",
   "volunteer.consent.agree": "I agree",
   "volunteer.roles.title": "Suspects you will play",
   "volunteer.role.runner": "The wanted person who runs (on foot)",

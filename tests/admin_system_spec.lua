@@ -968,9 +968,23 @@ do
     H.ok(seen[2] and seen[2].lock == 'storage' and Maint.active() == nil, 'Z8: into the other store: the lock ends')
     -- a copy into the store in use that failed after its writes: never emptied, the lock holds for a restart
     answer = { false, 'admin.cmd.storage_copy_failed_live', {}, true }
+    local reBefore = reapplied
     CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
     H.ok(Maint.active() == 'storage' and Maint.view().restart == true,
         'Z8: a live copy that failed part way keeps the lock and asks for a restart')
+    H.eq(reapplied, reBefore + 1, '(Z14) a forced copy that failed part way puts the money state back')
+    H.ok(Sys.storageMeta().copy_open == liveDir, '(Z14) the store in use keeps the copy_open mark')
+    Maint.finish('storage')
+    -- (Z14) the next start holds payments, runs and claims until a copy into it works
+    Sys._boot()
+    local kindZ, infoZ = Maint.active()
+    H.ok(kindZ == 'storage' and infoZ and infoZ.copyOpen == true, '(Z14) the start takes the storage lock again')
+    answer = { true, 'admin.cmd.storage_copied', { rows = 3 }, true }
+    local nZ = #seen
+    CP.Admin.command(0, { 'storage', 'copy', liveDir, 'force' })
+    H.eq(#seen, nZ + 1, '(Z14) the copy that fixes it may run under that lock')
+    H.eq(Sys.storageMeta().copy_open, nil, '(Z14) a copy that works clears the mark')
+    H.ok(Maint.active() == 'storage' and Maint.view().restart == true, '(Z14) and asks for the restart')
     Maint.finish('storage')
     -- a refusal before any write ends the lock
     answer = { false, 'admin.cmd.storage_target_has_rows', {}, false }

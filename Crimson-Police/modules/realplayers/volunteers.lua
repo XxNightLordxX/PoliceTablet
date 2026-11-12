@@ -770,6 +770,9 @@ local function MenuOf(src, info)
         roles = ROLES,
         strikes = strikes,
         maxStrikes = MaxStrikes(),
+        -- Z14: Config.FeatureRewards.suspect on: the consent says a fair case is paid
+        paid = (CP.FeatureRewards and CP.FeatureRewards.enabled and CP.FeatureRewards.enabled('suspect') == true)
+            or nil,
     }
 end
 

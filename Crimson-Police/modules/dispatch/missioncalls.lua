@@ -502,6 +502,12 @@ local function CallRule(call, unit, dist, now)
     if call.staff and call.issuerCid and Contains(unit.cids, call.issuerCid) then return 'err.mc_own_call' end
     -- a pushed mission stays the paged unit's for as long as the call is open
     if call.missionId and not Contains(unit.cids, call.pagedCid) then return 'err.mc_paged' end
+    -- Z14: a supervisor's push is for a unit of his own department (the paged leader may have joined another unit)
+    if call.missionId and call.pushDept then
+        for _, o in ipairs(unit.officers or {}) do
+            if o.department ~= call.pushDept then return 'err.mc_paged' end
+        end
+    end
     if call.pagedCid and now < (call.pagedUntil or 0) and not Contains(unit.cids, call.pagedCid) then
         return 'err.mc_paged'
     end
@@ -1652,7 +1658,8 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
     local res = table.pack(pushBusy:run(issuer, 0, function()
         local errP = PushCheck(src, role, dept, opts.missionId, typeKey, areaKey, unit, issuer)
         if errP then return false, errP end
-        return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, opts.missionId)
+        return PostPage(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, opts.missionId,
+            role == 'supervisor' and leaderO.department or nil)
     end))
     if res[1] == 'busy' then return false, 'err.busy' end
     if res[1] == 'error' then
@@ -1663,7 +1670,7 @@ function MC.page(src, typeKey, area, leaderSrc, opts)
 end
 
 -- The page itself, after its checks: the call, the unit's toast and the audit row (mcPush names the mission).
-PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, missionId)
+PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, missionId, pushDept)
     local push = missionId ~= nil
     local call = NewCall(typeKey, areaKey, {
         staff = true,
@@ -1673,6 +1680,7 @@ PostPage = function(src, typeKey, areaKey, leaderO, unit, issuer, issuerCid, mis
         pagedCid = leaderO.citizenid,
         missionId = missionId,
     })
+    call.pushDept = push and pushDept or nil
     local payload = ToastPayload(call)
     payload.paged = true
     if push then

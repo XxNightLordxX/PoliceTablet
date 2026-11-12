@@ -406,6 +406,7 @@ strings do not count.
 | `modules/realplayers/surrender.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/access/client/options.lua` | 3 | 0 | Auto-Ready input watcher; start-up hooks |
 | `modules/access/client/training.lua` | 1 | 0 | one-shot thread per /crimsonhelp (opens the tablet, sends the tour); no loop |
+| `modules/access/training.lua` | 1 | 0 | one-shot thread at start: registers the command once the saved settings load; no loop |
 | `modules/money/payments.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/money/payouts.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/progression/profile.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
