@@ -30,6 +30,9 @@ text that is a locale key. Screenshots go to the folder given as its first argum
 system temp folder, never the repo); `node ../../tools/clickthrough.mjs <dir> admin` runs one tablet. About 15
 minutes for all four. Run it after a change to a screen or the layout; it is not in CI or `check_all.sh`.
 
+**Not a gate step (needs an FXServer license key):** `tools/boot_smoke.sh` boots a real FXServer with
+Crimson-Police and says PASS or FAIL, "Real server boot test" below.
+
 A whole run takes about 8.5 minutes (the times above are from one run of every step on the full suite). Every
 `tools/lint_<name>.py` and `tools/check_<name>.py` (other than `check_contracts.py`) is a `lint-<name>` step, run right after `contracts`: a new lint joins by checking the
 repository with no arguments and exiting non-zero on a problem.
@@ -352,6 +355,75 @@ lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
 - `build`: `web/dist is stale: N files differ from a fresh build`, then the files (`Only in ...`, `Files ...
   differ`). Run `cd Crimson-Police/web && npm run build` and commit `web/dist`. The fresh build is kept in the
   logs folder. A build of the same sources is byte-identical, so a difference is never noise.
+
+## Real server boot test
+
+The specs run the resource in plain Lua. `tools/boot_smoke.sh` starts a real FXServer headless with Crimson-Police
+for two minutes (`--seconds N`), optionally types console commands, stops it and reads the console. It is not in
+`check_all.sh` or CI, because FXServer needs a license key. Run it after a change to the start-up (migrations,
+settings, the start-up check, `fxmanifest.lua`) and before a release.
+
+It says **FAIL** when:
+
+- a `SCRIPT ERROR`, `Error parsing`, `Failed to load` or `Couldn't start` line names Crimson-Police;
+- a `server thread hitch warning` line shows up while Crimson-Police starts (from its script environment to the
+  first line of another resource after its start-up check);
+- a start of Crimson-Police has no `Crimson-Police database at version N` (or `saves folder at version N`) line
+  or no `missions loaded:` line (each restart is checked the same way);
+- Crimson-Police starts fewer times than asked, or `CrimsonPoliceAdmin check` gets no `Check:` answer;
+- the server refuses its license key.
+
+**The key is never written to a file.** The tool reads it from `CP_FX_LICENSE_KEY` and hands it to FXServer with
+`+set sv_licenseKey` on the command line; `CP_FX_MYSQL` (the mysql connection string) goes the same way. The log
+masks both and every `cfxk_` value. Do not put the key in `server.cfg`, a script or a commit.
+
+### On your machine
+
+Linux (or WSL), with bash, curl, unzip, git and a MariaDB or MySQL server for qbx_core. Get a key at
+portal.cfx.re (Server registration keys). Then, from the repository folder:
+
+```bash
+export CP_FX_LICENSE_KEY=cfxk_...                              # your key, for this shell only
+export CP_FX_MYSQL='mysql://fx:password@127.0.0.1/cp_boot'     # a test database, made when missing
+
+# once (run it again any time: it fetches only what is missing, and copies Crimson-Police in again)
+tools/boot_smoke_setup.sh ~/cp-boot
+
+tools/boot_smoke.sh --fx ~/cp-boot/artifact --data ~/cp-boot/data --admin-check --restart \
+    --crimson Crimson-Police
+```
+
+`tools/boot_smoke_setup.sh DIR` fills a clean test folder: `DIR/artifact` is the FXServer build the changelogs API
+recommends (`--build N` for another), `DIR/data` is the server-data: oxmysql v2.14.3, ox_lib v3.42.2 with the
+`require` resource it needs (cfxlua-require v1.0.2), qbx_core v1.24.1, ox_target v1.18.1, qbx_vehicles v1.4.2
+(ox_inventory needs it) and ox_inventory v2.48.1 in `resources/[deps]` (release zips, so the UIs are built; a
+source checkout gets an empty `web/build/index.html`, which is enough for a server-only boot), this repository's
+Crimson-Police in `resources/[crimson]` with its `saves` folder (FXServer cannot make folders on Linux), and a
+minimal `server.cfg` (TCP only, `inventory:framework "qbx"`, the resources in order, no key or password in it).
+With `CP_FX_MYSQL` set it makes the database and imports `qbx_core.sql` and `qbx_vehicles/vehicles.sql` (both are
+safe to import again).
+
+Options of `tools/boot_smoke.sh` (`--help` has them all):
+
+| Option | What it does |
+| --- | --- |
+| `--fx DIR` | the FXServer artifact folder (`run.sh`; `FXServer.exe` on Windows, untested) |
+| `--data DIR` | a server-data folder, booted with its own `server.cfg` (`--cfg NAME` for another file) |
+| `--resources DIR` | instead of `--data`: a scratch server-data whose `resources` folder is DIR, with the test `server.cfg` |
+| `--admin-check` | types `CrimsonPoliceAdmin check` once the start-up check has printed |
+| `--restart` | types `restart Crimson-Police` after that and checks the second start too |
+| `--cmd 'TEXT'` | any other console command (more than once is fine) |
+| `--crimson DIR` | copies this Crimson-Police folder into the test folder first (its saves are kept; only a folder made by the setup) |
+| `--seconds N` | how long the server runs (default 120) |
+| `--log FILE` | where the console log goes (default: a new file in the temp folder) |
+| `--check LOG` | only reads a console log of an earlier boot and says PASS or FAIL (your own server's log works too) |
+
+The test folder boots with the database off (the shipped `Config.Database.enabled = false`). To boot database
+mode, set it to `true` in `DIR/data/resources/[crimson]/Crimson-Police/config/config.lua` and run without
+`--crimson` (that copy would put the shipped value back). Your own server-data works with `--data` too: stop the
+live server first (the ports), and leave `--crimson` out. The run stops the server itself (`quit`, then a kill
+after 15 s) and leaves nothing running. `tests/boot_smoke_spec.lua` checks the log reading against real consoles
+in `tests/fixtures/boot`.
 
 ## CI
 

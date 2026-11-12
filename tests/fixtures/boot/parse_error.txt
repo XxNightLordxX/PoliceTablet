@@ -1,0 +1,110 @@
+[38;5;83m[           resources] [0m[0m[32mScanning resources.[0m
+[38;5;83m[           resources] [0m[0m[32mFound 12 resources.[0m
+[38;5;66m[          svadhesive] [0m[0mAuthenticating server license key...
+[38;5;66m[          svadhesive] [0m[0mServer license key authentication succeeded. Welcome!
+[38;5;171m[                 cmd] [0m[0m[93mWarning: 'onesync' is an internal ConVar and cannot be changed.[0m
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for oxmysql
+[38;5;157m[    c-scripting-node] [0m[0mFilesystem permission check from 'oxmysql' for permission fs.read on resource '/usr/local/lib/node_modules_global/cardinal/package.json' - no device found
+[38;5;140m[   resources:oxmysql] [0m[0m[93mWarning: could not find file `web/build/index.html` (defined in fxmanifest.lua:21)[0m
+[38;5;83m[           resources] [0m[0mStarted resource oxmysql (1 warning)
+[38;5;83m[           resources] [0m[0mStarted resource require
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for ox_lib
+[38;5;83m[           resources] [0m[0mStarted resource ox_lib
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for qbx_core
+[38;5;83m[           resources] [0m[0mStarted resource qbx_core
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for ox_target
+[38;5;83m[           resources] [0m[0mStarted resource ox_target
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for qbx_vehicles
+[38;5;83m[           resources] [0m[0mStarted resource qbx_vehicles
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for ox_inventory
+[38;5;83m[           resources] [0m[0mStarted resource ox_inventory
+[38;5;161m[    c-scripting-core] [0m[0mCreating script environments for Crimson-Police
+[38;5;184m[script:Crimson-Polic] [0m[0mError parsing script @Crimson-Police/modules/admin/settings.lua in resource Crimson-Police: @Crimson-Police/modules/admin/settings.lua:4726: too many local variables (limit is 200) in main function near '='
+[38;5;161m[    c-scripting-core] [0m[0mFailed to load script modules/admin/settings.lua.
+[38;5;83m[           resources] [0m[0mStarted resource Crimson-Police
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police:admin] /CrimsonPoliceAdmin registered
+[38;5;42m[      script:oxmysql] [0m[0m[36m[10.11.14-MariaDB-0ubuntu0.24.04.1] [32mDatabase server connection established![97m
+[38;5;184m[script:Crimson-Polic] [0m[97m[crimson-police] storage: MySQL/MariaDB through oxmysql
+[38;5;34m[script:qbx_core:warn] [0m[97m[93mWarning: Table 'properties' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police:migrations] database server: 10.11.14-MariaDB-0ubuntu0.24.04.1
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'bank_accounts_new' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'playerskins' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;171m[                 cmd] [0m[0mAccess denied for command add_ace.
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'player_mails' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'player_outfits' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_calls' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_darkchat_channel_members' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_marketplace_listings' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_messages_participants' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_notes' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_phone_contacts' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_phone_gallery' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_twitter_profiles' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;34m[script:qbx_core:warn] [0m[0m[93mWarning: Table 'npwd_match_profiles' does not exist in database, please remove it from qbx_core/config/server.lua or create the table[0m
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 001_initial.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 002_test_def_hash.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 003_run_stats.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 004_profile.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 005_mission_calls.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 006_item_rewards.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 007_settings.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 008_admin_control.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 009_real_suspects.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 010_officer_options.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 011_dept_controls.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 012_mission_ban.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 013_call_department.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 014_live_catches.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 015_field_training.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 016_saved_cases.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] applied migration 017_lookup_indexes.sql
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] Crimson-Police database at version 17
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police:payouts] loaded 0 type payout(s) and 0 mission payout(s)
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police] missions loaded: 19 built-in (0 edited), 0 custom, 0 rejected
+[38;5;184m[script:Crimson-Polic] [0m[0m[crimson-police:missions] sent 19 mission definitions to clients
+[38;5;73m[ citizen-server-impl] [0m[0mserver thread hitch warning: timer interval of 177 milliseconds
+[38;5;84m[     script:qbx_core] [0m[0m[0m
+[38;5;84m[     script:qbx_core] [0m[0m[94mWelcome to [93mQbox[94m!
+[38;5;84m[     script:qbx_core] [0m[94mTo learn more, please check out the documentation at [36mhttps://docs.qbox.re/[94m.
+[38;5;84m[     script:qbx_core] [0m[94mTo turn this message off, set the [93mqbx:acknowledge[94m convar to true in your server.cfg file.[0m
+[38;5;84m[     script:qbx_core] [0m[0m[0m
+[38;5;135m[ script:ox_inventory] [0m[0m[36m[ox_inventory] [0m[INFO] Inventory has loaded 218 items[0m
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check items 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check desks 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check colours 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check tweaks 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check locale 10.2 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check avatars 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check departments 0.8 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check admins 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check folder 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check resources 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check webhooks 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check storage 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check crimtab 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check volunteers 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check cash 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check integrations 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check missions 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[prof] check rewards 0.0 ms
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m departments: FIB: Qbox has no job named fib, so nobody can use this department. Add the job to qbx_core/shared/jobs.lua, or put your own police job name in the department's jobs in Admin UI → Departments (or Config.Departments.fib in config/config.lua)
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m departments: SAST: Qbox has no job named sast, so nobody can use this department. Add the job to qbx_core/shared/jobs.lua, or put your own police job name in the department's jobs in Admin UI → Departments (or Config.Departments.sast in config/config.lua)
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m admins: No admin group can open the Admin UI yet. Add this line to server.cfg and restart: add_ace group.admin crimsonpolice.admin allow (skip it if you give crimsonpolice.admin to each admin yourself)
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m integrations: No dispatch script in use (Config.Integrations.dispatch = 'auto'). The tablet's own Dispatch still works, but officers who respond to a real call are not released from their run, and suspended officers are not kept off duty. Start sc-dispatch or ps-dispatch, or set it to 'none' if you have neither
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m integrations: No ambulance script in use (Config.Integrations.ambulance = 'auto'). A downed participant is always picked up and revived by Crimson-Police, and only a dead character counts as down. Start sc-ambulance or qbx_ambulancejob, or set it to 'none' if you have neither
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m integrations: No banking script in use (Config.Integrations.banking = 'auto'). Payouts get no bank history entry, and Cash.source 'society' pays new money like 'server'. Start Renewed-Banking, or set it to 'none' if you do not use it
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m integrations: No police script in use (Config.Integrations.police = 'auto'). NPC missions and Crimson-Police's own custody work as usual; live crimes and volunteer suspects stay off. Start sc-police or qbx_policejob, or set it to 'none' if you have neither
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:confighealth][0m Start-up check: 7 warnings and 0 errors (each on its own line above, with the fix), 17 checks passed. Type CrimsonPoliceAdmin check in the server console to see every line again
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:integrations][0m No dispatch script in use (Config.Integrations.dispatch = 'auto'). The tablet's own Dispatch still works, but officers who respond to a real call are not released from their run, and suspended officers are not kept off duty. Start sc-dispatch or ps-dispatch, or set it to 'none' if you have neither
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:integrations][0m No ambulance script in use (Config.Integrations.ambulance = 'auto'). A downed participant is always picked up and revived by Crimson-Police, and only a dead character counts as down. Start sc-ambulance or qbx_ambulancejob, or set it to 'none' if you have neither
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:integrations][0m No banking script in use (Config.Integrations.banking = 'auto'). Payouts get no bank history entry, and Cash.source 'society' pays new money like 'server'. Start Renewed-Banking, or set it to 'none' if you do not use it
+[38;5;184m[script:Crimson-Polic] [0m[0m[93m[crimson-police:integrations][0m No police script in use (Config.Integrations.police = 'auto'). NPC missions and Crimson-Police's own custody work as usual; live crimes and volunteer suspects stay off. Start sc-police or qbx_policejob, or set it to 'none' if you have neither
