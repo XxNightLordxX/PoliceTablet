@@ -208,8 +208,10 @@ local function Times(single, delta, lag)
 end
 
 local results = {}
--- cut points per case (CP_RACE_CUTS=n: more; every query of the first copy when it has no more than that)
-local CUTS = math.max(2, tonumber(os.getenv('CP_RACE_CUTS') or '') or 5)
+-- cut points per case (CP_RACE_CUTS=n: more; every query of the first copy when it has no more than that).
+-- CP_RACE_CUTS=all: a cut after every query of every case, a case's own maxCuts too (tools/check_all.sh race-all).
+local ALL_CUTS = os.getenv('CP_RACE_CUTS') == 'all'
+local CUTS = ALL_CUTS and math.huge or math.max(2, tonumber(os.getenv('CP_RACE_CUTS') or '') or 5)
 
 -- A restore (and its maintenance lock) goes on after its reply, and a finished one asks for `restart Crimson-Police`
 -- and keeps the lock until then: wait until the lock is gone, else restart as the admin is asked to.
@@ -320,7 +322,7 @@ local function RunCase(c)
     local cuts = 0
     if c.cut ~= false then
         -- every query up to CUTS of them, else CUTS spread from the first to the last
-        local max = c.maxCuts or CUTS
+        local max = (not ALL_CUTS and c.maxCuts) or CUTS
         local points, seen = {}, {}
         for i = 1, math.min(steps, max) do
             local at = steps <= max and i or math.max(1, math.floor((i - 1) * (steps - 1) / (max - 1) + 1.5))
@@ -348,6 +350,22 @@ local function RunCase(c)
             local whyCut = ('cut after query %d: %s | alone %s, now %s'):format(at, ShowReply(rb), Show(single),
                 Show(delta))
             H.ok(k ~= nil and k <= (c.one and 1 or 2), label .. ': no double or half effect, ' .. whyCut)
+            -- nothing done and the second copy refused: the cut copy left something behind (a marker, a used
+            -- allowance, a started cooldown) that blocks the action with nothing to show for it. Only a refusal
+            -- the case names as right by design (c.cutRefusals) may stand.
+            -- c.cutKnown: a finding not fixed yet, reported on every run until its fix lands (then delete the entry).
+            if k == 0 and not (rb and rb.ok) then
+                local allowed = false
+                for _, key in ipairs(c.cutRefusals or {}) do
+                    if rb and rb.data == key then allowed = true end
+                end
+                local known = rb and c.cutKnown and c.cutKnown[rb.data]
+                if known then
+                    print(('REPORT KNOWN %s: %s (%s)'):format(label, known, whyCut))
+                else
+                    H.ok(allowed, label .. ': a cut leaves nothing that blocks a new try, ' .. whyCut)
+                end
+            end
             cuts = cuts + 1
         end
     end
@@ -414,6 +432,10 @@ Case({
     label = 'manual cash, one request sent twice (a double click)',
     switches = true,
     one = true,
+    -- H0: the cut copy's request id stays claimed (Kit.claimRequest), so the same id again is refused. Right by
+    -- design: the UI makes a new id on every click (web/src/admin/components/kit/useAdminAction.ts), so a real retry
+    -- goes through.
+    cutRefusals = { 'err.request_busy' },
     setup = function() cur.rid = Uuid() end,
     effect = function() return { cash = Paid(CID[6]) } end,
     a = {
@@ -455,6 +477,10 @@ Case({
     label = 'Add funds, one request sent twice',
     switches = true,
     one = true,
+    -- H0: the cut copy's request id stays claimed (Kit.claimRequest), so the same id again is refused. Right by
+    -- design: the UI makes a new id on every click (web/src/admin/components/kit/useAdminAction.ts), so a real retry
+    -- goes through.
+    cutRefusals = { 'err.request_busy' },
     setup = function() cur.rid = Uuid() end,
     effect = function()
         return { funds = Sum('SELECT COALESCE(SUM(amount), 0) AS n FROM cp_dept_funding WHERE department = \'sast\'') }
@@ -531,6 +557,14 @@ local function Two(name, srcA, srcB, build)
     }
 end
 local function Audits(action) return Count('SELECT COUNT(*) AS n FROM cp_audit WHERE action = ?', { action }) end
+-- 1 when the officer's Extra runs marker (cp_officers.cap_extra) is for today: the grant the daily cap reads
+local function ExtraToday(cid)
+    local row = H.sql('SELECT cap_extra AS v FROM cp_officers WHERE citizenid = ?', { cid })[1]
+    local text = row and row.v
+    if type(text) ~= 'string' or text == '' then return 0 end
+    local ok, v = pcall(cjson.decode, text)
+    return (ok and type(v) == 'table' and v.day == CP.Schedule.dayKey()) and 1 or 0
+end
 local function Bit(sql, params) return Count(sql, params) end
 
 do
@@ -558,6 +592,10 @@ do
         label = 'Pay the rest of a capped payment, two admins',
         switches = true,
         one = true,
+        -- H0 finding, not fixed yet: a cut after the claim (breakdown.cash.restPaid = 'paying') and before the money
+        -- leaves the marker, so Pay the rest is refused from then on, and Payments has no Resolve for it (Resolve is
+        -- for cash_status 'paying'). The switch ships off (Config.Cash.allowCapTopUp).
+        cutKnown = { ['err.state_changed'] = 'Pay the rest left claimed by a cut: no Resolve for it in Payments' },
         setup = function() cur.row = Row({ cid = CID[1], owed = 500, paid = 300, status = 'capped' }) end,
         effect = function()
             return {
@@ -635,7 +673,17 @@ do
             local ok, err = Act('server:sup:awardPoints', 3, { citizenid = CID[7], points = 50, reason = 'Earlier' })
             H.eq(ok, true, 'points set-up: ' .. tostring(err))
         end,
-        effect = function() return { xp = Xp(CID[1]) + Xp(CID[6]) } end,
+        -- H0: the award is its manual_award row (the season points and the supervisor's daily count read it); the
+        -- officer's XP is added after it, so a cut between them leaves the XP short until an admin's Fix XP
+        -- (server:admin:fixXp) reads it from the rows again
+        effect = function()
+            return {
+                awards = Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE mission_id = 'manual_award'
+                    AND citizenid IN (?, ?)]], { CID[1], CID[6] }),
+                xp = Xp(CID[1]) + Xp(CID[6]),
+            }
+        end,
+        lag = { xp = true },
         a = a,
         b = b,
     })
@@ -771,12 +819,16 @@ do
             H.sql('DELETE FROM cp_dept_controls WHERE control_key = \'happyHour\'')
             if CP.DeptControls and CP.DeptControls.clearCache then CP.DeptControls.clearCache() end
         end,
+        -- H0: the happy hour is its cp_dept_controls row (what the multiplier reads); its audit row comes after it, so a
+        -- cut between them may leave the audit out
         effect = function()
             return {
+                row = Count('SELECT COUNT(*) AS n FROM cp_dept_controls WHERE control_key = \'happyHour\''),
                 set = Count([[SELECT COUNT(*) AS n FROM cp_audit WHERE action = 'missionControlSet'
                 AND target LIKE '%:happyHour']]),
             }
         end,
+        lag = { set = true },
         a = a,
         b = b,
     })
@@ -814,6 +866,10 @@ do
     Case({
         label = 'Adjust points, one request sent twice',
         one = true,
+        -- H0: the cut copy's request id stays claimed (Kit.claimRequest), so the same id again is refused. Right by
+        -- design: the UI makes a new id on every click (web/src/admin/components/kit/useAdminAction.ts), so a real retry
+        -- goes through.
+        cutRefusals = { 'err.request_busy' },
         setup = function()
             NewDay()
             rid = Uuid()
@@ -849,7 +905,10 @@ do
     Case({
         label = 'Extra runs, two admins to one officer',
         setup = function() NewDay() end,
-        effect = function() return { granted = Audits('extraRunsAllow') } end,
+        -- H0: the grant is the cap_extra marker of today (what the daily cap reads); its audit row is written after
+        -- it (CP.AdminKit, as for every action), so a cut between them may leave the audit out
+        effect = function() return { marker = ExtraToday(CID[1]), granted = Audits('extraRunsAllow') } end,
+        lag = { granted = true },
         a = a,
         b = b,
     })
@@ -1176,6 +1235,9 @@ do
     Case({
         label = 'A mission call, two officers claim it',
         one = true,
+        -- H0: mission calls live in memory and a restart closes them (modules/missions/missioncalls.lua), so the
+        -- second claim after a cut finds none: right by design
+        cutRefusals = { 'err.mc_gone' },
         setup = function()
             for _, s in ipairs({ 1, 6 }) do
                 local run = CP.Runs.getBySrc(s)
@@ -1202,7 +1264,6 @@ do
     Case({
         label = 'Accept a mission, sent twice',
         one = true,
-        cut = false,
         setup = function()
             local run = CP.Runs.getBySrc(7)
             if run then Act('server:abandon', 7, run.id) end

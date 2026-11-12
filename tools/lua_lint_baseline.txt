@@ -1,0 +1,45 @@
+# tools/lint_lua.py baseline: the known luacheck warnings, one per line, `<code> <file> <source line> -- <reason>`.
+# <source line> is the warning's line (comments left out); it is compared without whitespace and with " read as ',
+# so re-indenting keeps a line valid. One line covers every warning of that code on that source line. A new
+# warning is fixed, not added here, unless it is deliberate; a fixed one makes its line stale (delete it).
+
+W311 Crimson-Police/blocks/escort/server.lua local pick = nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W211 Crimson-Police/blocks/field_contact/server.lua local SCENE_ROLES = { 'occupied_car', 'loitering', 'casing' } -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W311 Crimson-Police/blocks/field_contact/server.lua due = false -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W421 Crimson-Police/blocks/interact_points/server.lua local pool = type(f.pool) == 'table' and #f.pool > 0 and f.pool or FIND_POOL -- an inner local reuses an outer name on purpose; each scope reads only its own
+W211 Crimson-Police/blocks/pursuit/client.lua local U = CP.U -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W211 Crimson-Police/blocks/search_area/client.lua local U = CP.U -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W122 Crimson-Police/modules/access/client/tablet.lua lib[name] = wrapper -- lib.progressBar and lib.progressCircle are wrapped on purpose (the tablet closes during a progress bar): T.wrapProgress
+W421 Crimson-Police/modules/admin/setup.lua local all = type(Config.Tablet) == 'table' and type(Config.Tablet.desks) == 'table' and Config.Tablet.desks -- an inner local reuses an outer name on purpose; each scope reads only its own
+W211 Crimson-Police/modules/admin/sysadmin.lua local function Now() -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W211 Crimson-Police/modules/missions/builder.lua local BOSS_ID = 'weekly_boss_kingpin' -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W431 Crimson-Police/modules/missions/client/testing.lua local function PushCheck(state, extra) -- an inner local or argument reuses an upvalue name on purpose; the function reads only its own
+W431 Crimson-Police/modules/missions/client/testing.lua local state = errKey and 'failed' or (stopped and 'stopped' or 'done') -- an inner local or argument reuses an upvalue name on purpose; the function reads only its own
+W421 Crimson-Police/modules/missions/testing.lua for _, row in ipairs(rows) do -- an inner local reuses an outer name on purpose; each scope reads only its own
+W581 Crimson-Police/modules/money/rewards.lua if pooled and spec.weight ~= nil and (type(spec.weight) ~= 'number' or not (spec.weight > 0)) then -- not (x > y) on purpose: it is also true when the value is NaN, which x <= y is not
+W211 Crimson-Police/modules/npc/client/custody.lua local U = CP.U -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W431 Crimson-Police/modules/npc/client/npc.lua local bags, had = perFrame.bags, perFrame.had -- an inner local or argument reuses an upvalue name on purpose; the function reads only its own
+W421 Crimson-Police/modules/npc/client/npc.lua local c = GetEntityCoords(ped) -- an inner local reuses an outer name on purpose; each scope reads only its own
+W421 Crimson-Police/modules/npc/client/npc.lua local function LetGo(netId, ent) -- an inner local reuses an outer name on purpose; each scope reads only its own
+W211 Crimson-Police/modules/npc/custody.lua local CHAIN_ACTIONS = { searchPerson = true, escort = true, seat = true, handover = true } -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W411 Crimson-Police/modules/npc/custody.lua local done, why = Apply(run, b, c, action, src, extra, bg.at) -- a second local why for the second check; the first is read before it
+W211 Crimson-Police/modules/progression/leaderboard.lua local COUNTED = 'r.voided = 0 AND r.flagged = 0' -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W211 Crimson-Police/modules/progression/profile.lua local function IssuerRole(src) -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W311 Crimson-Police/modules/realplayers/livecrime.lua local ok, reason = false, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W311 Crimson-Police/modules/runs/client/spawn.lua local result, reason, res, onZ = nil, nil, nil, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W421 Crimson-Police/modules/runs/runs.lua local waited -- an inner local reuses an outer name on purpose; each scope reads only its own
+W542 Crimson-Police/modules/supervisor/deptcontrols.lua elseif boot and not defs[key] and IsNum(v) then -- an empty branch on purpose: it stops the elseif chain below (the comment in the branch says why), or skips the ASC/DESC keyword
+W211 Crimson-Police/modules/system/memsql.lua local type, tostring, tonumber, pairs, ipairs, pcall, error, setmetatable, next, select, rawequal = -- unused local (a constant, an alias such as local U = CP.U, or a helper kept for a later use); harmless
+W542 Crimson-Police/modules/system/memsql.lua if kw('ASC') or kw('DESC') then end -- an empty branch on purpose: it stops the elseif chain below (the comment in the branch says why), or skips the ASC/DESC keyword
+W231 Crimson-Police/modules/system/memsql.lua local mx = 0 -- a local that is set but never read; harmless
+W423 Crimson-Police/modules/system/memsql.lua for i = ci, n - 1 do r[i] = r[i + 1] end -- an inner loop reuses the loop variable name; each loop reads only its own
+W231 Crimson-Police/modules/system/memsql.lua local x, status, dateOnly, hasTime -- a local that is set but never read; harmless
+W421 Crimson-Police/modules/system/memsql.lua local bad = STORE.checkRow(t, new, assigned) -- an inner local reuses an outer name on purpose; each scope reads only its own
+W581 Crimson-Police/modules/system/memsql.lua if prev ~= nil and not (prev < k) then sorted = false end -- not (x > y) on purpose: it is also true when the value is NaN, which x <= y is not
+W431 Crimson-Police/modules/system/migrations.lua local version = row and row.v -- an inner local or argument reuses an upvalue name on purpose; the function reads only its own
+W311 Crimson-Police/modules/system/migrations.lua local okC, errC = true, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W311 Crimson-Police/modules/teams/operations.lua local runState, tier, tierExpected, remaining = nil, nil, true, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W311 Crimson-Police/shared/locale.lua local strings = {} -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W311 Crimson-Police/shared/utils.lua local line, key, value = r.tl, nil, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
+W113 tests/foundation_spec.lua H.eq(pcall(function() return NoSuchNative end), false, 'H.strictGlobals: an undefined global is an error') -- H.strictGlobals is tested with a name that is undefined on purpose
+W113 tests/foundation_spec.lua H.eq(NoSuchNative, nil, 'and nil again once off') -- H.strictGlobals is tested with a name that is undefined on purpose

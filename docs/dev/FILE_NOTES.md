@@ -284,6 +284,7 @@ docs/dev/ARCHITECTURE.md.
 - `Crimson-Police/web/src/hud/HudColumn.tsx`: The screen-edge column that holds the mission HUD and the result card (no NUI focus).
 - `Crimson-Police/web/src/hud/ResultScreen.tsx`: The result card (ARCHITECTURE §9.6): points, cash, and when present the level bar, the mission call, the debrief (decision ledger and people) and item rewards.
 - `Crimson-Police/web/src/hud/TestControls.tsx`: HUD test controls (Admin test mode, SPEC "Test controls").
+- `Crimson-Police/web/src/hud/hud.walk.ts`: The in-world screens against the browser mocks (node walk.mjs, a gate step): the mission HUD and the result card.
 - `Crimson-Police/web/src/layouts/AdminLayout.tsx`: Admin UI: a separate full-screen panel (not the tablet), neutral admin theme (session.theme =
 - `Crimson-Police/web/src/layouts/Header.tsx`: Tablet header bar (--cp-primary): logo, app title "Crimson-Police" and, for officer and supervisor, the officer's picture and level next to "<departmentLabel> · <departmentShort> · <rank> · <callsign>".
 - `Crimson-Police/web/src/layouts/NotificationBell.tsx`: The header bell: the last 20 Crimson-Police toasts of this session (Lua and UI toasts alike), newest first, with the number that arrived since the list was last opened.
@@ -509,10 +510,13 @@ docs/dev/ARCHITECTURE.md.
 - `tests/builder_points_spec.lua`: The point list under the location map (Mission Builder, Locations step): web/src/builder/pointList.ts, bundled with esbuild and run in node.
 - `tests/builder_server_spec.lua`: Modules/builder/server.lua (slice builder_server).
 - `tests/builtin_override_spec.lua`: Full admin control, Missions and Mission Builder: editing a built-in mission in the Mission Builder (an override under the same id), the admin-only override rows, the shipped file as a baseline by value, Keep mine / Take the new original / Reset to original, Fold tweaks in, testing optional and the switches.
+- `tests/capability_inventory_spec.lua`: The capability inventory against its baseline: nothing Crimson-Police can do may disappear unnoticed.
 - `tests/cash_bonus_spec.lua`: Cash bonuses inside admin bounds: happyHourCash (x the cash of a run a department leads that was
 - `tests/challenge_tz_spec.lua`: Season weeks of CP.Challenge when the database and the game server run in different time zones: a run near the weekly reset counts in the week of the server's calendar, whatever the database's zone is.
+- `tests/check_tools_spec.lua`: The time limits of the test tools: tests/run.lua stops a spec that hangs (CP_SPEC_TIMEOUT) and reports
 - `tests/cooldown_controls_spec.lua`: Mission cooldowns as Mission controls: cooldownScale (x every mission's cooldown, per mission type) and
 - `tests/core_spec.lua`: The core slice: integrations (qbx, sc-dispatch, sc-ambulance, Renewed-Banking), access, permissions and the tablet (server and client).
+- `tests/crash_matrix_spec.lua`: The crash matrix of the server's own money journeys: each journey cut by a `restart Crimson-Police`
 - `tests/crimtab_spec.lua`: The criminal tablet: CP.CrimTab on the server over CP.Volunteers.
 - `tests/custody_clearance_spec.lua`: Service vehicles never appear on top of the officers (Config.Custody.serviceClearance) on the real engine,
 - `tests/custody_spec.lua`: CP.Custody: truths and cues, grading, knowing errors, police actions (begin/finish), facts, probable cause, the custody chain, service vehicles, impound, the sc-police listener, excessive force and stats.

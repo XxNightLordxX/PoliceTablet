@@ -13,6 +13,7 @@ What to update with each change is at the end, in "Working on the code".
 |---|---|---:|
 | `syntax` | `luac5.4 -p` on every `.lua` file in `Crimson-Police/`, `tests/` and `tools/` | 0.9 s |
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
+| `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/dev/STYLE.md) | 75 s |
 | `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
@@ -21,14 +22,26 @@ What to update with each change is at the end, in "Working on the code".
 | `tsc` | `cd Crimson-Police/web && npx --no-install tsc --noEmit` | 14 s |
 | `walk` | `cd Crimson-Police/web && node walk.mjs`: every `src/**/*.walk.ts` walked through against the browser mocks (vite's module loader), e.g. the New mission wizard: create from a template, Use my position, Fill the points for me, Check, Publish, and every screen of every tablet rendered (`everyScreen.walk.ts`); `node walk.mjs <text>` runs only the walks whose path holds that text | 15 s |
 | `build` | `npm run build` in a scratch copy of the web sources; `web/dist` must be byte-identical to its output | 20 s |
+| `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 15 min |
+| `race-all` | opt-in: `CP_RACE_CUTS=all lua5.4 tests/run.lua --jobs=1 race`, `tests/race_spec.lua` cut after every query of every case instead of 5 spread over it | 6 min |
 
-**Not a gate step (needs a browser):** `cd Crimson-Police/web && npm run clickthrough` builds the web UI, serves it
-in its browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright): the Officer, Supervisor, Admin
-and criminal tablets, every screen, every tab, every button of each screen and each dialog a button opens. It fails
-on a console error, a crashed screen, a blank screen, a button covered by something else or overlapping another, or
-text that is a locale key. Screenshots go to the folder given as its first argument (default: a new folder in the
-system temp folder, never the repo); `node ../../tools/clickthrough.mjs <dir> admin` runs one tablet. About 15
-minutes for all four. Run it after a change to a screen or the layout; it is not in CI or `check_all.sh`.
+**Opt-in steps.** `clickthrough` and `race-all` print `SKIP` (and count as skipped) unless they are named
+(`tools/check_all.sh clickthrough race-all`) or turned on (`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`).
+`.github/workflows/nightly.yml` runs both every night and on request. `clickthrough` serves the built web UI in its
+browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright, pinned in `Crimson-Police/web`'s
+devDependencies; `npx playwright install chromium` once): the Officer, Supervisor, Admin and criminal tablets, every
+screen, every tab, every button of each screen and each dialog a button opens, then the in-world screens (each
+sample HUD and result card on a 1280x720 screen, the HUD column inside it, each card button clicked). It fails on a
+console error, a crashed screen, a blank screen, a button covered by something else or overlapping another, or text
+that is a locale key. Screenshots go to the folder given as its first argument (in the gate: the logs folder, never
+the repo); `node tools/clickthrough.mjs <dir> admin` runs one part (`officer`, `supervisor`, `admin`, `crimtab`,
+`world`); `npm run clickthrough` in `Crimson-Police/web` builds first. Run it after a change to a screen or the
+layout.
+
+**Time limits.** Every step runs under `timeout`: `CP_STEP_TIMEOUT=<seconds>` (default 1800, the opt-in steps
+3600) stops a step that hangs and the summary says `TIMEOUT after N s`. Inside a suite each spec has its own limit,
+`CP_SPEC_TIMEOUT=<seconds>` (default 900, 0 = none): `tests/run.lua` stops it, prints `✗ TIMEOUT <spec>` and counts
+it as crashed. Ctrl-C stops the running step and its specs. tests/check_tools_spec.lua checks both limits.
 
 **Not a gate step (needs an FXServer license key):** `tools/boot_smoke.sh` boots a real FXServer with
 Crimson-Police and says PASS or FAIL, "Real server boot test" below.
@@ -62,6 +75,9 @@ payment and a restore that pays nothing twice).
 | A MariaDB server with root and no password | 10.11 (10.11.14 local, `mariadb:10.11` = 10.11.19 in CI) | `mariadb-server` | `tests/run.lua cannot start` with the client's error |
 | `mkfifo` (the harness's `mysql` client) and `xargs` (`--jobs`) | coreutils, findutils | `coreutils`, `findutils` | `tests/run.lua cannot start` names it |
 | Python 3.8 or newer (`check_contracts.py`, `lint_fivem.py`, `restyle.py`) | 3.11 / 3.12 | `python3` | `missing command: python3` |
+| luacheck (`lint-lua`; `.luacheckrc` is written for it) | 1.1.2 | `lua-check` | `missing command: luacheck` |
+| `timeout` (the step and spec time limits) | coreutils | `coreutils` | `missing command: timeout` |
+| Chromium for Playwright (the opt-in `clickthrough` step only; Playwright 1.63.0 itself is in `Crimson-Police/web/node_modules`) | chromium-1243 | none: `cd Crimson-Police/web && npx playwright install chromium` (`setup_test_env.sh --install` does it) | `setup_test_env.sh` warns; the step fails at launch |
 | StyLua 2.5.2 that reads Lua 5.4 (`style`) | 2.5.2 (cargo build local, release binary in CI) | none: `--install` downloads the release binary, or `cargo install stylua --version 2.5.2 --features lua54` | `stylua not found: ...` |
 | Prettier 3.9.9 (`style`) | 3.9.9 | none: `npx --yes prettier@3.9.9` fetches it into the npm cache on first use | the `style` step fails if npm cannot reach the registry that first time |
 | Node.js and npm (web steps, shadow mode) | Node 22, npm 10 | NodeSource `nodejs` | `missing command: node` / `tests/run.lua cannot start` in shadow mode |
@@ -237,7 +253,9 @@ Variables for one run:
 | `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
 | `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (WF6B; docs/dev/WORKFLOWS.md) |
 | `CP_LOAD_TRACE=1` | `tests/load_spec.lua` prints each harness step over 30 ms as a REPORT line |
-| `CP_RACE_ONLY=<text>`, `CP_RACE_CUTS=n`, `CP_RACE_DEBUG=1` | `tests/race_spec.lua`: only the cases whose name holds the text; the restart cuts per case (default 5); print both replies of each at-once pair |
+| `CP_RACE_ONLY=<text>`, `CP_RACE_CUTS=n` or `all`, `CP_RACE_DEBUG=1` | `tests/race_spec.lua`: only the cases whose name holds the text; the restart cuts per case (default 5; `all`: after every query, a case's own `maxCuts` too); print both replies of each at-once pair |
+| `CP_CRASH_SAMPLE=n`, `CP_CRASH_ALL=1` | `tests/crash_matrix_spec.lua`: the cut points of a journey with more awaits than n (default 40) are spread over it; `CP_CRASH_ALL=1` cuts after every await |
+| `CP_SPEC_TIMEOUT=<s>`, `CP_STEP_TIMEOUT=<s>` | the time limit of one spec (default 900) and of one `check_all.sh` step (default 1800), "Time limits" above |
 
 The specs pass at any wall-clock time and in any time zone: this was checked with `CP_TEST_CLOCK` on a
 Monday 00:10, a Tuesday 20:10 and 23:00 and a New Year's Eve, and with `CP_TEST_TZ` set to
@@ -339,6 +357,54 @@ lint_fivem FAIL: 1 new hits, 7 known (baseline), 1 stale baseline lines
   `tools/fivem_natives.txt`; `--update-natives natives.json natives_cfx.json` rebuilds it from
   runtime.fivem.net's lists.
 
+### lint-lua
+
+```
+Crimson-Police/shared/locale.lua:208:28: W113 accessing undefined variable 'GetGameTimr'
+lint-lua: 1 new warnings, 44 in the baseline, 0 stale baseline lines (45 luacheck warnings in 27 files)
+```
+
+- `<file>:<line>:<col>: <code> <message>`: a new warning (`luacheck --codes`). W1xx is a global: a misspelt
+  native or helper, a global written by mistake (only `CP`, `Config`, `RegisterMission` and `MySQL` may be). A
+  shared native (apiset `shared`, which `tools/fivem_natives.txt` leaves out) used for the first time goes into the
+  `shared` list of `.luacheckrc`. W2xx unused, W3xx a value never read, W4xx shadowing, W5xx unreachable code or an
+  empty branch. Fix the code; a deliberate one goes into `tools/lua_lint_baseline.txt` (`<code> <file> <source
+  line> -- <reason>`, the format of `tools/lint_baseline.txt`).
+- Unused arguments are not reported (block hooks, callbacks and methods share a signature); in `tests/` only the
+  globals, unreachable code and the like are, not unused or shadowed locals. luacheck does not look inside global
+  tables: `CP.Moeny` is `check_contracts.py`'s (module calls) or a spec's to catch.
+- `stale:` a baseline line no warning matches any more: delete it. `--all` prints the accepted warnings too,
+  `--update-baseline` prints a line for every warning.
+
+### Capability inventory
+
+`tests/capability_inventory_spec.lua` builds the inventory with `tools/capability_inventory.lua` (every command,
+net and local event, lib callback, NUI callback, export, admin action with its permission key, Admin UI setting,
+feature switch and shipped Config key, each `<kind> <side> <name>`) and compares it with
+`tests/capability_baseline.txt`:
+
+- `nothing of the baseline is gone (N of M lines missing)` and the lines: something the resource could do is gone.
+  Put it back, or, when it is removed on purpose, delete those lines from the baseline in the same commit and say
+  so in its message.
+- A REPORT line `N capabilities are not in the baseline yet`: new ones. Once they are meant to stay, run
+  `lua5.4 tools/capability_inventory.lua --write` and commit the baseline.
+
+The server list comes from tests/workflows_full_spec.lua's world on the shipped config, so a command or event that
+registers only while its feature is on is listed only while it ships on.
+
+### Crash matrix
+
+`tests/race_spec.lua` cuts each client action by a restart after its queries ("cut after query n"), and
+`tests/crash_matrix_spec.lua` does the same to what the server does by itself: a Beat Patrol's end and payout, and
+the pay of a pending payment at login. After each cut the server starts again, the catch-ups run and the officer
+logs in again; a failure names the cut (`patrol cut after await 6 of 25: paid at most once (2 payments)`).
+
+In `tests/race_spec.lua` a cut that leaves no effect while the second copy is refused fails (`a cut leaves nothing
+that blocks a new try`) unless the case lists that refusal in `cutRefusals` (right by design: a request id sent
+again, a mission call a restart closed) or in `cutKnown` (a finding not fixed yet, printed as `REPORT KNOWN` on every
+run: delete the entry with its fix). An effect a cut may leave behind (an audit row written after the change, XP
+added after the award row, money a 'paying' row waits on) is in the case's `lag`.
+
 ### The other steps
 
 - `syntax`: `luac5.4: <file>:<line>: <message>` for each file that does not parse.
@@ -437,7 +503,7 @@ package names are that release's):
    CLI and the twin use the service over TCP (`localhost` would mean a socket, and there is none); then
    `sysctl net.ipv4.tcp_tw_reuse=1` and a wider `ip_local_port_range` (see "Things that bit" below: the suites
    open about 29,000 connections a run);
-3. apt: `lua5.4 lua-cjson mariadb-client`. This replaces the runner's MySQL 8.0 client (apt removes those
+3. apt: `lua5.4 lua-cjson lua-check mariadb-client`. This replaces the runner's MySQL 8.0 client (apt removes those
    packages); the step links `mysql` to `mariadb` where a newer package leaves the old name out, and fails
    unless `mysql --version` says MariaDB;
 4. Node.js 22 with the npm cache (both lockfiles), `npm ci` in `Crimson-Police/web` and `tests/shadow`;
@@ -446,6 +512,10 @@ package names are that release's):
 6. `bash tools/setup_test_env.sh` (prints the environment, fails early when something is missing);
 7. `bash tools/check_all.sh` from the repository root (the scripts run through `bash`, so they do not rely on
    the executable bit); on failure the logs and shadow reports are uploaded as the `check-logs` artifact.
+
+`.github/workflows/nightly.yml` runs the opt-in steps (`clickthrough`, `race-all`) every night at 03:17 UTC and on
+request (workflow_dispatch), with the same service and setup plus `npx playwright install --with-deps chromium`; its
+logs and screenshots are the `nightly-logs` artifact.
 
 What differs from a local machine and is handled: no socket (TCP only), root reached over TCP with an empty
 password, `LANG=C.UTF-8` (the specs run with `LC_ALL=C` anyway), the runner's MySQL client and server
@@ -665,6 +735,10 @@ Until these gaps are closed, look for them in review.
   `%d` on a value that can be fractional, code acting on a state bag another client can write (an entity's
   owner writes its bag), and hidden server rolls (seeds) sent to clients. A new `tools/lint_<name>.py` or `tools/check_<name>.py` joins the
   gate automatically.
+- **Server journeys the crash matrix does not cut yet.** tests/crash_matrix_spec.lua cuts a run's end and pay and
+  the login pay. A flagged run then its approve, the daily and weekly resets, the other start-up catch-ups and the
+  bulk jobs are cut only at the hand-picked points of workflows_system_spec and adminkit_spec; `Restore a backup` is
+  not cut by race_spec (workflows_system_spec (3) cuts it once).
 - **Protocol names missing from ARCHITECTURE §8.** `check_contracts.py` compares code with code, not with
   the doc.
 - **Timing budgets in `storage_spec`.** On a busy machine, or next to other specs, they can fail. Rerun

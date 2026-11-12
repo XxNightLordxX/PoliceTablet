@@ -119,6 +119,7 @@ H.events = {}                                                    -- recorded Tri
 H.handlers = {}                                                  -- registered event handlers by name
 H.callbacks = {}                                                 -- lib.callback.register handlers by name
 H.commands = {}
+H.ownExports = {}                                                -- the names the resource registered with exports('Name', fn)
 H.exportsMock = {}                                               -- H.exportsMock['sc-dispatch'] = { ClearNotification = function(...) end }
 H.clockMs = 0
 H.frame = 0                                                      -- the client's GetFrameCount(): one per H.step or H.nextFrame()
@@ -893,7 +894,7 @@ end
 -- A server restart inside one spec: every handler, callback, command, recorded event, sleeping thread and module
 -- table is dropped; in files mode the next H.boot loads a new engine from the same saves folder.
 function H.restart()
-    H.handlers, H.callbacks, H.commands, H.events = {}, {}, {}, {}
+    H.handlers, H.callbacks, H.commands, H.events, H.ownExports = {}, {}, {}, {}, {}
     sleeping = {}
     H.filesMySQL = nil
     preBootDb, preBootFor = nil, nil
@@ -3146,7 +3147,8 @@ function H.boot(opts)
                 end,
             })
         end,
-        __call = function() end,   -- exports('Name', fn) registrations are ignored
+        -- exports('Name', fn): the resource's own export, recorded by name (tools/capability_inventory.lua)
+        __call = function(_, name) H.ownExports[tostring(name)] = true end,
     })
     _G.lib = {
         callback = {

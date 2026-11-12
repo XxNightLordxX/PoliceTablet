@@ -32,6 +32,8 @@
 --   CP_TEST_NOW=<unix time>                 the harness' default fake clock H.time (1790000000 otherwise)
 --   CP_TEST_CLOCK=<unix time>               the wall clock itself: os.time() and MariaDB NOW() start there
 --   CP_TEST_TZ=<zone>                       the specs' TZ (UTC otherwise; shadow mode always runs UTC)
+-- Every spec runs under `timeout`: CP_SPEC_TIMEOUT=<seconds> (default 900, 0 = no limit). A spec over it is stopped
+-- and reported as `✗ TIMEOUT <spec>`, counted as crashed.
 
 local base = (debug.getinfo(1, 'S').source:match('^@(.*)/run%.lua$') or 'tests')
 
@@ -209,6 +211,9 @@ if storage == 'shadow' then
     os.remove(report .. '.stats')
 end
 
+-- the time limit of one spec (ChildCmd)
+local specTimeout = math.floor(tonumber(os.getenv('CP_SPEC_TIMEOUT') or '') or 900)
+
 local env = ('LC_ALL=C TZ=\'%s\' CP_TEST_DB=\'%s\' CP_TEST_STORAGE=\'%s\''):format(tz, dbName, storage)
 if storage ~= 'database' then env = env .. (' CP_TEST_SAVES=\'%s\''):format(savesRoot) end
 if report then env = env .. (' CP_SHADOW_REPORT=\'%s\''):format(report) end
@@ -269,7 +274,12 @@ local function Result(fi, out)
     end
     local pass, fail = out:match('RESULT (%d+) (%d+)')
     pass, fail = tonumber(pass), tonumber(fail)
-    if not pass then
+    local limit = out:match('CP_TIMEOUT (%d+)')
+    if limit then
+        broken[#broken + 1] = file
+        print(
+            ('✗ TIMEOUT %s: no result within %s s (CP_SPEC_TIMEOUT); its output so far:\n%s'):format(file, limit, out))
+    elseif not pass then
         broken[#broken + 1] = file
         print(('✗ %s crashed:\n%s'):format(file, out))
     else
@@ -292,7 +302,17 @@ local function ChildCmd(fi, db)
         os.execute(('mkdir -p \'%s\''):format(dir))
         e = e .. (' CP_TEST_SAVES=\'%s\''):format(dir)
     end
-    return ('cd %s/.. && %s lua5.4 tests/run.lua --child %s 2>&1'):format(base, e, files[fi])
+    -- under a time limit (CP_SPEC_TIMEOUT seconds, default 900; 0 = none): a spec that hangs ends with exit 124 (or
+    -- 137 when it ignores the TERM) and a CP_TIMEOUT line, so the run reports it as TIMEOUT <spec> and goes on.
+    -- --foreground keeps the spec in the run's process group, so Ctrl-C and tools/check_all.sh's step limit reach
+    -- it too (its mysql and node helpers end when their pipes from the spec close).
+    if specTimeout <= 0 then
+        return ('cd %s/.. && %s lua5.4 tests/run.lua --child %s 2>&1'):format(base, e, files[fi])
+    end
+    return (
+        '{ cd %s/.. && %s timeout --foreground --kill-after=15 %d lua5.4 tests/run.lua --child %s 2>&1; rc=$?; '
+        .. 'if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then echo "CP_TIMEOUT %d"; fi; }'
+    ):format(base, e, specTimeout, files[fi], specTimeout)
 end
 
 if jobs <= 1 then

@@ -53,14 +53,14 @@ jobs:
         # connect at all. Reuse closed ports for new connections and widen the range.
         run: sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.ipv4.ip_local_port_range="16384 65535"
 
-      - name: Lua 5.4, lua-cjson and the MariaDB client
+      - name: Lua 5.4, lua-cjson, luacheck and the MariaDB client
         run: |
           sudo apt-get update -q
           # mariadb-client replaces the runner's preinstalled MySQL 8.0 client (apt removes those packages): the
           # harness parses the MariaDB client's batch output, and its charset follows the locale the same way on
           # every machine
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-            lua5.4 lua-cjson mariadb-client
+            lua5.4 lua-cjson lua-check mariadb-client
           # newer MariaDB packages ship the `mysql` name separately (mariadb-client-compat)
           command -v mysql > /dev/null || sudo ln -s "$(command -v mariadb)" /usr/local/bin/mysql
           mysql --version

@@ -77,8 +77,8 @@ from its browser-mock session (Officer, Supervisor, and Admin with every admin p
 checks that every screen of the registry shows, renders each one with its providers (no error card, its title in the
 locale), checks that every request a screen sends has a mock that answers it, and renders each criminal tablet screen.
 
-**Every click in a browser.** `tools/clickthrough.mjs` (WF5F; `npm run clickthrough` in Crimson-Police/web, needs
-Chromium, so it is not a gate step) opens the four tablets on the built UI in its browser mock mode and clicks every
+**Every click in a browser.** `tools/clickthrough.mjs` (WF5F; the opt-in gate step `clickthrough`, nightly in CI,
+docs/dev/TESTING.md) opens the four tablets on the built UI in its browser mock mode and clicks every
 screen, tab and button, checking each dialog a button opens. It found three defects, fixed in WF5F: (1) the sidebar
 did not scroll, so on a 900 or 1080 px high screen the Admin UI's lower groups (Money, Review, System) could not be
 reached; it now scrolls; (2) Admin -> Officers crashed on an officer with no badges (Lua sends an empty list as {});
@@ -132,8 +132,10 @@ is sent by two players, or twice by one (a double click), at the same moment wit
 by turn, one query each). Every case runs on the same starting state: alone (what one copy does), at once (each copy
 whole or not at all, never more than one copy's effect per success, exactly one where only one may act), with the
 first sender dropping and reconnecting in the middle, under the maintenance lock (both refused, nothing changes), and
-cut by `restart Crimson-Police` after up to five spread queries of the first copy, then the second sent (never a
-double effect, every part of the effect moves together). The shipped config first where an action is on there, then
+cut by `restart Crimson-Police` after up to five spread queries of the first copy (every query with the opt-in
+`race-all` step), then the second sent (never a double effect, every part of the effect moves together, and a cut that
+did nothing never leaves the action blocked). tests/crash_matrix_spec.lua cuts the server's own money journeys
+the same way. The shipped config first where an action is on there, then
 the switches on. It found and fixed: (1) two commendations sent at once both passed the issuer's daily limit and the
 same-kind wait; (2) two admins reverting one setting change both reverted it; (3) two guided tours finished at once
 kept only one, and two admins resetting one character's tours both logged a reset; (4) an action that finished while
