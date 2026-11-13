@@ -7,6 +7,11 @@
     pointer-events: none;
 }
 
+/* a dialog of the tablet is open over the tour (TourHost tourCovered): the tour steps aside until it closes */
+.cp-tour.is-covered {
+    display: none;
+}
+
 .cp-tour__ring {
     position: fixed;
     border: 2px solid var(--cp-accent, #e63946);

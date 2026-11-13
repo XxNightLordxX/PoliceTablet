@@ -1063,3 +1063,22 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Real database: on a MariaDB whose cp_ tables are MyISAM (ALTER TABLE cp_audit ENGINE=MyISAM on a test
   copy), restart: the console says "cp_audit is MyISAM: switching it to InnoDB (once)", and the next restart says
   nothing.
+
+## Player-journey fixes
+
+- [ ] Field training: with `Config.Recognition.fieldTraining.rookiesPerTrainer = 1`, two supervisors pair two
+  different rookies with the same trainer at the same moment: one pairing succeeds, the other says the trainer
+  already has as many rookies as allowed.
+- [ ] Field training: pair rookie A with trainer B, then try to pair B as the rookie of a third officer: it is
+  refused ("That officer is training rookies of their own ...").
+- [ ] Desks: two admins open Admin UI -> Departments -> desks. Admin 1 removes the first desk; admin 2 (without
+  refreshing) confirms Remove on the second one: it is refused ("Another admin changed the desk list ..."), and
+  after the list refreshes both remaining desks are still there.
+- [ ] Real suspects: set `Config.RealPlayers.staff.names = false`, open Admin UI -> Real suspects and a case: the
+  case list, the suspects, the officers, the timeline lines and the damage ledger show citizen IDs only, no
+  character names.
+- [ ] Criminal tablet: accept a case, wait until the free give-up is over, open Home: next to "Get off the list" it
+  says the case is given up too and that it is a strike. The ox_lib volunteer menu's Stop says the same.
+- [ ] Guided tours: start the Admin tour (Settings -> Tours -> Start), then press Leaderboards -> Item rewards -> Deliver now: the
+  tour card hides while the dialog is open, the dialog's Confirm and Cancel can be clicked, and the card comes back
+  when the dialog closes.

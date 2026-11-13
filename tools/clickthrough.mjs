@@ -8,8 +8,16 @@
 // The "world" pass opens the in-world screens with no tablet (?hud=<kind> and ?result=<kind>: the mission HUD, its
 // contact card and test controls, the result card and its debrief) in a 1280x720 window: the same checks, the HUD
 // column inside the window, and each button of the result card clicked.
+// Every screen also stays inside the window: the tablet frame on screen, no sideways page scroll, and no button,
+// heading, table head, tab or menu entry whose text is cut off (scrollWidth over clientWidth with its overflow hidden
+// and no ellipsis). A guided tour a button starts (Settings > Tours > Start) is checked to show and then skipped, so
+// its card never covers the later screens; a dialog opened while a tour runs must have its buttons on top (the tour
+// steps aside). A dialog that Escape and its close button cannot close is a failure.
+// Sizes: the full sweep runs the tablets at 1600x900 and the world at 1280x720; then every size of CP_CT_VIEWPORTS
+// (default 1280x720,1920x1080,3840x2160) gets a nav pass (each screen opened and checked, no button clicks) of every
+// tablet and the world, plus a phone (390x844) for the world and the criminal tablet. CP_CT_VIEWPORTS=none skips them.
 // Screenshots go to outDir (default: a fresh folder in the system temp folder), never into the repo.
-// `only` (officer, supervisor, admin, crimtab or world) runs one part. Needs Chromium for Playwright (npx playwright
+// `only` (officer, supervisor, admin, crimtab or world) runs one part; `tour` runs only the tour-under-a-dialog check. Needs Chromium for Playwright (npx playwright
 // install chromium once): the opt-in step `tools/check_all.sh clickthrough` (or CP_CLICKTHROUGH=1) and the nightly CI
 // job run it. npm run clickthrough (in Crimson-Police/web) builds and runs it.
 
@@ -79,12 +87,35 @@ const RESULT_KINDS = ['completed', 'failed', 'test', 'flagged'];
 // Buttons nobody should click in a sweep: they close the tablet or leave it (checked as shown and clickable only).
 const LEAVES = /^(close|close tablet|switch to|log out)$/i;
 
+// The full sweep's sizes, and the extra sizes of the nav passes (CP_CT_VIEWPORTS: WxH,WxH,... or none).
+const SWEEP_SIZE = { width: 1600, height: 900 };
+const WORLD_SIZE = { width: 1280, height: 720 };
+const PHONE = { width: 390, height: 844 };
+const VIEWPORTS = (process.env.CP_CT_VIEWPORTS ?? '1280x720,1920x1080,3840x2160')
+    .split(',')
+    .map(v => v.trim().match(/^(\d+)x(\d+)$/))
+    .filter(Boolean)
+    .map(m => ({ width: Number(m[1]), height: Number(m[2]) }));
+const sizeName = s => `${s.width}x${s.height}`;
+
 try {
     for (const tab of TABLETS) {
         if (ONLY && tab.ui !== ONLY) continue;
         await sweep(tab);
     }
-    if (!ONLY || ONLY === 'world') await world();
+    if (!ONLY || ONLY === 'world') await world(WORLD_SIZE);
+    if (!ONLY || ONLY === 'admin' || ONLY === 'tour') await tourOverDialog();
+    for (const size of VIEWPORTS) {
+        for (const tab of TABLETS) {
+            if (ONLY && tab.ui !== ONLY) continue;
+            await navPass(tab, size);
+        }
+        if (!ONLY || ONLY === 'world') await world(size);
+    }
+    if (VIEWPORTS.length) {
+        if (!ONLY || ONLY === 'crimtab') await navPass(TABLETS[3], PHONE);
+        if (!ONLY || ONLY === 'world') await world(PHONE);
+    }
 } finally {
     await browser.close();
     await new Promise(r => server.httpServer.close(r));
@@ -101,7 +132,7 @@ if (failures.length) {
 console.log('ok   clickthrough: every screen, tab, dialog and button passed');
 
 async function sweep(tab) {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    const page = await browser.newPage({ viewport: SWEEP_SIZE });
     // offline like the game may be: a picture from the internet (a mock officer photo) gets a blank one
     await page.route(
         url => !url.href.startsWith(base),
@@ -186,19 +217,20 @@ async function sweep(tab) {
 }
 
 // The in-world screens (src/hud): every sample HUD and result card of the browser mocks (src/mocks/samples.ts) on a
-// 1280x720 game screen with no tablet open (HUD_KINDS, RESULT_KINDS above).
-async function world() {
+// game screen of that size (1280x720 in the full sweep) with no tablet open (HUD_KINDS, RESULT_KINDS above).
+async function world(size) {
+    const at = size === WORLD_SIZE ? '' : ` @${sizeName(size)}`;
     const views = [
         ...HUD_KINDS.map(k => ({ name: `hud ${k}`, query: `hud=${k}`, sel: '.cp-hud-column' })),
         ...RESULT_KINDS.map(k => ({ name: `result ${k}`, query: `result=${k}`, sel: '.cp-result' })),
     ];
     for (const v of views) {
-        const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+        const page = await browser.newPage({ viewport: size });
         await page.route(
             url => !url.href.startsWith(base),
             route => route.fulfill({ contentType: 'image/png', body: BLANK_PNG }),
         );
-        const where = `world > ${v.name}`;
+        const where = `world${at} > ${v.name}`;
         page.on('console', m => {
             if (m.type() === 'error') fail(where, `console error: ${m.text().slice(0, 300)}`);
         });
@@ -220,10 +252,18 @@ async function world() {
             // the HUD column stays on the screen (it scales itself down to fit the height)
             const box = await page.locator('.cp-hud-column').first().boundingBox();
             if (!box) fail(where, 'no HUD column');
-            else if (box.x < 0 || box.y < 0 || box.x + box.width > 1280.5 || box.y + box.height > 720.5)
-                fail(where, `the HUD column leaves the 1280x720 screen (${JSON.stringify(box)})`);
+            else if (
+                box.x < 0 ||
+                box.y < 0 ||
+                box.x + box.width > size.width + 0.5 ||
+                box.y + box.height > size.height + 0.5
+            )
+                fail(where, `the HUD column leaves the ${sizeName(size)} screen (${JSON.stringify(box)})`);
+            await layoutOk(page, v.sel, where);
             await shot(page, where);
             covered.push(where);
+            // the extra sizes: the layout only (the full sweep clicks the buttons)
+            if (at) continue;
             // each button of the card once (Dismiss and Close last: they close the card)
             const labels = await page
                 .locator(`${v.sel} button`)
@@ -277,11 +317,13 @@ async function clickAll(page, tab, here, reopen, setWhere) {
         if (!clicked) {
             // the tablet closed itself in between (Start test hides it a moment later for the run in the world)
             if (err && (await page.locator(tab.frame).count())) fail(w, `could not be clicked (${why(err)})`);
+            await endTour(page, w, false);
             await reopen();
             continue;
         }
         await settle(page);
         if (!(await page.locator(tab.frame).count())) {
+            await endTour(page, w, false);
             await reopen();
             continue;
         }
@@ -290,8 +332,11 @@ async function clickAll(page, tab, here, reopen, setWhere) {
         if (await dialogs.count()) {
             await shot(page, w);
             await checkDialog(page, w);
-            await closeDialogs(page);
+            await closeDialogs(page, w);
         }
+        // a tour this button started (Settings > Tours > Start): it shows, then it is skipped, so its card never
+        // covers the screens after it
+        await endTour(page, w, true);
         await reopen();
     }
 }
@@ -359,6 +404,164 @@ async function check(page, tab, where, full) {
     if (full && text.length < 3) fail(where, 'blank screen');
     keysIn(text, where);
     if (full) await buttonsOk(page, tab.main, where);
+    if (full) await layoutOk(page, tab.frame, where);
+}
+
+// The frame stays inside the window, the page never scrolls sideways, and no button, heading, table head, tab or
+// menu entry has its text cut off (scrollWidth over clientWidth, its overflow not visible, no ellipsis).
+async function layoutOk(page, frame, where) {
+    const bad = await page.evaluate(sel => {
+        const out = [];
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const root = document.querySelector(sel);
+        if (!root) return out;
+        const r = root.getBoundingClientRect();
+        if (r.left < -1 || r.top < -1 || r.right > vw + 1 || r.bottom > vh + 1)
+            out.push(`the frame leaves the ${vw}x${vh} window (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`);
+        if (document.documentElement.scrollWidth > vw + 1)
+            out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
+        for (const el of root.querySelectorAll('button, h1, h2, h3, th, [role="tab"], .cp-nav-item')) {
+            if (!el.checkVisibility({ visibilityProperty: true }) || el.clientWidth <= 0) continue;
+            const cs = getComputedStyle(el);
+            if (el.scrollWidth > el.clientWidth + 2 && cs.overflowX !== 'visible' && cs.textOverflow !== 'ellipsis')
+                out.push(
+                    `text cut off: <${el.tagName.toLowerCase()}> "${(el.innerText || '').trim().slice(0, 40)}" ` +
+                        `(${el.scrollWidth} > ${el.clientWidth})`,
+                );
+        }
+        return out.slice(0, 8);
+    }, frame);
+    for (const b of bad) fail(where, b);
+}
+
+// A guided tour running now: (shows) its card is on screen with its buttons on top, then Skip ends it (else
+// Escape). A tour still running after that is a failure.
+async function endTour(page, where, shows) {
+    const card = page.locator('.cp-tour__card');
+    if (!(await card.count())) return;
+    if (shows) {
+        if (!(await card.first().isVisible())) fail(where, 'the tour it started shows no card');
+        else await buttonsOk(page, '.cp-tour__card', `${where} tour card`);
+    }
+    const skip = card.first().locator('button', { hasText: /^skip$/i });
+    if (await skip.count()) await skip.first().click({ timeout: 1000 }).catch(() => undefined);
+    for (let k = 0; k < 4 && (await page.locator('.cp-tour').count()); k++) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+    }
+    if (await page.locator('.cp-tour').count()) fail(where, 'the tour could not be ended (Skip and Escape)');
+}
+
+// A tour that runs while a dialog opens over it (Admin UI: Settings > Tours > Start, then Leaderboards > Item rewards >
+// Deliver now): the dialog's buttons must be on top (the tour steps aside while a dialog is open), and the tour shows again
+// once the dialog is closed.
+async function tourOverDialog() {
+    const tab = TABLETS[2];
+    const where = 'admin: a tour running under a dialog';
+    const page = await browser.newPage({ viewport: SWEEP_SIZE });
+    await page.route(
+        url => !url.href.startsWith(base),
+        route => route.fulfill({ contentType: 'image/png', body: BLANK_PNG }),
+    );
+    page.on('pageerror', e => fail(where, `page error: ${String(e.message).slice(0, 300)}`));
+    const nav = async name => {
+        const more = page.locator('.cp-nav-item--more:not(.is-open)');
+        if (await more.count()) await more.first().click({ timeout: 3000 });
+        await page.locator(tab.nav, { hasText: new RegExp(`^\\s*${name}\\b`) }).first().click({ timeout: 3000 });
+        await settle(page);
+    };
+    let step = 'open the Admin UI';
+    try {
+        await page.goto(`${base}?ui=admin&dev=0&bg=none`);
+        await page.waitForSelector(tab.frame, { timeout: 8000 });
+        await settle(page);
+        step = 'Settings > Tours > Start';
+        await nav('Settings');
+        const tours = page.locator(`${tab.main} [role="tab"]`, { hasText: /^\s*Tours\b/ });
+        if (await tours.count()) await tours.first().click({ timeout: 3000 });
+        await settle(page);
+        await page.locator(`${tab.main} button`, { hasText: /^\s*Start\s*$/ }).first().click({ timeout: 3000 });
+        await settle(page);
+        if (!(await page.locator('.cp-tour__card').count())) {
+            fail(where, 'Settings > Tours > Start showed no tour card');
+            return;
+        }
+        step = 'Leaderboards > Item rewards > Deliver now';
+        await nav('Leaderboards');
+        const rewards = page.locator(`${tab.main} button`, { hasText: /^\s*Item rewards\s*$/ });
+        if (await rewards.count()) await rewards.first().click({ timeout: 3000 });
+        await settle(page);
+        await page
+            .locator(tab.main)
+            .getByRole('button', { name: /Deliver now/i })
+            .first()
+            .click({ timeout: 3000 });
+        await settle(page);
+        if (!(await page.locator('[role="dialog"].cp-dialog').count())) {
+            fail(where, 'Leaderboards > Item rewards > Deliver now opened no dialog');
+            return;
+        }
+        step = 'the dialog';
+        await shot(page, where);
+        await buttonsOk(page, '[role="dialog"].cp-dialog', `${where} (the dialog)`);
+        await closeDialogs(page, where);
+        await settle(page);
+        if (!(await page.locator('.cp-tour__card').first().isVisible().catch(() => false)))
+            fail(where, 'the tour did not come back after the dialog closed');
+        await endTour(page, where, false);
+        covered.push(where);
+    } catch (e) {
+        fail(where, `stopped at ${step}: ${why(e)}`);
+    } finally {
+        await page.close();
+    }
+}
+
+// One tablet at another window size: every screen of the menu opened and checked (no button clicks).
+async function navPass(tab, size) {
+    const page = await browser.newPage({ viewport: size });
+    await page.route(
+        url => !url.href.startsWith(base),
+        route => route.fulfill({ contentType: 'image/png', body: BLANK_PNG }),
+    );
+    let where = `${tab.ui} @${sizeName(size)}: load`;
+    page.on('console', m => {
+        if (m.type() === 'error') fail(where, `console error: ${m.text().slice(0, 300)}`);
+    });
+    page.on('pageerror', e => fail(where, `page error: ${String(e.message).slice(0, 300)}`));
+    try {
+        await page.goto(`${base}?ui=${tab.ui}&dev=0&bg=none`);
+        try {
+            await page.waitForSelector(tab.frame, { timeout: 8000 });
+        } catch {
+            fail(where, 'the tablet did not open');
+            return;
+        }
+        await settle(page);
+        const more = page.locator('.cp-nav-item--more:not(.is-open)');
+        if (await more.count()) await more.first().click({ timeout: 3000 });
+        const NAV = `${tab.nav}:not(.cp-nav-item--more)`;
+        const labels = await page.locator(NAV).allInnerTexts();
+        for (let i = 0; i < labels.length; i++) {
+            const screen = labels[i].split('\n')[0].trim() || `#${i}`;
+            where = `${tab.ui} @${sizeName(size)} > ${screen}`;
+            try {
+                await page.locator(NAV).nth(i).click({ timeout: 3000 });
+            } catch (e) {
+                fail(where, `the screen's menu entry could not be clicked (${why(e)})`);
+                continue;
+            }
+            await settle(page);
+            await check(page, tab, where, true);
+            if (i === 0) await shot(page, where);
+            covered.push(where);
+        }
+    } catch (e) {
+        fail(where, `stopped: ${String(e.message).split('\n')[0]}`);
+    } finally {
+        await page.close();
+    }
 }
 
 async function checkDialog(page, where) {
@@ -388,8 +591,28 @@ async function buttonsOk(page, scope, where) {
             return r.width > 0 && r.height > 0 && b.checkVisibility({ visibilityProperty: true });
         });
         const name = b => (b.getAttribute('aria-label') || b.innerText || b.title || '?').trim().split('\n')[0];
-        // overlap first, before anything scrolls (rects of one moment)
-        const rects = btns.map(b => [b, b.getBoundingClientRect()]);
+        // what of the button shows: its rect cut by every ancestor that clips (overflow not visible), null when
+        // nothing of it shows (scrolled out of its list)
+        const shownRect = b => {
+            const r = b.getBoundingClientRect();
+            let { left, top, right, bottom } = r;
+            for (let el = b.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+                const cs = getComputedStyle(el);
+                if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+                const c = el.getBoundingClientRect();
+                if (cs.overflowX !== 'visible') {
+                    left = Math.max(left, c.left);
+                    right = Math.min(right, c.right);
+                }
+                if (cs.overflowY !== 'visible') {
+                    top = Math.max(top, c.top);
+                    bottom = Math.min(bottom, c.bottom);
+                }
+            }
+            return right - left > 0 && bottom - top > 0 ? { left, top, right, bottom } : null;
+        };
+        // overlap first, before anything scrolls (rects of one moment, as far as they show)
+        const rects = btns.map(b => [b, shownRect(b)]).filter(([, r]) => r);
         for (let i = 0; i < rects.length; i++)
             for (let j = i + 1; j < rects.length; j++) {
                 const [a, ra] = rects[i];
@@ -422,7 +645,9 @@ async function dismissToasts(page) {
     if (await page.locator('.cp-toasts .cp-toast').count()) await page.waitForTimeout(300);
 }
 
-async function closeDialogs(page) {
+// Escape, then the dialog's close button, 4 times; a dialog still open after that is a failure (and the page is
+// loaded again so the sweep goes on).
+async function closeDialogs(page, where) {
     for (let k = 0; k < 4; k++) {
         if (!(await page.locator('[role="dialog"].cp-dialog').count())) return;
         await page.keyboard.press('Escape');
@@ -432,4 +657,8 @@ async function closeDialogs(page) {
         if (await close.count()) await close.click({ timeout: 1000 }).catch(() => undefined);
         await page.waitForTimeout(150);
     }
+    if (!(await page.locator('[role="dialog"].cp-dialog').count())) return;
+    fail(where, 'the dialog could not be closed (Escape and its close button)');
+    await page.reload();
+    await page.waitForTimeout(500);
 }

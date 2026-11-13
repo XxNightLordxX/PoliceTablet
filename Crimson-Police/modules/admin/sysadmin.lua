@@ -1699,6 +1699,22 @@ local function DeskLocked(fn)
     return fn()
 end
 
+-- Desks are addressed by list index. The Admin UI also sends what it showed at that index (expect = { label, x,
+-- y, z }): a desk removed or moved by another admin in the meantime shifts the indexes, so a stale index is refused
+-- (err.desk_changed) instead of acting on the wrong desk. No expect (an older client, the console): the index alone.
+local function DeskStale(d, expect)
+    if expect == nil then return false end
+    if type(expect) ~= 'table' or type(d) ~= 'table' then return true end
+    if type(d.label) == 'string' and expect.label ~= d.label then return true end
+    local c = d.coords
+    if type(c) ~= 'table' and type(c) ~= 'vector3' then return false end
+    for _, k in ipairs({ 'x', 'y', 'z' }) do
+        local want, have = tonumber(expect[k]), tonumber(c[k])
+        if not want or not have or want ~= want or math.abs(want - have) > 0.05 then return true end
+    end
+    return false
+end
+
 -- The admin's own ped position (server coordinates; the client sends none).
 local function MyPosition(src)
     local ped = PedOf(src)
@@ -2342,6 +2358,7 @@ Kit.action('server:admin:updateDesk', 'departmentsAdmin', function(ctx)
         local list = Desks()
         local i = CP.Int(p.index)
         if not list[i] then return false, 'err.desk_unknown' end
+        if DeskStale(list[i], p.expect) then return false, 'err.desk_changed' end
         local desk = DeskFrom(p, list[i])
         if p.moveHere == true then
             local pos = MyPosition(ctx.src)
@@ -2361,6 +2378,7 @@ Kit.action('server:admin:removeDesk', 'departmentsAdmin', function(ctx)
         local list = Desks()
         local i = CP.Int(ctx.payload.index)
         if not list[i] then return false, 'err.desk_unknown' end
+        if DeskStale(list[i], ctx.payload.expect) then return false, 'err.desk_changed' end
         local label = list[i].label
         table.remove(list, i)
         local ok, err = SaveDesks(ctx.src, list, ctx.reason)
@@ -2375,6 +2393,7 @@ Kit.action('server:admin:teleportToDesk', 'departmentsAdmin', function(ctx)
     local list = Desks()
     local d = list[CP.Int(ctx.payload.index)]
     if not d then return false, 'err.desk_unknown' end
+    if DeskStale(d, ctx.payload.expect) then return false, 'err.desk_changed' end
     if not Teleport(ctx.src, d.coords) then return false, 'err.no_position' end
     ctx.audit('teleport', 'Tablet.desks', nil, tostring(d.label))
     return true, {}

@@ -92,6 +92,16 @@ export function outcomeKey(row: CrimHistoryRow): string {
 }
 
 // Whether he can still pick roles (at least one ticked).
+// What giving up the case now costs: the free line while the free give-up lasts (graceLeft: the live countdown, or
+// null for the view's own snapshot), else the strike line. Active shows it, and Home next to "Get off the list"
+// while a case runs, because stopping gives the case up too.
+export function cancelKey(active: CrimActive, graceLeft: number | null | undefined): string {
+    const left = graceLeft === undefined ? (active.graceLeft ?? null) : graceLeft;
+    return active.freeCancel && (left === null || left > 0)
+        ? 'crimtab.active.cancel_free'
+        : 'crimtab.active.cancel_strike';
+}
+
 export function rolesPayload(picked: Record<string, boolean>): CrimRole[] {
     return ROLES.filter(r => picked[r]);
 }

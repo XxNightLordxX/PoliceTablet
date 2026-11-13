@@ -1506,6 +1506,35 @@ do
     })
 end
 
+do
+    -- two pairings at once give one trainer two rookies: with rookiesPerTrainer = 1 exactly one may win (the
+    -- lock was per rookie only, so both read the trainer's rookie count before either wrote)
+    local function Trainees()
+        return Count([[SELECT COUNT(*) AS n FROM cp_officers WHERE field_training IS NOT NULL
+            AND JSON_VALUE(field_training, '$.trainer') = ?]], { CID[8] })
+    end
+    Case({
+        label = 'Pair two rookies with one trainer (one rookie per trainer), a supervisor and an admin at once',
+        one = true,
+        setup = function()
+            if Config.Recognition.fieldTraining.enabled ~= true then
+                Setting('Recognition.fieldTraining.enabled', true)
+            end
+            if Config.Recognition.fieldTraining.rookiesPerTrainer ~= 1 then
+                Setting('Recognition.fieldTraining.rookiesPerTrainer', 1)
+            end
+            H.sql('UPDATE cp_officers SET field_training = NULL WHERE citizenid IN (?, ?)', { CID[1], CID[6] })
+            Cb('getSession', 8, { ui = 'officer', via = 'command' })
+        end,
+        effect = function() return { trainees = Trainees() } end,
+        a = { name = 'server:sup:ftoPair', src = 3, payload = { rookie = CID[1], trainer = CID[8] } },
+        b = { name = 'server:sup:ftoPair', src = 5, payload = { rookie = CID[6], trainer = CID[8] } },
+        teardown = function()
+            H.sql('UPDATE cp_officers SET field_training = NULL WHERE citizenid IN (?, ?)', { CID[1], CID[6] })
+        end,
+    })
+end
+
 -- ============================================================================
 --                                     RUN
 -- ============================================================================

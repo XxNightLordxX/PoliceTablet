@@ -109,16 +109,26 @@ local function ValidRunId(v)
     return type(v) == 'string' and #v > 0 and #v <= 36 and v:match('^[%w%-]+$') ~= nil
 end
 
+-- Config.RealPlayers.staff.names: false = staff screens show citizen IDs only, no character names.
+local function NamesOn() return CP.RealPlayers('staff').names ~= false end
+
+-- A kept name, or nil (no name, or names are off).
+local function NameOf(name)
+    if type(name) ~= 'string' or name == '' or not NamesOn() then return nil end
+    return name
+end
+
 -- "Name (CITIZENID)", the citizenid alone, or nil.
 local function WhoText(who)
     if type(who) ~= 'table' or not ValidCid(who.cid) then return nil end
-    if type(who.name) == 'string' and who.name ~= '' then return ('%s (%s)'):format(who.name, who.cid) end
+    local name = NameOf(who.name)
+    if name then return ('%s (%s)'):format(name, who.cid) end
     return who.cid
 end
 
 local function Who(who)
     if type(who) ~= 'table' or not ValidCid(who.cid) then return nil end
-    return { citizenid = who.cid, name = type(who.name) == 'string' and who.name or nil }
+    return { citizenid = who.cid, name = NameOf(who.name) }
 end
 
 local function StateText(state) return state and STATE_KEY[state] and CP.L(STATE_KEY[state]) or nil end
@@ -128,7 +138,7 @@ local function Officer(case, src)
     local parts = type(case.run) == 'table' and type(case.run.participants) == 'table' and case.run.participants or {}
     local p = parts[tonumber(src) or -1]
     if type(p) ~= 'table' or not ValidCid(p.citizenid) then return nil end
-    return { citizenid = p.citizenid, name = type(p.name) == 'string' and p.name or nil, callsign = p.callsign }
+    return { citizenid = p.citizenid, name = NameOf(p.name), callsign = p.callsign }
 end
 
 -- The flag kind of a timeline entry (a conduct flag or a note), or nil.
@@ -203,7 +213,7 @@ local function Officers(case)
         if type(p) == 'table' and ValidCid(p.citizenid) then
             out[#out + 1] = {
                 citizenid = p.citizenid,
-                name = type(p.name) == 'string' and p.name or nil,
+                name = NameOf(p.name),
                 callsign = p.callsign,
                 status = p.status,
                 src = tonumber(src),
@@ -323,7 +333,7 @@ function Opp.staffCase(runId)
         local r = case.suspects[cid]
         suspects[#suspects + 1] = {
             citizenid = cid,
-            name = r.name,
+            name = NameOf(r.name),
             label = r.label,
             state = r.state,
             outcome = r.outcome,
@@ -454,7 +464,7 @@ if CP.AdminKit and CP.AdminKit.action then
         for _, c in ipairs(list) do
             for _, o in ipairs(c.officers or {}) do o.name = o.name or names[o.citizenid] end
         end
-        for _, v in ipairs(listed) do v.name = v.name or names[v.citizenid] end
+        for _, v in ipairs(listed) do v.name = NameOf(v.name) or names[v.citizenid] end
         return {
             enabled = CP.RealPlayersOn(),
             liveCrime = select(2, CP.RealPlayers('liveCrime')),

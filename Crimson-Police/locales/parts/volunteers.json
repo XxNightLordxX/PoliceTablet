@@ -14,6 +14,7 @@
   "volunteer.menu.roles": "Change the suspects you play",
   "volunteer.menu.stop": "Stop volunteering",
   "volunteer.stop.content": "Stop volunteering now? Police can no longer ask you to play a suspect.",
+  "volunteer.stop.content_case": "Stop volunteering now? You are playing a case: it is given up too, and giving it up after the free moment is a strike.",
   "volunteer.started": "You volunteer as a suspect for {minutes} minutes. Police may send you a question when a mission needs you.",
   "volunteer.renewed": "Renewed: you volunteer for another {minutes} minutes.",
   "volunteer.roles_saved": "Your choice of suspects is saved.",

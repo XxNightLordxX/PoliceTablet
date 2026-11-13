@@ -454,6 +454,6 @@ strings do not count.
 | `web/src/shared/components/Toasts.tsx` | 2 | 0 | one-shot timers (a toast, a confirm button, a debounce, a retry) |
 | `web/src/shared/hooks.ts` | 4 | 0 | `useRequest` poll, `useCountdown` (a timer per second), `useDebounced` (one-shot) |
 | `web/src/shared/tour/RunHints.tsx` | 1 | 0 | one-shot timer per first run tip (hintSeconds), cleared when the tip goes |
-| `web/src/shared/tour/TourHost.tsx` | 2 | 0 | the step's element looked for every 200 ms while a tour step shows; a one-shot after a waited click |
+| `web/src/shared/tour/TourHost.tsx` | 3 | 0 | the step's element looked for every 200 ms while a tour step shows; an open dialog looked for every 200 ms while a tour runs (the tour steps aside under it); a one-shot after a waited click |
 | `web/src/shared/nui.ts` | 4 | 0 | request timeout, retry delay, mock latency |
 | `web/src/shared/rowWindow.ts` | 0 | 1 | one frame per scroll burst |

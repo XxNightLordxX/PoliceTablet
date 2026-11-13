@@ -577,10 +577,12 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/foundation_spec.lua`: The foundation: migrations 003-007, CP.Hooks, CP.Lt tokens, the engine contracts other modules build on (stats, decisions, adoption, hidden spawns, plates, held bodies, removals), levels, tweaks, the Session.
 - `tests/frame_loops_spec.lua`: Frame loops read cache.ped: every while loop that can wait 0 ms in the block clients, the run client, the Testing debug drawing and the builder client reads the player's ped from ox_lib's cache, not PlayerPedId() each frame.
 - `tests/freeze_spec.lua`: The freeze after a down on the way to a mission start (recovered before the pick-up): the downed follow-up's end signal, the client's screen safety net, the tablet while down, the NUI open check, the web error boundaries and lint rule FX10 (loops that can go round with no Wait).
+- `tests/fuzz_net_spec.lua`: Forged calls to every server net event and ox_lib callback: a regression guard for the net plumbing.
 - `tests/generic_config_spec.lua`: The generic starting config (config/examples/generic.lua): what a copy for sale ships as config/config.lua.
 - `tests/globals_lint_spec.lua`: Globals lint: no server or shared script names a local, loop variable or parameter source (the event global; RegisterCommand's own signature aside), and no script writes the global _ or source.
 - `tests/happy_hour_spec.lua`: Happy hour: a supervisor starts N minutes (inside the admin's min and max) with no mission cooldowns
 - `tests/harness.lua`: A tiny FiveM/Qbox stand-in for unit tests (not shipped with the resource).
+- `tests/harness_threads_spec.lua`: The harness's thread stubs against FXServer's scheduler (stub fidelity): CreateThread runs at once by default
 - `tests/hostile_waves_director_spec.lua`: hostile_waves through the spawn director (Config.Spawning) on the real engine, the real block and the built-in mission files: wave 1 once an officer is near, every wave away from the officers, the rest waits.
 - `tests/hostile_waves_stage_spec.lua`: The raids' crew staged ahead (hostile_waves stage = true) on the real engine, the real blocks and the real
 - `tests/i18n_scan_spec.lua`: The translation scanner (tools/check_i18n.py, the gate's lint-i18n step) and the plural helpers it points to: English joined to a translated text, a plural built in place and a count string without plural forms are found; whole sentences, ' · ' joins and tn() / CP.Ln() pass; the shipped code has no hit outside tools/i18n_baseline.txt.

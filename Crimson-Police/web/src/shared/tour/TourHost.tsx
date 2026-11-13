@@ -32,6 +32,15 @@ import { TOURS, stepBodyKey, stepTitleKey, stepsToShow, type TourCtx, type TourI
 import './tour.css';
 
 const FIND_MS = 200; // how often the element of the step is looked for (only while a tour runs)
+const DIALOG = '[role="dialog"].cp-dialog'; // a Dialog / ConfirmDialog of the tablet (the tour card is not one)
+
+// A dialog opened while the tour runs (Deliver now, Rename, ...) sits under the tour (z-index 60 < 85): the card
+// and the dim would cover its buttons. The tour steps aside (hidden, still running) while a dialog is open, unless the
+// step points into that dialog. Pure, so the walk checks it without a DOM.
+export function tourCovered(dialog: { contains(node: unknown): boolean } | null, target: unknown): boolean {
+    if (!dialog) return false;
+    return !(target && dialog.contains(target));
+}
 const PAD = 4; // px of ring around the element
 
 function sameBox(a: Box | null, b: Box | null): boolean {
@@ -170,6 +179,26 @@ export function TourHost({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stepKey]);
 
+    // a dialog open over the tablet: the tour steps aside until it closes (tourCovered)
+    const [covered, setCovered] = useState(false);
+    useEffect(() => {
+        if (!run) {
+            setCovered(false);
+            return;
+        }
+        const target = step?.target ? `[data-tour="${step.target}"]` : null;
+        const look = () => {
+            const dialogs = document.querySelectorAll<HTMLElement>(DIALOG);
+            const dialog = dialogs.length ? dialogs[dialogs.length - 1] : null;
+            const el = target ? document.querySelector(target) : null;
+            setCovered(tourCovered(dialog, el));
+        };
+        look();
+        const id = setInterval(look, FIND_MS);
+        return () => clearInterval(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stepKey, !!run]);
+
     const next = () => (last ? endRun(true) : moveRun(1));
 
     // a step that waits for the click moves on once the element is clicked
@@ -185,8 +214,9 @@ export function TourHost({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stepKey]);
 
-    // Escape ends the tour first (before any dialog under it or the tablet); arrows move between steps
-    useEscapeLayer(!!run, () => endRun(false));
+    // Escape ends the tour first (before any dialog under it or the tablet); arrows move between steps. While the tour
+    // steps aside for a dialog opened over it, Escape is the dialog's.
+    useEscapeLayer(!!run && !covered, () => endRun(false));
     useEffect(() => {
         if (!run) return;
         const onKey = (e: KeyboardEvent) => {
@@ -226,7 +256,11 @@ export function TourHost({
     const allowSkip = view?.allowSkip !== false;
 
     return createPortal(
-        <div className="cp-tour" aria-live="polite">
+        <div
+            className={covered ? 'cp-tour is-covered' : 'cp-tour'}
+            aria-live="polite"
+            aria-hidden={covered || undefined}
+        >
             {ring ? <div className="cp-tour__ring" style={ring} aria-hidden /> : null}
             <div
                 ref={card}

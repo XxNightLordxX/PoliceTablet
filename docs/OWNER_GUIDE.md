@@ -1140,7 +1140,8 @@ UI → Settings → Recognition, or the Field training row of Settings → Featu
    rookie must run with his trainer (`{ patrol = 3, investigation = 2, tactical = 1 }` shipped). In Settings both
    lists are edited as a whole: you may leave a type (or department) out or add one, for example
    `{ "tactical": 1 }` for one Tactical run only; a key that is not a mission type (or department) is refused.
-3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once; `badge` (`field_training`) is the badge a rookie
+3. `rookiesPerTrainer` (2) caps the rookies one trainer has at once (pairings run one at a time, so two at once
+   never go over it), and an officer who trains rookies cannot be put in training himself; `badge` (`field_training`) is the badge a rookie
    gets at the end. While field training is on, an admin can also grant or revoke it in **Admin UI → Officers →
    Badges** like the other badges.
 4. Optional ride-along rule: `requireTrainerFor`, a list of mission type keys (for example `{ 'tactical' }`) a rookie
@@ -2368,7 +2369,8 @@ Both:
   pair**, **Exclude** and **Suspend** (each needs a number of days and a reason, and is in the audit log). **Lift**
   ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
   reason in the audit log (`Config.RealPlayers.staff.lift`, `Config.RealPlayers.volunteer.staffClearStrikes`). The screen shows
-  character names next to citizen IDs (`Config.RealPlayers.staff.names`) and weapon names in the damage ledger
+  character names next to citizen IDs (`Config.RealPlayers.staff.names`; off, every list, case, timeline line and
+  damage ledger shows citizen IDs only) and weapon names in the damage ledger
   (`Config.RealPlayers.staff.weaponNames`); both ship on.
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
@@ -2477,7 +2479,8 @@ keeps its pop-up menu. It runs on volunteers, so `Config.RealPlayers.volunteer.e
   citizen ID). Police on duty can never open it, and an open tablet closes when its player goes on police duty.
 - **Home**: agree to the rules, tick the suspects you play and **Get on the list** for
   `Config.RealPlayers.volunteer.windowMinutes`; while on it: the time left, **Save suspects**, **Renew** and **Get off the list**
-  (two clicks).
+  (two clicks; during a case it says that getting off the list gives the case up too, and whether that is free or a
+  strike, as **Give up** does).
 - **Jobs**: the question police just sent you (the suspect, the mission type, the area, how far, the time to get
   there and to answer). **Accept** is the same yes as the pop-up (the meet point becomes your waypoint); **Decline**
   costs nothing. While the tablet is open the question shows here instead of the pop-up; close the tablet and the

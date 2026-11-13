@@ -23,6 +23,7 @@
   "err.dept_unknown": "That department does not exist. Pick a department from the list.",
   "err.desk_size": "That desk box size is not valid. Each side must be 0.3 to 5 m.",
   "err.desk_unknown": "That desk no longer exists. Refresh the list.",
+  "err.desk_changed": "Another admin changed the desk list since you opened it. Nothing was changed: check the list and try again.",
   "err.export_folder": "The exports folder Crimson-Police/saves/exports is missing or cannot be written. Create it by hand (the server cannot create folders on Linux) and make sure the server may write to it.",
   "err.export_write": "The export file could not be written. Make sure the server may write to Crimson-Police/saves/exports.",
   "err.goal_type": "That goal names a mission type that does not exist. Pick a mission type from the list.",

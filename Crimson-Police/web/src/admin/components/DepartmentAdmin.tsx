@@ -564,6 +564,11 @@ type DeskForm = {
     prop: string;
 };
 
+// what this screen showed at the desk's index: the server refuses a stale index (err.desk_changed)
+function expectOf(d: DeskView) {
+    return { label: d.label, x: d.coords.x, y: d.coords.y, z: d.coords.z };
+}
+
 function formOf(d: DeskView | null): DeskForm {
     return {
         label: d?.label ?? '',
@@ -600,7 +605,7 @@ function DeskDialog({
         const res = desk
             ? await run(
                   'server:admin:updateDesk',
-                  { index: desk.index, moveHere, ...payload },
+                  { index: desk.index, expect: expectOf(desk), moveHere, ...payload },
                   { requestId: false, success: 'sysadmin.ui.desk_saved' },
               )
             : await run('server:admin:addDeskHere', payload, { requestId: false, success: 'sysadmin.ui.desk_added' });
@@ -709,13 +714,14 @@ export function DesksPanel({
         if (!removing) return;
         const res = await run(
             'server:admin:removeDesk',
-            { index: removing.index },
+            { index: removing.index, expect: expectOf(removing) },
             { requestId: false, success: 'sysadmin.ui.desk_removed' },
         );
         setRemoving(null);
         if (res.ok) onChanged();
     };
-    const teleport = (d: DeskView) => void run('server:admin:teleportToDesk', { index: d.index }, { requestId: false });
+    const teleport = (d: DeskView) =>
+        void run('server:admin:teleportToDesk', { index: d.index, expect: expectOf(d) }, { requestId: false });
     return (
         <div className="system-stack">
             <div className="system-buttons">
