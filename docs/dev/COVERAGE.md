@@ -12,11 +12,11 @@ has none: its file's head comment in docs/dev/FILE_NOTES.md says what the file d
 | | functions |
 |---|---:|
 | named by a spec | 1127 |
-| via | 5738 |
+| via | 5739 |
 | world | 148 |
 | walk | 388 |
 | none | 275 |
-| all | 7676 |
+| all | 7677 |
 
 Client entry points: 110, 88 driven by a spec that loads their file, 22 known gaps (tools/coverage_gaps.txt).
 
@@ -1549,9 +1549,10 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 676 | `FireLost` | - | via admin_backup_spec |
 | 687 | `Seed` | - | via admin_backup_spec |
 | 693 | `Evaluate` | Compare the player's current state with their last known active job. | via admin_backup_spec |
-| 716 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
-| 787 | `A.refreshOfficerRow` | - | admin_boards_spec |
-| 824 | `GetDepartment` | - | via admin_backup_spec |
+| 719 | `HeldWindowsOpenSql` | Whether the dispute windows the last suspension held are still open, in SQL on cp_officers: NOW() is at most its end (suspended_until) +... | via admin_backup_spec |
+| 738 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
+| 813 | `A.refreshOfficerRow` | - | admin_boards_spec |
+| 850 | `GetDepartment` | - | via admin_backup_spec |
 
 ### modules/access/client/access.lua
 

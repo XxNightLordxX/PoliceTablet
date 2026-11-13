@@ -2107,6 +2107,37 @@ do
     H.eq(Eligible(m2, 'HOLD0011', T4 + 271 * HR), false, 'lock window: one that starts after the moved end')
     Forfeit()
     H.eq(RowOf(m2).cash_status, 'forfeited', 'lock window: ...holds nothing')
+    -- a new suspension given more than 48 h after the last one ended, but inside the windows that one held as a
+    -- maintenance lock moved them on, keeps the last one's start (CP.Access.suspend uses CP.Maintenance.windowEnd):
+    -- voided at -1 h, suspended at 0, lifted at 10 h, a lock from 20 h to 30 h (the held windows end at 68 h),
+    -- suspended again at 63 h and lifted at 70 h: the run stays open until 48 h after that lift
+    local T5 = T0 + 6000 * HR
+    H.time = T5 - HR
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'HOLD0012\', \'sast\')')
+    local k = Row({ cid = 'HOLD0012', status = 'held', owed = 50, voided = true })
+    H.time = T5
+    H.ok(Async(function() return CP.Access.suspend('HOLD0012', 7, 0, 'x') end), 'lock and suspend: suspended at 0')
+    H.time = T5 + 10 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0012', 0, 0, 'lifted') end), 'lock and suspend: lifted at 10 h')
+    H.time = T5 + 20 * HR
+    Maint.begin('restore', { by = 'test' })
+    H.time = T5 + 30 * HR
+    Maint.finish('restore')
+    H.time = T5 + 63 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0012', 7, 0, 'x') end), 'lock and suspend: suspended at 63 h')
+    H.eq(Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0012\''), T5,
+        'lock and suspend: inside the windows the lock moved on, the last start is kept')
+    H.time = T5 + 70 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0012', 0, 0, 'lifted') end), 'lock and suspend: lifted at 70 h')
+    H.eq(Eligible(k, 'HOLD0012', T5 + 117 * HR), true, 'lock and suspend: a dispute may be filed until 48 h after it')
+    H.time = T5 + 117 * HR
+    Forfeit()
+    H.eq(RowOf(k).cash_status, 'held', 'lock and suspend: the forfeiture job holds it too')
+    -- after the moved end a new suspension starts now
+    H.time = T5 + 70 * HR + 59 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0012', 1, 0, 'x') end), 'lock and suspend: suspended later')
+    H.eq(Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0012\''), H.time,
+        'lock and suspend: after the moved end it starts now')
 
     -- H8: migration 019 fills suspended_from for the suspensions given before it: the last 'suspend' audit row up to
     -- their end (so one lifted just before the update still holds its windows), else now for one still running

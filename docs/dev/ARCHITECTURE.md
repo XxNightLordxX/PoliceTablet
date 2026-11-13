@@ -1544,7 +1544,8 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   inside the window holds it (`cp_officers.suspended_from`, migration 019, `row.suspended_from_ts`), the window's
   end moved on by the last maintenance lock as `CP.Maintenance.windowEnd` does it (in `CP.Money.disputeStartSql`
   too, with the lock's start and end written in as numbers): a later one never reopens a closed window. `CP.Access.suspend` writes it on a new suspension; one given while he is suspended or
-  less than a window after the last one ended keeps that start; a lift keeps it. Migration 019 fills it for the
+  less than a window after the last one ended (that window's end moved on by the last maintenance lock, as
+  `CP.Maintenance.windowEnd` does it) keeps that start; a lift keeps it. Migration 019 fills it for the
   suspensions given before it: the last `suspend` row of `cp_audit` up to their end, else `NOW()` for one still
   running.
 - `forSupervisor(src)`, `forAdmin()` (both read by the one Review queue, §5.26a), `forOfficer(citizenid, goesTo?,

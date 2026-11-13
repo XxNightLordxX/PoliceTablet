@@ -30,6 +30,10 @@ The first version for sale.
   where the department's history shows it **was** charged and not given it back, could only be closed with Mark
   paid. **Mark withdrawn** (tick the box) now records that, with no money moved: Pay again then pays the officer with
   the deposit only, and **Release Pay again** at that step gives the department its money back first.
+- **Suspensions and a maintenance lock:** a new suspension given more than a dispute window after the last one
+  ended, but inside the time a maintenance lock (a restore) added to that window, started a new hold, so the voided
+  runs the last suspension still held closed early. It now keeps the last suspension's start, by the same moved
+  window end the disputes use.
 
 ### Optimization work before 1.0.0
 

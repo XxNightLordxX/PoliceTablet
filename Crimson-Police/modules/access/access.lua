@@ -711,6 +711,28 @@ local function Evaluate(src)
     if reason then FireLost(n, reason) end
 end
 
+-- Whether the dispute windows the last suspension held are still open, in SQL on cp_officers: NOW() is at most its
+-- end (suspended_until) + Config.Disputes.windowHours, moved on by the last maintenance lock as
+-- CP.Maintenance.windowEnd does it (a lock that began inside that window adds its length from the window's start
+-- on). The same rule as CP.Disputes.eligible. Built per call: the window and the lock's start and end
+-- (CP.Maintenance.hold) are integers of seconds written into the SQL, never a value from a player.
+local function HeldWindowsOpenSql()
+    local w = math.floor(math.max(0, CP.Num(Config.Disputes and Config.Disputes.windowHours, 48)) * 3600)
+    local open = ('suspended_until >= NOW() - INTERVAL %d SECOND'):format(w)
+    local okH, h = false, nil
+    if CP.Maintenance and CP.Maintenance.hold then okH, h = pcall(CP.Maintenance.hold) end
+    local hf = okH and type(h) == 'table' and tonumber(h.from) and math.floor(tonumber(h.from)) or nil
+    local ht = okH and type(h) == 'table' and tonumber(h.to) and math.floor(tonumber(h.to)) or nil
+    if not (hf and ht and ht > hf) then return open end
+    -- a lock that began at or after the end and inside the window adds its length; one that began before the end and
+    -- ended after it moves the window's end to the lock's end + the window
+    return ([[(%s
+                OR (suspended_until <= FROM_UNIXTIME(%d) AND FROM_UNIXTIME(%d) < suspended_until + INTERVAL %d SECOND
+                    AND suspended_until >= NOW() - INTERVAL %d SECOND)
+                OR (suspended_until > FROM_UNIXTIME(%d) AND suspended_until < FROM_UNIXTIME(%d)
+                    AND NOW() <= FROM_UNIXTIME(%d)))]]):format(open, hf, hf, w, w + ht - hf, hf, ht, ht + w)
+end
+
 -- opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and
 -- at most MAX_SUSPEND_DAYS away).
 function A.suspend(citizenid, days, actorSrc, reason, opts)
@@ -755,14 +777,18 @@ function A.suspend(citizenid, days, actorSrc, reason, opts)
         end
         -- suspended_from: when this suspension started, for the dispute window (CP.Disputes.eligible). A new
         -- suspension starts now; one given while he is still suspended, or while the windows his last one held are
-        -- still open (it ended less than a dispute window ago), keeps the start of that one. Set before
-        -- suspended_until: the assignments run left to right and read the old end.
-        local held = math.floor(math.max(0, CP.Num(Config.Disputes and Config.Disputes.windowHours, 48)) * 3600)
-        local ok, err = pcall(MySQL.update.await, [[INSERT INTO cp_officers (citizenid, suspended_until, suspended_from)
+        -- still open (it ended less than a dispute window ago, that window moved on by the last maintenance lock as
+        -- CP.Maintenance.windowEnd does it), keeps the start of that one. Set before suspended_until: the
+        -- assignments run left to right and read the old end.
+        local ok, err = pcall(
+            MySQL.update.await,
+            ([[INSERT INTO cp_officers (citizenid, suspended_until, suspended_from)
             VALUES (?, FROM_UNIXTIME(?), NOW()) ON DUPLICATE KEY UPDATE
             suspended_from = IF(suspended_from IS NOT NULL AND suspended_until IS NOT NULL
-                AND suspended_until >= NOW() - INTERVAL ? SECOND, suspended_from, NOW()),
-            suspended_until = VALUES(suspended_until)]], { citizenid, untilTs, held })
+                AND %s, suspended_from, NOW()),
+            suspended_until = VALUES(suspended_until)]]):format(HeldWindowsOpenSql()),
+            { citizenid, untilTs }
+        )
         if not ok then
             CP.err(TAG, 'suspending %s failed: %s', citizenid, tostring(err))
             return false, 'err.internal'
