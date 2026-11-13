@@ -85,10 +85,10 @@ do
     end
 end
 
--- the opt-in steps (clickthrough, race-all, db-check) come last, after the steps every run has
+-- the opt-in steps (clickthrough, race-all, db-check, lua-coverage) come last, after the steps every run has
 do
     local ok, out = Shell(('%s timeout 60 bash tools/check_all.sh --list'):format(CLEAN_ENV))
-    H.ok(ok and out:find('\nbuild\nrelease\nclickthrough\nrace%-all\ndb%-check\n$') ~= nil,
+    H.ok(ok and out:find('\nbuild\nrelease\nclickthrough\nrace%-all\ndb%-check\nlua%-coverage\n$') ~= nil,
         'the opt-in steps are listed last: ' .. out)
 end
 
@@ -134,6 +134,39 @@ print(repr(mutate.code_mask(['if a == b then -- x == y', "s = 'p == q' .. [[r ==
     H.eq(Md5(file), before, 'mutate: the working tree file is unchanged')
     local _, left = Shell('ls -d /tmp/cp_mutate_* 2>/dev/null || true')
     H.eq(left:gsub('%s+', ''), '', 'mutate: no temporary copy is left')
+end
+
+-- ============================================================================
+--                            4. tools/lua_coverage
+-- ============================================================================
+-- H15: the line hook measures the spec process and the fixture processes it starts (npc_spec starts
+-- tests/fixtures/npc/client_check.lua with io.popen), each into a dump of its own.
+
+do
+    local hasCc = Shell('command -v cc')
+    if not hasCc then
+        print('SKIP check_tools: tools/lua_coverage (no C compiler)')
+    else
+        local dir = os.tmpname()
+        os.remove(dir)
+        os.execute(('mkdir -p \'%s/dumps\''):format(dir))
+        local okB, outB = Shell(('cc -O2 -shared -fPIC -o \'%s/ccov.so\' tools/lua_coverage/ccov.c'):format(dir))
+        H.ok(okB, 'lua_coverage: ccov.c builds: ' .. outB)
+        local ok, out = Shell((
+            '%s CP_COV_SO=\'%s/ccov.so\' CP_COV_DIR=\'%s/dumps\' LUA_INIT_5_4=@\'%s\' CP_TEST_COVERAGE=1 '
+            .. 'timeout 600 lua5.4 tests/run.lua --jobs=1 --storage=files tests/npc_spec'
+        ):format(CLEAN_ENV, dir, dir, H.root .. '../tools/lua_coverage/cov_init.lua'))
+        H.ok(ok, 'lua_coverage: npc_spec passes under the hook: ' .. out:sub(-300))
+        local _, list = Shell(('grep -l -r -h "^#spec " \'%s/dumps\' | xargs head -qn1'):format(dir))
+        H.ok(list:find('#spec tests/npc_spec.lua', 1, true) ~= nil,
+            'lua_coverage: the spec process is measured: ' .. list)
+        H.ok(list:find('#spec tests/fixtures/npc/client_check.lua', 1, true) ~= nil,
+            'lua_coverage: and the fixture process it starts: ' .. list)
+        local _, npc = Shell(
+            ('grep -h -c -F "Crimson-Police/modules/npc/client/npc.lua" \'%s\'/dumps/*client_check*'):format(dir))
+        H.ok(tonumber((npc:match('%d+'))) == 1, 'lua_coverage: the fixture\'s lines of npc/client/npc.lua are there')
+        os.execute(('rm -rf \'%s\''):format(dir))
+    end
 end
 
 return H

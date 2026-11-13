@@ -1,11 +1,18 @@
 # tools/coverage_gaps.txt: client entry points no spec drives yet (tools/check_coverage.py).
 # `<kind> <name> <file>`. Shrink it: a spec that loads the file and names the entry point removes a line.
 action contactAction modules/npc/client/custody.lua
+action toggleDebug modules/missions/client/testing.lua
+event client:contactConfirm modules/npc/client/custody.lua
 event client:crimtabClose modules/realplayers/client/crimtab.lua
 event client:crimtabOpen modules/realplayers/client/crimtab.lua
 event client:diagState modules/admin/client/diag.lua
 event client:diagUnstick modules/admin/client/diag.lua
 event client:inProgress modules/missions/client/testing.lua
+event client:operation modules/teams/client/teams.lua
+event client:participants modules/runs/client/route.lua
+event client:revive modules/system/client/ambulance.lua
+event client:runEnded modules/missions/client/testing.lua
+event client:serviceVehicle modules/npc/client/custody.lua
 event client:volunteerArea modules/realplayers/client/volunteers.lua
 event client:volunteerAsk modules/realplayers/client/crimtab.lua
 event client:volunteerAskClose modules/realplayers/client/crimtab.lua

@@ -28,10 +28,11 @@ What to update with each change is at the end, in "Working on the code".
 | `clickthrough` | opt-in: `node tools/clickthrough.mjs`, below | 20 min |
 | `race-all` | opt-in: `CP_RACE_CUTS=all lua5.4 tests/run.lua --jobs=1 race`, `tests/race_spec.lua` cut after every query of every case instead of 5 spread over it | 6 min |
 | `db-check` | opt-in: `tools/db_check.sh`, "Real database check" below | 10 min |
+| `lua-coverage` | opt-in: `bash tools/lua_coverage/run.sh`, "Measured Lua coverage" below | about 2x the two suites |
 
-**Opt-in steps.** `clickthrough`, `race-all` and `db-check` print `SKIP` (and count as skipped) unless they are
-named (`tools/check_all.sh clickthrough race-all db-check`) or turned on (`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`,
-`CP_DB_CHECK=1`).
+**Opt-in steps.** `clickthrough`, `race-all`, `db-check` and `lua-coverage` print `SKIP` (and count as skipped)
+unless they are named (`tools/check_all.sh clickthrough race-all db-check lua-coverage`) or turned on
+(`CP_CLICKTHROUGH=1`, `CP_RACE_ALL=1`, `CP_DB_CHECK=1`, `CP_LUA_COVERAGE=1`).
 `.github/workflows/nightly.yml` runs `clickthrough` and `race-all` every night and on request (`db-check` runs only when
 named). `clickthrough` serves the built web UI in its
 browser mock mode and runs `tools/clickthrough.mjs` in Chromium (Playwright, pinned in `Crimson-Police/web`'s
@@ -448,12 +449,32 @@ stale: docs/dev/COVERAGE.md is not the list of today's code: run python3 tools/c
 ```
 
 - After any change to the code or the specs, run `python3 tools/check_coverage.py --write` and commit the list.
-- A client entry point counts as driven only by a spec that loads its own client file and names it; a server spec
+- A client entry point counts as driven only by a spec that loads its own client file and fires or calls it:
+  an event by its full name (`'client:x'`, `'crimson-police:client:x'`, or the bare `'x'` on a call line of a spec
+  that builds the name with `'crimson-police:client:' ..`), anything else by a call (`.x(`, `:x(`, `['x'](`, the
+  first argument of a call such as `Client('x')`, or `name = 'x'` for the NUI `client` endpoint). Comments and the
+  lines that only read what the server sent (`H.findEvents`, `EventsTo`, `Has(` on a file's text) never count, and
+  an event registered under the literal `'crimson-police:client:x'` counts as `client:x`. A server spec
   that only sees the server send the event does not count. Write that spec (`tests/livecrime_client_spec.lua` is an
   example: ox_lib's alertDialog stubbed as one dialog at a time, the handlers fired with edge payloads).
   `tools/coverage_gaps.txt` holds the entry points with no such spec on 2026-11-13; it only shrinks. `--write-gaps`
   adds today's undriven ones to it: only on purpose, and say why in the commit.
 - The web components the walks do not import show `none`: `tools/clickthrough.mjs` (opt-in) renders every screen.
+
+### Measured Lua coverage
+
+`bash tools/lua_coverage/run.sh [OUTDIR]` (the opt-in gate step `lua-coverage`) runs both suites again (database and
+files mode) with a line hook in every lua5.4 process: `LUA_INIT_5_4=@tools/lua_coverage/cov_init.lua` starts
+`ccov.c` (built into OUTDIR with `cc`) in each `tests/run.lua --child` process and in every script under `tests/`
+that a spec starts itself (the client halves of npc_spec, npc_combat_spec, engine_b_spec and others run as their own
+`lua5.4 tests/fixtures/...` process), and each process writes its own dump. `CP_TEST_COVERAGE=1` is set for the run,
+so the time budgets (`H.timed`: the "under 250 ms" queries of storage_spec, load_spec's worst step) pass without
+being checked: the hook slows every line. `tools/lua_coverage/report.py` then writes `docs/dev/LUA_COVERAGE.md`
+(lines run per file, every function that never ran) and fails when a function that never ran is not in
+`tools/lua_coverage/allow.txt` (`<file> | <its first line> | <why it is safe unrun>`; `baseline` = measured unrun on
+2026-11-13, review pending; the list only shrinks). `run.sh OUTDIR --report` writes the report again from the dumps.
+Line level only: the not-taken side of an `if` with no `else` and the operands of `a and b` are not measured.
+There is no measured coverage of the web JavaScript yet.
 
 ### Crash matrix
 

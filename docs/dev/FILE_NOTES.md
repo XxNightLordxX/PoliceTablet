@@ -667,6 +667,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/rewards_spec.lua`: CP.Rewards (modules/rewards): optional item rewards.
 - `tests/run.lua`: Runs every tests/*_spec.lua in a fresh Lua state and prints a summary.
 - `tests/run_controls_spec.lua`: In a run: four per-department Mission controls of scope 'run' read for the leader at the accept and
+- `tests/run_history_gate_spec.lua`: Who may read one run's history (review:getRunHistory, modules/review/history.lua MayRead): an admin any run, a supervisor a run of his department (reviewFlagged or handleDisputes), never a run he or one of his characters took part in, never a plain officer or a supervisor of another department; a bad run id is refused first.
 - `tests/run_history_spec.lua`: One history per run (modules/review/history.lua): the rows of the run (live and archived), its flags and
 - `tests/run_ui_spec.lua`: run_ui slice (Officer Mission Board + Active Mission screens, UI only).
 - `tests/runs_maintenance_spec.lua`: The run engine's once-a-minute maintenance (Runs._maintenance): who is online comes from the map that the Qbox load, unload and drop events keep, so no GetPlayerByCitizenId export runs per cached citizen.
@@ -743,6 +744,11 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tools/gen_foreign_sites.py`: Writes tests/fixtures/foreign_sites.lua, the fixed world places of other scripts.
 - `tools/lint_fivem.py`: FiveM pitfall lint for Crimson-Police (dev tooling, not shipped).
 - `tools/lint_lua.py`: General Lua lint for Crimson-Police and its tests: luacheck at warning level (dev tooling, not shipped).
+- `tools/lua_coverage/allow.txt`: The functions that never ran under tools/lua_coverage, each with why it is safe unrun ('baseline': measured unrun on 2026-11-13, review pending); it only shrinks.
+- `tools/lua_coverage/ccov.c`: The line hook of the measured Lua coverage: records every line of Crimson-Police the Lua VM runs and dumps them per process.
+- `tools/lua_coverage/cov_init.lua`: Starts the line hook in every lua5.4 test process (LUA_INIT_5_4), the fixture processes a spec starts included, and dumps at the end.
+- `tools/lua_coverage/report.py`: Merges the coverage dumps, writes docs/dev/LUA_COVERAGE.md and fails on a function that never ran and is not in allow.txt.
+- `tools/lua_coverage/run.sh`: Measured Lua line coverage of both suites under the hook, then the report (opt-in check_all step lua-coverage).
 - `tools/lua_flow.py`: Control flow of Lua loops, for tools/lint_fivem.py rule FX10 (dev tooling, not shipped).
 - `tools/mutate.py`: Mutation testing for the Lua side: small breaks in one file, run against the specs that should catch them.
 - `tools/restyle.py`: Restyles Crimson-Police to the owner's style (docs/dev/STYLE.md) and writes docs/dev/FILE_NOTES.md (dev tooling, not shipped).

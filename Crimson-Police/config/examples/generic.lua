@@ -2068,7 +2068,8 @@ Config.Objectives = {
     challenge = {
         enabled = true,          -- true = departments compete in seasons (the department challenge)
         scoring = 'average',     -- 'average' (per active officer) | 'total' | 'top10'
-        minRunsActive = 3,       -- runs in the week that make an officer active (the average counts only these)
+        minRunsActive = 3,       -- completed runs in the season (in that department) that make an officer active
+                                 -- (the average counts only these)
     },
     bounty = {
         enabled = true,          -- true = a weekly bounty is picked every week (needs the department challenge)
@@ -2242,7 +2243,8 @@ Config.Cash = {
     source = 'server',    -- 'server' (new money) or 'society' (the department's bank account; needs a banking script)
     minPayout = 0,        -- limits for any base payout set in-game
     maxPayout = 25000,    -- dollars
-    dailyCap = 0,         -- max cash per officer per day; 0 = no cap
+    dailyCap = 0,         -- max cash per officer per run day (the reset day the run ended on; a held payment
+                          -- paid later counts on that day); 0 = no cap
     -- Money tools outside the normal flow (Admin UI → Payments, Departments). All ship off: turning one on in
     -- Settings needs the typed word ENABLE and is audited.
     allowUnfundedRetry = false,  -- retry payments the department account could not cover

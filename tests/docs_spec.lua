@@ -122,6 +122,7 @@ local DOCS = {
     'dev/FILE_NOTES.md',
     'dev/INTEGRATIONS.md',
     'dev/LOOPS.md',
+    'dev/LUA_COVERAGE.md',
     'dev/README.md',
     'dev/SPEC.md',
     'dev/STYLE.md',

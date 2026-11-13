@@ -1,0 +1,202 @@
+# tools/lua_coverage/allow.txt: the functions that never ran in the measured Lua coverage (tools/lua_coverage).
+# '<file> | <the function's first line, trimmed> | <why it is safe unrun>'. 'baseline' = measured unrun on
+# 2026-11-13, no written review yet: give it a test, or replace 'baseline' with the reason. The list only shrinks.
+blocks/checkpoint_route/client.lua | local function Fmt(seconds) | baseline
+blocks/checkpoint_route/server.lua | onEntityDead = function(ctx, netId, killerSrc) | baseline
+blocks/escort/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/field_contact/client.lua | local function ReportOnce(S, kind, netId) | baseline
+blocks/field_contact/client.lua | release = function(ctx, netId) | baseline
+blocks/field_contact/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/flee_arrest/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/hostile_waves/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/interact_points/client.lua | local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st | baseline
+blocks/interact_points/server.lua | onEntityDead = function(ctx, netId, killerSrc) | baseline
+blocks/live_response/client.lua | onSelect = function() TriggerServerEvent(CP.e('server:liveTalkDown')) end, | baseline
+blocks/process_scene/client.lua | local states = Kit.states(function() return { bodies = {}, targets = {}, alive = true } end, function(S) | baseline
+blocks/process_scene/client.lua | local function Info(S, netId) | baseline
+blocks/process_scene/client.lua | pcall(function() exports.ox_target:removeLocalEntity(ent, names) end) | baseline
+blocks/process_scene/client.lua | local function AddBodyOptions(S, b) | baseline
+blocks/process_scene/client.lua | local ok = Kit.target(BLOCK, function() | baseline
+blocks/process_scene/client.lua | canInteract = function() | baseline
+blocks/process_scene/client.lua | onSelect = function() CreateThread(function() Step(S, 'tag', b.netId) end) end, | baseline
+blocks/process_scene/client.lua | onSelect = function() CreateThread(function() Step(S, 'tag', b.netId) end) end, | baseline
+blocks/process_scene/client.lua | canInteract = function() | baseline
+blocks/process_scene/client.lua | onSelect = function() CreateThread(function() Step(S, 'bag', b.netId) end) end, | baseline
+blocks/process_scene/client.lua | onSelect = function() CreateThread(function() Step(S, 'bag', b.netId) end) end, | baseline
+blocks/process_scene/client.lua | local ok = Kit.target(BLOCK, function() exports.ox_target:addLocalEntity(ent, { ReleaseOption(S) }) end) | baseline
+blocks/process_scene/server.lua | onParticipantLeft = function(ctx, src) | baseline
+blocks/protect_rescue/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/pursuit/client.lua | local function ReportOnce(S, kind, netId, extra) | baseline
+blocks/pursuit/client.lua | local function TaskCruise(S, v, veh, driver, force) | baseline
+blocks/pursuit/client.lua | local function PullOver(S, v, veh, driver) | baseline
+blocks/pursuit/client.lua | local function Ram(S, v, veh, driver) | baseline
+blocks/pursuit/server.lua | local function WeaponsAllowed(list, allowed) | baseline
+blocks/pursuit/server.lua | local function HealthRatio(p) | baseline
+blocks/search_area/client.lua | local function ReportOnce(S, kind, netId) | baseline
+blocks/search_area/client.lua | hostChanged = function(ctx, isHost) | baseline
+blocks/skill_check/client.lua | local states = Kit.states(function(ctx) return type(ctx.state) == 'table' and ctx.state or {} end, function(st | baseline
+blocks/skill_check/client.lua | canInteract = function() | baseline
+blocks/skill_check/client.lua | local function SetbackEffect(ctx, st, data) | baseline
+blocks/skill_check/server.lua | onEntityDead = function(ctx, netId, killerSrc) | baseline
+modules/access/client/tablet.lua | function T.openUi() | baseline
+modules/access/client/tablet.lua | CreateThread(function() | baseline
+modules/admin/admin.lua | local function FlagLabel(reason) | baseline
+modules/admin/admin.lua | local function OnlineCitizenids() | baseline
+modules/admin/adminkit.lua | function Kit.weekStart(ts) | baseline
+modules/admin/adminkit.lua | function Kit.jobs(opts) | baseline
+modules/admin/client/diag.lua | RegisterNetEvent(CP.e('client:diagUnstick'), function() | baseline
+modules/admin/client/diag.lua | RegisterNetEvent(CP.e('client:diagState'), function(token) | baseline
+modules/admin/settings.lua | local function skipTo(e) | baseline
+modules/admin/settings.lua | known = function(id) | baseline
+modules/admin/settings.lua | known = function(id) | baseline
+modules/admin/settings.lua | known = function(id) | baseline
+modules/admin/sysadmin.lua | local function Now() | baseline
+modules/admin/sysadmin.lua | local function WriteJson(path, v) | baseline
+modules/admin/sysadmin.lua | Kit.callback('admin:getClientState', 'playerSupport', function(ctx) | baseline
+modules/dispatch/alerts.lua | function A.onInArena(fn) | baseline
+modules/dispatch/client/missioncalls.lua | local function Foreign(v) | baseline
+modules/map/client/markers.lua | function M.partCount() | baseline
+modules/missions/builder.lua | local function ShippedLocationValue(base, key, v) | baseline
+modules/missions/builder.lua | b[listKey] = U.filter(b[listKey] or {}, function(e) | baseline
+modules/missions/client/testing.lua | local function ToggleDebug(enabled) | baseline
+modules/missions/client/testing.lua | RegisterNetEvent(CP.e('client:inProgress'), function(runId) | baseline
+modules/missions/client/testing.lua | RegisterNetEvent(CP.e('client:runEnded'), function(runId) | baseline
+modules/missions/client/testing.lua | CP.Tablet.registerClientAction('toggleDebug', function(payload) | baseline
+modules/missions/missions.lua | table.sort(out, function(a, b) | baseline
+modules/missions/testing.lua | local function WarnOnce(key, fmt, ...) | baseline
+modules/missions/testing.lua | local function ForgetInvite(id) | baseline
+modules/missions/testing.lua | local function KnownError(errKey, fallback) | baseline
+modules/missions/testing.lua | table.sort(out, function(a, b) | baseline
+modules/money/cash.lua | return RunLocked(row.citizenid, function() return CapRestLocked(row, bd, rowId, rest) end, function() | baseline
+modules/money/cash.lua | return RunLocked(row.citizenid, function() return ClawbackLocked(row, rowId, n) end, function() | baseline
+modules/npc/client/custody.lua | local function EntityFromNet(netId, ms) | baseline
+modules/npc/client/custody.lua | local function Control(ent, ms) | baseline
+modules/npc/client/custody.lua | function Custody.cancel() | baseline
+modules/npc/client/custody.lua | RegisterNetEvent('crimson-police:client:contactConfirm', function(data) | baseline
+modules/npc/client/custody.lua | CreateThread(function() | baseline
+modules/npc/client/custody.lua | CP.Tablet.registerClientAction('contactAction', function(payload) | baseline
+modules/npc/client/custody.lua | local function RoadPoint(args) | baseline
+modules/npc/client/custody.lua | lib.callback.register(ROAD_CALLBACK, function(args) | baseline
+modules/npc/client/custody.lua | local function DriveTo(driver, veh, p) | baseline
+modules/npc/client/custody.lua | local function LoadCar(veh, car) | baseline
+modules/npc/client/custody.lua | RegisterNetEvent('crimson-police:client:serviceVehicle', function(data) | baseline
+modules/npc/client/custody.lua | CreateThread(function() | baseline
+modules/npc/client/custody.lua | AddEventHandler('onResourceStop', function(res) | baseline
+modules/npc/client/npc.lua | function ACTIONS.followPed(ped, a) | baseline
+modules/npc/client/npc.lua | function ACTIONS.stand(ped, a) | baseline
+modules/npc/client/npc.lua | function ACTIONS.leave(ped, a) | baseline
+modules/npc/client/npc.lua | onSelect = function(data) | baseline
+modules/npc/client/npc.lua | local chain = RunBags(function(b) | baseline
+modules/progression/profile.lua | local function IssuerRole(src) | baseline
+modules/realplayers/client/crimtab.lua | function C.refresh(screen) | baseline
+modules/realplayers/client/crimtab.lua | CreateThread(function() | baseline
+modules/realplayers/client/crimtab.lua | RegisterNUICallback('crimtabClose', function(_, cb) | baseline
+modules/realplayers/client/crimtab.lua | RegisterNUICallback('crimtabAnswered', function(body, cb) | baseline
+modules/realplayers/client/crimtab.lua | RegisterNetEvent(CP.e('client:crimtabClose'), function() | baseline
+modules/realplayers/client/crimtab.lua | RegisterNetEvent(CP.e('client:volunteerCase'), function(s) | baseline
+modules/realplayers/client/crimtab.lua | exports('useCriminalTablet', function(data) | baseline
+modules/realplayers/client/crimtab.lua | CreateThread(function() C.open() end) | baseline
+modules/realplayers/client/crimtab.lua | RegisterCommand(cmd, function() | baseline
+modules/realplayers/client/crimtab.lua | CreateThread(function() | baseline
+modules/realplayers/client/crimtab.lua | AddEventHandler('onResourceStop', function(res) | baseline
+modules/realplayers/client/volunteers.lua | onSelect = function() | baseline
+modules/realplayers/client/volunteers.lua | RegisterNetEvent(CP.e('client:volunteerAskClose'), function(token) | baseline
+modules/realplayers/client/volunteers.lua | RegisterNetEvent(CP.e('client:volunteerArea'), function(a) | baseline
+modules/realplayers/client/volunteers.lua | AddEventHandler('onResourceStop', function(res) | baseline
+modules/realplayers/livecrime.lua | exports('GetAvailablePolice', function() | baseline
+modules/realplayers/opponents.lua | table.sort(out, function(a, b) | baseline
+modules/realplayers/pairs.lua | CreateThread(function() | baseline
+modules/review/anticheat.lua | ctx.combat = function(acc, armour) | baseline
+modules/review/corrections.lua | local function LiftSuspension(ctx, citizenid) | baseline
+modules/runs/client/downed.lua | AddEventHandler('onResourceStop', function(res) | baseline
+modules/runs/client/route.lua | RegisterNetEvent(CP.e('client:participants'), function(runId, list) | baseline
+modules/runs/client/route.lua | AddEventHandler('onResourceStop', function(res) | baseline
+modules/runs/client/runs.lua | function Runs.adoptedBy(netId) | baseline
+modules/runs/runs.lua | function Runs.host(run) | baseline
+modules/runs/runs.lua | local ok = pcall(function() Entity(entity).state:set('cp', bag, true) end) | baseline
+modules/runs/runs.lua | exports('IsOnMission', function(src) | baseline
+modules/runs/runs.lua | AddEventHandler('onResourceStart', function(resource) | baseline
+modules/runs/scaling.lua | relaxes = function(v, c) | baseline
+modules/runs/spawn.lua | local ok = pcall(function() Entity(a.entity).state:set('cp', nb, true) end) | baseline
+modules/supervisor/deptcontrols.lua | local function Same(a, b) | baseline
+modules/supervisor/livectl.lua | local function DeptShort(key) | baseline
+modules/system/client/ambulance.lua | RegisterNetEvent(CP.e('client:revive'), function() | baseline
+modules/system/integrations/ps_dispatch.lua | AddEventHandler('onResourceStart', function(res) | baseline
+modules/system/integrations/qbx.lua | function Q.characterExists(citizenid) | baseline
+modules/system/memsql.lua | local function DtoaSig(x, n) | baseline
+modules/system/memsql.lua | local function DtoaFix(x, n) | baseline
+modules/system/memsql.lua | Gcvt = function(x, width) | baseline
+modules/system/memsql.lua | NumTime = function(nr, hasFrac) | baseline
+modules/system/memsql.lua | BinOrderKey = function(v) | baseline
+modules/system/memsql.lua | local function SyntaxError(sql, p) | baseline
+modules/system/memsql.lua | return function(v) return v and Rescale(v, fs, ts) end | baseline
+modules/system/memsql.lua | if ft == 'str' then return function(v) return v and ParseDT(v) end end | baseline
+modules/system/memsql.lua | if ft == 'dt' then return function(v) return v and Midnight(v) end end | baseline
+modules/system/memsql.lua | local function StrNumOf(ty) | baseline
+modules/system/memsql.lua | if e then return function(v) return (e[v] or 0) + 0.0 end end | baseline
+modules/system/memsql.lua | return function(v) if v == nil then return nil end return num(v) ~= 0 end | baseline
+modules/system/memsql.lua | local function JsonContent(v) | baseline
+modules/system/memsql.lua | local na = ta.jfun and function(v) return key(JsonContent(v)) end or key | baseline
+modules/system/memsql.lua | local nb = (not ta.jfun) and function(v) return key(JsonContent(v)) end or key | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) local r = f.up.up[si] if r then return r[ci] end return nil end | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | fn = function(f) | baseline
+modules/system/memsql.lua | fn = function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | conds[i] = function(f) return tf(cf(f)) == true end | baseline
+modules/system/memsql.lua | vals[i] = function(f) return cv(vf(f)) end | baseline
+modules/system/memsql.lua | ef = function(f) return cv(e0(f)) end | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | FUNCS.IFNULL = function(node, sc) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) local v = fa(f) if v == nil then return nil end return -num(v) end, | baseline
+modules/system/memsql.lua | return function(f) local v = fa(f) if v == nil then return nil end return -v end, | baseline
+modules/system/memsql.lua | return function(f) local v = fn(f); return v ~= nil and num(v) ~= 0 end | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | return function(f) | baseline
+modules/system/memsql.lua | fn = function(_, out) | baseline
+modules/system/memsql.lua | updaters[s] = function(acc, fr) | baseline
+modules/system/memsql.lua | updaters[s] = function(acc, fr) | baseline
+modules/system/memsql.lua | updaters[s] = function(acc, fr) | baseline
+modules/system/memsql.lua | updaters[s] = function(acc, fr) | baseline
+modules/system/memsql.lua | STORE.reset = function(col) | baseline
+modules/system/memsql.lua | local function TimeNumber(v, vt) | baseline
+modules/system/memsql.lua | return function(v, rn, ign) | baseline
+modules/system/memsql.lua | return function(v, rn, ign) | baseline
+modules/system/memsql.lua | return function(v, rn, ign) | baseline
+modules/system/memsql.lua | return function(v, rn, ign) if v == nil then return nil end return byIndex(v, rn, ign) end | baseline
+modules/system/memsql.lua | return function(v, rn, ign) | baseline
+modules/system/memsql.lua | __index = function(_, name) | baseline
+modules/system/memsql.lua | return function() Unsupported('a column of the row in INSERT ... VALUES') end | baseline
+modules/system/memsql.lua | local function LessLo(a, ai, b, bi) -- is lower bound a (inclusive ai) below b? | baseline
+modules/system/memsql.lua | return function(v) | baseline
+modules/system/memsql.lua | return function(v) return v end | baseline
+modules/system/memsql.lua | if ty.t == 'dt' and cty.t == 'str' then return function(v) return ParseDT(v) or false end end | baseline
+modules/system/memsql.lua | and function() return nil end | baseline
+modules/system/memsql.lua | and function() return nil end | baseline
+modules/system/memsql.lua | function() | baseline
+modules/system/migrations.lua | local function Warn(name, err) | reviewed: a boot-failure path (a migration that fails); tools/db_check.sh covers the migrations on real servers
+modules/system/storage.lua | local function UseResourceFiles(dir) | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | local function rel(path) | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | fs.read = function(path) | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | fs.write = function(path, data) | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | fs.exists = function(path) return fs.read(path) ~= nil end | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | fs.remove = function(path) SaveResourceFile(res, rel(path), '', 0); return true end | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/system/storage.lua | fs.rename = function(a, b) | reviewed: the resource-files fallback runs only when the io library is missing, which FXServer never does (storage.lua UseResourceFiles)
+modules/teams/client/teams.lua | function Units.lastInviteAt() | baseline
+modules/teams/client/teams.lua | RegisterCommand(READY_KEY, function() | baseline
+modules/teams/client/teams.lua | function Ops.last() | baseline
+modules/teams/client/teams.lua | RegisterNetEvent(CP.e('client:operation'), function(state, missionLabel, extra) | baseline
+modules/teams/operations.lua | function Ops.startNow(src) | baseline
+modules/teams/operations.lua | function Ops.relaunch(src) | baseline
+modules/teams/operations.lua | function Ops.removeJoiner(src, target, reason) | baseline
+shared/init.lua | function CP.Blocks.all() | baseline
+shared/init.lua | function RegisterMission(def) | baseline
+shared/utils.lua | function U.inRange(x, lo, hi) | baseline
+shared/utils.lua | function U.map(list, fn) | baseline

@@ -841,7 +841,7 @@ The server works out points from the mission type's points in config, adjusted b
 
 - M_streak: personal; +5% for each consecutive day with a completed run, up to +25%, reset after a missed day, except that up to Config.Scoring.streakGraceDays missed days a week (1 by default, counted from the weekly reset) are forgiven: the streak carries on, but a forgiven day adds nothing.
 
-- Points are worked out separately for each participant with this formula and rounded down to a whole number, never below 0. Type of the Day doubles the result after the cap; a department's happy hour points bonus (happyHourPoints, fixed at the accept) multiplies it after that, on a Completed result only and never on test runs, Cross-Department runs or the Weekly Boss. A Failed result earns 25% of P × the share of objectives completed; an Abandoned result earns 0.
+- Points are worked out separately for each participant with this formula and rounded down to a whole number, never below 0. Each bonus or penalty line is whole points (halves up). Type of the Day doubles the result after the cap; a department's happy hour points bonus (happyHourPoints, fixed at the accept) multiplies it after that, on a Completed result only and never on test runs, Cross-Department runs or the Weekly Boss. A Failed result earns 25% of P × the share of objectives completed; an Abandoned result earns 0.
 
 - Manual awards and goal rewards are stored as their own rows in cp_mission_runs (mission_type = 'manual_award' or 'goal') and count only toward the Overall and Department boards. These rows use state = 'completed', the same word as their end_reason, and the goal id or 'manual_award' as mission_id, and they never count as runs (completed-run counts, goals, streaks, badges, the hourly cap, bounties and the 3-run minimum).
 
@@ -920,17 +920,17 @@ Service record (Profile & History, public profiles, Supervisor UI → Department
 
 ## Cash payouts
 
-Every participant in a Completed run is paid cash: the mission's base payout multiplied by how difficult the run was.
+Every participant in a Completed run is paid cash: the base payout times how difficult the run was.
 
-\text{Cash per participant} = \operatorname{round}\left(B \cdot M_{\text{tier}} \cdot M_{\text{mod}}\right)
+\text{Cash per participant} = \operatorname{round}\left(B \cdot M_{\text{tier}} \cdot M_{\text{mod}} \cdot M_{\text{bonus}}\right)
 
-- B: the base payout. If an admin has set a payout for the mission, B is that amount. Otherwise B is the mission type's payout × the mission's star multiplier (Config.Difficulty.cashByStars, 1.0 for every star by default). The Weekly Boss uses Config.Events.weeklyBoss.payout unless an admin has set one.
+- B: the base payout: a payout an admin set for the mission, otherwise B is the mission type's payout × the mission's star multiplier (Config.Difficulty.cashByStars, 1.0 for every star by default). B is whole dollars (halves up), fixed at the accept. The Weekly Boss uses Config.Events.weeklyBoss.payout unless an admin has set one.
 
 - M_tier: the cash multiplier from the tier table (× 1.00 at Standard up to × 1.75 at Critical).
 
 - M_mod: the run's twists: each twist's cash multiplier (× 1.25 Armored Hostiles and Radio Silence, × 1.20 Time Crunch), multiplied together and capped at × 1.95 (Config.Events.twistMaxCash); × 1.00 without a twist. A department's twistCash Mission control may raise each twist's multiplier inside the admin's bounds (read at the accept); the cap still applies.
 
-- M_bonus: a department's happyHourCash Mission control, for a run it leads that was accepted while a happy hour ran (fixed at the accept, so the end of the hour never cuts it); × 1.00 otherwise, and always × 1.00 on test runs, Cross-Department runs and the Weekly Boss. Cash per participant is then round(B · M_tier · M_mod · M_bonus), and Config.Cash.dailyCap still cuts the payment.
+- M_bonus: a department's happyHourCash Mission control, for a run it leads that was accepted while a happy hour ran (fixed at the accept: the hour's end never cuts it); × 1.00 otherwise, and always × 1.00 on test runs, Cross-Department runs and the Weekly Boss.
 
 - Only Completed results pay, rounded to the nearest dollar. Failed and Abandoned results pay $0. Type of the Day, streaks and bonuses change points only.
 
@@ -972,7 +972,7 @@ Who can change payouts
 How cash is paid (by the server, once per participant per run)
 
 - Claim the row first: UPDATE cp_mission_runs SET cash_status = 'paying' WHERE id = ? AND cash_status IN ('none','held','pending'); no row changed = stop. paid, capped, unfunded and forfeited are final (only the Full admin control money tools, all shipped off, act on them).
-- Work out the amount; pay only up to Config.Cash.dailyCap for the day (0 = no cap).
+- Work out the amount; pay only up to Config.Cash.dailyCap for the run's reset day, even when paid later (0 = no cap).
 - Society source: removeAccountMoney from the department's account; false = pay $0, final status unfunded, the officer and online supervisors told.
 - player.Functions.AddMoney(Config.Cash.account ('bank'), amount, 'crimson-police-mission'); for bank payments handleTransaction(citizenid, 'Crimson-Police', amount, 'Mission payout: <mission label>', '<department label>', '<character name>', 'deposit', 'CP-<run_uuid>-<citizenid>'), plus a 'withdraw' on the society account.
 - Write cash_paid and the final status (capped if the cap cut it, else paid). A row left in paying after a crash is never retried automatically: Admin UI → Payments (and Leaderboards) lists it for a check against the bank history, and the admin marks it paid (no money moves) or, only with the Pay again tool on, pays it again as CP-<run_uuid>-<citizenid>-r2 (step markers make sure a department is never charged twice).

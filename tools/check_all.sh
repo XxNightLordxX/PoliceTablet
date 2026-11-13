@@ -30,6 +30,10 @@
 #   db-check      (opt-in) tools/db_check.sh: the migrations and every query on a throwaway MariaDB server of its
 #                 own (four kinds of database, each file twice, PREPARE, round-trip writes; about 10 minutes);
 #                 SKIP unless named or CP_DB_CHECK=1
+#   lua-coverage  (opt-in) bash tools/lua_coverage/run.sh: both suites again under a line hook (every lua5.4 process,
+#                 the fixture processes included; the 'under N ms' budgets are not checked there), then
+#                 docs/dev/LUA_COVERAGE.md; fails when a function that never ran is not in
+#                 tools/lua_coverage/allow.txt; SKIP unless named or CP_LUA_COVERAGE=1
 #
 # The suites run 2 specs at a time (CP_TEST_JOBS=N changes it for all three, 1 = one after another).
 #
@@ -58,9 +62,9 @@ for f in tools/lint_*.py tools/check_*.py; do
     LINT_SCRIPT[$name]=$f
     ALL_STEPS+=("lint-$name")
 done
-ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build release clickthrough race-all db-check)
+ALL_STEPS+=(style suite-db suite-files suite-shadow tsc walk build release clickthrough race-all db-check lua-coverage)
 # the long steps that run only when named or turned on (their run_<step> prints SKIP otherwise)
-OPT_IN=" clickthrough race-all db-check "
+OPT_IN=" clickthrough race-all db-check lua-coverage "
 
 usage() {
     sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
@@ -319,6 +323,17 @@ detail_db-check() {
     sum=$(grep -E '^SUMMARY ' "$1" | tail -1 | sed 's/^SUMMARY [A-Z]*: //')
     grep -E '^db_check: |^missing command|did not start|install-db failed' "$1" | tail -1 | sed "s/\$/${sum:+ ($sum)}/" |
         cut -c1-80
+}
+
+# Measured Lua line coverage (docs/dev/TESTING.md "Measured Lua coverage"): both suites under the line hook.
+run_lua-coverage() {
+    opted_in lua-coverage CP_LUA_COVERAGE ||
+        { echo "SKIP: opt-in (tools/check_all.sh lua-coverage, or CP_LUA_COVERAGE=1)"; return 0; }
+    bash tools/lua_coverage/run.sh "$LOGS/lua-coverage"
+}
+detail_lua-coverage() {
+    grep -m1 -E '^SKIP: ' "$1" && return 0
+    grep -E '^(lua-coverage (PASS|FAIL)|lua-coverage: |missing command)' "$1" | tail -1 | cut -c1-80
 }
 
 # One step, called by the loop below under `timeout` (tools/check_all.sh --step-body=<step>): its output and exit

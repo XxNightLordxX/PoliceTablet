@@ -408,8 +408,16 @@ end
 
 -- Inserts the rewards (list of { source, key, item, count, value }) under the daily caps; a reward past a cap
 -- gives nothing. The unique key makes a second call for the same source and key insert nothing. Runs under the
--- citizenid lock. Returns the number of new rows.
-local function Store(citizenid, rowId, status, list)
+-- citizenid lock. Returns the number of new rows. With revive (season rewards only), a row under the same key that
+-- was forfeited by a season correction (Reopen season, Recount champion) comes back with this status, under the same
+-- caps; a row an admin cancelled or took back himself stays forfeited.
+local function Revivable(id)
+    local byAdmin = Query([[SELECT COUNT(*) AS n FROM cp_audit WHERE target = ?
+        AND action IN ('rewardCancel', 'rewardTakeBack')]], { ('reward #%d'):format(id) })
+    return byAdmin and math.floor(U.num(byAdmin[1] and byAdmin[1].n)) == 0
+end
+
+local function Store(citizenid, rowId, status, list, revive)
     if #list == 0 then return 0 end
     local usedN, usedV = UsedToday(citizenid)
     if not usedN then return 0 end
@@ -420,18 +428,32 @@ local function Store(citizenid, rowId, status, list)
     for _, r in ipairs(list) do
         local key = U.clip(r.key, 64)
         local dup = Query([[
-            SELECT id FROM cp_item_rewards WHERE citizenid = ? AND source = ? AND source_key = ? AND item = ?
+            SELECT id, status FROM cp_item_rewards WHERE citizenid = ? AND source = ? AND source_key = ? AND item = ?
         ]], { citizenid, r.source, key, r.item })
-        if dup and #dup == 0 then
+        local back = revive
+                and r.source == 'season'
+                and dup
+                and #dup == 1
+                and dup[1].status == 'forfeited'
+                and math.floor(U.num(dup[1].id))
+            or nil
+        if back and not Revivable(back) then back = nil end
+        if dup and (#dup == 0 or back) then
             if (capN > 0 and usedN + r.count > capN) or (capV > 0 and usedV + r.value > capV) then
                 CP.log(TAG, '%s: %d x %s (%s %s) is past the daily cap; nothing given', citizenid, r.count, r.item,
                     r.source, key)
             else
-                local n = Update([[
+                local n
+                if back then
+                    n = Update([[UPDATE cp_item_rewards SET status = ?, created_at = FROM_UNIXTIME(?)
+                        WHERE id = ? AND status = 'forfeited']], { status, Now(), back })
+                else
+                    n = Update([[
                     INSERT IGNORE INTO cp_item_rewards (row_id, source, source_key, citizenid, item, count, value, status,
                         created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?))
                 ]], { rowId, r.source, key, citizenid, U.clip(r.item, 64), r.count, r.value, status, Now() })
+                end
                 if n and n > 0 then
                     added = added + 1
                     usedN, usedV = usedN + r.count, usedV + r.value
@@ -596,11 +618,11 @@ function Rewards.deliver(citizenid)
 end
 
 -- Stores rewards for one officer and delivers what is pending.
-local function Grant(citizenid, rowId, status, list)
+local function Grant(citizenid, rowId, status, list, revive)
     if not Enabled() or not ValidCitizenId(citizenid) or #list == 0 then return 0 end
     CP.Db()
     local added = WithLock(citizenid, function()
-        local n = Store(citizenid, rowId, status, list)
+        local n = Store(citizenid, rowId, status, list, revive)
         if n > 0 and status == 'pending' then DeliverAll(citizenid) end
         return n
     end) or 0
@@ -847,7 +869,8 @@ local function OnLevelUp(citizenid, _, oldLevel, newLevel)
 end
 
 -- season:ended: season.champion for the champion department's officers with a completed row in the season,
--- season.top10 for the season's top 10.
+-- season.top10 for the season's top 10. Fired again after a Reopen or a Recount, it brings back the season rewards
+-- that correction cancelled (Store revive).
 local function OnSeasonEnded(seasonId, results)
     if not Enabled() or type(results) ~= 'table' then return end
     local season = Cfg().season
@@ -862,13 +885,14 @@ local function OnSeasonEnded(seasonId, results)
             GROUP BY citizenid ORDER BY citizenid
         ]], { tonumber(seasonId), results.champion })
         for _, r in ipairs(rows or {}) do
-            Grant(r.citizenid, nil, 'pending', SpecRewards(SpecList(season.champion), 'season', 'champion:' .. id))
+            Grant(r.citizenid, nil, 'pending', SpecRewards(SpecList(season.champion), 'season', 'champion:' .. id),
+                true)
         end
     end
     if season.top10 and type(results.top10) == 'table' then
         for i, cid in ipairs(results.top10) do
             if i > 10 then break end
-            Grant(cid, nil, 'pending', SpecRewards(SpecList(season.top10), 'season', 'top10:' .. id))
+            Grant(cid, nil, 'pending', SpecRewards(SpecList(season.top10), 'season', 'top10:' .. id), true)
         end
     end
 end

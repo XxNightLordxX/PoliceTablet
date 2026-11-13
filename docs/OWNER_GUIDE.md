@@ -544,7 +544,8 @@ Config.MissionTypes = {
 - The Weekly Boss pays its own amount: `payout = 2500` in `Config.Events.weeklyBoss`.
 - `Config.Cash`: `account = 'bank'` or `'cash'`; `source = 'server'` (new money) or `'society'` (the department's
   bank account, see [3.8](#38-paying-from-the-departments-bank-account)); `minPayout` and `maxPayout` limit every
-  payout set in game (0 to 25,000); `dailyCap` = most cash per officer per day (0 = no cap).
+  payout set in game (0 to 25,000); `dailyCap` = most cash per officer per run day (the reset day the run ended
+  on: a held payment paid later counts on that day; 0 = no cap).
 - Admins can also change payouts in game (Admin UI → **Money** → **Pay rates**, or `/CrimsonPoliceAdmin payout type
   patrol 300 New economy`). A payout set in game wins over `config.lua`. An admin can go back to the `config.lua`
   value with `/CrimsonPoliceAdmin payout type patrol clear Back to config`. **Let supervisors change it again** and

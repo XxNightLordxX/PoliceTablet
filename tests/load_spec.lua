@@ -561,9 +561,9 @@ for _, name in ipairs({ 'shipped', 'switches', 'queue' }) do
     local p95, p99 = Pct(b.list, 0.95), Pct(b.list, 0.99)
     print(('REPORT load %s (%s): %d steps, mean %.2f ms, p95 %.2f ms, p99 %.1f ms, max %.1f ms'):format(name,
         ON_DB and 'MariaDB' or 'saves folder', b.n, b.total / math.max(1, b.n), p95, p99, b.max))
-    H.ok(p95 <= BUDGET.p95, ('tick: %s p95 %.2f ms within %d ms'):format(name, p95, BUDGET.p95))
-    H.ok(p99 <= BUDGET.p99, ('tick: %s p99 %.1f ms within %d ms'):format(name, p99, BUDGET.p99))
-    H.ok(b.max <= BUDGET.max, ('tick: %s worst step %.1f ms within %d ms'):format(name, b.max, BUDGET.max))
+    H.timed(p95 <= BUDGET.p95, ('tick: %s p95 %.2f ms within %d ms'):format(name, p95, BUDGET.p95))
+    H.timed(p99 <= BUDGET.p99, ('tick: %s p99 %.1f ms within %d ms'):format(name, p99, BUDGET.p99))
+    H.timed(b.max <= BUDGET.max, ('tick: %s worst step %.1f ms within %d ms'):format(name, b.max, BUDGET.max))
 end
 
 if not ON_DB then os.execute(('mysql -uroot -e "DROP DATABASE IF EXISTS %s"'):format(H.db)) end

@@ -159,6 +159,13 @@ function H.ok(cond, msg)
     return false
 end
 
+-- A time budget check (the 'under N ms' asserts). Under the measured line coverage (tools/lua_coverage, which sets
+-- CP_TEST_COVERAGE=1) the line hook slows every line, so the budget is not checked there: it passes and says so.
+function H.timed(cond, msg)
+    if os.getenv('CP_TEST_COVERAGE') == '1' then return H.ok(true, (msg or '') .. ' (not timed under coverage)') end
+    return H.ok(cond, msg)
+end
+
 function H.near(a, b, eps, msg)
     return H.ok(type(a) == 'number' and math.abs(a - b) <= (eps or 1e-6),
         (msg or '') .. (' (%s vs %s)'):format(tostring(a), tostring(b)))

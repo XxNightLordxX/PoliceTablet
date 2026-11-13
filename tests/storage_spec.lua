@@ -824,7 +824,7 @@ local function Measure(label, fn)
     Say('%-44s %2d statements, slowest %6.1f ms, all SQL %6.1f ms, whole call %6.1f ms, retries %d  (%s)', label,
         #best.rec, best.slowest * 1000, best.sum * 1000, best.total * 1000, passes, OneLine(best.slowSql))
     H.ok(#best.rec > 0, label .. ' queried the saves folder engine')
-    H.ok(best.slowest < BUDGET,
+    H.timed(best.slowest < BUDGET,
         ('%s: every query under 250 ms (best of %d passes after a warm-up; slowest %.1f ms: %s)'):format(label, passes,
             best.slowest * 1000, OneLine(best.slowSql)))
     return best.res
@@ -950,7 +950,7 @@ Say(
     'one finished run: %d write statements %.1f ms (slowest %.1f ms: %s), %d documents rewritten (%d bytes); %d reads %.1f ms',
     wN, wT * 1000, slowW * 1000, OneLine(slowSql), docWrites, docBytes, rN, rT * 1000)
 H.ok(wN >= 3, 'the finished run wrote its row, cash and officer (' .. wN .. ' statements)')
-H.ok(wT < 0.020, ('saving one finished run takes about 20 ms or less (%.1f ms)'):format(wT * 1000))
+H.timed(wT < 0.020, ('saving one finished run takes about 20 ms or less (%.1f ms)'):format(wT * 1000))
 M.fs.write = realWrite
 -- FXServer's file:flush() is an fsync (LocalDevice::Flush), plain Lua's only empties its buffer: the same
 -- documents written again with an fsync each, on this machine's disk, by a helper (the wall time of each write)
@@ -1014,7 +1014,7 @@ Say('start-up load: %.2f s for %d runs (%.0f MB of Lua memory for the loaded eng
     #db2.tables.cp_mission_runs.rows, (memAfter - memBefore) / 1024)
 H.eq(#db2.tables.cp_mission_runs.rows, #db.tables.cp_mission_runs.rows, 'every run loaded')
 H.eq(#db2.tables.cp_officers.rows, #db.tables.cp_officers.rows, 'every officer loaded')
-H.ok(tLoad < 3, ('start-up load under 3 s (%.2f s)'):format(tLoad))
+H.timed(tLoad < 3, ('start-up load under 3 s (%.2f s)'):format(tLoad))
 db2 = nil
 
 -- size on disk

@@ -11,42 +11,42 @@ has none: its file's head comment in docs/dev/FILE_NOTES.md says what the file d
 
 | | functions |
 |---|---:|
-| named by a spec | 1126 |
-| via | 5734 |
+| named by a spec | 1127 |
+| via | 5735 |
 | world | 148 |
 | walk | 388 |
 | none | 275 |
-| all | 7671 |
+| all | 7673 |
 
-Client entry points: 102, 87 driven by a spec that loads their file, 15 known gaps (tools/coverage_gaps.txt).
+Client entry points: 110, 88 driven by a spec that loads their file, 22 known gaps (tools/coverage_gaps.txt).
 
 ## Client entry points
 
 | kind | name | file:line | spec |
 |---|---|---|---|
-| event | `client:push` | modules/access/client/options.lua:219 | int_web_spec |
+| event | `client:push` | modules/access/client/options.lua:219 | options_client_spec |
 | action | `getKeyHints` | modules/access/client/options.lua:238 | options_client_spec |
-| action | `getLocalOptions` | modules/access/client/options.lua:243 | int_web_spec |
-| action | `setLocalOption` | modules/access/client/options.lua:246 | int_web_spec |
-| event | `client:notify` | modules/access/client/tablet.lua:733 | access_spec |
-| event | `client:push` | modules/access/client/tablet.lua:748 | access_spec |
+| action | `getLocalOptions` | modules/access/client/options.lua:243 | options_client_spec |
+| action | `setLocalOption` | modules/access/client/options.lua:246 | options_client_spec |
+| event | `client:notify` | modules/access/client/tablet.lua:733 | core_spec |
+| event | `client:push` | modules/access/client/tablet.lua:748 | core_spec |
 | event | `client:openAdmin` | modules/access/client/tablet.lua:773 | access_spec |
-| nui | `ready` | modules/access/client/tablet.lua:795 | access_spec |
-| nui | `opened` | modules/access/client/tablet.lua:815 | access_spec |
+| nui | `ready` | modules/access/client/tablet.lua:795 | core_spec |
+| nui | `opened` | modules/access/client/tablet.lua:815 | freeze_spec |
 | nui | `close` | modules/access/client/tablet.lua:841 | access_spec |
 | nui | `request` | modules/access/client/tablet.lua:846 | access_spec |
-| nui | `action` | modules/access/client/tablet.lua:868 | access_spec |
-| nui | `client` | modules/access/client/tablet.lua:882 | access_spec |
+| nui | `action` | modules/access/client/tablet.lua:868 | core_spec |
+| nui | `client` | modules/access/client/tablet.lua:882 | core_spec |
 | nui | `switchUi` | modules/access/client/tablet.lua:902 | access_spec |
 | action | `logoFailed` | modules/access/client/tablet.lua:921 | core_spec |
 | export | `OpenTablet` | modules/access/client/tablet.lua:935 | core_spec |
-| export | `useTablet` | modules/access/client/tablet.lua:940 | access_spec |
-| action | `getKeyLabels` | modules/access/client/tablet.lua:984 | int_web_spec |
+| export | `useTablet` | modules/access/client/tablet.lua:940 | core_spec |
+| action | `getKeyLabels` | modules/access/client/tablet.lua:984 | my_keys_spec |
 | event | `client:closeTablet` | modules/access/client/tablet.lua:1352 | access_spec |
 | event | `client:startTour` | modules/access/client/training.lua:24 | livecrime_client_spec |
 | event | `client:diagUnstick` | modules/admin/client/diag.lua:116 | **none** |
 | event | `client:diagState` | modules/admin/client/diag.lua:121 | **none** |
-| event | `client:settings` | modules/admin/client/settings.lua:42 | module_layout_spec |
+| event | `client:settings` | modules/admin/client/settings.lua:42 | settings_spec |
 | event | `client:missionCall` | modules/dispatch/client/missioncalls.lua:40 | dispatch_spec |
 | event | `client:markerParts` | modules/map/client/markers.lua:1051 | markers_parts_spec |
 | action | `setObjectiveGps` | modules/map/client/markers.lua:1100 | markers_spec |
@@ -64,17 +64,25 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | action | `builderWaypoint` | modules/missions/client/builder.lua:2564 | builder_client_spec |
 | event | `client:builder` | modules/missions/client/builder.lua:2573 | builder_client_spec |
 | event | `client:missions` | modules/missions/client/missions.lua:65 | engine_a_spec |
-| event | `client:test` | modules/missions/client/testing.lua:871 | frame_loops_spec |
+| event | `client:test` | modules/missions/client/testing.lua:871 | testing_spec |
 | event | `client:testInvite` | modules/missions/client/testing.lua:907 | testing_spec |
 | event | `client:inProgress` | modules/missions/client/testing.lua:918 | **none** |
-| event | `client:runEnded` | modules/missions/client/testing.lua:922 | testing_spec |
-| action | `testControl` | modules/missions/client/testing.lua:937 | spawn_check_spec |
-| action | `teleport` | modules/missions/client/testing.lua:949 | int_web_spec |
-| action | `toggleDebug` | modules/missions/client/testing.lua:955 | testing_spec |
-| action | `spawnCheck` | modules/missions/client/testing.lua:960 | int_web_spec |
-| action | `spawnCheckStop` | modules/missions/client/testing.lua:961 | int_web_spec |
+| event | `client:runEnded` | modules/missions/client/testing.lua:922 | **none** |
+| action | `testControl` | modules/missions/client/testing.lua:937 | testing_spec |
+| action | `teleport` | modules/missions/client/testing.lua:949 | spawn_check_spec |
+| action | `toggleDebug` | modules/missions/client/testing.lua:955 | **none** |
+| action | `spawnCheck` | modules/missions/client/testing.lua:960 | spawn_check_spec |
+| action | `spawnCheckStop` | modules/missions/client/testing.lua:961 | spawn_check_spec |
 | action | `testPanel` | modules/missions/client/testing.lua:965 | testing_spec |
+| event | `client:contactConfirm` | modules/npc/client/custody.lua:134 | **none** |
 | action | `contactAction` | modules/npc/client/custody.lua:171 | **none** |
+| event | `client:serviceVehicle` | modules/npc/client/custody.lua:233 | **none** |
+| event | `client:serviceBlip` | modules/npc/client/custody.lua:265 | markers_spec |
+| event | `client:start` | modules/npc/client/npc.lua:1898 | npc_spec |
+| event | `client:participants` | modules/npc/client/npc.lua:1908 | check_tools_spec |
+| event | `client:hostChanged` | modules/npc/client/npc.lua:1913 | check_tools_spec |
+| event | `client:runEnded` | modules/npc/client/npc.lua:1927 | check_tools_spec |
+| event | `client:contactAct` | modules/npc/client/npc.lua:2292 | check_tools_spec |
 | event | `client:npcCombatDrop` | modules/npc/client/npccombat.lua:162 | npc_combat_spec |
 | nui | `crimtabClose` | modules/realplayers/client/crimtab.lua:137 | **none** |
 | nui | `crimtabAnswered` | modules/realplayers/client/crimtab.lua:143 | **none** |
@@ -96,11 +104,11 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | event | `client:pickup` | modules/runs/client/downed.lua:168 | freeze_spec |
 | event | `client:pickupCancel` | modules/runs/client/downed.lua:190 | freeze_spec |
 | event | `client:downedEnded` | modules/runs/client/downed.lua:196 | freeze_spec |
-| event | `client:requestEMS` | modules/runs/client/downed.lua:206 | freeze_spec |
+| event | `client:requestEMS` | modules/runs/client/downed.lua:206 | safety_spec |
 | event | `client:routeWarning` | modules/runs/client/route.lua:464 | safety_spec |
 | event | `client:routeRecalc` | modules/runs/client/route.lua:479 | markers_spec |
 | event | `client:routeStatus` | modules/runs/client/route.lua:487 | markers_spec |
-| event | `client:participants` | modules/runs/client/route.lua:492 | freeze_spec |
+| event | `client:participants` | modules/runs/client/route.lua:492 | **none** |
 | event | `client:start` | modules/runs/client/route.lua:506 | freeze_spec |
 | event | `client:runEnded` | modules/runs/client/route.lua:523 | freeze_spec |
 | action | `setGps` | modules/runs/client/route.lua:544 | markers_spec |
@@ -108,7 +116,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | event | `client:start` | modules/runs/client/runs.lua:438 | engine_b_spec |
 | event | `client:inProgress` | modules/runs/client/runs.lua:510 | engine_b_spec |
 | event | `client:objective` | modules/runs/client/runs.lua:533 | engine_b_spec |
-| event | `client:marker` | modules/runs/client/runs.lua:582 | engine_b_spec |
+| event | `client:marker` | modules/runs/client/runs.lua:582 | markers_spec |
 | event | `client:hud` | modules/runs/client/runs.lua:591 | engine_b_spec |
 | event | `client:tierChanged` | modules/runs/client/runs.lua:596 | engine_b_spec |
 | event | `client:hostChanged` | modules/runs/client/runs.lua:619 | engine_b_spec |
@@ -117,15 +125,15 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | event | `client:runEnded` | modules/runs/client/runs.lua:673 | engine_b_spec |
 | action | `logResult` | modules/runs/client/runs.lua:720 | engine_b_spec |
 | event | `client:runEnded` | modules/runs/client/spawn.lua:775 | spawn_placer_spec |
-| event | `client:revive` | modules/system/client/ambulance.lua:82 | core_spec |
+| event | `client:revive` | modules/system/client/ambulance.lua:82 | **none** |
 | event | `QBCore:Client:OnJobUpdate` | modules/system/client/qbx.lua:63 | core_spec |
 | event | `qbx_core:client:onGroupUpdate` | modules/system/client/qbx.lua:73 | core_spec |
 | event | `QBCore:Client:SetDuty` | modules/system/client/qbx.lua:82 | access_spec |
 | event | `QBCore:Client:OnPlayerUnload` | modules/system/client/qbx.lua:87 | core_spec |
 | event | `QBCore:Client:OnPlayerLoaded` | modules/system/client/qbx.lua:92 | core_spec |
-| event | `client:push` | modules/teams/client/teams.lua:54 | module_layout_spec |
+| event | `client:push` | modules/teams/client/teams.lua:54 | options_client_spec |
 | event | `client:readyCheck` | modules/teams/client/teams.lua:77 | options_client_spec |
-| event | `client:operation` | modules/teams/client/teams.lua:158 | teams_spec |
+| event | `client:operation` | modules/teams/client/teams.lua:158 | **none** |
 
 ## Functions
 
@@ -1536,7 +1544,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 599 | `step` | - | via admin_backup_spec |
 | 636 | `A.isSupervisor` | officer: getOfficer(src) when the caller already has it (CP.Permissions.can), so it is looked up once. | adminkit_spec |
 | 641 | `A.role` | - | adminkit_spec |
-| 649 | `A.recheck` | - | core_spec |
+| 649 | `A.recheck` | - | admin_boards_spec |
 | 668 | `A.onLost` | - | core_spec |
 | 676 | `FireLost` | - | via admin_backup_spec |
 | 687 | `Seed` | - | via admin_backup_spec |
@@ -1747,7 +1755,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 539 | `Opening` | What the officer option openOn 'active_on_run' needs (My options -> Opening the tablet): whether the player is on a run, and whether a re... | via access_spec |
 | 554 | `BuildSession` | The Session (§9.2) for 'ui', or nil and an error key. | via access_spec |
 | 701 | `T.notify` | opts: title (a locale key), duration (ms), channel ('social' = unit invites, commendations, rewards and profile news: the officer option... | access_spec |
-| 719 | `T.notifyMany` | - | core_spec |
+| 719 | `T.notifyMany` | - | admin_economy_spec |
 | 737 | `RunNavDue` | A 'run' push changes the onRun badge only when the run starts or ends. | via access_spec |
 | 747 | `PushGapMs` | Config.Performance.pushGapMs: the least time between two pushes of one topic to one player (0 = no wait). | via access_spec |
 | 758 | `MergePush` | - | via access_spec |
@@ -1823,7 +1831,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 461 | `QueueDropNotice` | Once the queue has room again: one audit post saying how many ordinary posts a full queue dropped. | via admin_backup_spec |
 | 483 | `Admin._pumpWebhooks` | - | via admin_backup_spec |
 | 511 | `Admin._webhookQueue` | - | adminkit_spec |
-| 514 | `Admin.webhook` | opts: { critical = true (never dropped from a full queue) } | admin_system_spec |
+| 514 | `Admin.webhook` | opts: { critical = true (never dropped from a full queue) } | admin_boards_spec |
 | 573 | `Admin._webhookDropped` | - | adminkit_spec |
 | 579 | `ResolveActor` | ============================================================================ AUDIT ======================================================... | via admin_backup_spec |
 | 597 | `ResolveRole` | - | via admin_backup_spec |
@@ -2042,7 +2050,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 1075 | `Maint.view` | - | admin_backup_spec |
 | 1079 | `Maint.mark` | More about the lock that is held (for example a restore that failed part way): fields are merged into its info and every client gets the... | admin_boards_spec |
 | 1088 | `Maint.askRestart` | The work is done and only a restart by the owner ends the lock: the Admin UI and one console line say so. | adminkit_spec |
-| 1108 | `Kit._reset` | Test hooks (not part of the contract). | admin_economy_spec |
+| 1108 | `Kit._reset` | Test hooks (not part of the contract). | admin_boards_spec |
 | 1111 | `Kit._jobKinds` | - | via admin_backup_spec |
 
 ### modules/admin/client/diag.lua
@@ -3551,7 +3559,7 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 381 | `Payments.stuckCount` | Stuck payments ('paying', and the follow-ups) for the sidebar badge, read at most every 30 s. | admin_economy_spec |
 | 400 | `Payments.departmentFunds` | - | via admin_economy_spec |
 | 411 | `spentSince` | - | via admin_economy_spec |
-| 465 | `Payments.sourcePreview` | Before Cash.source changes: each department's balance and what it would then pay (held and pending rows). | via admin_economy_spec |
+| 465 | `Payments.sourcePreview` | Before Cash.source changes: each department's balance and what it would then pay (held and pending rows). | admin_economy_spec |
 | 496 | `Payments.health` | Config health (CP.ConfigHealth 'cash'): the money account, missing society accounts, low balances. | admin_economy_spec |
 | 527 | `Payments.lowBalanceToasts` | Once a day: a toast to each department's online supervisors when its account is below Cash.lowBalanceWarn. | admin_economy_spec |
 | 558 | `OwnRow` | true when a row belongs to src (any character of their license, or a run they took part in) or the license is unknown: the S guard for a... | via admin_economy_spec |
@@ -3628,100 +3636,101 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 36 | `Cfg` | - | via admin_rewards_spec |
-| 38 | `Enabled` | - | via admin_rewards_spec |
-| 42 | `ToId` | - | via admin_rewards_spec |
-| 50 | `DayStart` | - | via admin_rewards_spec |
-| 56 | `WeekStart` | - | via admin_rewards_spec |
-| 61 | `WeekKey` | - | via admin_rewards_spec |
-| 68 | `Query` | - | via admin_rewards_spec |
-| 70 | `Update` | - | via admin_rewards_spec |
-| 72 | `CitizenOf` | - | via admin_rewards_spec |
-| 79 | `InArena` | - | via admin_rewards_spec |
-| 86 | `Notify` | Reward toasts are social: the officer option quietRun keeps their info and success ones in the bell during a run. | via admin_rewards_spec |
-| 90 | `Push` | - | via admin_rewards_spec |
-| 96 | `WithLock` | - | via admin_rewards_spec |
-| 109 | `Label` | - | via admin_rewards_spec |
-| 112 | `DeliveryHeld` | A maintenance lock holds reward delivery back (the rows wait in the locker); a store left behind never gives. | via admin_rewards_spec |
-| 123 | `ItemDef` | - | via admin_rewards_spec |
-| 128 | `CanCarry` | - | via admin_rewards_spec |
-| 134 | `AddItem` | true, false (refused: nothing was added) or nil (it raised: the inventory may have changed) | via admin_rewards_spec |
-| 149 | `PatternOf` | 'ammo-*' -> '^ammo%-.*$': a config pattern, matched on lower case | via admin_rewards_spec |
+| 36 | `Cfg` | - | via admin_boards_spec |
+| 38 | `Enabled` | - | via admin_boards_spec |
+| 42 | `ToId` | - | via admin_boards_spec |
+| 50 | `DayStart` | - | via admin_boards_spec |
+| 56 | `WeekStart` | - | via admin_boards_spec |
+| 61 | `WeekKey` | - | via admin_boards_spec |
+| 68 | `Query` | - | via admin_boards_spec |
+| 70 | `Update` | - | via admin_boards_spec |
+| 72 | `CitizenOf` | - | via admin_boards_spec |
+| 79 | `InArena` | - | via admin_boards_spec |
+| 86 | `Notify` | Reward toasts are social: the officer option quietRun keeps their info and success ones in the bell during a run. | via admin_boards_spec |
+| 90 | `Push` | - | via admin_boards_spec |
+| 96 | `WithLock` | - | via admin_boards_spec |
+| 109 | `Label` | - | via admin_boards_spec |
+| 112 | `DeliveryHeld` | A maintenance lock holds reward delivery back (the rows wait in the locker); a store left behind never gives. | via admin_boards_spec |
+| 123 | `ItemDef` | - | via admin_boards_spec |
+| 128 | `CanCarry` | - | via admin_boards_spec |
+| 134 | `AddItem` | true, false (refused: nothing was added) or nil (it raised: the inventory may have changed) | via admin_boards_spec |
+| 149 | `PatternOf` | 'ammo-*' -> '^ammo%-.*$': a config pattern, matched on lower case | via admin_boards_spec |
 | 154 | `Rewards.forbidden` | - | rewards_spec |
-| 167 | `SpecList` | A guaranteed reward is one spec { item, count, value } or a list of them. | via admin_rewards_spec |
-| 175 | `PoolList` | - | via admin_rewards_spec |
-| 182 | `SortedKeys` | - | via admin_rewards_spec |
-| 190 | `Pools` | Every configured pool: { key, specs, example }, in a stable order. | via admin_rewards_spec |
-| 219 | `Rewards.validate` | The start check: forbidden names and items ox_inventory does not know are turned off, with a warning when the owner uses that pool (the e... | anticheat_note_spec |
-| 258 | `EnsureChecked` | The check runs again once ox_inventory is up when it was not at the last check (it started late). | via admin_rewards_spec |
-| 264 | `Usable` | Checked twice: the forbidden names right here (an item added in game before the next check is never given), and the last check's list (fo... | via admin_rewards_spec |
-| 273 | `Rewards.usable` | For other modules (CP.FeatureRewards): may this item be given now (not forbidden, not refused by the last check)? | via admin_rewards_spec |
-| 275 | `Rewards.itemKnown` | - | via admin_rewards_spec |
+| 167 | `SpecList` | A guaranteed reward is one spec { item, count, value } or a list of them. | via admin_boards_spec |
+| 175 | `PoolList` | - | via admin_boards_spec |
+| 182 | `SortedKeys` | - | via admin_boards_spec |
+| 190 | `Pools` | Every configured pool: { key, specs, example }, in a stable order. | via admin_boards_spec |
+| 219 | `Rewards.validate` | The start check: forbidden names and items ox_inventory does not know are turned off, with a warning when the owner uses that pool (the e... | admin_boards_spec |
+| 258 | `EnsureChecked` | The check runs again once ox_inventory is up when it was not at the last check (it started late). | via admin_boards_spec |
+| 264 | `Usable` | Checked twice: the forbidden names right here (an item added in game before the next check is never given), and the last check's list (fo... | via admin_boards_spec |
+| 273 | `Rewards.usable` | For other modules (CP.FeatureRewards): may this item be given now (not forbidden, not refused by the last check)? | via admin_boards_spec |
+| 275 | `Rewards.itemKnown` | - | via admin_boards_spec |
 | 282 | `Rewards.health` | Config health lines ({ level, text }), for CP.ConfigHealth and the admin view. | rewards_spec |
 | 316 | `Rewards.entryFor` | The run entry for a mission: byMission replaces the type's entry; the example pool only with useExamplePools. | rewards_spec |
 | 327 | `Rewards.chanceFor` | entry.chance + the tier's tierChance + findBonus per lawful evidence find (up to findBonusMax), in [0, 1]. | rewards_spec |
-| 336 | `CountOf` | - | via admin_rewards_spec |
-| 346 | `Seed` | - | via admin_rewards_spec |
+| 336 | `CountOf` | - | via admin_boards_spec |
+| 346 | `Seed` | - | via admin_boards_spec |
 | 353 | `Rewards.roll` | The rolls of one run entry for one officer: the same for the same run id and citizenid, always. | admin_rewards_spec |
-| 387 | `Guaranteed` | A guaranteed spec as a reward, or nil when its item is turned off. | via admin_rewards_spec |
-| 399 | `UsedToday` | Items and value this officer got today, from every source (forfeited rows do not count). | via admin_rewards_spec |
-| 412 | `Store` | Inserts the rewards (list of { source, key, item, count, value }) under the daily caps; a reward past a cap gives nothing. | via admin_rewards_spec |
-| 445 | `RewardRow` | - | via admin_rewards_spec |
-| 463 | `Rewards.forRow` | - | via admin_rewards_spec |
-| 473 | `Rewards.lockerCount` | - | rewards_spec |
-| 491 | `ItemsView` | RunResult.items (the result screen: given, pending or held) and breakdown.items (the history, forfeited too). | via admin_rewards_spec |
-| 505 | `SyncBreakdown` | The history breakdown (cp_mission_runs.breakdown.items) follows the rewards of its row. | via admin_rewards_spec |
-| 522 | `BackToPending` | - | via admin_rewards_spec |
-| 529 | `GiveRow` | Gives one pending row to src. | via admin_rewards_spec |
-| 559 | `DeliverAll` | Every pending row of an online officer: given now, or left in the locker (arena, no room, no ox_inventory). | via admin_rewards_spec |
-| 593 | `Rewards.deliver` | - | admin_rewards_spec |
-| 599 | `Grant` | Stores rewards for one officer and delivers what is pending. | via admin_rewards_spec |
-| 617 | `PresenceFailed` | - | via admin_rewards_spec |
-| 632 | `RunFinds` | The run's lawful evidence finds, from every participant (the bonus is the run's, not the finder's). | via admin_rewards_spec |
-| 642 | `OnRowSettled` | row:settled: each participant of a Completed, non-test run who met the presence share rolls the run entry, and gets the medal and Weekly... | via admin_rewards_spec |
-| 691 | `OnRowApproved` | row:approved: held rewards of the row become pending and are given. | via admin_rewards_spec |
-| 709 | `OnRowVoided` | row:voided: rewards not given yet wait (held) for the dispute window, like held cash. | via admin_rewards_spec |
-| 726 | `OnRowForfeited` | row:forfeited: the dispute window closed on a voided row. | via admin_rewards_spec |
-| 749 | `ForfeitRows` | CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending. | via admin_rewards_spec |
-| 764 | `forfeitRow` | - | via admin_rewards_spec |
-| 793 | `ForfeitureJob` | Waits while a maintenance lock holds rewards back, and for an admin's bulk job; holds the busy lock meanwhile. | via admin_rewards_spec |
-| 812 | `SpecRewards` | - | via admin_rewards_spec |
-| 824 | `OnGoalCompleted` | goal:completed: Config.Rewards.goals[goalId], else goals.daily or goals.weekly; once per goal and period. | via admin_rewards_spec |
-| 835 | `OnLevelUp` | xp:levelUp (may not yield): every level passed that has an item, once per level. | via admin_rewards_spec |
-| 851 | `OnSeasonEnded` | season:ended: season.champion for the champion department's officers with a completed row in the season, season.top10 for the season's to... | via admin_rewards_spec |
-| 880 | `Rewards.locker` | - | admin_rewards_spec |
-| 906 | `Rewards.claim` | server:rewards:claim: everything is checked again here (own row, pending, not in the arena, room). | via admin_rewards_spec |
-| 926 | `AdminRows` | - | via admin_rewards_spec |
-| 940 | `AdminWhere` | WHERE for the admin filters: sql, params / nil, errKey. | via admin_rewards_spec |
-| 973 | `Rewards.adminView` | args: a page number (old callers) or { page, citizenid, status, source, from, to }. | via admin_rewards_spec |
-| 1048 | `RewardById` | - | via admin_rewards_spec |
-| 1056 | `RewardTarget` | - | via admin_rewards_spec |
-| 1061 | `TaggedSlots` | The officer's slots holding the item tagged with this reward (metadata cpReward = id): count, slots. | via admin_rewards_spec |
-| 1080 | `Rewards.checkInventory` | What the inventory says about one reward: { id, status, online, found, count, needed }. | via admin_rewards_spec |
-| 1104 | `Rewards.resolve` | outcome 'given' (found, or not found: the default) or 'locker' (not found, typed LOCKER): back to pending and delivered again. | via admin_rewards_spec |
-| 1133 | `Rewards.cancel` | Cancel: a pending or held reward is forfeited (the run keeps its points and its cash). | feature_rewards_spec |
-| 1147 | `Rewards.takeBack` | Take back: exactly the tagged item, from an online officer, under the officer's reward lock. | via admin_rewards_spec |
-| 1203 | `Rewards.undoForfeit` | row:forfeitUndone (an admin undid the forfeiture of a row: Unretire, a batch Undo, forfeited cash paid after all): the row's forfeited re... | admin_rewards_spec |
-| 1242 | `CheckSpec` | - | via admin_rewards_spec |
-| 1263 | `CheckSpecs` | - | via admin_rewards_spec |
-| 1273 | `CheckEntry` | - | via admin_rewards_spec |
-| 1289 | `CheckMap` | - | via admin_rewards_spec |
-| 1299 | `Rewards.checkSetting` | errKey / nil for one Rewards.* path and its new value. | feature_rewards_spec |
-| 1327 | `CountMean` | - | via admin_rewards_spec |
-| 1337 | `Rewards.expected` | The expected items and value per run of one run entry at each scaling tier (no evidence finds), in Lua. | via admin_rewards_spec |
-| 1366 | `Rewards.itemChoices` | The item picker: every ox_inventory item a reward may be (forbidden names left out), by name. | via admin_rewards_spec |
-| 1388 | `SelfOfReward` | - | via admin_rewards_spec |
-| 1430 | `confirm` | - | via admin_rewards_spec |
-| 1431 | `self` | - | via admin_rewards_spec |
-| 1443 | `self` | - | via admin_rewards_spec |
-| 1456 | `self` | - | via admin_rewards_spec |
-| 1474 | `confirm` | - | via admin_rewards_spec |
-| 1478 | `self` | - | via admin_rewards_spec |
-| 1487 | `HomeExtras` | Home: "rewards waiting", read from the cache only (the hook may not yield); a miss is read for the next refresh. | via admin_rewards_spec |
-| 1494 | `OnLoaded` | - | via admin_rewards_spec |
-| 1501 | `OnArenaExited` | arena:exited (may not yield): retried 10 s later, when Crimson-Arena has handed the inventory back. | via admin_rewards_spec |
-| 1577 | `Rewards._reset` | Test hooks (not part of the contract). | anticheat_note_spec |
-| 1581 | `Rewards._arenaWait` | - | rewards_spec |
+| 387 | `Guaranteed` | A guaranteed spec as a reward, or nil when its item is turned off. | via admin_boards_spec |
+| 399 | `UsedToday` | Items and value this officer got today, from every source (forfeited rows do not count). | via admin_boards_spec |
+| 414 | `Revivable` | Inserts the rewards (list of { source, key, item, count, value }) under the daily caps; a reward past a cap gives nothing. | via admin_boards_spec |
+| 420 | `Store` | - | via admin_boards_spec |
+| 467 | `RewardRow` | - | via admin_boards_spec |
+| 485 | `Rewards.forRow` | - | via admin_boards_spec |
+| 495 | `Rewards.lockerCount` | - | rewards_spec |
+| 513 | `ItemsView` | RunResult.items (the result screen: given, pending or held) and breakdown.items (the history, forfeited too). | via admin_boards_spec |
+| 527 | `SyncBreakdown` | The history breakdown (cp_mission_runs.breakdown.items) follows the rewards of its row. | via admin_boards_spec |
+| 544 | `BackToPending` | - | via admin_boards_spec |
+| 551 | `GiveRow` | Gives one pending row to src. | via admin_boards_spec |
+| 581 | `DeliverAll` | Every pending row of an online officer: given now, or left in the locker (arena, no room, no ox_inventory). | via admin_boards_spec |
+| 615 | `Rewards.deliver` | - | admin_rewards_spec |
+| 621 | `Grant` | Stores rewards for one officer and delivers what is pending. | via admin_boards_spec |
+| 639 | `PresenceFailed` | - | via admin_boards_spec |
+| 654 | `RunFinds` | The run's lawful evidence finds, from every participant (the bonus is the run's, not the finder's). | via admin_boards_spec |
+| 664 | `OnRowSettled` | row:settled: each participant of a Completed, non-test run who met the presence share rolls the run entry, and gets the medal and Weekly... | via admin_boards_spec |
+| 713 | `OnRowApproved` | row:approved: held rewards of the row become pending and are given. | via admin_boards_spec |
+| 731 | `OnRowVoided` | row:voided: rewards not given yet wait (held) for the dispute window, like held cash. | via admin_boards_spec |
+| 748 | `OnRowForfeited` | row:forfeited: the dispute window closed on a voided row. | via admin_boards_spec |
+| 771 | `ForfeitRows` | CP.Cash fires row:forfeited only for a voided row whose cash was still held or pending. | via admin_boards_spec |
+| 786 | `forfeitRow` | - | via admin_boards_spec |
+| 815 | `ForfeitureJob` | Waits while a maintenance lock holds rewards back, and for an admin's bulk job; holds the busy lock meanwhile. | via admin_boards_spec |
+| 834 | `SpecRewards` | - | via admin_boards_spec |
+| 846 | `OnGoalCompleted` | goal:completed: Config.Rewards.goals[goalId], else goals.daily or goals.weekly; once per goal and period. | via admin_boards_spec |
+| 857 | `OnLevelUp` | xp:levelUp (may not yield): every level passed that has an item, once per level. | via admin_boards_spec |
+| 874 | `OnSeasonEnded` | season:ended: season.champion for the champion department's officers with a completed row in the season, season.top10 for the season's to... | via admin_boards_spec |
+| 904 | `Rewards.locker` | - | admin_rewards_spec |
+| 930 | `Rewards.claim` | server:rewards:claim: everything is checked again here (own row, pending, not in the arena, room). | via admin_boards_spec |
+| 950 | `AdminRows` | - | via admin_boards_spec |
+| 964 | `AdminWhere` | WHERE for the admin filters: sql, params / nil, errKey. | via admin_boards_spec |
+| 997 | `Rewards.adminView` | args: a page number (old callers) or { page, citizenid, status, source, from, to }. | via admin_boards_spec |
+| 1072 | `RewardById` | - | via admin_boards_spec |
+| 1080 | `RewardTarget` | - | via admin_boards_spec |
+| 1085 | `TaggedSlots` | The officer's slots holding the item tagged with this reward (metadata cpReward = id): count, slots. | via admin_boards_spec |
+| 1104 | `Rewards.checkInventory` | What the inventory says about one reward: { id, status, online, found, count, needed }. | via admin_boards_spec |
+| 1128 | `Rewards.resolve` | outcome 'given' (found, or not found: the default) or 'locker' (not found, typed LOCKER): back to pending and delivered again. | via admin_boards_spec |
+| 1157 | `Rewards.cancel` | Cancel: a pending or held reward is forfeited (the run keeps its points and its cash). | admin_boards_spec |
+| 1171 | `Rewards.takeBack` | Take back: exactly the tagged item, from an online officer, under the officer's reward lock. | via admin_boards_spec |
+| 1227 | `Rewards.undoForfeit` | row:forfeitUndone (an admin undid the forfeiture of a row: Unretire, a batch Undo, forfeited cash paid after all): the row's forfeited re... | admin_rewards_spec |
+| 1266 | `CheckSpec` | - | via admin_boards_spec |
+| 1287 | `CheckSpecs` | - | via admin_boards_spec |
+| 1297 | `CheckEntry` | - | via admin_boards_spec |
+| 1313 | `CheckMap` | - | via admin_boards_spec |
+| 1323 | `Rewards.checkSetting` | errKey / nil for one Rewards.* path and its new value. | feature_rewards_spec |
+| 1351 | `CountMean` | - | via admin_boards_spec |
+| 1361 | `Rewards.expected` | The expected items and value per run of one run entry at each scaling tier (no evidence finds), in Lua. | via admin_boards_spec |
+| 1390 | `Rewards.itemChoices` | The item picker: every ox_inventory item a reward may be (forbidden names left out), by name. | via admin_boards_spec |
+| 1412 | `SelfOfReward` | - | via admin_boards_spec |
+| 1454 | `confirm` | - | via admin_boards_spec |
+| 1455 | `self` | - | via admin_boards_spec |
+| 1467 | `self` | - | via admin_boards_spec |
+| 1480 | `self` | - | via admin_boards_spec |
+| 1498 | `confirm` | - | via admin_boards_spec |
+| 1502 | `self` | - | via admin_boards_spec |
+| 1511 | `HomeExtras` | Home: "rewards waiting", read from the cache only (the hook may not yield); a miss is read for the next refresh. | via admin_boards_spec |
+| 1518 | `OnLoaded` | - | via admin_boards_spec |
+| 1525 | `OnArenaExited` | arena:exited (may not yield): retried 10 s later, when Crimson-Arena has handed the inventory back. | via admin_boards_spec |
+| 1601 | `Rewards._reset` | Test hooks (not part of the contract). | admin_boards_spec |
+| 1605 | `Rewards._arenaWait` | - | rewards_spec |
 
 ### modules/npc/client/custody.lua
 
@@ -3744,154 +3753,154 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 305 | `Now` | - | via loop_pace_spec |
-| 307 | `CurrentRun` | - | via loop_pace_spec |
-| 314 | `MyServerId` | - | via loop_pace_spec |
-| 316 | `ValidPed` | - | via loop_pace_spec |
-| 320 | `ToVec3` | - | via loop_pace_spec |
-| 326 | `PointsOf` | - | via loop_pace_spec |
-| 341 | `perFrame.readCp` | one reader for every bag read (no new closure per read) | via loop_pace_spec |
-| 343 | `BagOf` | - | via loop_pace_spec |
-| 357 | `perFrame.fresh` | - | via loop_pace_spec |
+| 305 | `Now` | - | via check_tools_spec |
+| 307 | `CurrentRun` | - | via check_tools_spec |
+| 314 | `MyServerId` | - | via check_tools_spec |
+| 316 | `ValidPed` | - | via check_tools_spec |
+| 320 | `ToVec3` | - | via check_tools_spec |
+| 326 | `PointsOf` | - | via check_tools_spec |
+| 341 | `perFrame.readCp` | one reader for every bag read (no new closure per read) | via check_tools_spec |
+| 343 | `BagOf` | - | via check_tools_spec |
+| 357 | `perFrame.fresh` | - | via check_tools_spec |
 | 368 | `perFrame.bag` | The entity's cp bag, read once per frame; nil for no entity, one that is gone or one that is not networked (the checks ContactBag and Cuf... | npc_spec |
 | 383 | `perFrame.currentRun` | CurrentRun(), asked once per frame. | spawn_placer_npc_spec |
-| 390 | `perFrame.isDead` | The local player is dead / in any vehicle, asked once per frame. | via loop_pace_spec |
+| 390 | `perFrame.isDead` | The local player is dead / in any vehicle, asked once per frame. | via check_tools_spec |
 | 396 | `perFrame.inCar` | - | loop_pace_spec |
-| 402 | `FleeCfg` | - | via loop_pace_spec |
-| 409 | `GaitOf` | The gait the server's flee clock wrote in a ped's cp bag: 'sprint' unless it is fleeing and Config.Flee is on (a missing or unknown gait... | via loop_pace_spec |
-| 414 | `Foreign` | - | via loop_pace_spec |
-| 418 | `InForeignArena` | - | via loop_pace_spec |
-| 424 | `SpeedOf` | args.speed is m/s (args.kmh is accepted too); defaultMs when neither is given. | via loop_pace_spec |
-| 432 | `StyleOf` | A numeric args.drivingStyle wins over the args.style name. | via loop_pace_spec |
-| 438 | `Aggressive` | - | via loop_pace_spec |
-| 447 | `LoadDict` | - | via loop_pace_spec |
-| 462 | `PlayAnim` | - | via loop_pace_spec |
-| 468 | `Control` | - | via loop_pace_spec |
-| 483 | `EntityFromNet` | - | via loop_pace_spec |
-| 496 | `VehicleOf` | - | via loop_pace_spec |
-| 506 | `IsDriver` | - | via loop_pace_spec |
-| 514 | `EnsureGroups` | - | via loop_pace_spec |
-| 538 | `CacheParticipants` | - | via loop_pace_spec |
-| 552 | `ParticipantSrcs` | - | via loop_pace_spec |
-| 554 | `add` | - | via loop_pace_spec |
-| 579 | `ParticipantPeds` | - | via loop_pace_spec |
-| 591 | `Npc.nearestParticipant` | - | npc_spec |
-| 603 | `IsParticipantPed` | - | via loop_pace_spec |
-| 616 | `WeaponHash` | - | via loop_pace_spec |
-| 622 | `Disarm` | - | via loop_pace_spec |
-| 627 | `Pristine` | - | via loop_pace_spec |
-| 632 | `NC` | Config.NpcCombat (shared/npccombat.lua), or nil before it loaded. | via loop_pace_spec |
-| 640 | `ApplyBehaviour` | With Config.NpcCombat.noCharge an NPC never charges (13 aggressive and 50 charge stay off), and its combat ability is at most abilityMax. | via loop_pace_spec |
-| 662 | `ApplyCaps` | Config.NpcCombat on an armed mission ped this game owns: the accuracy cap, the shoot rate, the firing pattern, the combat ability cap, no... | via loop_pace_spec |
-| 685 | `ReapplyPattern` | TaskCombatPed may pick its own firing pattern for the weapon: Config.NpcCombat's goes back on after each one. | via loop_pace_spec |
-| 691 | `GroupFor` | - | via loop_pace_spec |
-| 701 | `ApplyWith` | - | via loop_pace_spec |
-| 767 | `Npc.apply` | - | npc_spec |
-| 776 | `IsCurrent` | - | via loop_pace_spec |
-| 784 | `Held` | A ped that waits for its placement (its cp bag asks for one: CP.Spawn.holds) stays frozen, so this game, maybe with no ground loaded wher... | via loop_pace_spec |
-| 789 | `LetGo` | - | via loop_pace_spec |
-| 800 | `Release` | Undo a pose (kneeling, cuffed, cowering) before a moving task. | via loop_pace_spec |
-| 806 | `Calm` | - | via loop_pace_spec |
-| 815 | `RunTo` | mbr: the move blend ratio of the runner's gait (GAIT_MBR), a sprint without one. | via loop_pace_spec |
-| 819 | `DriveTo` | - | via loop_pace_spec |
-| 825 | `ArriveRadius` | - | via loop_pace_spec |
-| 831 | `NearestAhead` | The nearest point AHEAD: walking the route from its first point, the first local minimum of the distance (a later part of the route that... | via loop_pace_spec |
-| 845 | `StartIndex` | args.startIndex when given, else the nearest point ahead (or the one after it when already there). | via loop_pace_spec |
-| 856 | `SmartFlee` | - | via loop_pace_spec |
-| 880 | `AwayPoint` | The navmesh point GetSafeCoordForPed finds near the end of a leg from pos along (dx, dy), or nil: none, one less than two arrive radii ah... | via loop_pace_spec |
-| 893 | `AwayLeg` | A tired runner with no route left: GTA's flee task has no speed, so he runs navmesh legs at his gait instead, each 40 m straight away fro... | via loop_pace_spec |
-| 927 | `FreeFlee` | A flee with no route, or at its end: GTA's smart flee while the runner sprints or sits in a vehicle, else away legs. | via loop_pace_spec |
-| 939 | `Hold` | No participant to fight: stay put without looking for targets. | via loop_pace_spec |
-| 946 | `ACTIONS.combat` | - | npc_spec |
-| 975 | `ACTIONS.flee` | - | npc_spec |
-| 1008 | `ACTIONS.handsUp` | - | npc_spec |
-| 1014 | `ACTIONS.kneel` | - | npc_spec |
-| 1039 | `ACTIONS.cuffed` | - | npc_spec |
-| 1058 | `ACTIONS.follow` | - | npc_spec |
-| 1087 | `ACTIONS.followPed` | An escorted person walks beside the officer (src = the escorting officer's server id), hands cuffed. | via loop_pace_spec |
-| 1104 | `ACTIONS.stand` | A stopped person on foot: stands still, calm, facing the nearest participant. | via loop_pace_spec |
-| 1113 | `ACTIONS.leave` | Released, warned or cited: walks off, or drives off from the driver seat. | via loop_pace_spec |
-| 1125 | `ACTIONS.cower` | - | npc_spec |
-| 1131 | `ACTIONS.wander` | - | npc_spec |
-| 1138 | `ACTIONS.enterVehicle` | - | npc_spec |
-| 1149 | `ACTIONS.driveTo` | - | npc_spec |
-| 1164 | `ACTIONS.driveRoute` | - | npc_spec |
-| 1182 | `SamePoint` | - | via loop_pace_spec |
-| 1190 | `SameTask` | Poses and combat on the same target are never restarted (no animation replay); a flee without points keeps a running route or a tired run... | via loop_pace_spec |
-| 1216 | `Npc.task` | - | npc_spec |
-| 1254 | `Stuck` | - | via loop_pace_spec |
-| 1263 | `StepCombat` | - | via loop_pace_spec |
-| 1285 | `StepPoints` | - | via loop_pace_spec |
-| 1331 | `StepAway` | A tired runner's next away leg: at the end of the last one, when he is stuck, or when an officer is now nearer its end than he is (it wou... | via loop_pace_spec |
-| 1355 | `Regait` | The server changed a runner's gait (Config.Flee): the leg he is on is given again at the new pace. | via loop_pace_spec |
-| 1365 | `StepPose` | - | via loop_pace_spec |
-| 1372 | `Step` | - | via loop_pace_spec |
-| 1421 | `EnsureLoop` | - | via loop_pace_spec |
-| 1474 | `TaskKey` | ============================================================================ THE CP STATE BAG (host re-tasking) =========================... | via loop_pace_spec |
-| 1479 | `Retask` | - | via loop_pace_spec |
-| 1507 | `OnHostBag` | settled = the ped was already in this state before (host change, stream-in): no transitions. | via loop_pace_spec |
-| 1528 | `Schedule` | - | via loop_pace_spec |
-| 1536 | `ForgetRun` | - | via loop_pace_spec |
-| 1547 | `MarkDropSafe` | - | via loop_pace_spec |
-| 1563 | `ProtectDrops` | - | via loop_pace_spec |
-| 1608 | `PaceRate` | - | via loop_pace_spec |
-| 1615 | `PaceFor` | The pace a ped's bag asks of the game that owns it, or nil: none in a vehicle, dead or not tired. | via loop_pace_spec |
-| 1620 | `ClipSetReady` | - | via loop_pace_spec |
-| 1643 | `Unpace` | His own pace back: no cap, the normal move rate and his own walk (only on a ped this game still owns). | via loop_pace_spec |
-| 1650 | `LetGo` | - | via loop_pace_spec |
-| 1657 | `LetGoAll` | - | via loop_pace_spec |
-| 1664 | `ReleaseAssets` | The end of the run: the game may unload the pose and tell dictionaries and the jog and winded walk clip sets (RemoveAnimDict, RemoveClipS... | via loop_pace_spec |
-| 1672 | `HoldPace` | One frame of a tired runner: the cap and the move rate (both every frame), and the clip set once it is loaded. | via loop_pace_spec |
-| 1688 | `PaceStep` | - | via loop_pace_spec |
-| 1712 | `EnsurePacer` | - | via loop_pace_spec |
-| 1737 | `Pace` | A ped of the run that this game owns: held to its gait while it is tired; once it is not, its own pace back if a bag of it asked for a pa... | via loop_pace_spec |
-| 1753 | `Tired` | true while the ped's bag asks the game that owns him for a tired runner's pace | via loop_pace_spec |
-| 1756 | `PaceBag` | A new bag of a ped of the run: a gait change reaches the pace in the same frame. | via loop_pace_spec |
-| 1778 | `ArmedBag` | - | via loop_pace_spec |
-| 1788 | `CalmBag` | A calm person of the run waiting idle with no contact (a raid's staged crew before the breach): every game that owns him ignores what goe... | via loop_pace_spec |
-| 1796 | `KeepRunning` | A tired runner with no route keeps moving on whichever game owns him (OneSync hands him to the officer chasing him): the host's away leg... | via loop_pace_spec |
-| 1822 | `GovernStep` | - | via loop_pace_spec |
-| 1856 | `EnsureGovernor` | - | via loop_pace_spec |
-| 2008 | `ActionLabel` | - | via loop_pace_spec |
-| 2010 | `ReachOf` | - | via loop_pace_spec |
-| 2018 | `ContactBag` | read: how the bag is read (BagOf when not given; the ox_target options pass perFrame.bag). | via loop_pace_spec |
-| 2033 | `Offers` | - | via loop_pace_spec |
-| 2037 | `CanAct` | - | via loop_pace_spec |
-| 2044 | `perFrame.canAct` | CanAct, asked once per frame (the ox_target options). | via loop_pace_spec |
-| 2050 | `Perform` | - | via loop_pace_spec |
-| 2058 | `PersonOption` | - | via loop_pace_spec |
-| 2064 | `canInteract` | - | via loop_pace_spec |
-| 2075 | `onSelect` | - | via loop_pace_spec |
-| 2082 | `VehicleOption` | - | via loop_pace_spec |
-| 2088 | `canInteract` | - | via loop_pace_spec |
-| 2098 | `onSelect` | - | via loop_pace_spec |
-| 2106 | `SeatOption` | A door option: the person in that seat (GetPedInVehicleSeat) is the target; the server resolves it again. | via loop_pace_spec |
-| 2114 | `canInteract` | - | via loop_pace_spec |
-| 2128 | `onSelect` | - | via loop_pace_spec |
-| 2135 | `RegisterContactOptions` | - | via loop_pace_spec |
-| 2153 | `RemoveContactOptions` | - | via loop_pace_spec |
-| 2169 | `RunBags` | - | via loop_pace_spec |
-| 2182 | `NearestOfList` | - | via loop_pace_spec |
-| 2193 | `TransportVan` | The run's transport van within 8 m: only networked vehicles in reach have their bag read (a pool holds 100-300 vehicles downtown). | via loop_pace_spec |
-| 2208 | `ContactKey` | - | via loop_pace_spec |
-| 2263 | `ActOn` | - | via loop_pace_spec |
-| 2330 | `DefaultLabel` | - | via loop_pace_spec |
-| 2332 | `LabelOf` | - | via loop_pace_spec |
-| 2340 | `OptionLabelOf` | The option that offers this bag: the one of its label, or the default one for a label that came after the MAX_OPTIONS cap (labels pile up... | via loop_pace_spec |
-| 2346 | `RangeOf` | - | via loop_pace_spec |
-| 2350 | `DurationOf` | - | via loop_pace_spec |
-| 2355 | `CuffableBag` | read: how the bag is read (BagOf when not given; the cuff options pass perFrame.bag). | via loop_pace_spec |
-| 2365 | `CanCuff` | - | via loop_pace_spec |
-| 2376 | `CancelProgress` | - | via loop_pace_spec |
-| 2380 | `CuffFlow` | - | via loop_pace_spec |
-| 2429 | `OptionFor` | - | via loop_pace_spec |
-| 2435 | `canInteract` | - | via loop_pace_spec |
-| 2439 | `onSelect` | - | via loop_pace_spec |
-| 2453 | `RegisterOption` | - | via loop_pace_spec |
-| 2458 | `EnsureCuffOption` | - | via loop_pace_spec |
-| 2470 | `RemoveAll` | - | via loop_pace_spec |
-| 2481 | `TargetMenuOpen` | ox_target's eye menu is open (false when ox_target is gone or cannot say). | via loop_pace_spec |
-| 2491 | `SyncTargetOptions` | The cuff, contact, custody and seat options exist only while the local player is on a run: ox_target calls each canInteract every 50 ms w... | via loop_pace_spec |
+| 402 | `FleeCfg` | - | via check_tools_spec |
+| 409 | `GaitOf` | The gait the server's flee clock wrote in a ped's cp bag: 'sprint' unless it is fleeing and Config.Flee is on (a missing or unknown gait... | via check_tools_spec |
+| 414 | `Foreign` | - | via check_tools_spec |
+| 418 | `InForeignArena` | - | via check_tools_spec |
+| 424 | `SpeedOf` | args.speed is m/s (args.kmh is accepted too); defaultMs when neither is given. | via check_tools_spec |
+| 432 | `StyleOf` | A numeric args.drivingStyle wins over the args.style name. | via check_tools_spec |
+| 438 | `Aggressive` | - | via check_tools_spec |
+| 447 | `LoadDict` | - | via check_tools_spec |
+| 462 | `PlayAnim` | - | via check_tools_spec |
+| 468 | `Control` | - | via check_tools_spec |
+| 483 | `EntityFromNet` | - | via check_tools_spec |
+| 496 | `VehicleOf` | - | via check_tools_spec |
+| 506 | `IsDriver` | - | via check_tools_spec |
+| 514 | `EnsureGroups` | - | via check_tools_spec |
+| 538 | `CacheParticipants` | - | via check_tools_spec |
+| 552 | `ParticipantSrcs` | - | via check_tools_spec |
+| 554 | `add` | - | via check_tools_spec |
+| 579 | `ParticipantPeds` | - | via check_tools_spec |
+| 591 | `Npc.nearestParticipant` | - | check_tools_spec |
+| 603 | `IsParticipantPed` | - | via check_tools_spec |
+| 616 | `WeaponHash` | - | via check_tools_spec |
+| 622 | `Disarm` | - | via check_tools_spec |
+| 627 | `Pristine` | - | via check_tools_spec |
+| 632 | `NC` | Config.NpcCombat (shared/npccombat.lua), or nil before it loaded. | via check_tools_spec |
+| 640 | `ApplyBehaviour` | With Config.NpcCombat.noCharge an NPC never charges (13 aggressive and 50 charge stay off), and its combat ability is at most abilityMax. | via check_tools_spec |
+| 662 | `ApplyCaps` | Config.NpcCombat on an armed mission ped this game owns: the accuracy cap, the shoot rate, the firing pattern, the combat ability cap, no... | via check_tools_spec |
+| 685 | `ReapplyPattern` | TaskCombatPed may pick its own firing pattern for the weapon: Config.NpcCombat's goes back on after each one. | via check_tools_spec |
+| 691 | `GroupFor` | - | via check_tools_spec |
+| 701 | `ApplyWith` | - | via check_tools_spec |
+| 767 | `Npc.apply` | - | check_tools_spec |
+| 776 | `IsCurrent` | - | via check_tools_spec |
+| 784 | `Held` | A ped that waits for its placement (its cp bag asks for one: CP.Spawn.holds) stays frozen, so this game, maybe with no ground loaded wher... | via check_tools_spec |
+| 789 | `LetGo` | - | via check_tools_spec |
+| 800 | `Release` | Undo a pose (kneeling, cuffed, cowering) before a moving task. | via check_tools_spec |
+| 806 | `Calm` | - | via check_tools_spec |
+| 815 | `RunTo` | mbr: the move blend ratio of the runner's gait (GAIT_MBR), a sprint without one. | via check_tools_spec |
+| 819 | `DriveTo` | - | via check_tools_spec |
+| 825 | `ArriveRadius` | - | via check_tools_spec |
+| 831 | `NearestAhead` | The nearest point AHEAD: walking the route from its first point, the first local minimum of the distance (a later part of the route that... | via check_tools_spec |
+| 845 | `StartIndex` | args.startIndex when given, else the nearest point ahead (or the one after it when already there). | via check_tools_spec |
+| 856 | `SmartFlee` | - | via check_tools_spec |
+| 880 | `AwayPoint` | The navmesh point GetSafeCoordForPed finds near the end of a leg from pos along (dx, dy), or nil: none, one less than two arrive radii ah... | via check_tools_spec |
+| 893 | `AwayLeg` | A tired runner with no route left: GTA's flee task has no speed, so he runs navmesh legs at his gait instead, each 40 m straight away fro... | via check_tools_spec |
+| 927 | `FreeFlee` | A flee with no route, or at its end: GTA's smart flee while the runner sprints or sits in a vehicle, else away legs. | via check_tools_spec |
+| 939 | `Hold` | No participant to fight: stay put without looking for targets. | via check_tools_spec |
+| 946 | `ACTIONS.combat` | - | check_tools_spec |
+| 975 | `ACTIONS.flee` | - | check_tools_spec |
+| 1008 | `ACTIONS.handsUp` | - | check_tools_spec |
+| 1014 | `ACTIONS.kneel` | - | check_tools_spec |
+| 1039 | `ACTIONS.cuffed` | - | check_tools_spec |
+| 1058 | `ACTIONS.follow` | - | check_tools_spec |
+| 1087 | `ACTIONS.followPed` | An escorted person walks beside the officer (src = the escorting officer's server id), hands cuffed. | via check_tools_spec |
+| 1104 | `ACTIONS.stand` | A stopped person on foot: stands still, calm, facing the nearest participant. | via check_tools_spec |
+| 1113 | `ACTIONS.leave` | Released, warned or cited: walks off, or drives off from the driver seat. | via check_tools_spec |
+| 1125 | `ACTIONS.cower` | - | check_tools_spec |
+| 1131 | `ACTIONS.wander` | - | check_tools_spec |
+| 1138 | `ACTIONS.enterVehicle` | - | check_tools_spec |
+| 1149 | `ACTIONS.driveTo` | - | check_tools_spec |
+| 1164 | `ACTIONS.driveRoute` | - | check_tools_spec |
+| 1182 | `SamePoint` | - | via check_tools_spec |
+| 1190 | `SameTask` | Poses and combat on the same target are never restarted (no animation replay); a flee without points keeps a running route or a tired run... | via check_tools_spec |
+| 1216 | `Npc.task` | - | check_tools_spec |
+| 1254 | `Stuck` | - | via check_tools_spec |
+| 1263 | `StepCombat` | - | via check_tools_spec |
+| 1285 | `StepPoints` | - | via check_tools_spec |
+| 1331 | `StepAway` | A tired runner's next away leg: at the end of the last one, when he is stuck, or when an officer is now nearer its end than he is (it wou... | via check_tools_spec |
+| 1355 | `Regait` | The server changed a runner's gait (Config.Flee): the leg he is on is given again at the new pace. | via check_tools_spec |
+| 1365 | `StepPose` | - | via check_tools_spec |
+| 1372 | `Step` | - | via check_tools_spec |
+| 1421 | `EnsureLoop` | - | via check_tools_spec |
+| 1474 | `TaskKey` | ============================================================================ THE CP STATE BAG (host re-tasking) =========================... | via check_tools_spec |
+| 1479 | `Retask` | - | via check_tools_spec |
+| 1507 | `OnHostBag` | settled = the ped was already in this state before (host change, stream-in): no transitions. | via check_tools_spec |
+| 1528 | `Schedule` | - | via check_tools_spec |
+| 1536 | `ForgetRun` | - | via check_tools_spec |
+| 1547 | `MarkDropSafe` | - | via check_tools_spec |
+| 1563 | `ProtectDrops` | - | via check_tools_spec |
+| 1608 | `PaceRate` | - | via check_tools_spec |
+| 1615 | `PaceFor` | The pace a ped's bag asks of the game that owns it, or nil: none in a vehicle, dead or not tired. | via check_tools_spec |
+| 1620 | `ClipSetReady` | - | via check_tools_spec |
+| 1643 | `Unpace` | His own pace back: no cap, the normal move rate and his own walk (only on a ped this game still owns). | via check_tools_spec |
+| 1650 | `LetGo` | - | via check_tools_spec |
+| 1657 | `LetGoAll` | - | via check_tools_spec |
+| 1664 | `ReleaseAssets` | The end of the run: the game may unload the pose and tell dictionaries and the jog and winded walk clip sets (RemoveAnimDict, RemoveClipS... | via check_tools_spec |
+| 1672 | `HoldPace` | One frame of a tired runner: the cap and the move rate (both every frame), and the clip set once it is loaded. | via check_tools_spec |
+| 1688 | `PaceStep` | - | via check_tools_spec |
+| 1712 | `EnsurePacer` | - | via check_tools_spec |
+| 1737 | `Pace` | A ped of the run that this game owns: held to its gait while it is tired; once it is not, its own pace back if a bag of it asked for a pa... | via check_tools_spec |
+| 1753 | `Tired` | true while the ped's bag asks the game that owns him for a tired runner's pace | via check_tools_spec |
+| 1756 | `PaceBag` | A new bag of a ped of the run: a gait change reaches the pace in the same frame. | via check_tools_spec |
+| 1778 | `ArmedBag` | - | via check_tools_spec |
+| 1788 | `CalmBag` | A calm person of the run waiting idle with no contact (a raid's staged crew before the breach): every game that owns him ignores what goe... | via check_tools_spec |
+| 1796 | `KeepRunning` | A tired runner with no route keeps moving on whichever game owns him (OneSync hands him to the officer chasing him): the host's away leg... | via check_tools_spec |
+| 1822 | `GovernStep` | - | via check_tools_spec |
+| 1856 | `EnsureGovernor` | - | via check_tools_spec |
+| 2008 | `ActionLabel` | - | via check_tools_spec |
+| 2010 | `ReachOf` | - | via check_tools_spec |
+| 2018 | `ContactBag` | read: how the bag is read (BagOf when not given; the ox_target options pass perFrame.bag). | via check_tools_spec |
+| 2033 | `Offers` | - | via check_tools_spec |
+| 2037 | `CanAct` | - | via check_tools_spec |
+| 2044 | `perFrame.canAct` | CanAct, asked once per frame (the ox_target options). | via check_tools_spec |
+| 2050 | `Perform` | - | via check_tools_spec |
+| 2058 | `PersonOption` | - | via check_tools_spec |
+| 2064 | `canInteract` | - | via check_tools_spec |
+| 2075 | `onSelect` | - | via check_tools_spec |
+| 2082 | `VehicleOption` | - | via check_tools_spec |
+| 2088 | `canInteract` | - | via check_tools_spec |
+| 2098 | `onSelect` | - | via check_tools_spec |
+| 2106 | `SeatOption` | A door option: the person in that seat (GetPedInVehicleSeat) is the target; the server resolves it again. | via check_tools_spec |
+| 2114 | `canInteract` | - | via check_tools_spec |
+| 2128 | `onSelect` | - | via check_tools_spec |
+| 2135 | `RegisterContactOptions` | - | via check_tools_spec |
+| 2153 | `RemoveContactOptions` | - | via check_tools_spec |
+| 2169 | `RunBags` | - | via check_tools_spec |
+| 2182 | `NearestOfList` | - | via check_tools_spec |
+| 2193 | `TransportVan` | The run's transport van within 8 m: only networked vehicles in reach have their bag read (a pool holds 100-300 vehicles downtown). | via check_tools_spec |
+| 2208 | `ContactKey` | - | via check_tools_spec |
+| 2263 | `ActOn` | - | via check_tools_spec |
+| 2330 | `DefaultLabel` | - | via check_tools_spec |
+| 2332 | `LabelOf` | - | via check_tools_spec |
+| 2340 | `OptionLabelOf` | The option that offers this bag: the one of its label, or the default one for a label that came after the MAX_OPTIONS cap (labels pile up... | via check_tools_spec |
+| 2346 | `RangeOf` | - | via check_tools_spec |
+| 2350 | `DurationOf` | - | via check_tools_spec |
+| 2355 | `CuffableBag` | read: how the bag is read (BagOf when not given; the cuff options pass perFrame.bag). | via check_tools_spec |
+| 2365 | `CanCuff` | - | via check_tools_spec |
+| 2376 | `CancelProgress` | - | via check_tools_spec |
+| 2380 | `CuffFlow` | - | via check_tools_spec |
+| 2429 | `OptionFor` | - | via check_tools_spec |
+| 2435 | `canInteract` | - | via check_tools_spec |
+| 2439 | `onSelect` | - | via check_tools_spec |
+| 2453 | `RegisterOption` | - | via check_tools_spec |
+| 2458 | `EnsureCuffOption` | - | via check_tools_spec |
+| 2470 | `RemoveAll` | - | via check_tools_spec |
+| 2481 | `TargetMenuOpen` | ox_target's eye menu is open (false when ox_target is gone or cannot say). | via check_tools_spec |
+| 2491 | `SyncTargetOptions` | The cuff, contact, custody and seat options exist only while the local player is on a run: ox_target calls each canInteract every 50 ms w... | via check_tools_spec |
 
 ### modules/npc/client/npccombat.lua
 
@@ -4565,12 +4574,13 @@ Client entry points: 102, 87 driven by a spec that loads their file, 15 known ga
 | 1152 | `ReadBannedFile` | The file's lines as they are (comments and blank lines kept) and its words in order. | via admin_boards_spec |
 | 1165 | `CleanWord` | - | via admin_boards_spec |
 | 1174 | `BannedMatches` | - | via admin_boards_spec |
-| 1373 | `Filled` | An action's refusal carries a key only: one with values (a limit from the config) goes as its filled text. | via admin_boards_spec |
-| 1384 | `SupAction` | Supervisor handlers check the permission first (ARCHITECTURE §0.7), then the payload. | via admin_boards_spec |
-| 1396 | `AdminAction` | - | via admin_boards_spec |
-| 1442 | `HomeExtras` | Home: "Commended for Valor by ..." for announceDays days. | via admin_boards_spec |
-| 1481 | `Profile._resetCaches` | Test hooks (not part of the contract). | profile_spec |
-| 1485 | `Profile._news` | - | profile_spec |
+| 1310 | `CommendationOwner` | Never on a commendation of the admin's own license (any of his characters), as commend and handleReport | via admin_boards_spec |
+| 1382 | `Filled` | An action's refusal carries a key only: one with values (a limit from the config) goes as its filled text. | via admin_boards_spec |
+| 1393 | `SupAction` | Supervisor handlers check the permission first (ARCHITECTURE §0.7), then the payload. | via admin_boards_spec |
+| 1405 | `AdminAction` | - | via admin_boards_spec |
+| 1451 | `HomeExtras` | Home: "Commended for Valor by ..." for announceDays days. | via admin_boards_spec |
+| 1490 | `Profile._resetCaches` | Test hooks (not part of the contract). | profile_spec |
+| 1494 | `Profile._news` | - | profile_spec |
 
 ### modules/progression/scoring.lua
 

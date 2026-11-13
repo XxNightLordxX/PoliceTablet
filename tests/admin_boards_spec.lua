@@ -274,6 +274,230 @@ do
 end
 
 -- ============================================================================
+--                                   4b. H15
+-- ============================================================================
+-- THE SEASON CORRECTION TOOLS (RECOUNTS, REOPEN UNDO).
+-- Recount champion moves the trophy and the unfinished champion rewards, and a recount back brings the first
+-- department's rewards back (the H15 rewards fix); Recount bounty week; Cancel planned end; Undo a reopen with a
+-- badge override and pending rewards.
+
+do
+    H.mockInventory({ sprunk = { label = 'Sprunk' }, water = { label = 'Water' } })
+    H.load('modules/money/rewards.lua')
+    local R = CP.Rewards
+    Config.Rewards.enabled = true
+    Config.Rewards.dailyItemCap, Config.Rewards.dailyValueCap = 0, 0
+    Config.Rewards.byType, Config.Rewards.byMission, Config.Rewards.medals = {}, {}, {}
+    Config.Rewards.goals, Config.Rewards.levels, Config.Rewards.weeklyBoss = {}, {}, nil
+    Config.Rewards.useExamplePools = false
+    Config.Rewards.season = {
+        champion = { item = 'sprunk', count = 1, value = 25 },
+        top10 = { item = 'water', count = 1, value = 20 },
+    }
+    R._reset()
+    R.validate()
+    Config.Objectives.challenge.minRunsActive = 1
+    local hooks = {}
+    local realHook = CP.Admin.webhook
+    CP.Admin.webhook = function(kind, title, ...)
+        hooks[#hooks + 1] = { kind = kind, title = title }
+        return realHook(kind, title, ...)
+    end
+    W.offline[3], W.offline[4] = true, true      -- both officers offline: their season rewards wait (pending)
+    local function Reward(cid, key)
+        return One([[SELECT id, status FROM cp_item_rewards WHERE citizenid = ? AND source = 'season'
+            AND source_key = ?]], { cid, key })
+    end
+    local function Badge(cid, badge)
+        return Count('SELECT COUNT(*) AS n FROM cp_badges WHERE citizenid = ? AND badge_id = ?', { cid, badge })
+    end
+
+    -- a season SAST wins (OFF00003 alone), FIB second (OFF00004)
+    local ok, e = Act('server:admin:startSeason', 1, { name = 'Recount Season' })
+    H.ok(ok == true, 'H15: a season to correct: ' .. tostring(e))
+    local season = C.currentSeason(true)
+    local sid = season.id
+    H.time = H.time + 3600
+    local sastRows = {}
+    for i = 1, 2 do
+        sastRows[i] = W.row({
+            citizenid = 'OFF00003',
+            department = 'sast',
+            points = 300,
+            at = H.time - 600 + i,
+            seasonId = sid,
+        })
+    end
+    W.row({ citizenid = 'OFF00004', department = 'fib', points = 100, at = H.time - 500, seasonId = sid })
+    ok, e = Act('server:admin:endSeason', 1, { reason = 'done', confirm = 'Recount Season' })
+    H.ok(ok == true, 'H15: ended: ' .. tostring(e))
+    local champ = ('champion:%d'):format(sid)
+    local badge = ('season_%d_champion'):format(sid)
+    H.eq(One('SELECT winner FROM cp_dept_bounties WHERE season_id = ? AND week = 0', { sid }).winner, 'sast',
+        'H15: SAST is champion')
+    H.eq(Reward('OFF00003', champ) and Reward('OFF00003', champ).status, 'pending',
+        'H15: the SAST officer\'s champion reward waits (offline)')
+    H.eq(Reward('OFF00004', champ), nil, 'H15: FIB has none')
+    H.eq(Badge('OFF00003', badge), 1, 'H15: the SAST officer holds the champion trophy')
+
+    -- previews and refusals
+    local res = W.cb('admin:previewChampionRecount', 1, { seasonId = 999999 })
+    H.ok(res and res.ok == false and res.error == 'err.no_season', 'H15: an unknown season: err.no_season')
+    local pv = Data('admin:previewChampionRecount', 1, { seasonId = sid })
+    H.ok(pv and pv.old == 'sast' and pv.new == 'sast' and pv.changed == false, 'H15: nothing to recount yet')
+
+    -- OFF00003's runs are voided: FIB wins on a recount
+    H.sql('UPDATE cp_mission_runs SET voided = 1 WHERE id IN (?, ?)', { sastRows[1], sastRows[2] })
+    pv = Data('admin:previewChampionRecount', 1, { seasonId = sid })
+    H.ok(pv and pv.old == 'sast' and pv.new == 'fib' and pv.changed == true and pv.badgeId == badge,
+        'H15: the preview names the change sast -> fib')
+    local cancelled = 0
+    for _, r in ipairs(pv and pv.rewards or {}) do if r.fate == 'cancel' then cancelled = cancelled + 1 end end
+    H.eq(cancelled, 1, 'H15: and the one unfinished reward it cancels')
+    ok, e = Act('server:admin:recountChampion', 1,
+        { seasonId = sid, reason = 'voided runs', confirm = 'wrong', previewToken = pv.previewToken })
+    H.ok(not ok and e == 'err.confirm_mismatch', 'H15: the typed word RECOUNT is needed: ' .. tostring(e))
+    ok, e = Act('server:admin:recountChampion', 1,
+        { seasonId = sid, reason = 'voided runs', confirm = 'RECOUNT', previewToken = 'x' })
+    H.ok(not ok, 'H15: a bad preview token is refused: ' .. tostring(e))
+    hooks = {}
+    pv = Data('admin:previewChampionRecount', 1, { seasonId = sid })
+    ok, e = Act('server:admin:recountChampion', 1,
+        { seasonId = sid, reason = 'voided runs', confirm = 'RECOUNT', previewToken = pv.previewToken })
+    H.ok(ok == true and e.cancelled == 1, 'H15: recounted sast -> fib: ' .. tostring(e and e.cancelled or e))
+    H.eq(One('SELECT winner FROM cp_dept_bounties WHERE season_id = ? AND week = 0', { sid }).winner, 'fib',
+        'H15: FIB is champion now')
+    H.eq(Reward('OFF00003', champ).status, 'forfeited', 'H15: the SAST officer\'s unfinished reward is cancelled')
+    H.eq(Reward('OFF00004', champ) and Reward('OFF00004', champ).status, 'pending', 'H15: FIB\'s is granted')
+    H.eq(
+        Count([[SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE badge_id = ? AND citizenid = 'OFF00004'
+        AND mode = 'grant']], { badge }),
+        1,
+        'H15: the trophy is granted to the FIB officer'
+    )
+    H.eq(
+        Count([[SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE badge_id = ? AND citizenid = 'OFF00003'
+        AND mode = 'block']], { badge }),
+        1,
+        'H15: the SAST officer\'s trophy is blocked'
+    )
+    H.eq(Badge('OFF00003', badge), 0, 'H15: and taken off him')
+    H.eq(W.auditCount('championRecount', ('season:%d'):format(sid)), 1, 'H15: the recount is audited')
+    local posted = false
+    for _, h in ipairs(hooks) do if h.kind == 'board' then posted = true end end
+    H.ok(posted, 'H15: and posted to the board webhook')
+    -- a second recount with the same result changes nothing
+    pv = Data('admin:previewChampionRecount', 1, { seasonId = sid })
+    H.ok(pv.changed == false, 'H15: nothing left to recount')
+
+    -- the runs are restored: recount back to SAST
+    H.sql('UPDATE cp_mission_runs SET voided = 0 WHERE id IN (?, ?)', { sastRows[1], sastRows[2] })
+    pv = Data('admin:previewChampionRecount', 1, { seasonId = sid })
+    ok, e = Act('server:admin:recountChampion', 1,
+        { seasonId = sid, reason = 'restored', confirm = 'RECOUNT', previewToken = pv.previewToken })
+    H.ok(ok == true, 'H15: recounted fib -> sast: ' .. tostring(e))
+    H.eq(Reward('OFF00003', champ).status, 'pending',
+        'H15: recount back: the SAST officer\'s champion reward comes back')
+    H.eq(Reward('OFF00004', champ).status, 'forfeited', 'H15: and FIB\'s is cancelled')
+    H.eq(
+        Count('SELECT COUNT(*) AS n FROM cp_item_rewards WHERE citizenid = \'OFF00003\' AND source_key = ?', { champ }),
+        1, 'H15: no second row')
+
+    -- 14 days after the end: too late
+    local t0 = H.time
+    H.time = H.time + 15 * DAY
+    res = W.cb('admin:previewChampionRecount', 1, { seasonId = sid })
+    H.ok(res and res.ok == false and res.error == 'err.champion_recount_late', 'H15: more than 14 days: refused')
+    H.time = t0
+
+    -- Reopen with a badge override and an unfinished top-10 reward, then Undo: both come back
+    H.sql([[INSERT INTO cp_badge_overrides (citizenid, badge_id, mode, by_actor, reason)
+        VALUES ('OFF00006', ?, 'grant', 'ADM00001', 'helped') ON DUPLICATE KEY UPDATE mode = 'grant']], { badge })
+    local top = ('top10:%d'):format(sid)
+    local topRow = Reward('OFF00003', top)
+    H.eq(topRow and topRow.status, 'pending', 'H15: the top-10 reward waits too')
+    pv = Data('admin:previewReopen', 1, { id = sid })
+    ok, e = Act('server:admin:reopenSeason', 1,
+        { id = sid, reason = 'recheck', confirm = 'Recount Season', previewToken = pv.previewToken, requestId = Rid() })
+    H.ok(ok == true, 'H15: reopened: ' .. tostring(e))
+    local jobId = ok and e.jobId
+    H.eq(Reward('OFF00003', champ).status, 'forfeited', 'H15: the reopen cancels the champion reward')
+    H.eq(Reward('OFF00003', top).status, 'forfeited', 'H15: and the top-10 reward')
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE badge_id = ?', { badge }), 0,
+        'H15: and drops the trophy overrides')
+    ok, e = Act('server:admin:undoReopen', 1, { jobId = jobId, reason = 'oops' })
+    H.ok(ok == true, 'H15: undo the reopen: ' .. tostring(e))
+    H.eq(Reward('OFF00003', champ).status, 'pending', 'H15: Undo: the champion reward is pending again')
+    H.eq(Reward('OFF00003', top).status, 'pending', 'H15: Undo: the top-10 reward is pending again')
+    H.eq(
+        Count([[SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE badge_id = ? AND citizenid = 'OFF00006'
+        AND mode = 'grant']], { badge }),
+        1,
+        'H15: Undo: the trophy override is back'
+    )
+    H.eq(One('SELECT winner FROM cp_dept_bounties WHERE season_id = ? AND week = 0', { sid }).winner, 'sast',
+        'H15: Undo: the champion row is back')
+
+    -- Reopen, then end the season again (no Undo): the same result gives the cancelled rewards back
+    H.time = H.time + 60
+    pv = Data('admin:previewReopen', 1, { id = sid })
+    ok, e = Act('server:admin:reopenSeason', 1,
+        { id = sid, reason = 'recheck', confirm = 'Recount Season', previewToken = pv.previewToken, requestId = Rid() })
+    H.ok(ok == true, 'H15: reopened again: ' .. tostring(e))
+    H.eq(Reward('OFF00003', champ).status, 'forfeited', 'H15: cancelled by the reopen')
+    ok, e = Act('server:admin:endSeason', 1, { reason = 'done again', confirm = 'Recount Season' })
+    H.ok(ok == true, 'H15: ended again: ' .. tostring(e))
+    H.eq(Reward('OFF00003', champ).status, 'pending', 'H15: ended again: the champion reward comes back')
+    H.eq(Reward('OFF00003', top).status, 'pending', 'H15: ended again: the top-10 reward comes back')
+
+    -- the bounty recount: week 1 closed with a stored winner nobody earned
+    ok, e = Act('server:admin:startSeason', 1, { name = 'Bounty Season' })
+    H.ok(ok == true, 'H15: a running season for the bounty recount: ' .. tostring(e))
+    local bs = C.currentSeason(true)
+    res = W.cb('admin:previewBountyRecount', 1, { week = 1 })
+    H.ok(res and res.ok == false and res.error == 'err.bounty_open', 'H15: the running week cannot be recounted')
+    H.time = H.time + 8 * DAY
+    H.sql([[INSERT INTO cp_dept_bounties (season_id, week, objective, winner) VALUES (?, 1, ?, 'fib')
+        ON DUPLICATE KEY UPDATE winner = 'fib']], {
+        bs.id,
+        (function()
+            for _, k in ipairs(Config.Objectives.bounty.objectives or {}) do
+                return type(k) == 'table' and k.id or k
+            end
+            return 'arrests'
+        end)(),
+    })
+    local bp = Data('admin:previewBountyRecount', 1, { week = 1 })
+    H.ok(bp and bp.week == 1 and bp.old == 'fib', 'H15: the bounty preview: ' .. tostring(bp and bp.new))
+    ok, e = Act('server:admin:recountBountyWeek', 1,
+        { week = 1, reason = 'no one earned it', confirm = 'RECOUNT', previewToken = bp.previewToken })
+    H.ok(ok == true, 'H15: the bounty week is recounted: ' .. tostring(e))
+    local stored = One('SELECT week, winner FROM cp_dept_bounties WHERE season_id = ? AND week = 1', { bs.id }).winner
+    H.eq(tostring(stored), tostring(bp.new), 'H15: the stored winner is the recounted one')
+    H.eq(W.auditCount('bountyRecount', ('season:%d:week:1'):format(bs.id)), bp.changed and 1 or 0,
+        'H15: audited when it changed')
+
+    -- a planned end, then Cancel
+    ok, e = Act('server:admin:scheduleSeasonEnd', 1, { id = bs.id, at = H.time + 3 * DAY, reason = 'plan' })
+    H.ok(ok == true, 'H15: an end planned: ' .. tostring(e))
+    ok, e = Act('server:admin:cancelSeasonEnd', 1, { id = bs.id + 1000 })
+    H.ok(not ok and e == 'err.no_season', 'H15: cancel on another season: refused')
+    ok, e = Act('server:admin:cancelSeasonEnd', 1, { id = bs.id })
+    H.ok(ok == true, 'H15: the planned end is cancelled: ' .. tostring(e))
+    H.eq(C.currentSeason(true).plannedEnd, nil, 'H15: no planned end')
+    H.eq(W.auditCount('seasonScheduleCancel'), 1, 'H15: audited')
+    ok, e = Act('server:admin:cancelSeasonEnd', 1, { id = bs.id })
+    H.ok(not ok, 'H15: nothing left to cancel: ' .. tostring(e))
+    ok, e = Act('server:admin:endSeason', 1, { reason = 'tidy', confirm = 'Bounty Season' })
+    H.ok(ok == true, 'H15: tidy up: ' .. tostring(e))
+
+    CP.Admin.webhook = realHook
+    W.offline[3], W.offline[4] = nil, nil
+    Config.Rewards.enabled = false
+    Config.Objectives.challenge.minRunsActive = 3
+end
+
+-- ============================================================================
 --                  5. FLAGGED PANEL, GOALS, RESTORE AND CACHE
 -- ============================================================================
 
