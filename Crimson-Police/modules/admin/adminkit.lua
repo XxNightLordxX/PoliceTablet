@@ -963,24 +963,21 @@ local function MaintPush()
     CP.Hooks.fire('maintenance:changed', MaintView())
 end
 
--- THE HOLD OF THE DISPUTE WINDOW. While a lock is held nobody can file a dispute and the forfeiture waits, so the
--- window of a voided row stands still. cp_storage_meta keeps it across restarts (a copy or restore never replaces
--- that table): holdFrom while a lock is held (kept, not moved, when a start takes the lock again), holdLast
--- 'from:to' the last one that ended (Maint.finish, or the first start that took no lock). Only one is open at a time,
--- so a restart never counts it twice.
-local META_HOLD_FROM, META_HOLD_LAST = 'holdFrom', 'holdLast'
-local hold = nil   -- { from, to (nil while open) } | false (none) | nil (not read yet)
-
-local function MetaGet(key)
-    local ok, v = pcall(MySQL.scalar.await, 'SELECT meta_value FROM cp_storage_meta WHERE meta_key = ?', { key })
-    if not ok then return nil, false end
-    return v, true
-end
+-- THE HOLDS OF THE DISPUTE WINDOW. While a lock is held nobody can file a dispute and the forfeiture waits, so the
+-- window of a voided row stands still. cp_storage_meta keeps them across restarts (a copy or restore never replaces
+-- that table) in one row, holds = 'from:to,from:to|open': the last HOLDS_MAX that ended (Maint.finish, or the first
+-- start that took no lock) and the one open while a lock is held (kept, not moved, when a start takes the lock again).
+-- One row, so each change is one statement: a cut write leaves the last state whole. A write that fails is kept in
+-- memory and written again at the next change. The rows of older versions (holdFrom, holdLast 'from:to') are read
+-- while holds is missing.
+local META_HOLDS, META_HOLD_FROM, META_HOLD_LAST = 'holds', 'holdFrom', 'holdLast'
+local HOLDS_MAX = 10                -- ended holds kept (cp_storage_meta.meta_value is VARCHAR(255))
+local HOLD_WINDOW_MAX = 720 * 3600  -- seconds: the longest dispute window the settings allow (Disputes.windowHours)
+local holds = nil                   -- { past = { { from, to }, ... } oldest first, open = from | nil } | nil (unread)
+local holdsSaved = true             -- false: holds in memory is newer than the row (its write failed)
+local holdBusy, holdAgain = false, false
 
 local function MetaSet(key, value)
-    if value == nil then
-        return (pcall(MySQL.update.await, 'DELETE FROM cp_storage_meta WHERE meta_key = ?', { key }))
-    end
     return (
         pcall(MySQL.update.await, [[INSERT INTO cp_storage_meta (meta_key, meta_value, updated_at)
         VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value), updated_at = VALUES(updated_at)]],
@@ -988,60 +985,138 @@ local function MetaSet(key, value)
     )
 end
 
-local function ReadHold()
-    local from, ok1 = MetaGet(META_HOLD_FROM)
-    local last, ok2 = MetaGet(META_HOLD_LAST)
-    if not (ok1 and ok2) then return nil end
-    from = tonumber(from)
-    if from then return { from = from } end
-    local a, b = tostring(last or ''):match('^(%d+):(%d+)$')
-    if a then return { from = tonumber(a), to = tonumber(b) } end
-    return false
+local function ParseHold(s)
+    local a, b = tostring(s or ''):match('^(%d+):(%d+)$')
+    a, b = tonumber(a), tonumber(b)
+    if a and b and b > a then return { from = a, to = b } end
+    return nil
 end
 
-local function HoldOpen(since)
-    local h = ReadHold()
-    if h and not h.to then
-        hold = h
+-- The holds as saved: { past, open } | nil when they cannot be read.
+local function ReadHolds()
+    local ok, rows = pcall(MySQL.query.await,
+        'SELECT meta_key, meta_value FROM cp_storage_meta WHERE meta_key IN (?, ?, ?)',
+        { META_HOLDS, META_HOLD_FROM, META_HOLD_LAST })
+    if not ok then return nil end
+    local v = {}
+    for _, r in ipairs(type(rows) == 'table' and rows or {}) do v[r.meta_key] = r.meta_value end
+    local st = { past = {} }
+    if v[META_HOLDS] ~= nil then
+        local list, open = tostring(v[META_HOLDS]):match('^([%d:,]*)|(%d*)$')
+        for part in tostring(list or ''):gmatch('[^,]+') do
+            local h = ParseHold(part)
+            if h then st.past[#st.past + 1] = h end
+        end
+        st.open = tonumber(open)
+    else
+        st.past[#st.past + 1] = ParseHold(v[META_HOLD_LAST])
+        st.open = tonumber(v[META_HOLD_FROM])
+    end
+    table.sort(st.past, function(x, y) return x.from < y.from end)
+    return st
+end
+
+-- The row's value: the ended holds that can still move a window that is open (one that ended more than the longest
+-- window plus every hold's length ago cannot), at most HOLDS_MAX of them, the newest kept.
+local function EncodeHolds(st, now)
+    local w = math.max(HOLD_WINDOW_MAX, math.floor(CP.Num(Config.Disputes and Config.Disputes.windowHours, 48) * 3600))
+    local total = 0
+    for _, h in ipairs(st.past) do total = total + (h.to - h.from) end
+    local keep = {}
+    for _, h in ipairs(st.past) do
+        if h.to >= now - w - total then keep[#keep + 1] = h end
+    end
+    while #keep > HOLDS_MAX do table.remove(keep, 1) end
+    st.past = keep
+    local parts = {}
+    for _, h in ipairs(keep) do parts[#parts + 1] = ('%d:%d'):format(h.from, h.to) end
+    return ('%s|%s'):format(table.concat(parts, ','), st.open and ('%d'):format(st.open) or '')
+end
+
+-- The holds brought in line with the lock: one opens when a lock is held and none is open, the open one ends when
+-- no lock is held. One at a time: a begin or finish while a change is being written (its awaits) runs again after it,
+-- so the row always ends matching the lock.
+local function HoldSync()
+    if holdBusy then
+        holdAgain = true
         return
     end
-    if MetaSet(META_HOLD_FROM, tostring(since)) then hold = { from = since } end
-end
-
-local function HoldClose(now)
-    local h = ReadHold()
-    if h == nil then return end
-    if h and not h.to then
-        if not MetaSet(META_HOLD_LAST, ('%d:%d'):format(h.from, now)) then return end
-        MetaSet(META_HOLD_FROM, nil)
-        h = { from = h.from, to = now }
-    end
-    hold = h
+    holdBusy = true
+    repeat
+        holdAgain = false
+        local st = holdsSaved and ReadHolds() or holds
+        if st then
+            local changed = not holdsSaved
+            local now = os.time()
+            if maintenance and not st.open then
+                st.open, changed = maintenance.since, true
+            elseif not maintenance and st.open then
+                if now > st.open then st.past[#st.past + 1] = { from = st.open, to = now } end
+                st.open, changed = nil, true
+            end
+            if changed then
+                holdsSaved = MetaSet(META_HOLDS, EncodeHolds(st, now))
+                if not holdsSaved then
+                    CP.err(TAG, 'saving the dispute window hold failed: it is written again later')
+                end
+            end
+            holds = st
+        end
+    until not holdAgain
+    holdBusy = false
 end
 
 -- At start, after the start-up locks: a hold left open by the last run that no lock took again ended at this start.
-function Maint.settleHold()
-    if maintenance then
-        HoldOpen(maintenance.since)
-        return
-    end
-    HoldClose(os.time())
+function Maint.settleHold() HoldSync() end
+
+-- Every hold kept, oldest first: { { from, to }, ... } (to = now for the one open while a lock is held).
+function Maint.holds()
+    if holds == nil then holds = ReadHolds() end
+    local out = {}
+    if not holds then return out end
+    for _, h in ipairs(holds.past) do out[#out + 1] = { from = h.from, to = h.to } end
+    if holds.open then out[#out + 1] = { from = holds.open, to = math.max(holds.open, os.time()) } end
+    return out
 end
 
 -- The last hold: { from, to } (to = now while a lock is held) | nil.
 function Maint.hold()
-    if hold == nil then hold = ReadHold() end
-    if not hold then return nil end
-    return { from = hold.from, to = hold.to or os.time() }
+    local list = Maint.holds()
+    return list[#list]
 end
 
--- The end of a window of windowS seconds from startTs, moved on by the time the last hold stood it still (the part
--- of the hold from the window's start on, when the hold began before the window ended).
+-- THE RULE, in Lua and in SQL. A window of windowS seconds from startTs ends at startTs + windowS + the parts of the
+-- holds it reached: hold i adds its time from the window's start on, c_i = max(0, to - max(from, startTs)), when it
+-- began before the end the holds before it moved the window to: from < startTs + windowS + c_1 + ... + c_(i-1). The
+-- holds never overlap, so the ones a window reaches are its first ones, and this sum (with no end carried from one
+-- hold to the next) is the same as moving the end on hold by hold. windowEnd and windowEndSql write it out the same.
 function Maint.windowEnd(startTs, windowS)
-    local e = startTs + windowS
-    local h = Maint.hold()
-    if h and h.from < e and h.to > startTs then e = e + (h.to - math.max(h.from, startTs)) end
-    return e
+    local base, add, before = startTs + windowS, 0, 0
+    for _, h in ipairs(Maint.holds()) do
+        local c = math.max(0, h.to - math.max(h.from, startTs))
+        if h.from < base + before then add = add + c end
+        before = before + c
+    end
+    return base + add
+end
+
+-- The same end in SQL: a DATETIME expression for the window of windowS seconds from the DATETIME startExpr (a column
+-- or an expression of the caller's own SQL, never a value from a player). The holds' times are integers of seconds
+-- written into the SQL.
+function Maint.windowEndSql(startExpr, windowS)
+    local w = math.floor(tonumber(windowS) or 0)
+    local list = Maint.holds()
+    if #list == 0 then return ('%s + INTERVAL %d SECOND'):format(startExpr, w) end
+    local u = ('UNIX_TIMESTAMP(%s)'):format(startExpr)
+    local terms, before = {}, {}
+    for _, h in ipairs(list) do
+        local f, t = math.floor(h.from), math.floor(h.to)
+        local c = ('GREATEST(0, %d - GREATEST(%d, %s))'):format(t, f, u)
+        local reach = #before > 0 and (' + ' .. table.concat(before, ' + ')) or ''
+        terms[#terms + 1] = ('CASE WHEN %d < %s + %d%s THEN %s ELSE 0 END'):format(f, u, w, reach, c)
+        before[#before + 1] = c
+    end
+    return ('%s + INTERVAL (%d + %s) SECOND'):format(startExpr, w, table.concat(terms, ' + '))
 end
 
 -- ok | false, errKey. info = { by = actor, restart = bool, ... } (shown to admins).
@@ -1050,7 +1125,7 @@ function Maint.begin(kind, info)
     if maintenance and maintenance.kind ~= kind then return false, 'err.maintenance' end
     local fresh = maintenance == nil
     maintenance = { kind = kind, info = type(info) == 'table' and info or {}, since = os.time() }
-    if fresh then HoldOpen(maintenance.since) end
+    if fresh then HoldSync() end
     CP.warn(TAG, 'maintenance lock on (%s): new runs, claims, tests, operations and payments wait', kind)
     MaintPush()
     return true
@@ -1061,7 +1136,7 @@ function Maint.finish(kind)
     if kind ~= nil and maintenance.kind ~= kind then return false, 'err.maintenance' end
     CP.warn(TAG, 'maintenance lock off (%s)', maintenance.kind)
     maintenance = nil
-    HoldClose(os.time())
+    HoldSync()
     MaintPush()
     return true
 end
@@ -1106,6 +1181,7 @@ end)
 
 -- Test hooks (not part of the contract).
 Kit._reset = function()
-    previews, previewOrder, busy, maintenance, hold = {}, {}, nil, nil, nil
+    previews, previewOrder, busy, maintenance, holds = {}, {}, nil, nil, nil
+    holdsSaved, holdBusy, holdAgain = true, false, false
 end
 Kit._jobKinds = function() return jobKinds end
