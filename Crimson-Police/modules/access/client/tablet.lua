@@ -1111,12 +1111,19 @@ local function SpawnDeskProp(desk)
     return obj
 end
 
+-- Each RemoveDeskZones starts a new generation. A build keeps its zones and props to itself while it runs (a
+-- prop's model load can wait): when a RemoveDeskZones came meanwhile, it removes its own instead of storing them, so
+-- two builds at once never leave a zone behind. deskBuilding: the generation a build is running for.
+local deskGen, deskBuilding = 0, nil
+
 -- Created once; again only after RemoveDeskZones (resource stop, a foreign arena flag).
 CreateDeskZones = function()
-    if state.deskZones or InForeignArena() or not TargetUp() then return false end
+    if state.deskZones or deskBuilding == deskGen or InForeignArena() or not TargetUp() then return false end
     local desks = DeskList()
     if #desks == 0 then return false end
-    local ids = {}
+    local gen = deskGen
+    deskBuilding = gen
+    local ids, props = {}, {}
     for i, desk in ipairs(desks) do
         if type(desk) == 'table' and desk.coords then
             local index = i
@@ -1142,18 +1149,29 @@ CreateDeskZones = function()
             if ok and id then
                 ids[#ids + 1] = id
                 local obj = SpawnDeskProp(desk)
-                if obj then state.deskProps[#state.deskProps + 1] = obj end
+                if obj then props[#props + 1] = obj end
             else
                 CP.warn(TAG, 'desk %d (%s): ox_target addBoxZone failed: %s', i, tostring(desk.label), tostring(id))
             end
         end
     end
+    if deskBuilding == gen then deskBuilding = nil end
+    if gen ~= deskGen then
+        -- removed while it was building: a newer build (or none) owns the desks now
+        if TargetUp() then
+            for _, id in ipairs(ids) do CP.Ext.call('ox_target', 'removeZone', id) end
+        end
+        for _, obj in ipairs(props) do DeleteObject(obj) end
+        return false
+    end
+    for _, obj in ipairs(props) do state.deskProps[#state.deskProps + 1] = obj end
     state.deskZones = ids
     CP.log(TAG, '%d mission desk zones created', #ids)
     return true
 end
 
 RemoveDeskZones = function()
+    deskGen = deskGen + 1
     local ids = state.deskZones
     state.deskZones = nil
     if ids and TargetUp() then

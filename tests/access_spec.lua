@@ -1360,6 +1360,37 @@ do
     for _, fn in ipairs(H.handlers.onClientResourceStart or {}) do fn('some_other_resource') end
     H.eq(ZoneCount(), 2, 'another resource start adds none')
 
+    -- H13: two builds at once (a prop's model load waits while the desks are removed and built again): the first
+    -- build's zones are removed, not left behind
+    local function ArenaInThread(value)
+        LocalPlayer.state.crimsonArena = value
+        for _, h in ipairs(bagHandlers) do
+            if h.key == 'crimsonArena' then
+                CreateThread(function() h.fn('player:7', 'crimsonArena', value) end)
+            end
+        end
+    end
+    local realLoaded = HasModelLoaded
+    local loaded = false
+    _G.HasModelLoaded = function() return loaded end
+    ArenaInThread({ active = true, matchId = 'h13a' })
+    H.advance(20, 10)
+    ArenaInThread(nil)   -- build A: its zones are added, its prop's model load waits
+    H.advance(50, 10)
+    ArenaInThread({ active = true, matchId = 'h13b' })
+    H.advance(20, 10)
+    ArenaInThread(nil)   -- build B, while A still waits
+    H.advance(50, 10)
+    loaded = true
+    H.advance(200, 10)
+    _G.HasModelLoaded = realLoaded
+    H.eq(ZoneCount(), 2, 'H13: two builds at once leave one set of desk zones')
+    H.eq(PropCount(), 1, 'H13: ...and one prop')
+    H.eq(#CT.deskZones(), 2, 'H13: ...the stored ids are the ones in ox_target')
+    for _, id in ipairs(CT.deskZones()) do
+        H.ok(target.zones[id] ~= nil, 'H13: stored zone ' .. tostring(id) .. ' exists')
+    end
+
     -- ox_target started late (was down when the desks were first built)
     for _, fn in ipairs(H.handlers.onResourceStop or {}) do fn('Crimson-Police') end
     H.eq(ZoneCount(), 0, 'no desk zones while ox_target is missing')

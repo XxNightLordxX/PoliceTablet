@@ -496,6 +496,14 @@ function LB.hidesNamesFrom(dept, viewerDept)
     return rule ~= nil and rule.showToOthers == false
 end
 
+-- The name a Discord board post may carry. The board webhook is seen by every department, so an officer whose
+-- department shows callsigns only to other departments (boards Mission control showToOthers = false) is posted by
+-- his callsign, as an officer who hides his name. e = { name, callsign, hideName, department }.
+function LB.postName(e)
+    if e.hideName or LB.hidesNamesFrom(e.department, nil) then return e.callsign or CP.L('leaderboard.hidden_name') end
+    return e.name or e.callsign or CP.L('common.unknown')
+end
+
 function LB.registerControls()
     local dc = CP.DeptControls
     if not (dc and dc.register) then return false end
@@ -1057,11 +1065,16 @@ end
 -- The weekly top 3 post to the board webhook (correction = an admin's recount or post again).
 local function WeekPost(weekKey, top, correction)
     local fields = {}
+    -- an officer of a department that shows callsigns only to other departments: by his callsign
+    local function Posted(e)
+        if LB.hidesNamesFrom(e.department, nil) then return e.callsign or CP.L('leaderboard.hidden_name') end
+        return e.callsign and e.callsign ~= e.name and ('%s %s'):format(e.callsign, e.name) or e.name
+    end
     for i, e in ipairs(top) do
         fields[i] = {
             name = CP.L('leaderboard.webhook_place', { rank = i }),
             value = CP.L('leaderboard.webhook_entry', {
-                name = e.callsign and e.callsign ~= e.name and ('%s %s'):format(e.callsign, e.name) or e.name,
+                name = Posted(e),
                 department = e.departmentShort,
                 points = FmtInt(e.points),
             }),
@@ -1071,7 +1084,11 @@ local function WeekPost(weekKey, top, correction)
     local title = CP.L(correction and 'leaderboard.webhook_weekly_correction' or 'leaderboard.webhook_weekly_title',
         { week = weekKey })
     local desc = top[1]
-            and CP.L('leaderboard.webhook_weekly_desc', { name = top[1].name, points = FmtInt(top[1].points) })
+            and CP.L('leaderboard.webhook_weekly_desc', {
+                name = LB.hidesNamesFrom(top[1].department, nil) and (top[1].callsign or CP.L(
+                    'leaderboard.hidden_name')) or top[1].name,
+                points = FmtInt(top[1].points),
+            })
         or CP.L('common.none')
     return Webhook(title, desc, fields)
 end

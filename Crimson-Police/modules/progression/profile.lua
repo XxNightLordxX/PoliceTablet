@@ -736,7 +736,9 @@ CommendChecked = function(src, role, cfg, cid, kind, runUuid, citation, issuer, 
         -- The board is public: the same name rule as LB.publicName, never the real name of a hidden officer and
         -- never the citizenid.
         local name
-        if U.truthy(target.hide_name) then
+        local LB = CP.Leaderboard
+        if U.truthy(target.hide_name) or (LB and LB.hidesNamesFrom and LB.hidesNamesFrom(target.department, nil)) then
+            -- also an officer whose department shows callsigns only to other departments
             name = NonEmpty(target.callsign) or CP.L('leaderboard.hidden_name')
         else
             name = NonEmpty(target.display_name) or NonEmpty(target.callsign) or CP.L('common.unknown')

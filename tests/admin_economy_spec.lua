@@ -426,6 +426,12 @@ do
     H.eq(eF, 'err.invalid_filter', 'an unknown status is refused')
     _, eF = Cb('admin:getPayments', 1, { from = H.time, to = H.time - 10 })
     H.eq(eF, 'err.invalid_filter', 'from after to is refused')
+    -- H13: a malformed date is refused, never silently ignored (the list would cover every row)
+    local nF
+    nF, eF = Pay.list({ from = 'abc' })
+    H.ok(nF == nil and eF == 'err.invalid_filter', 'H13: a from that is no number is refused')
+    nF, eF = Cb('admin:getPayments', 1, { to = -5 })
+    H.ok(nF == nil and eF == 'err.invalid_filter', 'H13: a negative to is refused')
 
     local t = Cb('admin:getPaymentTotals', 1, {})
     H.ok(
@@ -665,6 +671,21 @@ do
     local okH, eH = Act('server:admin:payNow', 1, { rowId = id6, requestId = Rid() })
     H.ok(okH == false and eH == 'err.state_changed', '(Z14) Pay now refuses a flagged pending row')
     H.eq(RowOf(id6).cash_status, 'pending', '(Z14) it stays pending')
+
+    -- H13: a completed row left 'none' with cash (a crash before its pay) is paid by Pay now; a manual_award row left
+    -- 'none' never reached its audit and is never paid
+    local addsBefore = #calls.add
+    local id7 = Row({ status = 'none', owed = 100 })
+    local okI, dI = Act('server:admin:payNow', 1, { rowId = id7, requestId = Rid() })
+    H.ok(okI and dI.status == 'paid' and RowOf(id7).cash_status == 'paid', 'H13: Pay now pays an unpaid none row')
+    H.eq(#calls.add, addsBefore + 1, 'H13: ...with one deposit')
+    local id8 = Row({ status = 'none', owed = 100, type = 'manual_award', mission = 'manual_award' })
+    local auditsBefore = Count('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'paymentRetry\'')
+    local okJ, eJ = Act('server:admin:payNow', 1, { rowId = id8, requestId = Rid() })
+    H.ok(okJ == false and eJ == 'err.state_changed', 'H13: Pay now refuses a none manual_award row')
+    H.eq(#calls.add, addsBefore + 1, 'H13: ...no deposit')
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_audit WHERE action = \'paymentRetry\''), auditsBefore,
+        'H13: ...and no paymentRetry audit row')
 end
 
 -- ============================================================================
@@ -718,6 +739,22 @@ do
     H.ok(RowOf(a).cash_status == 'paid' and RowOf(b).cash_status == 'paid' and bank.balance.sast == 4500,
         'both rows paid from the account')
     H.eq(RowOf(mine).cash_status, 'unfunded', 'the admin\'s own unfunded row is not paid by their department retry')
+    -- H13: the summary counts: one row paid, one whose officer is offline stays pending
+    local a2 = Row({ status = 'unfunded', owed = 100 })
+    local b2 = Row({ status = 'unfunded', owed = 100, cid = 'SUP00002' })
+    people[2].offline = true
+    pv = Cb('admin:previewRetryUnfunded', 1, { department = 'sast' })
+    ok, e = Act('server:admin:retryUnfunded', 1, {
+        department = 'sast',
+        reason = 'topped up',
+        confirm = '200',
+        previewToken = pv and pv.previewToken,
+        requestId = Rid(),
+    })
+    people[2].offline = nil
+    H.ok(ok and e.claimed == 2 and e.paid == 1 and e.pending == 1,
+        ('H13: claimed 2, paid 1, pending 1 (got %s)'):format(ok and cjson.encode(e) or tostring(e)))
+    H.ok(RowOf(a2).cash_status == 'paid' and RowOf(b2).cash_status ~= 'paid', 'H13: ...the rows agree')
     H.ok(Logged('entry', { side = 'personal' })[1].txn == ('CP-%s-OFF00007'):format(RowOf(a).run_uuid),
         'with the same transaction id (no money moved before)')
     Config.Cash.allowUnfundedRetry = false
@@ -823,7 +860,7 @@ do
     H.ok(ok and e.status == 'paid' and #calls.add == 1, 'forfeited -> pending -> paid')
     Config.Cash.restoreForfeited = false
     ok, e = Act('server:admin:repayForfeited', 1, { rowId = id, reason = 'x', confirm = '150', requestId = Rid() })
-    H.eq(e, 'err.money_tool_off', 'off again: refused')
+    H.ok(not ok and e == 'err.money_tool_off', 'off again: refused')
 end
 
 -- ============================================================================
@@ -867,7 +904,7 @@ do
     })
     local ok, e = Act('server:admin:clawback', 1,
         { rowId = id, amount = 100, reason = 'x', confirm = '100', requestId = Rid() })
-    H.eq(e, 'err.money_tool_off', 'refused while its switch is off')
+    H.ok(not ok and e == 'err.money_tool_off', 'refused while its switch is off')
     Config.Cash.allowClawback = true
     ok, e = Act('server:admin:clawback', 1,
         { rowId = id, amount = 400, reason = 'x', confirm = '400', requestId = Rid() })
@@ -935,7 +972,7 @@ do
     H.sql('DELETE FROM cp_mission_runs')
     local ok, e = Act('server:admin:manualCash', 1,
         { citizenid = 'OFF00007', amount = 300, reason = 'x', requestId = Rid() })
-    H.eq(e, 'err.money_tool_off', 'refused while its switch is off')
+    H.ok(not ok and e == 'err.money_tool_off', 'refused while its switch is off')
     Config.Cash.allowManualCash = true
     Config.Cash.dailyCap = 100
     Config.Cash.manualDailyLimit = 1000
@@ -1027,7 +1064,7 @@ do
     H.eq(eS, 'err.no_permission', 'admins only')
     local ok, e = Act('server:admin:addDepartmentFunds', 1,
         { department = 'sast', amount = 500, reason = 'x', confirm = '500', requestId = Rid() })
-    H.eq(e, 'err.money_tool_off', 'refused while its switch is off')
+    H.ok(not ok and e == 'err.money_tool_off', 'refused while its switch is off')
     Config.Cash.allowAddFunds = true
     H.clockMs = H.clockMs + 11000   -- one Add funds per department per 10 s, whichever admin asks
     local seen = nil

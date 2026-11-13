@@ -398,6 +398,23 @@ do
     )
     H.ok(byKind.exclusion and byKind.exclusion.citizenid == 'CRIM0002' and byKind.exclusion.reason == 'Exploit',
         'an exclusion is listed with its reason')
+    -- H13: Config.RealPlayers.staff.names = false: the real-suspect rows carry citizen IDs only (the setter keeps his)
+    H.ok(byKind.pairBlock.name ~= nil and byKind.pairBlock.otherName ~= nil,
+        ('H13: names on: a pair block names both sides (%s, %s)'):format(tostring(byKind.pairBlock.name),
+            tostring(byKind.pairBlock.otherName)))
+    Config.RealPlayers.staff.names = false
+    local hidden = cbs['admin:getRestrictions'].fn({ src = 9, args = {} })
+    local n = 0
+    for _, r in ipairs(hidden.rows) do
+        if r.kind == 'pairBlock' or r.kind == 'exclusion' or r.kind == 'rsSuspension' or r.kind == 'volunteerBlock' then
+            n = n + 1
+            H.ok(r.name == nil and r.otherName == nil, ('H13 names = false: %s row has no name (%s / %s)'):format(
+                r.kind, tostring(r.name), tostring(r.otherName)))
+            H.ok(r.citizenid ~= nil, 'H13 names = false: ...the citizenid stays')
+        end
+    end
+    H.ok(n >= 2, 'H13 names = false: the real-suspect rows are still listed')
+    Config.RealPlayers.staff.names = true
     nAudit = #audits
     ok = Act(RA, { op = 'extend', kind = 'exclusion', citizenid = 'CRIM0002', hours = 24 })
     local w = writes[#writes]

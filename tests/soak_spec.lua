@@ -21,6 +21,14 @@
 --   error_line      no error line (CP.err) and no Lua error
 --   refusal         an action of the wrong role, department, a feature off or under the maintenance lock never
 --                   succeeds
+--   lost_run        (H13) every completed run with cash on its result card has its ledger row two minutes later (a
+--                   row the database refused is saved by the retry), and at the end no completed, unflagged run
+--                   with cash is left unpaid ('none' or 'pending')
+--   leak            (H13) no client event to an ordinary officer carries another player's citizenid
+-- Besides graceful restarts the driver mixes in (H13) hard crashes ('crash': the resource state is thrown away with no
+-- onResourceStop, the entities of the old boot are gone as on a real server crash) and database outages ('dbdown':
+-- every MySQL call raises for 1-4 actions and up to 90 s; the error lines of that window are expected and dropped).
+-- CP_SOAK_CHAOS=0 leaves both out.
 -- On a failure it prints the seed and the shortest action list it finds that still fails (it replays shorter lists
 -- in child runs: CP_SOAK_REPLAY).
 --   lua5.4 tests/run.lua tests/soak_spec.lua                       the short run of the normal suite (~2 hours)
@@ -34,6 +42,7 @@ local SEEDS = os.getenv('CP_SOAK_SEEDS')
 local SEED = tonumber(os.getenv('CP_SOAK_SEED') or '') or 20261112
 local HOURS = tonumber(os.getenv('CP_SOAK_HOURS') or '') or (SOAK and 8 or 2)
 local SELF = 'tests/soak_spec.lua'
+local CHAOS = os.getenv('CP_SOAK_CHAOS') ~= '0'
 
 -- Lua source of a plain value (numbers, strings, booleans and tables of them): the action lists of a replay.
 local function Ser(v)
@@ -214,13 +223,15 @@ local offline = {}          -- src -> true while dropped
 local maintOn = false       -- the soak holds the maintenance lock
 local dutyOff = {}          -- src -> true while off duty
 local lockRegistry = setmetatable({}, { __mode = 'k' })
-local evMark = 0            -- H.events read so far by the runEnded check
-local endedCount = {}       -- runId|src -> runEnded events
-local runsSeen = {}         -- runId -> { participants = { [src] = true } }
-local tally = {}            -- day|kind|who -> count (successful supervisor actions)
-local orphanSince = {}      -- entity handle -> clockMs first seen without its run
-local playerVehicles = {}   -- entity handle -> true (the officers' own cars)
-local failure = nil         -- { invariant, detail }
+local evMark = 0 -- H.events read so far by the runEnded check
+local endedCount = {} -- runId|src -> runEnded events
+local runsSeen = {} -- runId -> { participants = { [src] = true } }
+local tally = {} -- day|kind|who -> count (successful supervisor actions)
+local orphanSince = {} -- entity handle -> clockMs first seen without its run
+local playerVehicles = {} -- entity handle -> true (the officers' own cars)
+local failure = nil -- { invariant, detail }
+local expectRow = {} -- run_uuid|citizenid -> clockMs of a completed runEnded with cash (the lost_run check)
+local chaos = { crashes = 0, outages = 0, forgiven = 0 } -- H13 counts for the report
 
 local function Fail(name, detail)
     if not failure then failure = { name = name, detail = tostring(detail) } end
@@ -241,17 +252,63 @@ end
 
 -- A restart ends every run (onResourceStop deletes its entities and writes nothing, as documented in runs.lua; the
 -- client's resource restarts too): those runs count as ended once, by the restart.
+-- A restart drops the run rows the database refused and that were not saved yet (they wait in memory only,
+-- modules/runs/runs.lua UNSAVED ROWS): those are no lost_run failure, only counted.
+local function ForgiveUnsaved()
+    local n = CP.Runs._unsavedCount and CP.Runs._unsavedCount() or 0
+    if n == 0 then return end
+    chaos.forgiven = chaos.forgiven + n
+    for key in pairs(expectRow) do expectRow[key] = nil end
+end
+
 local function Restart()
     for _, run in ipairs(CP.Runs.all()) do
         local seen = runsSeen[run.id] or { participants = {} }
         seen.ended = 'restart'
         runsSeen[run.id] = seen
     end
+    ForgiveUnsaved()
     W.Restart()
     WatchLocks()
     -- the lock of a restore is memory only: a restart lets it go
     maintOn = CP.Maintenance.active() ~= nil
     for src in pairs(offline) do PD[src].job.onduty = false end
+end
+
+-- H13: a hard crash. No onResourceStop runs; the old boot's entities are gone (a real server crash takes them along,
+-- the officers' own cars stay), then the resource starts again on the same saves.
+local function Crash()
+    for _, run in ipairs(CP.Runs.all()) do
+        local seen = runsSeen[run.id] or { participants = {} }
+        seen.ended = 'restart'
+        runsSeen[run.id] = seen
+    end
+    ForgiveUnsaved()
+    chaos.crashes = chaos.crashes + 1
+    for h, e in pairs(W.ents) do
+        if not playerVehicles[h] then e.exists = false end
+    end
+    H.restart()
+    W.Boot()
+    W.Secs(5)
+    WatchLocks()
+    maintOn = CP.Maintenance.active() ~= nil
+    for src in pairs(offline) do PD[src].job.onduty = false end
+end
+
+-- H13: a copy of the MySQL table where every call raises as oxmysql does when the server is down (the await form
+-- and the callback form of query, single, scalar, insert, update, prepare, transaction ...).
+local function DownMySQL(real)
+    local function Down() error('connect ECONNREFUSED 127.0.0.1:3306', 2) end
+    local copy = {}
+    for k, v in pairs(real) do
+        if type(v) == 'table' then
+            copy[k] = setmetatable({ await = Down }, { __call = Down })
+        else
+            copy[k] = v
+        end
+    end
+    return copy
 end
 
 -- ============================================================================
@@ -416,6 +473,7 @@ local function Staff()
     return Pick(OFFICERS)
 end
 
+local Generate   -- below GEN (a dbdown action draws its inner actions)
 local GEN = {
     {
         14,
@@ -598,9 +656,23 @@ local GEN = {
         function() return { k = 'open', src = Int(1, 17), ui = Pick({ 'officer', 'supervisor', 'admin' }) } end,
     },
 }
+if CHAOS then
+    GEN[#GEN + 1] = {
+        1,
+        function() return { k = 'crash' } end,
+    }
+    GEN[#GEN + 1] = {
+        2,
+        function()
+            local inner = {}
+            for i = 1, Int(1, 4) do inner[i] = Generate() end
+            return { k = 'dbdown', inner = inner, secs = Int(0, 90) }
+        end,
+    }
+end
 local GEN_TOTAL = 0
 for _, g in ipairs(GEN) do GEN_TOTAL = GEN_TOTAL + g[1] end
-local function Generate()
+function Generate()
     local r = Int(1, GEN_TOTAL)
     for _, g in ipairs(GEN) do
         r = r - g[1]
@@ -630,7 +702,8 @@ end
 local function Unit(src) return CP.Units.unitOf(src) end
 
 local acceptOnRun = false  -- the accepting player was on a run when his accept was sent
-local EXEC = {
+local EXEC
+EXEC = {
     accept = function(a)
         -- whether he is on a run is read right when the accept is sent (a run may end during the wait before it)
         local ok, err = ActAt('server:acceptType', a.src, a.type, function()
@@ -728,6 +801,28 @@ local EXEC = {
     preset = function(a) return Act('server:admin:applyPreset', a.src, { preset = a.preset }) end,
     restart = function()
         Restart()
+        return true
+    end,
+    crash = function()
+        Crash()
+        return true
+    end,
+    -- the inner actions run while every MySQL call raises; their error lines are expected and dropped
+    dbdown = function(a)
+        chaos.outages = chaos.outages + 1
+        local real = _G.MySQL
+        _G.MySQL = DownMySQL(real)
+        local mark = #errorLines
+        local okAll, err = pcall(function()
+            for _, b in ipairs(a.inner) do
+                if b.k ~= 'restart' and b.k ~= 'crash' and b.k ~= 'dbdown' then pcall(EXEC[b.k], b) end
+            end
+            Secs(a.secs)
+        end)
+        _G.MySQL = real
+        for i = #errorLines, mark + 1, -1 do table.remove(errorLines, i) end
+        if not okAll then return false, err end
+        Secs(3)
         return true
     end,
     drop = function(a)
@@ -887,6 +982,23 @@ end
 
 local function Num(v) return tonumber(v) or 0 end
 
+-- One lost_run expectation (key = run_uuid|citizenid, at = clockMs of the card): true while it may still wait or
+-- its row is there (a found one is forgotten).
+local function CheckRowOf(key, at, graceMs)
+    if H.clockMs - at < graceMs then return true end
+    local uuid, cid = key:match('^(.-)|(.*)$')
+    for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        local r =
+            H.sql(('SELECT COUNT(*) AS n FROM %s WHERE run_uuid = ? AND citizenid = ?'):format(tbl), { uuid, cid })[1]
+        if Num(r and r.n) > 0 then
+            expectRow[key] = nil
+            return true
+        end
+    end
+    return Fail('lost_run',
+        ('run %s ended completed with cash for %s %d s ago and has no row'):format(uuid, cid, (H.clockMs - at) // 1000))
+end
+
 local function CheckRuns()
     local on = {}
     for _, run in ipairs(CP.Runs.all()) do
@@ -905,6 +1017,12 @@ local function CheckRuns()
             local key = tostring(e.args[1]) .. '|' .. tostring(e.target)
             endedCount[key] = (endedCount[key] or 0) + 1
             if runsSeen[e.args[1]] then runsSeen[e.args[1]].ended = true end
+            local rr = type(e.args[4]) == 'table' and e.args[4] or {}
+            local cash = type(rr.cash) == 'table' and rr.cash or {}
+            local cid = CID[tonumber(e.target) or 0]
+            if e.args[2] == 'completed' and not rr.test and Num(cash.amount) > 0 and cid then
+                expectRow[tostring(e.args[1]) .. '|' .. cid] = H.clockMs
+            end
             if endedCount[key] > 1 then
                 return Fail('ended_twice',
                     ('run %s ended %d times for player %s'):format(e.args[1], endedCount[key], tostring(e.target)))
@@ -912,6 +1030,10 @@ local function CheckRuns()
         end
     end
     evMark = #H.events
+    -- H13 lost_run: a completed run with cash has its row two minutes after its card (the retry saves a refused one)
+    for key, at in pairs(expectRow) do
+        if not CheckRowOf(key, at, 120000) then return false end
+    end
     for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
         local rows = H.sql((
             'SELECT run_uuid, citizenid, COUNT(*) AS n FROM %s WHERE mission_type IN '
@@ -928,23 +1050,24 @@ local function CheckRuns()
 end
 
 local function CheckMoney()
-    local paying = H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE cash_status = \'paying\'')[1]
-    if Num(paying and paying.n) > 0 then
-        return true
-    end -- a payout in flight: checked on the next action
+    -- a payout in flight (or one left 'paying' for an admin's Resolve): only that officer waits for the next check
+    local paying = {}
+    for _, r in ipairs(H.sql('SELECT DISTINCT citizenid FROM cp_mission_runs WHERE cash_status = \'paying\'')) do
+        paying[r.citizenid] = true
+    end
     local got = {}
     for _, m in ipairs(W.addMoney) do got[m.citizenid] = (got[m.citizenid] or 0) + Num(m.amount) end
     for _, src in ipairs(ALL) do
         local cid = CID[src]
         local sum = 0
-        for _, tbl in ipairs({ 'cp_mission_runs', 'cp_mission_runs_archive' }) do
+        for _, tbl in ipairs(paying[cid] and {} or { 'cp_mission_runs', 'cp_mission_runs_archive' }) do
             local r = H.sql((
                 'SELECT SUM(cash_paid) AS s FROM %s WHERE citizenid = ? AND cash_status IN '
                 .. '(\'paid\', \'capped\')'
             ):format(tbl), { cid })[1]
             sum = sum + Num(r and r.s)
         end
-        if (got[cid] or 0) ~= sum then
+        if not paying[cid] and (got[cid] or 0) ~= sum then
             return Fail('paid_twice', ('%s got $%d, his paid rows say $%d'):format(cid, got[cid] or 0, sum))
         end
     end
@@ -1030,9 +1153,36 @@ local function CheckEntities()
     return true
 end
 
+-- H13 leak: no client event to an ordinary officer carries the citizenid of another player. LEAK_OK: event names
+-- that may (none today).
+local LEAK_OK = {}
+local leakMark = 0
+local function CheckLeaks()
+    if #H.events < leakMark then leakMark = 0 end
+    for i = leakMark + 1, #H.events do
+        local e = H.events[i]
+        local t = e.kind == 'client' and tonumber(e.target)
+        if t and IS[t] == 'officer' and not LEAK_OK[e.name] then
+            local okE, txt = pcall(cjson.encode, e.args)
+            if not okE then txt = Ser(e.args) end
+            for other = 1, 17 do
+                if other ~= t and CID[other] and txt:find(CID[other], 1, true) then
+                    leakMark = i
+                    return Fail('leak', ('%s to officer %d carries the citizenid of %s %d'):format(e.name, t,
+                        tostring(IS[other]), other))
+                end
+            end
+        end
+    end
+    leakMark = #H.events
+    return true
+end
+
 local function Invariants()
     if #errorLines > 0 then return Fail('error_line', errorLines[1]) end
-    if not CheckRuns() or not CheckMoney() or not CheckCaps() or not CheckEntities() then return false end
+    if not CheckRuns() or not CheckMoney() or not CheckCaps() or not CheckEntities() or not CheckLeaks() then
+        return false
+    end
     local held = HeldLocks()
     if held then
         Secs(3)
@@ -1089,6 +1239,19 @@ local function Drain()
             local row = H.sql('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE run_uuid = ?', { id })[1]
             if Num(row and row.n) == 0 then return Fail('ended_twice', 'run ' .. id .. ' never ended') end
         end
+    end
+    -- H13 lost_run at the end: every expected row is there, and no completed, unflagged run with cash waits unpaid
+    for key, at in pairs(expectRow) do
+        if not CheckRowOf(key, at, 0) then return false end
+    end
+    local unpaid = H.sql(
+        'SELECT id, citizenid, cash_status FROM cp_mission_runs WHERE state = \'completed\' AND '
+            .. 'flagged = 0 AND voided = 0 AND cash_base > 0 AND cash_status IN (\'none\', \'pending\') AND mission_type IN '
+            .. '(\'patrol\', \'training\', \'investigation\', \'tactical\') ORDER BY id'
+    )[1]
+    if unpaid then
+        return Fail('lost_run', ('row %s of %s is still %s at the end'):format(tostring(unpaid.id),
+            tostring(unpaid.citizenid), tostring(unpaid.cash_status)))
     end
     return true
 end
@@ -1181,6 +1344,8 @@ print(('REPORT soak seed=%d (%s): %d actions over %.1f simulated hours, %d runs 
         for _ in pairs(runsSeen) do n = n + 1 end
         return n
     end)()))
+print(('REPORT soak chaos: %d crashes, %d database outages, %d refused rows lost to a restart'):format(chaos.crashes,
+    chaos.outages, chaos.forgiven))
 if os.getenv('CP_SOAK_VERBOSE') then
     print('REPORT succeeded/tried ' .. table.concat(kinds, ' '))
     local r = H.sql('SELECT COUNT(*) AS n, SUM(cash_paid) AS s FROM cp_mission_runs WHERE state = \'completed\'')[1]

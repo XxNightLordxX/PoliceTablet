@@ -14,20 +14,21 @@ local MC = CP.MissionCalls
 
 local TAG = 'missioncalls'
 local BOSS_KEY = 'weekly_boss'
-local WATCH_TTL_S = 45               -- a Dispatch screen that has not asked for the calls this long is closed
-local MUTE_CACHE_S = 30              -- cp_officers.calls_muted is read at most this often per officer
-local FINISHED_KEEP = 20             -- ended calls kept in memory for the Recent list
-local CLAIM_POLL_MS = 50             -- how often a waiting claim looks whether its window was decided
-local CLAIM_WAIT_MS = 12000          -- a claim never waits longer than this for its answer
-local COVERAGE_CACHE_S = 60          -- areaIndex() is rebuilt at most this often
-local COUNT_RECHECK_S = 60           -- an hourly or daily count at its cap is read again this often
-local AREA_SPREAD = 0.25             -- base weight of an area when a call is posted (plus the idle units near it)
+local WATCH_TTL_S = 45             -- a Dispatch screen that has not asked for the calls this long is closed
+local MUTE_CACHE_S = 30            -- cp_officers.calls_muted is read at most this often per officer
+local FINISHED_KEEP = 20           -- ended calls kept in memory for the Recent list
+local CLAIM_POLL_MS = 50           -- how often a waiting claim looks whether its window was decided
+local CLAIM_WAIT_MS = 12000        -- a claim never waits longer than this for its answer
+local COVERAGE_CACHE_S = 60        -- areaIndex() is rebuilt at most this often
+local COUNT_RECHECK_S = 60         -- an hourly or daily count at its cap is read again this often
+local AREA_SPREAD = 0.25           -- base weight of an area when a call is posted (plus the idle units near it)
 local HOUR_S = 3600
 local DAY_S = 86400
-local LANE_KEY = 'callLane'          -- the Mission control of a department's own call lane
-local WAIT_KEY = 'staffCallWait'     -- the Mission control of a department's wait between staff calls
-local LANE_WEIGHT_MAX = 10           -- the highest weight a lane gives one mission type
-local PUSH_KEY = 'pushMission'       -- the Mission control of a mission a supervisor pushes to a unit
+local HISTORY_CATCHUP_MS = 120000  -- the history clean-up's catch-up after start (as schedule.lua's cleanup)
+local LANE_KEY = 'callLane'        -- the Mission control of a department's own call lane
+local WAIT_KEY = 'staffCallWait'   -- the Mission control of a department's wait between staff calls
+local LANE_WEIGHT_MAX = 10         -- the highest weight a lane gives one mission type
+local PUSH_KEY = 'pushMission'     -- the Mission control of a mission a supervisor pushes to a unit
 
 -- End reasons of a claimed run that reopen the call when nobody had reached the start (SPEC Dispatch).
 local REDISPATCH = {
@@ -2646,6 +2647,12 @@ CreateThread(function()
                 return tonumber(n) or 0
             end,
         })
+        -- a catch-up once after start, as the cleanup job has (a server that always restarts across the reset
+        -- hour never reaches a daily boundary); its on() still skips it when missionCallDays is 0
+        CreateThread(function()
+            Wait(HISTORY_CATCHUP_MS)
+            CP.Schedule.run('mission_calls')
+        end)
     end
     if CP.Qbx and CP.Qbx.onDutyChange then
         CP.Qbx.onDutyChange(function(src)

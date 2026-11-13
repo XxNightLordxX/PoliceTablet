@@ -28,6 +28,7 @@
   "result.cash_status.held": "Held for review",
   "result.cash_status.pending": "Pending",
   "result.cash_status.forfeited": "Forfeited",
+  "result.cash_status.not_saved": "Not saved yet: saved and paid when the database is back",
   "err.in_arena": "You can't take a mission while you are in the arena. Leave the arena first.",
   "err.internal": "Something went wrong. Please try again.",
   "err.invalid_days": "Enter a whole number of days from 0 to 3650.",

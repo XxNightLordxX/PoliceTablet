@@ -254,7 +254,7 @@ do
     local g = Reward({ status = 'given', item = 'water', count = 2 })
     Holding(7, 'water', 2, g)
     ok, e = Act('server:admin:takeBackReward', 1, { id = g, reason = 'x', confirm = 'water', requestId = Rid() })
-    H.eq(e, 'err.money_tool_off', 'Take back is refused while its switch is off')
+    H.ok(not ok and e == 'err.money_tool_off', 'Take back is refused while its switch is off')
     Config.Rewards.allowTakeBack = true
     ok, e = Act('server:admin:takeBackReward', 1, { id = g, reason = 'x', confirm = 'burger', requestId = Rid() })
     H.eq(e, 'err.confirm_mismatch', 'the typed word is the item')

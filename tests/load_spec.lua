@@ -341,7 +341,7 @@ do
     H.eq(ok, false, 'shipped: a storage copy while runs go on is refused (' .. tostring(err) .. ')')
     ok, err = Act('server:admin:manualCash', 5,
         { citizenid = CID[28], amount = 25, reason = 'WF6B', requestId = Rid() })
-    H.eq(err, 'err.money_tool_off', 'shipped: manual cash ships off')
+    H.ok(not ok and err == 'err.money_tool_off', 'shipped: manual cash ships off')
     ok, err = Act('server:sup:awardPoints', 3, { citizenid = CID[29], points = 5, reason = 'WF6B' })
     H.eq(ok, DEPT_OF[29] == 'sast', 'shipped: points only for the own department (' .. tostring(err) .. ')')
     ok, err = Act('server:sup:opLaunch', 28, { missionId = 'beat_patrol' })

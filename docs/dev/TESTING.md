@@ -271,7 +271,7 @@ Variables for one run:
 | `FUZZ_SEED=n`, `FUZZ_N=n` | the fuzz scripts' seed and statement count |
 | `CP_FUZZ_SEED=n`, `CP_FUZZ_PER=n` | `tests/fuzz_net_spec.lua`: its seed (default 1) and rounds over every event and callback (default 5, about 1 s) |
 | `CP_DEFER_THREADS=1` | the harness queues `CreateThread` threads to the next `H.step`, as FXServer's scheduler does, instead of running them at once (`Citizen.CreateThreadNow` still runs at once; `H.deferThreads = true` before `H.boot` does the same for one spec). Opt-in and not in the gate ("What the gate does not catch yet" below) |
-| `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
+| `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_CHAOS=0` leaves out the crashes and database outages, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
 | `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (docs/dev/WORKFLOWS.md) |
 | `CP_LOAD_TRACE=1` | `tests/load_spec.lua` prints each harness step over 30 ms as a REPORT line |
 | `CP_RACE_ONLY=<text>`, `CP_RACE_CUTS=n` or `all`, `CP_RACE_DEBUG=1` | `tests/race_spec.lua`: only the cases whose name holds the text; the restart cuts per case (default 5; `all`: after every query, a case's own `maxCuts` too); print both replies of each at-once pair |
@@ -447,6 +447,27 @@ that blocks a new try`) unless the case lists that refusal in `cutRefusals` (rig
 again, a mission call a restart closed) or in `cutKnown` (a finding not fixed yet, printed as `REPORT KNOWN` on every
 run: delete the entry with its fix). An effect a cut may leave behind (an audit row written after the change, XP
 added after the award row, money a 'paying' row waits on) is in the case's `lag`.
+
+### Mutation testing
+
+`tools/mutate.py` (not a gate step: it runs the named specs once per mutant) makes small breaks in one Lua file and
+runs the specs that should catch them: a flipped comparison, `and`/`or` swapped, a `not ` dropped, `true`/`false`
+or `0`/`1` swapped, `+`/`-` swapped, or a line deleted. Comments and strings are never mutated; a mutant that does not
+parse (`luac5.4 -p`) is skipped. It works on a temporary copy of the repository (the files git knows plus new ones),
+so the working tree is never changed, restores the file after every mutant and removes the copy at the end.
+
+```bash
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --specs economy,crash_matrix --max 40 --seed 1
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --specs economy --only '554:~= => =='
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --list --lines 400-620
+```
+
+Each mutant prints `KILLED by <spec>` (the first spec that failed) or `SURVIVED`; `--out <file>` writes the list as
+JSON; exit 0 when every mutant was killed, 1 when one survived. A survivor is a test to write, or a change that is
+the same in effect (say why in the commit). The specs must pass on the unchanged code first (it checks). The first
+round's survivors and their new tests: cash.lua 554 (economy_spec, the refund after a failed 'adding' marker),
+permissions.lua 118 (admin_permissions_spec, the grades list), payments.lua 182, 841, 908 and 1029
+(admin_economy_spec). tests/check_tools_spec.lua checks the tool itself.
 
 ### The other steps
 

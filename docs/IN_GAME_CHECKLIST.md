@@ -1082,3 +1082,24 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Guided tours: start the Admin tour (Settings -> Tours -> Start), then press Leaderboards -> Item rewards -> Deliver now: the
   tour card hides while the dialog is open, the dialog's Confirm and Cancel can be clicked, and the card comes back
   when the dialog closes.
+
+## Variant and robustness fixes
+
+- [ ] Database outage at a run's end: finish a Beat Patrol while MariaDB is stopped (`systemctl stop mariadb` on a
+  test server, start it again within a few minutes): the result card says the pay is "Not saved yet: saved and paid
+  when the database is back", and about 30 s after MariaDB is back the console says the run row was saved after an
+  outage, the officer is paid once and the run shows in his Profile. (A restart while the database is still down
+  loses that run, as before.)
+- [ ] Real suspects at start-up: with an admin exclusion on a player, start the server while MariaDB is down for the
+  first minute: until the rows are read that player is never picked as a suspect, and once the database is back
+  (within a minute) Admin UI -> Restrictions lists the exclusion again.
+- [ ] Restrictions: set `Config.RealPlayers.staff.names = false`, open Admin UI -> Restrictions: pair blocks,
+  exclusions, real-suspect suspensions and volunteer blocks show citizen IDs only (the admin who set each one keeps
+  his name); officer suspensions and mission bans still show names.
+- [ ] Discord board: a supervisor sets the department's boards Mission control to callsigns only for other
+  departments; the weekly Officer of the Week post, the season results top 10 and a commendation announce name that
+  department's officers by callsign, never by name.
+- [ ] Mission call history: with `missionCallDays` set, restart the server: about two minutes after the start, old
+  mission calls past the limit are removed (no need to wait for the daily reset).
+- [ ] Desks: change a desk in Admin UI -> Departments twice quickly while a desk prop model is still loading (or
+  join a Crimson-Arena match and leave it at once): afterwards each desk has one ox_target option, not two.

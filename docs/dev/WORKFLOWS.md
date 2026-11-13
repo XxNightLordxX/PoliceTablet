@@ -92,13 +92,19 @@ objective, abandon, units (invite, answer, leave, kick, promote, disband, cancel
 decline), Give points, commend, Mission ban, Clear cooldown, happy hour, the Review Queue, disputes, manual cash and
 Add funds, Settings changes, presets, restarts, drops and reconnects, duty toggles, the hourly, daily and weekly
 resets, the maintenance lock, the guided tours (done, `/crimsonhelp`, the admin's reset, the Setup checklist on Home)
-and opening each tablet. Even seeds turn every switch on first; odd seeds keep the shipped config. After every action
+and opening each tablet. It also mixes in hard crashes (no onResourceStop, the old boot's entities gone, as
+on a real server crash) and database outages (every MySQL call raises for 1-4 actions and up to 90 s; the error
+lines of that window are expected and dropped); `CP_SOAK_CHAOS=0` leaves both out. Even seeds turn every switch on first; odd seeds keep the shipped config. After every action
 it checks: no player on two runs; every run ends once per player (one runEnded, one ledger row), and at the end
 every run has ended (a restart ends the runs it stops, as documented in runs.lua); the cash each character got
 equals the cash_paid of his paid and capped rows; no negative XP, pay or funding; the supervisors' per-day caps, the
 unit size and the completions an hour are never passed; every CP.Lock key and the maintenance lock are released; no
 entity outlives its run by two minutes; no error line and no Lua error; and a wrong role, another department, a
-feature off or the maintenance lock never lets an action succeed. On a failure it prints the seed and shrinks the
+feature off or the maintenance lock never lets an action succeed; a completed run with cash on its card has its
+ledger row two minutes later, and at the end no completed, unflagged run with cash is left 'none' or 'pending'
+(lost_run); and no client event to an ordinary officer carries another player's citizenid (leak). An officer with a
+row left 'paying' (for an admin's Resolve) is left out of the money check until it is resolved, the others are still
+checked. On a failure it prints the seed and shrinks the
 action list to the shortest one that still fails (child runs replay it). The normal suite runs one seed for about
 two simulated hours; `CP_SOAK=1 CP_SOAK_SEEDS=1-24 CP_SOAK_HOURS=6` runs many, and `CP_SOAK_STORAGE=database` runs
 it on MariaDB. A run of 24 seeds for 6 simulated hours each in files mode (77,202 actions, 2,923 runs) and 6

@@ -776,6 +776,29 @@ do
     H.eq(LB._weeklyJob(LAST_WEEK, WEEK), false, 'second run does nothing')
     H.eq(#hooks, 1, 'no second webhook')
     H.eq(LB._weeklyJob(WEEK, WEEK), false, 'empty window refused')
+
+    -- H13: a department that shows callsigns only to other departments: the board post carries the callsign only
+    local realDc = CP.DeptControls
+    CP.DeptControls = {
+        get = function(dept, key)
+            if dept == 'sast' and key == 'boards' then return { showToOthers = false } end
+            return nil
+        end,
+    }
+    H.sql('DELETE FROM cp_badges WHERE badge_id = \'officer_of_week_2026-09-14\'')
+    hooks = {}
+    local realL = CP.L
+    CP.L = function(key, vars) return key .. require('cjson').encode(vars or {}) end
+    H.eq(LB._weeklyJob(LAST_WEEK, WEEK), true, 'H13: weekly job with the callsigns-only rule')
+    CP.L = realL
+    local text = hooks[1] and (tostring(hooks[1].description) .. require('cjson').encode(hooks[1].fields)) or ''
+    H.ok(text:find('2L-15', 1, true) ~= nil, 'H13: the post names LB5 by callsign (' .. text .. ')')
+    H.ok(text:find('Echo Five', 1, true) == nil, 'H13: ...never by name (' .. text .. ')')
+    H.eq(LB.postName({ name = 'Echo Five', callsign = '2L-15', department = 'sast' }), '2L-15',
+        'H13: LB.postName follows the rule')
+    H.eq(LB.postName({ name = 'Fay Fib', callsign = 'F-4', department = 'fib' }), 'Fay Fib',
+        'H13: ...and leaves other departments named')
+    CP.DeptControls = realDc
 end
 
 -- announcements: last week and last month

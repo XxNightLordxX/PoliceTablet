@@ -203,6 +203,7 @@
   "result.cash_status.held": "Held for review",
   "result.cash_status.pending": "Pending",
   "result.cash_status.forfeited": "Forfeited",
+  "result.cash_status.not_saved": "Not saved yet: saved and paid when the database is back",
   "result.flagged": "Flagged: {reason}.",
   "result.flag_generic": "under review",
   "result.flagged_note": "Points and cash are held until a supervisor reviews the run.",

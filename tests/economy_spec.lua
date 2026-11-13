@@ -857,8 +857,54 @@ end
 local s4 = InsertRun({ amount = 650 })
 H.eq(CP.Cash.pay(s4), 'pending', 'with a refund call the row goes back to pending')
 H.eq(#banking.refunds, 1, 'society refunded')
-CP.Banking.depositSociety = nil
 addMoneyResult = true
+
+-- H13: the 'adding' marker cannot be written after the department paid: the refund decides. Refund done -> pending
+-- (the next pay withdraws again, once); refund refused -> stays paying at 'withdrawn' (never withdrawn twice); refund
+-- raised with no telling -> 'refunding'.
+do
+    local realUpdate = MySQL.update.await
+    MySQL.update.await = function(sql, params)
+        if type(sql) == 'string' and sql:find('$.cash.step', 1, true) and type(params) == 'table'
+            and params[1] == 'adding' then
+            return 0
+        end
+        return realUpdate(sql, params)
+    end
+    local function Step(id) return (Bd(id).cash or {}).step end
+    -- (A) refund OK
+    banking.withdraws, banking.refunds = {}, {}
+    local addsA = #qbxCalls.addMoney
+    local mA = InsertRun({ amount = 210 })
+    H.eq(CP.Cash.pay(mA), 'pending', 'H13 (A) no adding marker, refund done: back to pending')
+    H.eq(RowOf(mA).cash_status, 'pending', 'H13 (A) ...the row is pending')
+    H.ok(#banking.withdraws == 1 and #banking.refunds == 1 and banking.refunds[1][2] == 210,
+        'H13 (A) ...the department got its 210 back')
+    H.eq(#qbxCalls.addMoney, addsA, 'H13 (A) ...no deposit to the officer')
+    -- (B) the refund refused
+    CP.Banking.depositSociety = function(account, amount)
+        banking.refunds[#banking.refunds + 1] = { account, amount }
+        return false
+    end
+    banking.withdraws, banking.refunds = {}, {}
+    local mB = InsertRun({ amount = 220 })
+    H.eq(CP.Cash.pay(mB), 'paying', 'H13 (B) refund refused: stays paying')
+    H.eq(Step(mB), 'withdrawn', 'H13 (B) ...at step withdrawn')
+    H.eq(CP.Cash.pay(mB), 'paying', 'H13 (B) a second pay leaves it paying')
+    H.eq(#banking.withdraws, 1, 'H13 (B) ...and withdraws nothing again')
+    H.eq(#qbxCalls.addMoney, addsA, 'H13 (B) ...no deposit')
+    -- (C) the refund raised and the balance does not tell
+    local realBalance = CP.Banking.societyBalance
+    CP.Banking.societyBalance = function() return nil end
+    CP.Banking.depositSociety = function() error('refund raised') end
+    local mC = InsertRun({ amount = 230 })
+    H.eq(CP.Cash.pay(mC), 'paying', 'H13 (C) refund raised: stays paying')
+    H.eq(Step(mC), 'refunding', 'H13 (C) ...at step refunding')
+    CP.Banking.societyBalance = realBalance
+    MySQL.update.await = realUpdate
+    H.sql('UPDATE cp_mission_runs SET cash_status = \'paid\' WHERE id IN (?, ?, ?)', { mA, mB, mC })
+end
+CP.Banking.depositSociety = nil
 Config.Cash.source = 'server'
 
 -- review: a Lua error after the claim but before any money moved puts the row back to pending; an error

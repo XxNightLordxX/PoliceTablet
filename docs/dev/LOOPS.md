@@ -295,6 +295,7 @@ list and mission definitions at start) all end at a deadline and are not loops o
 | --- | --- | --- | --- | --- |
 | modules/runs/runs.lua | engine thread (one thread): run timeouts, arrivals, arena exit sweeps, job recheck | while a run or an orphaned item is kept | 1000 ms; arena sweeps every 5th pass; job recheck every `Config.AntiCheat.jobRecheck` passes | run deadlines and HUD timers are in seconds |
 | modules/runs/runs.lua | maintenance | always | 60 s | housekeeping |
+| modules/runs/runs.lua | unsaved run rows | while a run row the database refused waits | 30 s | an outage is minutes; the thread ends when the list is empty |
 | modules/runs/route.lua | drive-to-start safety net | while a run or a tracked participant exists | 1000 ms | the warning deadline is in seconds |
 | modules/dispatch/alerts.lua | crimsonArena flag reconcile | always | 2000 ms, scaled | a lost flag is restored within two seconds |
 | modules/review/anticheat.lua | buckets, idle, presence sampling | always | 2000 ms, presence 5 s (on the next pass) | idle and bucket rules count seconds |
@@ -386,14 +387,14 @@ strings do not count.
 | `modules/supervisor/livectl.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/map/client/markers.lua` | 2 | 0 | objective pointer; a start-up hook |
 | `modules/system/migrations.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/dispatch/missioncalls.lua` | 2 | 1 | call posting, `checkEvery`; one-shots; the push is a `SetTimeout` |
+| `modules/dispatch/missioncalls.lua` | 3 | 1 | call posting, `checkEvery`; one-shots (the history clean-up's catch-up 2 min after start); the push is a `SetTimeout` |
 | `modules/missions/client/missions.lua` | 1 | 0 | bounded definitions retry at start |
 | `modules/missions/missions.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/npc/client/npc.lua` | 19 | 1 | owned ped AI, pace, governor, cuff guard; bounded control waits; one-shots |
 | `modules/npc/client/npccombat.lua` | 1 | 0 | damage re-apply while the run is live |
 | `modules/teams/operations.lua` | 4 | 1 | operations, adaptive; one-shots |
 | `modules/realplayers/conduct.lua` | 2 | 0 | one-shot threads (start-up hooks, async work); no loop |
-| `modules/realplayers/pairs.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
+| `modules/realplayers/pairs.lua` | 3 | 1 | one-shot threads (start-up hooks, async work); the start-up read, tried again every 60 s until it works, then it ends |
 | `modules/realplayers/proof.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/saved.lua` | 3 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/realplayers/opponents.lua` | 3 | 1 | live crime watch while a case is tracked; one-shots |
@@ -408,7 +409,7 @@ strings do not count.
 | `modules/runs/client/route.lua` | 2 | 0 | drive-to-start report; a start-up hook |
 | `modules/runs/route.lua` | 4 | 0 | one-shots; the tick is a `CP.Perf.armed` loop |
 | `modules/runs/client/runs.lua` | 3 | 1 | telemetry, weapon fired; bounded entity wait |
-| `modules/runs/runs.lua` | 6 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop |
+| `modules/runs/runs.lua` | 7 | 1 | maintenance, 60 s; per-run tick threads; one-shots; the engine is a `CP.Perf.armed` loop; the unsaved-row retry, 30 s, only while a refused run row waits |
 | `modules/system/schedule.lua` | 3 | 1 | daily jobs, 60 s; one-shots |
 | `modules/progression/scoring.lua` | 1 | 0 | one-shot threads (start-up hooks, async work); no loop |
 | `modules/admin/client/settings.lua` | 1 | 0 | bounded settings wait at start |

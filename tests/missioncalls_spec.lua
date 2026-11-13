@@ -256,6 +256,13 @@ do
     H.sql('DELETE FROM mdt_dispatch')
 end
 
+-- H13: an old call row the history clean-up's catch-up after start removes (a fresh one stays)
+H.sql('DELETE FROM cp_mission_calls')
+for i, ago in ipairs({ 200 * 86400, 3600 }) do
+    H.sql([[INSERT INTO cp_mission_calls (code, mission_type, area, status, outcome, created_by, claimed_by, created_at,
+        claimed_at) VALUES (?, 'patrol', NULL, 'closed', 'completed', NULL, 'OFF00001', FROM_UNIXTIME(?),
+        FROM_UNIXTIME(?))]], { ('MC-H13%d'):format(i), os.time() - ago, os.time() - ago + 60 })
+end
 H.load('modules/system/schedule.lua')
 H.load('modules/runs/draw.lua')
 H.load('modules/system/integrations/sc_dispatch.lua')
@@ -263,6 +270,12 @@ H.load('modules/dispatch/missioncalls.lua')
 local MC = CP.MissionCalls
 local D = CP.Draw
 H.advance(500)
+H.eq(#H.sql('SELECT id FROM cp_mission_calls WHERE code LIKE \'MC-H13%\''), 2, 'H13: before the catch-up both rows')
+H.advance(120000)
+local h13Left = H.sql('SELECT code FROM cp_mission_calls WHERE code LIKE \'MC-H13%\'')
+H.ok(#h13Left == 1 and h13Left[1].code == 'MC-H132',
+    'H13: two minutes after start the history clean-up ran once: the old call is gone, the fresh one stays')
+H.sql('DELETE FROM cp_mission_calls')
 MC._setRng(U.rng(12345))
 
 -- ============================================================================
