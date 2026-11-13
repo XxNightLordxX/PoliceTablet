@@ -39,6 +39,8 @@
 --       'refunding' or 'withdrawn' step; CP.Cash.releaseAgain(rowId, audit) -> ok, data | false, errKey releases it
 --       (at 'withdrawn' the department gets its money back first); CP.Cash.markAgainWithdrawn(rowId, audit) -> the
 --       same, records that the department was charged (step 'withdrawn', no money moves)
+--   CP.Cash.releaseRefund(row, bd) -> amount | nil     what a Release gives the department back now (its Resolve asks
+--       for the typed amount)
 --   CP.Cash.retryGiveBacks() -> n                      owed clawback give-backs tried again (start, every 10 min)
 --   CP.Cash.earnedThisWeek(citizenid) -> number        cash_paid of paid/capped rows since the week start
 -- All functions except compute and range query the database: call them from a thread.
@@ -932,8 +934,9 @@ end
 
 -- The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step
 -- (withdrawing -> withdrawn -> adding -> added; review when a raised call left no telling), written compare-and-set on
--- the claim marker <key> = 'paying'. A refused deposit gives the department its money back; when that fails too the
--- marker stays at 'withdrawn' (the department paid, the officer did not). -> true | false, errKey
+-- the claim marker <key> = 'paying'. A refused deposit gives the department its money back ('refunded' before the
+-- claim is released, so a failed release never reads as a charge); when that fails too the marker stays at
+-- 'withdrawn' (the department paid, the officer did not). -> true | false, errKey
 local function MoveLocked(rowId, key, src, account, needWithdraw, moneyAccount, moneyItem, amount)
     local stepKey = key .. 'Step'
     local function Step(v, extra)
@@ -961,6 +964,7 @@ local function MoveLocked(rowId, key, src, account, needWithdraw, moneyAccount, 
         if not needWithdraw then return false, 'err.state_changed' end
         local refund = RefundSociety(account, amount)
         if refund == 'done' then
+            Step('refunded')
             Release(rowId, key)
             return false, 'err.state_changed'
         end
@@ -982,6 +986,7 @@ local function MoveLocked(rowId, key, src, account, needWithdraw, moneyAccount, 
         if needWithdraw then
             local refund = RefundSociety(account, amount)
             if refund == 'done' then
+                Step('refunded')
                 Release(rowId, key)
                 return false, 'err.payment_refused'
             end
@@ -1119,14 +1124,15 @@ end
 -- 'withdrawing' or 'refunding' (the department call or its refund raised with no telling) the admin reads the
 -- department's history: not charged, or got it back -> againRelease (no money moves); charged and not given back ->
 -- againWithdrawn (the step becomes 'withdrawn', no money moves). At 'withdrawn' (the department paid, the officer did
--- not) Pay again deposits only, and againRelease gives up: the department gets its money back first. Only a first
--- Pay again ('again'; a resumed deposit, 'again2', never calls the department) on a row still 'paying'.
+-- not) Pay again deposits only, and againRelease gives up: the department gets its money back first. At 'refunded'
+-- (the department got it back and the release did not follow) againRelease only releases. Only a first Pay again
+-- ('again'; a resumed deposit, 'again2', never calls the department) on a row still 'paying'.
 function Cash.againOutcomes(row, bd)
     local c = CashOf(type(bd) == 'table' and bd or {})
     if type(row) ~= 'table' or row.cash_status ~= 'paying' then return {} end
     if c.again ~= 'paying' or c.again2 ~= nil then return {} end
     if UNKNOWN_STEP[c.againStep] then return { againRelease = true, againWithdrawn = true } end
-    if c.againStep == 'withdrawn' then return { againRelease = true } end
+    if c.againStep == 'withdrawn' or c.againStep == 'refunded' then return { againRelease = true } end
     return {}
 end
 
@@ -1139,7 +1145,8 @@ end
 
 -- A Pay again at 'withdrawn' given up, under the officer's payment lock: the department gets its money back
 -- ('refunding' while the refund runs), then the claim is released. A refund with no telling stays at 'refunding'
--- (a second Release only releases, so it is never given back twice); a refused one goes back to 'withdrawn'.
+-- (a second Release only releases, so it is never given back twice); a refused one goes back to 'withdrawn'; a
+-- refund that went through is 'refunded' before the release.
 local function GiveUpAgainLocked(row, bd, rowId, amount)
     local c = CashOf(bd)
     local dept = DeptOf(row.department)
@@ -1156,6 +1163,8 @@ local function GiveUpAgainLocked(row, bd, rowId, amount)
         AgainStepIf(rowId, 'refunding', 'withdrawn')
         return false, 'err.payment_refund_failed'
     end
+    -- 'refunded' first: a release that fails now leaves a step where Release only releases (never Mark withdrawn)
+    AgainStepIf(rowId, 'refunding', 'refunded')
     if not Release(rowId, 'again', ' AND cash_status = \'paying\'') then return false, 'err.state_changed' end
     return true
 end
@@ -1171,7 +1180,7 @@ function Cash.releaseAgain(rowId, audit)
     rowId = math.floor(CP.U.num(row.id))
     if Cash.rowBusy(rowId, row.citizenid) then return false, 'err.payment_in_flight' end
     if not Cash.againOutcomes(row, bd).againRelease then return false, 'err.payment_step_unknown' end
-    local step = CashOf(bd).againStep   -- 'withdrawing', 'refunding' or 'withdrawn', never a value from a player
+    local step = CashOf(bd).againStep   -- 'withdrawing', 'refunding', 'withdrawn' or 'refunded', never from a player
     local amount = PayAmountOf(bd) or AmountOf(row, bd)
     if not Audited(audit, { kind = 'again', outcome = 'againRelease', amount = amount, step = step }) then
         return false, 'err.audit_failed'
@@ -1493,11 +1502,33 @@ local function FollowUpAmount(row, bd, kind)
 end
 Cash.followUpAmount = FollowUpAmount
 
+-- The amount a Release would give the department back now, else nil: a Pay again at 'withdrawn' (againRelease), a
+-- Pay the rest after its department withdrawal ('withdrawn', 'adding', 'review': restRelease). That Release moves
+-- money, so its Resolve asks for the typed amount (server:admin:resolvePayment).
+function Cash.releaseRefund(row, bd)
+    if type(row) ~= 'table' or type(bd) ~= 'table' then return nil end
+    local c = CashOf(bd)
+    local kind = Cash.followUpOf(bd)
+    if kind == 'rest' then
+        local st = c.restPaidStep
+        if (st == 'withdrawn' or st == 'adding' or st == 'review') and c.restPaidAccount ~= nil then
+            return FollowUpAmount(row, bd, 'rest')
+        end
+        return nil
+    end
+    if kind == nil and c.againStep == 'withdrawn' and Cash.againOutcomes(row, bd).againRelease then
+        return PayAmountOf(bd) or AmountOf(row, bd)
+    end
+    return nil
+end
+
 -- What a follow-up's Resolve may do now: { outcome = true }. rest: 'restPaid' once a deposit was tried (adding,
 -- review, added); 'restRelease' unless the money reached the officer ('added'): with no step it only releases, at
 -- 'withdrawing' or 'refunding' (a department call cut part way) it only releases after the admin checked the
 -- department's history, and after a department withdrawal ('withdrawn', 'adding', 'review') it gives the department
--- its money back first. back: 'backTaken' once RemoveMoney ran (removing), 'backUndone' always. giveBack: 'giveBack'
+-- its money back first ('refunded' once it did: then it only releases); 'restWithdrawn' at 'withdrawing' or
+-- 'refunding' when the department's history shows it WAS charged and not given it back (the step becomes
+-- 'withdrawn', no money moves, where restRelease gives it back). back: 'backTaken' once RemoveMoney ran (removing), 'backUndone' always. giveBack: 'giveBack'
 -- (try the deposit now) and 'giveBackDone' (it arrived, no money moves).
 function Cash.followUpOutcomes(bd)
     local kind = Cash.followUpOf(bd)
@@ -1507,6 +1538,7 @@ function Cash.followUpOutcomes(bd)
         return {
             restPaid = st == 'adding' or st == 'review' or st == 'added',
             restRelease = st ~= 'added',
+            restWithdrawn = UNKNOWN_STEP[st] == true and c.restPaidAccount ~= nil or nil,
         }
     elseif kind == 'back' then
         return { backTaken = c.backStep == 'removing', backUndone = true }
@@ -1550,10 +1582,22 @@ local function ResolveLocked(row, bd, rowId, outcome, amount)
                 MarkIf(rowId, { restPaidStep = st }, 'restPaidStep', 'refunding')
                 return false, 'err.payment_refund_failed'
             end
+            -- 'refunded' first: a release that fails now leaves a step where Release only releases
+            MarkIf(rowId, { restPaidStep = 'refunded' }, 'restPaidStep', 'refunding')
             if not Release(rowId, 'restPaid') then return false, 'err.state_changed' end
         elseif st == 'added' or not Release(rowId, 'restPaid') then
-            -- 'withdrawing', 'refunding' (a department call cut part way: the admin checked its history) and a
-            -- server-paid rest: it only releases
+            -- 'withdrawing', 'refunding' (a department call cut part way: the admin checked its history),
+            -- 'refunded' and a server-paid rest: it only releases
+            return false, 'err.state_changed'
+        end
+        return true, { id = rowId, outcome = outcome, amount = amount }
+    elseif outcome == 'restWithdrawn' then
+        -- the department WAS charged (the admin checked its history) and did not get it back: no money moves, the
+        -- step becomes 'withdrawn' (compare and set), where restRelease gives the department its money back
+        if not UNKNOWN_STEP[c.restPaidStep] or c.restPaidAccount == nil then
+            return false, 'err.payment_step_unknown'
+        end
+        if not MarkIf(rowId, { restPaidStep = 'withdrawn' }, 'restPaidStep', c.restPaidStep) then
             return false, 'err.state_changed'
         end
         return true, { id = rowId, outcome = outcome, amount = amount }

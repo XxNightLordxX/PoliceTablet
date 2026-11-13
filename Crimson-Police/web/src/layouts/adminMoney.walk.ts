@@ -7,7 +7,7 @@ import '../mocks/oversight.mock';
 import paymentsSrc from '../admin/screens/Payments.tsx?raw';
 import { mockLocale } from '../mocks/samples';
 import { setLocale, t } from '../shared/i18n';
-import { request } from '../shared/nui';
+import { action, request } from '../shared/nui';
 import type { Session } from '../shared/types';
 import type { BankingCheck, DepartmentFundsView, PaymentsView } from '../types/admin_economy';
 import type { DepartmentsData } from '../types/oversight';
@@ -93,7 +93,15 @@ async function steps(): Promise<void> {
     const chk = await request<BankingCheck>('admin:checkBankingTxn', { rowId: follow?.id });
     ok(chk.ok && chk.data?.followUp === 'rest' && chk.data.outcomes?.restRelease === true, 'Resolve: its outcomes');
     ok(/r\.status === 'paying' \|\| r\.followUp\) out\.push\('resolve'\)/.test(paymentsSrc), 'Resolve shows for it');
-    const outcomes = ['restPaid', 'restRelease', 'backTaken', 'backUndone', 'giveBack', 'giveBackDone'];
+    const outcomes = [
+        'restPaid',
+        'restRelease',
+        'restWithdrawn',
+        'backTaken',
+        'backUndone',
+        'giveBack',
+        'giveBackDone',
+    ];
     ok(
         outcomes.every(o => t(`payments.followup.${o}`) !== `payments.followup.${o}`) &&
             outcomes.every(o => t(`payments.followup.${o}_msg`) !== `payments.followup.${o}_msg`),
@@ -102,6 +110,26 @@ async function steps(): Promise<void> {
     ok(
         ['withdrawing', 'adding', 'review', 'refunding'].every(s => t(`payments.step.${s}`) !== `payments.step.${s}`),
         'the new step markers have their English text',
+    );
+    // R4: a Release that gives the department its money back asks for that amount typed, like every money tool
+    ok(chk.data?.releaseRefund === (follow ? follow.owed - follow.paid : -1), 'Resolve: the Release refund is told');
+    ok(
+        /const moves = mode === 'payAgain' \|\| mode === 'giveBack' \|\| refund !== null;/.test(paymentsSrc) &&
+            /typedWord=\{moves \? String\(word\) : undefined\}/.test(paymentsSrc),
+        'Resolve: a Release with a refund asks for the typed amount',
+    );
+    const untyped = await action('server:admin:resolvePayment', {
+        rowId: follow?.id,
+        outcome: 'restRelease',
+        reason: 'x',
+    });
+    ok(!untyped.ok, 'Resolve: a Release with a refund and no typed amount is refused');
+    // R5: 'refunded' (the refund went through, the release did not follow) has its English text
+    ok(
+        t('payments.step.refunded') !== 'payments.step.refunded' &&
+            t('payments.followup.step.refunded') !== 'payments.followup.step.refunded' &&
+            t('payments.followup.restRelease_refund_msg') !== 'payments.followup.restRelease_refund_msg',
+        'the refunded step and the rest refund have their English text',
     );
     // Pay again stays offered after a cut or raised officer's deposit (the checked box is required); never at an
     // unknown department call or refund

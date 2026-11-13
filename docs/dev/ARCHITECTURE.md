@@ -752,7 +752,7 @@ Who is an officer, of which department, with which role.
   longer qualifies (a different active job, or one outside every department, is job_change).
 - S `onLost(fn(src, endReason))` — fired on qbx duty/job events and from `suspend()` for a player whose last known job
   (seeded on start, load, getOfficer, recheck and every qbx event) was a department job.
-- S `isSuspended(citizenid) -> bool, untilTs` (15 s cache; a failed refresh keeps a suspension the cache knew); `suspend(citizenid, days, actorSrc, reason, opts) -> ok, errKey` (0
+- S `isSuspended(citizenid) -> bool, untilTs` (15 s cache; a failed refresh keeps a suspension the cache knew and is cached for the 15 s too); `suspend(citizenid, days, actorSrc, reason, opts) -> ok, errKey` (0
   days lifts, writing `suspended_until = NOW()` so the end is kept for the dispute window; whole days 0-3650 or
   `opts.untilTs`; a player actor needs `can(actorSrc, 'suspend')`, console/anticheat
   skip it; the end is capped at 2147483647 because MariaDB's `FROM_UNIXTIME` gives NULL beyond; `err.internal` when it
@@ -1451,7 +1451,9 @@ Points, streaks, XP and badges.
   it: changed by the amount = done, unchanged = refused, else no telling (left for an admin, never refunded blind): a
   department call stays at `withdrawing`, the officer's deposit at `review`. A department refund with no telling
   (`RefundSociety` answers `'done' | 'refused' | 'unknown'`) leaves `refunding` (`step`, `againStep`,
-  `restPaidStep`): never refunded again and never resumed as a deposit only.
+  `restPaidStep`): never refunded again and never resumed as a deposit only. A refund that went through is
+  `refunded` before the claim is released, so a release that then fails leaves a step where Resolve's Release only
+  releases (never Mark withdrawn, never a second refund).
   Pay again refuses `withdrawing` and `refunding` (`err.payment_step_unknown`); at `adding` and `review` it deposits
   only (the department already paid) when the admin ticked the checked box (`opts.checked`); it resumes a Pay
   again left at `againStep = 'withdrawn'` with the deposit only (`again2`).
@@ -2130,11 +2132,18 @@ while one is held is refused), `finish(kind)`, `active() -> kind, info | nil`, `
 `askRestart(kind)` (the work is done: `view().restart = true` and one console line "Restart Crimson-Police now from
 txAdmin or the server console"; Crimson-Police never restarts itself), `mark(kind, fields)` (merges fields into the
 held lock's info and pushes: a restore that stopped part way sets `failed` and `automatic`, shown in the view).
-The hold of the dispute window: `cp_storage_meta` keeps `holdFrom` while a lock is held (a start that takes the lock
-again keeps it) and `holdLast` (`from:to`) of the last one that ended (`finish`, or `settleHold()` at the first start
-that takes no lock, called by `CP.Sysadmin` after the start-up locks). `hold() -> { from, to } | nil` (to = now
-while held), `windowEnd(startTs, windowS)`: the end moved on by the part of the last hold from the window's start
-on, when that hold began before the window ended. Only one hold is kept, so a restart never counts it twice.
+The holds of the dispute window: one `cp_storage_meta` row, `holds` = `'from:to,from:to|open'`, keeps the last 10
+holds that ended (`finish`, or `settleHold()` at the first start that takes no lock, called by `CP.Sysadmin` after
+the start-up locks; ones that can no longer move an open window are dropped) and the one open while a lock is held
+(a start that takes the lock again keeps it). One row, so each change is one statement; changes run one at a time
+(a `begin` or `finish` during a write's await runs the sync again after it, so the row always ends matching the
+lock), and a write that fails is kept in memory and written again at the next change. The rows of older versions
+(`holdFrom`, `holdLast`) are read while `holds` is missing. `holds() -> { { from, to }, ... }` (oldest first, to =
+now for the open one), `hold() -> { from, to } | nil` (the last), `windowEnd(startTs, windowS)`: startTs + windowS +
+the part from the window's start on of every hold the window reached (hold i counts when it began before
+startTs + windowS + the parts of the holds before it). `windowEndSql(startExpr, windowS)` writes the same rule as a
+DATETIME expression on a column of the caller's SQL; `CP.Money.disputeStartSql` and `CP.Access.suspend`'s
+held-windows check use it, so the Lua and the SQL rule cannot drift.
 
 ### 5.38 CP.Corrections — modules/review/corrections (S)
 An admin's corrections to officers' records, all through `CP.AdminKit` (§5.37) and the admin-only keys of §5.3.
@@ -2599,7 +2608,8 @@ admin switched them on and only inside the admin's bounds.
 - `set(src, key, value, reason, opts?)` — the only write: `canChange`, a reason, the value inside the bounds
   (`err.control_value`, never clamped), for a supervisor `Config.MissionControls.changeWait` (`err.control_wait`; the
   last set or reset is read once a start from the `cp_audit` rows `missionControlSet`/`missionControlReset` of the
-  last changeWait, so a reset holds the wait across a restart; while that read fails the whole wait applies),
+  last changeWait, and again when changeWait grows past the wait it was read for, so a reset holds the wait across a
+  restart; while that read fails the whole wait applies),
   then upsert, audit `missionControlSet` (target `dept:key`), hook `deptControls:changed { dept, key }`, push
   `missionControls` to that department's supervisors (all for `'*'`) and admins.
 - `view(src)` (each control `{ key, kind, scope, serverWide, master, on, active, min, max, value, configValue, saved,
@@ -2736,7 +2746,7 @@ Each is one server file with no client half; its Net names are in §8.3 / §8.4 
   Loop: 30 s, armed only while a happy hour runs (LOOPS.md).
 - `CP.MissionBan` — modules/supervisor/missionban.lua: a supervisor's temporary mission ban (`cp_officers.mission_ban`,
   012). `MB.get(cid, now)` (while the store cannot be read: `{ until = now + 60, unreadable = true }` for everyone,
-  so a ban never lifts by a failed read; set, lift and extend refuse it with `err.internal`, `view` shows nothing),
+  so a ban never lifts by a failed read; the failure is kept 60 s, so an outage costs one read a minute; set, lift and extend refuse it with `err.internal`, `view` shows nothing),
   `first(officers, now)` (the accept checks of draw and runs), `view(cid)`, `perDay()`,
   `usedToday(src)`, `supView(src, cid)`, `clearCache()`; action `server:sup:missionBan`; restriction kind `missionBan`.
   No loop (one load at start).
@@ -2817,8 +2827,12 @@ the admin ticked that the department was not charged or got it back; the row is 
 the admin ticked that the department WAS charged and did not get it back, `againWithdrawn`
 (`CP.Cash.markAgainWithdrawn`, no money moves) sets its step to `withdrawn` (compare and set on the step). At
 `withdrawn` Pay again resumes with the deposit only (`again2`), and `againRelease` gives up: the step goes to
-`refunding`, the department gets its money back (`depositSociety`), then the claim is released; a refund with no
-telling stays at `refunding` (a second Release only releases), a refused one goes back to `withdrawn`.
+`refunding`, the department gets its money back (`depositSociety`), the step goes to `refunded`, then the claim is
+released; a refund with no telling stays at `refunding` (a second Release only releases), a refused one goes back to
+`withdrawn` (with a second audit row `refused:<err>`); at `refunded` Release only releases. Pay the rest has the
+same pair: `restWithdrawn` at `withdrawing` or `refunding` (with `restPaidAccount`) sets `restPaidStep` to
+`withdrawn`, where `restRelease` gives the department its money back. A Release that refunds asks for the typed
+amount (`CP.Cash.releaseRefund(row, bd) -> amount | nil`, also `releaseRefund` in `admin:checkBankingTxn`).
 
 ---
 
@@ -3469,7 +3483,7 @@ every action.
 | callback `admin:previewRetryUnfunded` | `{ rowId }` or `{ department, since? }` → UnfundedPreview | payments | P |
 | callback `admin:previewCashSource` | `{}` → CashSourcePreview | payments | P |
 | callback `admin:getDepartmentFunds` | `{ department }` → DepartmentFundsView | deptFunds | P |
-| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| 'againWithdrawn' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, no money moves; at `withdrawn` the department gets its money back first) and againWithdrawn (at `withdrawing` or `refunding`: the step becomes `withdrawn`, no money moves), both offered by `CP.Cash.againOutcomes`: W `allowPayAgain`, `checked` |
+| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| 'againWithdrawn' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, no money moves; at `withdrawn` the department gets its money back first) and againWithdrawn (at `withdrawing` or `refunding`: the step becomes `withdrawn`, no money moves), both offered by `CP.Cash.againOutcomes`: W `allowPayAgain`, `checked`; a Release that gives the department its money back (againRelease at `withdrawn`, restRelease after the rest's department withdrawal, `CP.Cash.releaseRefund`): T the amount; a Release or follow-up refused after its audit row writes a second row `refused:<err>` |
 | `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
 | `server:admin:retryPending` | `{ requestId }` | payments | P I |
 | `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total; a department retry (and its preview, `excluded`) leaves out every row of the admin's own characters and runs, and rows whose officer's license is unknown |

@@ -1572,7 +1572,12 @@ do
     H.ok(not ok and e == 'err.payment_refund_failed' and c.restPaidStep == 'withdrawn' and c.restPaidAccount == 'sast',
         'H3 (e): the rest at step withdrawn')
     sast0 = bank.balance.sast
+    H.eq((Cb('admin:checkBankingTxn', 1, { rowId = idE2 }) or {}).releaseRefund, 200,
+        'R4: the dialog is told that Release gives back $200')
     ok, e = Resolve(idE2, 'restRelease')
+    H.ok(not ok and e == 'err.confirm_mismatch' and bank.balance.sast == sast0,
+        'R4: Release that gives the department its money back asks for the typed amount: ' .. tostring(e))
+    ok, e = Resolve(idE2, 'restRelease', '200')
     H.ok(ok and bank.balance.sast == sast0 + 200 and RowOf(idE2).bd.cash.restPaid == nil,
         'H3 (e): Release gives the department its $200 back and frees the rest: ' .. tostring(e))
     ok = Act('server:admin:payCapRest', 1, { rowId = idE2, reason = 'x', confirm = '200', requestId = Rid() })
@@ -1688,7 +1693,7 @@ do
     H.eq(RowOf(idA).bd.cash.restPaidStep, 'withdrawn', 'H8 (A): the rest at step withdrawn')
     local sast0 = bank.balance.sast
     UnknownRefund()
-    local ok, e = Resolve(idA, 'restRelease')
+    local ok, e = Resolve(idA, 'restRelease', '200')
     Restore()
     H.ok(not ok and e == 'err.payment_raised' and RowOf(idA).bd.cash.restPaidStep == 'refunding',
         'H8 (A): a refund with no telling stays at refunding: ' .. tostring(e))
@@ -1923,8 +1928,11 @@ do
         'Mark withdrawn: at withdrawn only Release is offered'
     )
     local sG = bank.balance.sast
-    CP.Banking.depositSociety = function() return false end
     ok, e = Resolve(idG, 'againRelease')
+    H.ok(not ok and e == 'err.confirm_mismatch' and bank.balance.sast == sG,
+        'R4: Release at withdrawn asks for the typed amount: ' .. tostring(e))
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idG, 'againRelease', '70')
     Restore()
     H.ok(
         not ok and e == 'err.payment_refund_failed' and RowOf(idG).bd.cash.againStep == 'withdrawn'
@@ -1932,7 +1940,7 @@ do
         'Release at withdrawn: a refused refund keeps it at withdrawn: ' .. tostring(e)
     )
     UnknownRefund()
-    ok, e = Resolve(idG, 'againRelease')
+    ok, e = Resolve(idG, 'againRelease', '70')
     Restore()
     H.ok(not ok and e == 'err.payment_raised' and RowOf(idG).bd.cash.againStep == 'refunding',
         'Release at withdrawn: a refund with no telling stays at refunding: ' .. tostring(e))
@@ -1944,13 +1952,116 @@ do
     Reset()
     local idG2 = AgainAt('withdrawn', 60)
     local sG2 = bank.balance.sast
-    ok, e = Resolve(idG2, 'againRelease')
+    ok, e = Resolve(idG2, 'againRelease', '60')
     local auG = LastAudit('paymentResolve') or {}
     H.ok(
         ok and RowOf(idG2).bd.cash.again == nil and bank.balance.sast - sG2 == 60 and auG.old_value == 'again:withdrawn'
             and auG.new_value == 'againRelease:60',
         'Release at withdrawn: the department gets it back, audited: ' .. tostring(e)
     )
+
+    -- R6: a Release refused after its audit row (the refund refused) gets a row of its own, as Forfeit now does
+    Reset()
+    local idF = AgainAt('withdrawn', 40)
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idF, 'againRelease', '40')
+    Restore()
+    local auF = H.sql(
+        'SELECT old_value, new_value FROM cp_audit WHERE action = \'paymentResolve\' ORDER BY id DESC LIMIT 2')
+    H.ok(
+        not ok and auF[1] and auF[1].old_value == 'againRelease:40'
+            and auF[1].new_value == 'refused:err.payment_refund_failed' and auF[2]
+            and auF[2].new_value == 'againRelease:40',
+        'R6: the refused refund is audited as its own row (' .. tostring(auF[1] and auF[1].new_value) .. ')'
+    )
+
+    -- R5: the refund went through and the release that follows fails: 'refunded', where Release only releases (no
+    -- Mark withdrawn, no typed amount, no second refund)
+    local realUpd = MySQL.update.await
+    local function FailRelease(key)
+        local once = true
+        MySQL.update.await = function(sql, ...)
+            if once and tostring(sql):find('JSON_REMOVE(breakdown, \'$.cash.' .. key .. '\'', 1, true) then
+                once = false
+                error('db down')
+            end
+            return realUpd(sql, ...)
+        end
+    end
+    Reset()
+    local idK = AgainAt('withdrawn', 30)
+    local sK = bank.balance.sast
+    FailRelease('again')
+    ok, e = Resolve(idK, 'againRelease', '30')
+    MySQL.update.await = realUpd
+    local chkK = Cb('admin:checkBankingTxn', 1, { rowId = idK }) or {}
+    H.ok(
+        not ok and RowOf(idK).bd.cash.againStep == 'refunded' and bank.balance.sast - sK == 30
+            and (chkK.againOutcomes or {}).againRelease == true and (chkK.againOutcomes or {}).againWithdrawn == nil
+            and chkK.releaseRefund == nil,
+        'R5: Pay again: a refund done and a failed release: refunded, only Release offered (' .. tostring(e) .. ')'
+    )
+    ok, e = Resolve(idK, 'againRelease')
+    H.ok(ok and RowOf(idK).bd.cash.again == nil and bank.balance.sast - sK == 30,
+        'R5: Pay again: the second Release only releases: ' .. tostring(e))
+    ok, e = Resolve(idK, 'againWithdrawn')
+    H.ok(not ok, 'R5: Pay again: no Mark withdrawn after the refund')
+
+    -- R2: Pay the rest left at 'withdrawing' or 'refunding' whose department WAS charged: Mark withdrawn records it,
+    -- Release then gives the department its money back, so a later Pay the rest never charges it twice
+    local function RestAt(st)
+        local id = Row(
+            { status = 'capped', owed = 500, paid = 300, cash = { source = 'society', societyAccount = 'sast' } })
+        H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying',
+            '$.cash.restPaidClaim', 1, '$.cash.restPaidStep', ?, '$.cash.restPaidAccount', 'sast') WHERE id = ?]],
+            { st, id })
+        return id
+    end
+    for _, st in ipairs({ 'withdrawing', 'refunding' }) do
+        Reset()
+        local chk = Cb('admin:checkBankingTxn', 1, { rowId = RestAt(st) }) or {}
+        H.ok(
+            (chk.outcomes or {}).restWithdrawn == true and (chk.outcomes or {}).restRelease == true
+                and chk.releaseRefund == nil,
+            'R2: Mark withdrawn offered for the rest at ' .. st
+        )
+    end
+    Reset()
+    people[7].money.bank = 1000
+    local idT = RestAt('withdrawing')
+    bank.balance.sast = bank.balance.sast - 200   -- the department was charged; the call raised with no telling
+    local sT = bank.balance.sast
+    ok, e = Resolve(idT, 'restWithdrawn')
+    local auT = LastAudit('paymentResolve') or {}
+    H.ok(
+        ok and RowOf(idT).bd.cash.restPaidStep == 'withdrawn' and bank.balance.sast == sT
+            and auT.old_value == 'rest:withdrawing' and auT.new_value == 'restWithdrawn:200',
+        'R2: Mark withdrawn: step withdrawn, no money moves, audited: ' .. tostring(e)
+    )
+    local chkT = Cb('admin:checkBankingTxn', 1, { rowId = idT }) or {}
+    H.ok(
+        (chkT.outcomes or {}).restWithdrawn == nil and (chkT.outcomes or {}).restRelease == true
+            and chkT.releaseRefund == 200,
+        'R2: at withdrawn Release gives the $200 back'
+    )
+    ok, e = Resolve(idT, 'restWithdrawn')
+    H.ok(not ok and e == 'err.payment_step_unknown', 'R2: Mark withdrawn only once: ' .. tostring(e))
+    -- R5 for the rest: the refund done, the release fails: 'refunded', Release then only releases
+    FailRelease('restPaid')
+    ok, e = Resolve(idT, 'restRelease', '200')
+    MySQL.update.await = realUpd
+    local chkT2 = Cb('admin:checkBankingTxn', 1, { rowId = idT }) or {}
+    H.ok(
+        not ok and RowOf(idT).bd.cash.restPaidStep == 'refunded' and bank.balance.sast == sT + 200
+            and (chkT2.outcomes or {}).restWithdrawn == nil and chkT2.releaseRefund == nil,
+        'R5: the rest: refunded, only Release offered (' .. tostring(e) .. ')'
+    )
+    ok, e = Resolve(idT, 'restRelease')
+    H.ok(ok and RowOf(idT).bd.cash.restPaid == nil and bank.balance.sast == sT + 200,
+        'R5: the rest: the second Release only releases: ' .. tostring(e))
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = idT, reason = 'x', confirm = '200', requestId = Rid() })
+    H.ok(ok and RowOf(idT).cash_paid == 500 and bank.balance.sast == sT and people[7].money.bank == 1200,
+        'R2: Pay the rest then charges the department once: ' .. tostring(e))
 
     CP.Qbx.getMoney = realGet
     Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = false, false, false
@@ -2138,6 +2249,137 @@ do
     H.ok(Async(function() return CP.Access.suspend('HOLD0012', 1, 0, 'x') end), 'lock and suspend: suspended later')
     H.eq(Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0012\''), H.time,
         'lock and suspend: after the moved end it starts now')
+
+    -- R1: every lock a window reached moves it on, not only the last one: voided at 0, a lock from 10 h to 20 h (the
+    -- end goes to 58 h), a second from 50 h to 55 h (inside 58 h: the end goes to 63 h)
+    local T6 = T0 + 8000 * HR
+    H.time = T6
+    local n1 = Row({ status = 'held', owed = 50, voided = true })
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'HOLD0013\', \'sast\')')
+    local n2 = Row({ cid = 'HOLD0013', status = 'held', owed = 50, voided = true })
+    H.time = T6 + 10 * HR
+    Maint.begin('restore', { by = 'test' })
+    H.time = T6 + 20 * HR
+    Maint.finish('restore')
+    H.time = T6 + 50 * HR
+    Maint.begin('restore', { by = 'test' })
+    H.time = T6 + 55 * HR
+    Maint.finish('restore')
+    H.eq(Maint.windowEnd(T6, 48 * HR), T6 + 63 * HR, 'R1: two locks: both move the window (63 h)')
+    H.eq(Eligible(n1, 'OFF00007', T6 + 62 * HR), true, 'R1: a dispute may be filed at 62 h')
+    H.eq(Eligible(n1, 'OFF00007', T6 + 64 * HR), false, 'R1: and not at 64 h')
+    H.time = T6 + 60 * HR
+    Forfeit()
+    H.eq(RowOf(n1).cash_status, 'held', 'R1: the forfeiture job holds it at 60 h too')
+    -- the forfeiture SQL (CP.Money.disputeStartSql) reads the same end: suspended at 61 h, lifted at 70 h
+    H.time = T6 + 61 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0013', 7, 0, 'x') end), 'R1: HOLD0013 suspended at 61 h')
+    H.time = T6 + 70 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0013', 0, 0, 'lifted') end), 'R1: lifted at 70 h')
+    H.time = T6 + 117 * HR
+    Forfeit()
+    H.eq(RowOf(n2).cash_status, 'held', 'R1: a suspension inside the moved end holds the row (forfeiture SQL)')
+    H.eq(RowOf(n1).cash_status, 'forfeited', 'R1: the row of no suspension is forfeited after 63 h')
+    H.time = T6 + 119 * HR
+    Forfeit()
+    H.eq(RowOf(n2).cash_status, 'forfeited', 'R1: forfeited 48 h after the lift')
+    -- the suspension SQL (CP.Access.suspend) reads the same end: voided at -1 h, suspended at 0, lifted at 5 h (the
+    -- held windows end at 53 h), locks from 10 h to 20 h (63 h) and from 60 h to 65 h (68 h), suspended again at 66 h
+    local T7 = T0 + 9000 * HR
+    H.time = T7 - HR
+    H.sql('INSERT INTO cp_officers (citizenid, department) VALUES (\'HOLD0014\', \'sast\')')
+    local n3 = Row({ cid = 'HOLD0014', status = 'held', owed = 50, voided = true })
+    H.time = T7
+    H.ok(Async(function() return CP.Access.suspend('HOLD0014', 7, 0, 'x') end), 'R1: HOLD0014 suspended at 0')
+    H.time = T7 + 5 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0014', 0, 0, 'lifted') end), 'R1: lifted at 5 h')
+    for _, l in ipairs({ { 10, 20 }, { 60, 65 } }) do
+        H.time = T7 + l[1] * HR
+        Maint.begin('restore', { by = 'test' })
+        H.time = T7 + l[2] * HR
+        Maint.finish('restore')
+    end
+    H.time = T7 + 66 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0014', 7, 0, 'x') end), 'R1: suspended again at 66 h')
+    H.eq(Count('SELECT UNIX_TIMESTAMP(suspended_from) FROM cp_officers WHERE citizenid = \'HOLD0014\''), T7,
+        'R1: inside the windows both locks moved on, the first start is kept')
+    H.time = T7 + 70 * HR
+    H.ok(Async(function() return CP.Access.suspend('HOLD0014', 0, 0, 'lifted') end), 'R1: lifted at 70 h')
+    H.eq(Eligible(n3, 'HOLD0014', T7 + 117 * HR), true, 'R1: the run stays open until 48 h after that lift')
+
+    -- R3: a failed write when a lock ends is written again at the next change (the hold never runs on to the next
+    -- lock): voided at 0, a lock from 10 h to 20 h whose end cannot be saved, a second from 30 h to 35 h: 63 h
+    local T8 = T0 + 10000 * HR
+    H.time = T8
+    local n4 = Row({ status = 'held', owed = 50, voided = true })
+    H.time = T8 + 10 * HR
+    Maint.begin('restore', { by = 'test' })
+    local realU = MySQL.update.await
+    local failOnce = true
+    MySQL.update.await = function(sql, ...)
+        if failOnce and tostring(sql):find('cp_storage_meta', 1, true) then
+            failOnce = false
+            error('db down')
+        end
+        return realU(sql, ...)
+    end
+    H.time = T8 + 20 * HR
+    Maint.finish('restore')
+    MySQL.update.await = realU
+    H.eq(Maint.windowEnd(T8, 48 * HR), T8 + 58 * HR, 'R3: the failed save: the lock still ended at 20 h')
+    H.time = T8 + 30 * HR
+    Maint.begin('restore', { by = 'test' })
+    H.time = T8 + 35 * HR
+    Maint.finish('restore')
+    H.eq(Maint.windowEnd(T8, 48 * HR), T8 + 63 * HR, 'R3: the next lock adds only its own 5 h')
+    H.eq(Eligible(n4, 'OFF00007', T8 + 62 * HR), true, 'R3: open at 62 h')
+    H.eq(Eligible(n4, 'OFF00007', T8 + 64 * HR), false, 'R3: closed at 64 h')
+    Kit._reset()          -- a restart reads what was saved
+    Maint.settleHold()
+    H.eq(Maint.windowEnd(T8, 48 * HR), T8 + 63 * HR, 'R3: after a restart the same end (saved)')
+    -- a lock taken again while the end of the last one is being written: the new one is held from its start
+    local T9 = T0 + 11000 * HR
+    H.time = T9
+    local n5 = Row({ status = 'held', owed = 50, voided = true })
+    H.time = T9 + 10 * HR
+    Maint.begin('restore', { by = 'test' })
+    local inner = true
+    MySQL.update.await = function(sql, ...)
+        if inner and tostring(sql):find('cp_storage_meta', 1, true) then
+            inner = false
+            Maint.begin('storage', { by = 'test' })
+        end
+        return realU(sql, ...)
+    end
+    H.time = T9 + 20 * HR
+    Maint.finish('restore')
+    MySQL.update.await = realU
+    local hNow = Maint.hold() or {}
+    H.ok(Maint.active() == 'storage' and hNow.from == T9 + 20 * HR and hNow.to == H.time,
+        'R3: a lock taken during the write is held from its start (' .. tostring(hNow.from) .. ')')
+    Kit._reset()
+    H.eq((Maint.hold() or {}).from, T9 + 20 * HR, 'R3: and saved open')
+    Kit._reset()
+    Maint.begin('storage', { by = 'test' })   -- the restart takes the lock again
+    H.time = T9 + 30 * HR
+    Maint.finish('storage')
+    H.eq(Maint.windowEnd(T9, 48 * HR), T9 + 68 * HR, 'R3: both locks count (10 h to 30 h)')
+    H.eq(Eligible(n5, 'OFF00007', T9 + 67 * HR), true, 'R3: open at 67 h')
+    -- R9: the SQL of the rule (CP.Maintenance.windowEndSql) answers what CP.Maintenance.windowEnd answers, for
+    -- windows before, across and after every hold this section left
+    local agree, tried = true, 0
+    for _, base in ipairs({ T1, T4, T5, T6, T8, T9 }) do
+        for _, off in ipairs({ -30, -5, 0, 7, 15, 25, 45, 52 }) do
+            local st = base + off * HR
+            local sql = Maint.windowEndSql('FROM_UNIXTIME(?)', 48 * HR)
+            local params = {}
+            for _ in sql:gmatch('%?') do params[#params + 1] = st end
+            local got = Count(('SELECT UNIX_TIMESTAMP(%s) AS e'):format(sql), params)
+            tried = tried + 1
+            if got ~= Maint.windowEnd(st, 48 * HR) then agree = false end
+        end
+    end
+    H.ok(agree and tried == 48, 'R9: the SQL and the Lua rule give the same end (' .. tried .. ' windows)')
 
     -- H8: migration 019 fills suspended_from for the suspensions given before it: the last 'suspend' audit row up to
     -- their end (so one lifted just before the update still holds its windows), else now for one still running

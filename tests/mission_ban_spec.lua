@@ -294,8 +294,12 @@ do
     -- the ban store cannot be read: every officer reads as banned for a minute, and nothing is listed or saved
     MB.clearCache()
     local realQ = MySQL.query.await
+    local reads = 0
     MySQL.query.await = function(sql, ...)
-        if tostring(sql):find('mission_ban IS NOT NULL', 1, true) then error('db down') end
+        if tostring(sql):find('mission_ban IS NOT NULL', 1, true) then
+            reads = reads + 1
+            error('db down')
+        end
         return realQ(sql, ...)
     end
     local now = os.time()
@@ -305,6 +309,13 @@ do
     local who = MB.first({ { citizenid = 'OFF00007', src = 7 } }, now)
     H.ok(who ~= nil, 'and MB.first finds him')
     H.eq(MB.view('OFF00009', now), nil, 'his screens show no made-up ban')
+    -- R8: the failed read is kept for a minute: one SELECT, not one a lookup (and still banned)
+    for _ = 1, 5 do MB.get('OFF00009', now) end
+    H.eq(reads, 1, 'R8: during the outage the store is read once a minute, not on every lookup')
+    H.ok((MB.get('OFF00010', now) or {}).unreadable == true, 'R8: the kept failure still reads as banned')
+    H.time = H.time + 61
+    MB.get('OFF00009', os.time())
+    H.eq(reads, 2, 'R8: after the minute it is read again')
     MySQL.query.await = realQ
     MB.clearCache()
     H.eq(MB.get('NOBAN001', now), nil, 'the store reads again: an officer with no ban is free')
@@ -315,14 +326,26 @@ do
     local s1, u1 = CP.Access.isSuspended('OFF00008')
     H.ok(s1 == true and u1 == now + 86400, 'suspended (read from the row)')
     local realS = MySQL.single.await
+    local sreads = 0
     MySQL.single.await = function(sql, ...)
-        if tostring(sql):find('suspended_until', 1, true) then error('db down') end
+        if tostring(sql):find('suspended_until', 1, true) then
+            sreads = sreads + 1
+            error('db down')
+        end
         return realS(sql, ...)
     end
     H.time = H.time + 20
     local s2, u2 = CP.Access.isSuspended('OFF00008')
     H.ok(s2 == true and u2 == now + 86400, 'the row cannot be read: still suspended (' .. tostring(s2) .. ')')
     H.eq((CP.Access.isSuspended('NOSUSP01')), false, 'an officer with no known suspension is not blocked by it')
+    -- R8: the failed read is kept for the cache's 15 s: one SELECT per officer, not one a lookup
+    sreads = 0
+    for _ = 1, 5 do CP.Access.isSuspended('OFF00008') end
+    H.eq(sreads, 0, 'R8: during the outage the officer row is not read again on every lookup')
+    H.eq((CP.Access.isSuspended('OFF00008')), true, 'R8: and the known suspension still holds')
+    H.time = H.time + 16
+    CP.Access.isSuspended('OFF00008')
+    H.eq(sreads, 1, 'R8: after the 15 s it is read again')
     MySQL.single.await = realS
 end
 return H

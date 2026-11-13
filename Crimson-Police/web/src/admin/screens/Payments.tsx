@@ -146,10 +146,13 @@ function EntryLine({ label, e }: { label: string; e?: BankingEntry | null }) {
 // the checked box (the officer's history shows it never arrived).
 const UNKNOWN_STEPS = ['added', 'withdrawing', 'refunding'];
 
-// The follow-up outcomes in the order the dialog offers them; giveBack moves money (typed amount)
+// The follow-up outcomes in the order the dialog offers them; giveBack moves money (typed amount), and so does a
+// Release that gives the department its money back (releaseRefund). restWithdrawn: the rest at 'withdrawing' or
+// 'refunding' whose department WAS charged (no money moves; Release then gives it back)
 const FOLLOW_UP_ORDER: FollowUpOutcome[] = [
     'restPaid',
     'restRelease',
+    'restWithdrawn',
     'backTaken',
     'backUndone',
     'giveBack',
@@ -174,8 +177,12 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
     if (!row) return null;
     const followUp = data?.followUp ?? null;
     const amount = followUp ? (data?.followUpAmount ?? 0) : (data?.amount ?? row.owed);
-    const moves = mode === 'payAgain' || mode === 'giveBack';
     const refundsAgain = mode === 'againRelease' && data?.againStep === 'withdrawn';
+    // a Release that gives the department its money back asks for that amount typed, like every money tool
+    const refund =
+        (mode === 'againRelease' || mode === 'restRelease') && data?.releaseRefund ? data.releaseRefund : null;
+    const moves = mode === 'payAgain' || mode === 'giveBack' || refund !== null;
+    const word = refund ?? amount;
 
     const submit = async (reason: string, typed: string) => {
         const res = await run(
@@ -221,7 +228,9 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                     : t('payments.resolve.again_release_msg')
                 : m === 'againWithdrawn'
                   ? t('payments.resolve.again_withdrawn_msg')
-                  : t(`payments.followup.${m}_msg`);
+                  : m === 'restRelease' && data?.releaseRefund
+                    ? t('payments.followup.restRelease_refund_msg')
+                    : t(`payments.followup.${m}_msg`);
 
     return (
         <>
@@ -350,7 +359,14 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                 effect={
                     moves ? (
                         <>
-                            <MoneyEffect lines={[{ label: row.missionLabel, amount }]} />
+                            <MoneyEffect lines={[{ label: row.missionLabel, amount: word }]} />
+                            {refundsAgain ? (
+                                <Checkbox
+                                    checked={checked}
+                                    onChange={setChecked}
+                                    label={t('payments.resolve.again_refund_checked')}
+                                />
+                            ) : null}
                             {mode === 'payAgain' ? (
                                 <Checkbox
                                     checked={checked}
@@ -375,7 +391,7 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                         />
                     ) : null
                 }
-                typedWord={moves ? String(amount) : undefined}
+                typedWord={moves ? String(word) : undefined}
                 tone={moves ? 'danger' : 'primary'}
                 reason={{ required: true, maxLength: REASON_MAX }}
                 onConfirm={submit}

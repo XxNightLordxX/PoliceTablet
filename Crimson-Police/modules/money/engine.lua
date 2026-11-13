@@ -42,28 +42,18 @@ local Num = CP.Num
 -- end of the officer's suspension when that came later (NOW() while he is still suspended: a suspended officer cannot
 -- file a dispute, so the window stands still and he gets all of it once the suspension ends; a lift keeps its time
 -- in suspended_until). Only a suspension that started while the window was open (suspended_from) moves it, the
--- window's end moved on by the last maintenance lock as CP.Maintenance.windowEnd does it. The same rule as
--- CP.Disputes.eligible. Built per call: the window is Config.Disputes.windowHours and the lock's start and end come
--- from CP.Maintenance.hold (integers of seconds written into the SQL, never a value from a player).
+-- window's end moved on by the maintenance locks (CP.Maintenance.windowEndSql, the SQL of CP.Maintenance.windowEnd).
+-- The same rule as CP.Disputes.eligible. Built per call: the window is Config.Disputes.windowHours.
 function Money.disputeStartSql()
     local w = math.floor(math.max(0, Num(Config.Disputes and Config.Disputes.windowHours, 48)) * 3600)
-    local open = ('o.suspended_from <= r.created_at + INTERVAL %d SECOND'):format(w)
-    local okH, h = false, nil
-    if CP.Maintenance and CP.Maintenance.hold then okH, h = pcall(CP.Maintenance.hold) end
-    local hf = okH and type(h) == 'table' and tonumber(h.from) and math.floor(tonumber(h.from)) or nil
-    local ht = okH and type(h) == 'table' and tonumber(h.to) and math.floor(tonumber(h.to)) or nil
-    if hf and ht and ht > hf then
-        -- Maint.windowEnd in SQL: a lock that began inside the window (at or after the run) adds its length; one
-        -- that began before the run and ended after it moves the end to the lock's end + the window
-        open = ([[(%s
-      OR (r.created_at <= FROM_UNIXTIME(%d) AND FROM_UNIXTIME(%d) < r.created_at + INTERVAL %d SECOND
-          AND o.suspended_from <= r.created_at + INTERVAL %d SECOND)
-      OR (r.created_at > FROM_UNIXTIME(%d) AND r.created_at < FROM_UNIXTIME(%d)
-          AND o.suspended_from <= FROM_UNIXTIME(%d)))]]):format(open, hf, hf, w, w + ht - hf, hf, ht, ht + w)
+    local e = ('r.created_at + INTERVAL %d SECOND'):format(w)
+    if CP.Maintenance and CP.Maintenance.windowEndSql then
+        local ok, sql = pcall(CP.Maintenance.windowEndSql, 'r.created_at', w)
+        if ok and type(sql) == 'string' then e = sql end
     end
     return ([[GREATEST(r.created_at, LEAST(COALESCE((SELECT o.suspended_until FROM cp_officers o
     WHERE o.citizenid = r.citizenid AND o.suspended_from IS NOT NULL
-      AND %s), r.created_at), NOW()))]]):format(open)
+      AND o.suspended_from <= %s), r.created_at), NOW()))]]):format(e)
 end
 
 -- The end of a dispute window that starts at startTs: Config.Disputes.windowHours on, moved on by the time a

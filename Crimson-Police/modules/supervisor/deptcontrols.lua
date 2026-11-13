@@ -25,7 +25,7 @@ local defs = {}                 -- key -> { kind, scope, master, serverWide, int
 local order = {}                -- the registered keys in the order they were registered
 local cache = {}                -- department -> { [key] = row } (rows of cp_dept_controls, decoded)
 local lastChange = {}           -- 'department|key' -> os.time() of the last set or reset (a reset leaves no row behind)
-local changesSeeded = false     -- lastChange holds the audit's sets and resets of the last changeWait (read once a start)
+local seededWait = nil          -- lastChange holds the audit's sets and resets of the last seededWait seconds (or nil)
 
 -- ============================================================================
 --                                SMALL HELPERS
@@ -600,10 +600,11 @@ local function ActorOf(n)
     return type(info) == 'table' and info.citizenid or ('src:%d'):format(n)
 end
 
--- After a start, lastChange is filled once from the audit (missionControlSet / missionControlReset of the last
--- changeWait), so a reset (which leaves no row) still holds the wait across a restart. false when it cannot be read.
+-- After a start, lastChange is filled from the audit (missionControlSet / missionControlReset of the last changeWait),
+-- so a reset (which leaves no row) still holds the wait across a restart. Read again when changeWait grows past the
+-- wait it was read for (a change before that start may fall inside the longer wait). false when it cannot be read.
 local function SeedChanges(wait)
-    if changesSeeded then return true end
+    if seededWait and wait <= seededWait then return true end
     CP.Db()
     local ok, rows = pcall(MySQL.query.await, [[
         SELECT target, UNIX_TIMESTAMP(MAX(created_at)) AS t FROM cp_audit
@@ -622,7 +623,7 @@ local function SeedChanges(wait)
             if t > (lastChange[k] or 0) then lastChange[k] = t end
         end
     end
-    changesSeeded = true
+    seededWait = wait
     return true
 end
 
@@ -1100,5 +1101,5 @@ end
 
 -- Test hooks (not part of the contract).
 DC._reset = function()
-    cache, lastChange, changesSeeded = {}, {}, false
+    cache, lastChange, seededWait = {}, {}, nil
 end
