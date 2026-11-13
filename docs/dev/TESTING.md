@@ -15,6 +15,7 @@ What to update with each change is at the end, in "Working on the code".
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
 | `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
+| `lint-coverage` | `python3 tools/check_coverage.py`: `docs/dev/COVERAGE.md` is the coverage list of today's code (every Lua function, exported web function and client entry point with what it must do and the spec that runs it), and every client entry point is driven by a spec that loads its file, known gaps in `tools/coverage_gaps.txt` ("Coverage list" below) | 3 s |
 | `lint-i18n` | `python3 tools/check_i18n.py`: the translation scanner, English joined to a translated text (J), a plural built in place (P), a count string with no `_one` / `_other` forms (S), known hits in `tools/i18n_baseline.txt` ("Translation scanner" below) | 1 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/dev/STYLE.md) | 75 s |
 | `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
@@ -271,7 +272,7 @@ Variables for one run:
 | `FUZZ_SEED=n`, `FUZZ_N=n` | the fuzz scripts' seed and statement count |
 | `CP_FUZZ_SEED=n`, `CP_FUZZ_PER=n` | `tests/fuzz_net_spec.lua`: its seed (default 1) and rounds over every event and callback (default 5, about 1 s) |
 | `CP_DEFER_THREADS=1` | the harness queues `CreateThread` threads to the next `H.step`, as FXServer's scheduler does, instead of running them at once (`Citizen.CreateThreadNow` still runs at once; `H.deferThreads = true` before `H.boot` does the same for one spec). Opt-in and not in the gate ("What the gate does not catch yet" below) |
-| `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
+| `CP_SOAK=1` with `CP_SOAK_SEED=n` or `CP_SOAK_SEEDS=a-b`, `CP_SOAK_HOURS=h`, `CP_SOAK_STORAGE=database` | `tests/soak_spec.lua`'s long random soak (default: one seed, 2 simulated hours); `CP_SOAK_NOSHRINK=1` skips the shrinking of a failure, `CP_SOAK_CHAOS=0` leaves out the crashes and database outages, `CP_SOAK_TRACE=1` prints every action, `CP_SOAK_VERBOSE=1` the counts (docs/dev/WORKFLOWS.md) |
 | `CP_WF_STORAGE=database` | the workflow and end-to-end specs that run on the saves folder (`tests/workflows_*_spec.lua`, `workflows_e2e`, `live_fto_e2e`, `realsuspects_e2e`) run on MariaDB with the database on instead, with `lua5.4 tests/run.lua`'s default database mode (docs/dev/WORKFLOWS.md) |
 | `CP_LOAD_TRACE=1` | `tests/load_spec.lua` prints each harness step over 30 ms as a REPORT line |
 | `CP_RACE_ONLY=<text>`, `CP_RACE_CUTS=n` or `all`, `CP_RACE_DEBUG=1` | `tests/race_spec.lua`: only the cases whose name holds the text; the restart cuts per case (default 5; `all`: after every query, a case's own `maxCuts` too); print both replies of each at-once pair |
@@ -430,6 +431,30 @@ feature switch and shipped Config key, each `<kind> <side> <name>`) and compares
 The server list comes from tests/workflows_full_spec.lua's world on the shipped config, so a command or event that
 registers only while its feature is on is listed only while it ships on.
 
+### Coverage list
+
+`docs/dev/COVERAGE.md` lists every function (Lua: `function X.y`, `local function Name`, `X.y = function`, a table
+field `name = function`; web: every exported function of `web/src`, not the walks and mocks) and every client entry
+point (client net event, NUI callback, client callback, command, export, client action), each with its file:line,
+what it must do (the first sentence of the comment above it) and what runs it: a spec that loads the file and names
+it, `via <spec>` (the spec loads the file and runs it through its callers), `world` (only the whole-server or
+whole-client worlds load it), `walk <file>`, or `none`. `python3 tools/check_coverage.py` (the gate's `lint-coverage`)
+fails on:
+
+```
+stale: docs/dev/COVERAGE.md is not the list of today's code: run python3 tools/check_coverage.py --write
+  - no spec drives the client entry point event client:foo modules/foo/client/foo.lua (a spec that loads its file and names it)
+  - stale gap event client:bar ...: a spec drives it now (python3 tools/check_coverage.py --write drops it)
+```
+
+- After any change to the code or the specs, run `python3 tools/check_coverage.py --write` and commit the list.
+- A client entry point counts as driven only by a spec that loads its own client file and names it; a server spec
+  that only sees the server send the event does not count. Write that spec (`tests/livecrime_client_spec.lua` is an
+  example: ox_lib's alertDialog stubbed as one dialog at a time, the handlers fired with edge payloads).
+  `tools/coverage_gaps.txt` holds the entry points with no such spec on 2026-11-13; it only shrinks. `--write-gaps`
+  adds today's undriven ones to it: only on purpose, and say why in the commit.
+- The web components the walks do not import show `none`: `tools/clickthrough.mjs` (opt-in) renders every screen.
+
 ### Crash matrix
 
 `tests/race_spec.lua` cuts each client action by a restart after its queries ("cut after query n"), and
@@ -447,6 +472,27 @@ that blocks a new try`) unless the case lists that refusal in `cutRefusals` (rig
 again, a mission call a restart closed) or in `cutKnown` (a finding not fixed yet, printed as `REPORT KNOWN` on every
 run: delete the entry with its fix). An effect a cut may leave behind (an audit row written after the change, XP
 added after the award row, money a 'paying' row waits on) is in the case's `lag`.
+
+### Mutation testing
+
+`tools/mutate.py` (not a gate step: it runs the named specs once per mutant) makes small breaks in one Lua file and
+runs the specs that should catch them: a flipped comparison, `and`/`or` swapped, a `not ` dropped, `true`/`false`
+or `0`/`1` swapped, `+`/`-` swapped, or a line deleted. Comments and strings are never mutated; a mutant that does not
+parse (`luac5.4 -p`) is skipped. It works on a temporary copy of the repository (the files git knows plus new ones),
+so the working tree is never changed, restores the file after every mutant and removes the copy at the end.
+
+```bash
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --specs economy,crash_matrix --max 40 --seed 1
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --specs economy --only '554:~= => =='
+python3 tools/mutate.py Crimson-Police/modules/money/cash.lua --list --lines 400-620
+```
+
+Each mutant prints `KILLED by <spec>` (the first spec that failed) or `SURVIVED`; `--out <file>` writes the list as
+JSON; exit 0 when every mutant was killed, 1 when one survived. A survivor is a test to write, or a change that is
+the same in effect (say why in the commit). The specs must pass on the unchanged code first (it checks). The first
+round's survivors and their new tests: cash.lua 554 (economy_spec, the refund after a failed 'adding' marker),
+permissions.lua 118 (admin_permissions_spec, the grades list), payments.lua 182, 841, 908 and 1029
+(admin_economy_spec). tests/check_tools_spec.lua checks the tool itself.
 
 ### The other steps
 

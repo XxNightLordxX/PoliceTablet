@@ -647,7 +647,11 @@ Cooldowns are kept in memory by `CP.Runs` and rebuilt from `cp_mission_runs` row
    cleanup) when no active participant is left.
 5. `endRun` → per participant: `CP.Scoring.compute`, `CP.Cash.compute`, row insert, `CP.Cash.pay`,
    `CP.Scoring.onRowCounted`, `CP.Goals.onRunCompleted`, `client:runEnded`, cleanup of every
-   entity/item/reservation, `CP.Operations.onRunEnded(run, state)` when `operationId`.
+   entity/item/reservation, `CP.Operations.onRunEnded(run, state)` when `operationId`. A row insert the database
+   refuses is kept in memory (`Unsaved` in runs.lua, at most 500, keyed `run_uuid|citizenid`) and the card says
+   `cash.status = 'not_saved'`, `notSaved = true`; every 30 s `Runs._retryUnsaved` looks the row up first (an errored
+   insert may have been committed: no unique key) and inserts it if missing, then runs the same post-insert steps
+   (`Unsaved.after`: pay, onRowCounted, goals, recordLast, `row:settled`) once. A restart while it waits loses it.
 6. Resource stop: every entity deleted, every flag removed (modules/dispatch/alerts.lua), no rows, no cooldowns.
 
 ---
@@ -2348,7 +2352,9 @@ The anti-farm core both features share.
   `suspectDayCount(cid)` (`maxCatchesPerSuspectDay`), `officerDayCount(cid, kind?)`, `excluded(cid)`,
   `suspended(cid)`, and the admin writers `block`, `exclude`, `suspend` (0 < days ≤ 3650) and `lift(kind, officer,
   suspect)`: each writes its `cp_pvp_pairs` row (or deletes it) before memory changes, in the caller's thread, and
-  answers `false, 'internal'` when that write fails (the caller then audits nothing).
+  answers `false, 'internal'` when that write fails (the caller then audits nothing). Until the admin rows are read
+  at start, `pairOk` answers `false, 'blocked', now + 60` and `excluded` / `suspended` answer `true, now + 60`
+  (fail closed); a start-up read that fails (ledger or admin rows) is tried again every 60 s.
 - Pair repeat: `checkPairFlags(run)` after recordPairs: the pair's cases within `pairFlag.days` reach `pairFlag.count`
   and a second sign exists (a detain within `fastCatchSeconds`, a never-armed suspect who moved under 30 m after
   contact, or a case under 180 s) → flag `rs_pair_repeat` on that officer.

@@ -92,4 +92,48 @@ do
         'the opt-in steps are listed last: ' .. out)
 end
 
+-- ============================================================================
+--                              3. tools/mutate.py
+-- ============================================================================
+-- H13: the mutation tool works on a temporary copy (the working tree stays as it is), never mutates a comment or a
+-- string, kills a mutant the specs catch and reports one they miss (exit 1).
+
+do
+    local function Md5(path)
+        local _, out = Shell(('md5sum \'%s\''):format(path))
+        return out:match('^(%x+)')
+    end
+    local file = 'Crimson-Police/modules/access/permissions.lua'
+    local before = Md5(file)
+    local py = os.tmpname()
+    local f = io.open(py, 'w')
+    f:write([=[
+import sys
+sys.path.insert(0, 'tools')
+import mutate
+print(repr(mutate.code_mask(['if a == b then -- x == y', "s = 'p == q' .. [[r == t]] .. n"])))
+]=])
+    f:close()
+    local okM, mask = Shell('python3 ' .. py)
+    os.remove(py)
+    H.ok(okM and mask:find('\'if a == b then          \'', 1, true) ~= nil, 'mutate: a comment is blanked: ' .. mask)
+    H.ok(mask:find('p == q', 1, true) == nil and mask:find('r == t', 1, true) == nil and mask:find('.. n', 1, true),
+        'mutate: strings and long strings are blanked, the code around them stays: ' .. mask)
+    local ok, out = Shell((
+        '%s timeout 600 python3 tools/mutate.py %s --specs admin_permissions --storage=files '
+        .. '--jobs=1 --only \'118:== => ~=\''
+    ):format(CLEAN_ENV, file))
+    H.ok(ok and out:find('KILLED by admin_permissions', 1, true) ~= nil and out:find('1 of 1 mutants killed', 1, true),
+        'mutate: the grades-list mutant is killed: ' .. out:sub(-300))
+    ok, out = Shell((
+        '%s timeout 600 python3 tools/mutate.py %s --specs admin_permissions --storage=files '
+        .. '--jobs=1 --only \'120:false => false\''
+    ):format(CLEAN_ENV, file))
+    H.ok(not ok and out:find('SURVIVED', 1, true) ~= nil,
+        'mutate: a mutant no spec catches survives, exit 1: ' .. out:sub(-300))
+    H.eq(Md5(file), before, 'mutate: the working tree file is unchanged')
+    local _, left = Shell('ls -d /tmp/cp_mutate_* 2>/dev/null || true')
+    H.eq(left:gsub('%s+', ''), '', 'mutate: no temporary copy is left')
+end
+
 return H

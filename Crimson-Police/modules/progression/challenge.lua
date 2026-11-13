@@ -1084,7 +1084,7 @@ local function EndSeasonInternal(src, season, reason)
             end
         end
     end
-    local top10 = {}
+    local top10, posted = {}, {}
     if Has('Leaderboard', 'ranking') then
         local ok, ranked = Call('Leaderboard', 'ranking',
             { period = 'season', seasonId = season.id, filter = 'overall', fresh = true })
@@ -1099,10 +1099,16 @@ local function EndSeasonInternal(src, season, reason)
                     departmentShort = DeptShort(e.department),
                     points = e.points,
                 }
+                -- the board post honours a department's callsigns-only rule (LB.postName)
+                posted[i] = {
+                    name = Has('Leaderboard', 'postName') and CP.Leaderboard.postName(e) or top10[i].name,
+                    departmentShort = top10[i].departmentShort,
+                    points = e.points,
+                }
             end
         end
     end
-    SeasonResultsWebhook(season, list, champion, top10)
+    SeasonResultsWebhook(season, list, champion, posted)
     if CP.Hooks and CP.Hooks.fire then
         local cids = {}
         for i, e in ipairs(top10) do cids[i] = e.citizenid end

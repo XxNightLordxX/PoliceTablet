@@ -80,6 +80,7 @@
   "result.cash_status.held": "Held for review",
   "result.cash_status.pending": "Pending",
   "result.cash_status.forfeited": "Forfeited",
+  "result.cash_status.not_saved": "Not saved yet: saved and paid when the database is back",
 
   "leaderboard.subtitle": "Officers ranked by points in each period",
   "leaderboard.periods": "Leaderboard period",

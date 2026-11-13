@@ -654,6 +654,7 @@ for _, pair in ipairs(RS_KINDS) do
         perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
         maxHours = 3650 * 24,
         self = true,
+        staffNames = true,   -- Config.RealPlayers.staff.names = false: citizen IDs only (modules/supervisor/restrictions)
         on = function() return CP.RealPlayersOn() end,
         liftOn = function() return CP.RealPlayers('staff').lift ~= false end,
         list = function()
@@ -686,6 +687,7 @@ CP.Restriction('volunteerBlock', {
     perm = { lift = 'antiFarmOverride', extend = 'antiFarmOverride' },
     maxHours = 8760,
     self = true,
+    staffNames = true,
     on = function() return CP.RealPlayersOn('volunteer') end,
     liftOn = function() return (CP.RealPlayers('volunteer')).staffClearStrikes ~= false end,
     list = function()

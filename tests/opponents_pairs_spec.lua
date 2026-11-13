@@ -86,6 +86,7 @@ local function Fixtures()
 end
 
 local stmts = {}
+local failSql = nil   -- H13: a statement holding this text raises (a database blip), set by a case
 local function Proxy(db)
     if type(db) ~= 'table' then return db end
     local out = {}
@@ -95,6 +96,7 @@ local function Proxy(db)
             out[kind] = setmetatable({
                 await = function(sql, ...)
                     stmts[#stmts + 1] = tostring(sql)
+                    if failSql and tostring(sql):find(failSql, 1, true) then error('ECONNREFUSED') end
                     return real.await(sql, ...)
                 end,
             }, { __index = real })
@@ -593,6 +595,36 @@ do
     H.ok(not Opp.excluded(E), 'nor a lifted exclusion')
     H.eq((Opp.pairOk(A, C)), false, 'the block holds after a restart')
     H.ok(Opp.excluded(C) and Opp.suspended(D), 'and so do the exclusion and the suspension')
+
+    -- H13: the admin rows cannot be read at start (a database blip during boot): the admin checks fail closed, and
+    -- the read is tried again every minute until it works
+    failSql = '\'block\', \'exclude\', \'suspend\') AND until_at >'
+    Opp = Restart(false)
+    H.ok(Opp.excluded(C), 'H13: the exclusion holds after a failed start-up read')
+    H.ok(Opp.suspended(D), 'H13: the suspension holds after a failed start-up read')
+    H.eq((Opp.pairOk(A, C)), false, 'H13: the block holds after a failed start-up read')
+    H.ok(Opp.excluded(E), 'H13: until the rows are read, nobody may be picked (fail closed)')
+    H.advance(61000)
+    H.ok(Opp.excluded(E), 'H13: still failing a minute later: still closed')
+    failSql = nil
+    H.advance(61000)
+    H.ok(not Opp.excluded(E), 'H13: the read tried again: a player with no exclusion is free again')
+    H.ok(Opp.excluded(C) and Opp.suspended(D) and (Opp.pairOk(A, C)) == false,
+        'H13: ...and the saved rows are back in memory')
+    local seen = false
+    for _, l in ipairs(Opp.adminRows()) do
+        if l.suspect == C then seen = true end
+    end
+    H.ok(seen, 'H13: ...and listed again')
+    -- the case rows the same way (the pair and suspect cooldowns read them)
+    local statsBefore = #Opp.pairStats(A)
+    failSql = 'kind IN (\'live\', \'volunteer\', \'duty_off\') AND created_at >='
+    Opp = Restart(false)
+    H.eq(#Opp.pairStats(A), 0, 'H13: the case rows could not be read at start')
+    failSql = nil
+    H.advance(61000)
+    H.ok(statsBefore > 0 and #Opp.pairStats(A) == statsBefore,
+        ('H13: ...read again a minute later (%d of %d pairs)'):format(#Opp.pairStats(A), statsBefore))
     H.time = H.time + DAY + 1
     H.eq((Opp.pairOk(A, C)), true, 'the block ends at its until_at')
     H.ok(Opp.excluded(C) and Opp.suspended(D), 'the longer ones go on')

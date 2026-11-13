@@ -28,6 +28,10 @@ local lastPolice = {}                          -- [citizenid] = os.time() he las
 local lastSuspect = {}                         -- [citizenid] = os.time() a case with him as a suspect closed
 local ledger = { rows = {}, byOfficer = {}, bySuspect = {}, byRun = {}, keys = {}, from = nil }
 local blocks, excludes, suspends = {}, {}, {}  -- [officer|suspect] / [citizenid] = until (os.time())
+-- Whether the start-up reads worked. Until the admin rows are read, the admin checks fail closed (excluded,
+-- suspended, blocked for a minute); a failed read is tried again every LOAD_RETRY_S.
+local adminLoaded, ledgerLoaded = false, false
+local LOAD_RETRY_S = 60
 
 -- ============================================================================
 --                                   HELPERS
@@ -609,6 +613,7 @@ end
 function Opp.pairOk(officerCid, suspectCid)
     if not ValidCid(officerCid) or not ValidCid(suspectCid) then return false, 'invalid' end
     local now = os.time()
+    if not adminLoaded then return false, 'blocked', now + LOAD_RETRY_S end
     local blocked = blocks[officerCid .. '|' .. suspectCid]
     if blocked and blocked > now then return false, 'blocked', blocked end
     local cfg = CP.RealPlayers('antiFarm')
@@ -657,6 +662,7 @@ end
 
 -- Whether an admin excluded this player from being a suspect -> excluded, until.
 function Opp.excluded(cid)
+    if not adminLoaded then return true, os.time() + LOAD_RETRY_S end
     local t = ValidCid(cid) and excludes[cid] or nil
     if t and t > os.time() then return true, t end
     return false
@@ -664,6 +670,7 @@ end
 
 -- Whether an admin suspended this officer from real-suspect cases -> suspended, until.
 function Opp.suspended(officerCid)
+    if not adminLoaded then return true, os.time() + LOAD_RETRY_S end
     local t = ValidCid(officerCid) and suspends[officerCid] or nil
     if t and t > os.time() then return true, t end
     return false
@@ -1018,10 +1025,23 @@ CreateThread(function()
         local info = Info(src)
         if info then Sync(src, info, true) end
     end
-    if not DbReady() then return end
-    local now = os.time()
-    Prune(now)
-    ledger.from = now - Window()
-    LoadRows(ledger.from, nil)
-    LoadAdmin(now)
+    -- a read that fails (or a database not ready) is tried again every minute; the admin checks fail closed
+    -- until their rows are in memory (a database blip during boot never lets an excluded player be picked)
+    local pruned = false
+    while true do
+        if DbReady() then
+            local now = os.time()
+            if not pruned then
+                Prune(now)
+                pruned = true
+            end
+            if not ledgerLoaded then
+                ledger.from = ledger.from or (now - Window())
+                ledgerLoaded = LoadRows(ledger.from, nil) == true
+            end
+            if not adminLoaded then adminLoaded = LoadAdmin(now) == true end
+        end
+        if adminLoaded and ledgerLoaded then break end
+        Wait(LOAD_RETRY_S * 1000)
+    end
 end)

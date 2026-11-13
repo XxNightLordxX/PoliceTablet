@@ -287,7 +287,8 @@ You set them in Admin UI → **Permissions** → **Mission controls** (below); s
 - **Leaderboard and review** (per department, off when you install, under the master switch):
   - `boards = { on = false }` (**Leaderboard visibility**): a supervisor picks whether officers of other departments
     see his department's officers by name or by callsign only (on the Leaderboard, on their profiles and in Home's
-    top 3; the picture is hidden too), and which **Rank by** tabs his own officers see (from
+    top 3; the picture is hidden too; the Discord board posts, which every department reads, then name them by
+    callsign too), and which **Rank by** tabs his own officers see (from
     `Config.Leaderboard.metrics`; Points always stays). A tab change shows the next time an officer opens the tablet.
     Presentation only: the counts, the Department Challenge and the admin boards never change.
   - `reviewRules = { on = false }` (**Review rules**, stricter only): with **A Void needs a second supervisor** on, a
@@ -2370,7 +2371,7 @@ Both:
   ends one early and **Clear strikes** (Volunteers tab) clears a volunteer's strikes and strike block, each with a
   reason in the audit log (`Config.RealPlayers.staff.lift`, `Config.RealPlayers.volunteer.staffClearStrikes`). The screen shows
   character names next to citizen IDs (`Config.RealPlayers.staff.names`; off, every list, case, timeline line and
-  damage ledger shows citizen IDs only) and weapon names in the damage ledger
+  damage ledger shows citizen IDs only, and so do the real-suspect rows of Admin UI → **Restrictions**) and weapon names in the damage ledger
   (`Config.RealPlayers.staff.weaponNames`); both ship on.
 - ☐ Play one case of each kind on the test server with the in-game checklist (`docs/IN_GAME_CHECKLIST.md`, section
   Real suspects) and watch resmon: idle must stay at 0.02 ms or less.
@@ -2591,6 +2592,7 @@ The console lines about storage, config.lua, missions, payments and webhooks, af
 | `cp_<table> could not be switched to InnoDB, so its writes are not crash safe: ...` | Give the database user the ALTER right (the line's "How to fix it" says which), then restart |
 | `the database server's time zone uses daylight saving, so a time saved in the hour the clocks go back reads back an hour early ...` | A warning: Crimson-Police starts. See "Server time zone" in [4](#4-settings-to-check-in-your-other-resources) for the one line to add to the MariaDB config |
 | `cp_<table> could not be switched to utf8mb4, so names and reasons with emoji cannot be saved in it: ...` | Give the database user the ALTER right (the line's "How to fix it" says which), then restart. Until then a name or reason with an emoji in that table is not saved |
+| `row insert failed for <citizenid> (run <id>): ...` then `run row <id>\|<citizenid> kept to save again in 30 s` | The database did not answer when a run ended (an outage). The officer's result card says "Not saved yet: saved and paid when the database is back". Every 30 s Crimson-Police tries again; once the database answers, the console says `run row ... saved after an outage` and the officer is paid once. The rows wait in memory only: a restart while the database is still down loses them (as before), so bring the database back before restarting |
 | `still waiting for the database after 30 seconds: oxmysql has not connected` | Check the oxmysql lines above it and `set mysql_connection_string` in server.cfg (user name, password, host, database name). Or set `Config.Database.enabled = false` |
 | `first start with the database off: the saves folder ... is empty` | Normal on a new install |
 | `the saves folder ... is new, so Crimson-Police starts with no data` | You switched the database off on a server that has data in the database. Run `CrimsonPoliceAdmin storage copy database-to-files`, then restart ([3.5](#35-database-off-the-saves-folder)) |

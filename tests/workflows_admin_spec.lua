@@ -881,7 +881,7 @@ do
         requestId = RequestId(),
         confirm = tostring(owedNow),
     })
-    H.eq(err, 'err.money_tool_off', 'payments: Pay again ships off')
+    H.ok(not ok and err == 'err.money_tool_off', 'payments: Pay again ships off')
     ok, err = Act('server:admin:resolvePayment', 5,
         { rowId = row and row.id, outcome = 'paid', reason = 'Checked the bank history', requestId = RequestId() })
     H.eq(ok, true, 'payments: Mark paid: ' .. tostring(err))
@@ -908,7 +908,7 @@ do
     -- the money tools: off as shipped; turning one on needs ENABLE; manual cash, a clawback; off again
     local ok, err = Act('server:admin:manualCash', 5,
         { citizenid = CID[1], amount = 300, reason = 'Lost payout', requestId = RequestId() })
-    H.eq(err, 'err.money_tool_off', 'money tools: manual cash ships off')
+    H.ok(not ok and err == 'err.money_tool_off', 'money tools: manual cash ships off')
     ok, err = Setting('Cash.allowManualCash', true)
     H.eq(ok, false, 'money tools: turning one on without ENABLE is refused (' .. tostring(err) .. ')')
     for _, path in ipairs({ 'Cash.allowManualCash', 'Cash.allowClawback' }) do
@@ -942,7 +942,7 @@ do
     end
     ok, err = Act('server:admin:clawback', 5,
         { rowId = row and row.id, amount = 50, reason = 'x', confirm = '50', requestId = RequestId() })
-    H.eq(err, 'err.money_tool_off', 'money tools: off again')
+    H.ok(not ok and err == 'err.money_tool_off', 'money tools: off again')
     H.eq(Audits('manualCash'), 1, 'money tools: the manual cash audited')
 end
 
@@ -955,7 +955,7 @@ do
     local ok
     ok, err = Act('server:admin:addDepartmentFunds', 5,
         { department = 'sast', amount = 500, reason = 'Top up', confirm = '500', requestId = RequestId() })
-    H.eq(err, 'err.money_tool_off', 'funds: Add funds ships off')
+    H.ok(not ok and err == 'err.money_tool_off', 'funds: Add funds ships off')
     ok, err = Act('server:admin:setSetting', 5,
         { path = 'Cash.allowAddFunds', json = 'true', reason = 'WF5C', confirm = 'ENABLE' })
     H.eq(ok, true, 'funds: Add funds on: ' .. tostring(err))
@@ -1011,7 +1011,7 @@ do
     H.eq(W.ItemsGiven(1, 'water'), items0 + 1, 'rewards: the other one given once (the cancelled one never)')
     ok, err = Act('server:admin:takeBackReward', 5,
         { id = waiting[2] and waiting[2].id, reason = 'x', confirm = 'water', requestId = RequestId() })
-    H.eq(err, 'err.money_tool_off', 'rewards: Take back ships off')
+    H.ok(not ok and err == 'err.money_tool_off', 'rewards: Take back ships off')
     Act('server:admin:resetSetting', 5, { path = 'Rewards.byType', reason = 'WF5C' })
     Act('server:admin:resetSetting', 5, { path = 'Rewards.enabled', reason = 'WF5C' })
     H.eq(Config.Rewards.enabled, false, 'rewards: off again')

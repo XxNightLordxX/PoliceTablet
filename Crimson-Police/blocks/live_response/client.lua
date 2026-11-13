@@ -52,7 +52,8 @@ local function EndCase()
         centered = true,
         cancel = true,
     })
-    if answer == 'confirm' and active == cur then cur.ctx.report({ type = 'end_case' }) end
+    -- still this objective and still the host once he confirms (the server refuses a non-host anyway)
+    if answer == 'confirm' and active == cur and cur.ctx.isHost == true then cur.ctx.report({ type = 'end_case' }) end
 end
 
 local function SyncRadial()

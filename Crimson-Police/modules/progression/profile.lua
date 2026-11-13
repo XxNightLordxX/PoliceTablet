@@ -686,6 +686,10 @@ function Profile.commend(src, role, payload)
         end
     end
     if issuer == cid then return false, 'err.commend_self' end
+    -- another character of the issuer's own license is self too (CP.AdminKit.isSelf; the console is never self)
+    if tonumber(src) ~= 0 and CP.AdminKit and CP.AdminKit.isSelf and CP.AdminKit.isSelf(src, cid) then
+        return false, 'err.commend_self'
+    end
     -- WF6C: the issuer's count of today and the officer's same-kind check are read before yields, so one
     -- commendation per issuer and per officer at a time: two sent at once cannot both pass them
     local st, ok, data, extra = commendLock:runAll({ 'by|' .. issuer, 'to|' .. cid }, CommendChecked, src, role, cfg,
@@ -736,7 +740,9 @@ CommendChecked = function(src, role, cfg, cid, kind, runUuid, citation, issuer, 
         -- The board is public: the same name rule as LB.publicName, never the real name of a hidden officer and
         -- never the citizenid.
         local name
-        if U.truthy(target.hide_name) then
+        local LB = CP.Leaderboard
+        if U.truthy(target.hide_name) or (LB and LB.hidesNamesFrom and LB.hidesNamesFrom(target.department, nil)) then
+            -- also an officer whose department shows callsigns only to other departments
             name = NonEmpty(target.callsign) or CP.L('leaderboard.hidden_name')
         else
             name = NonEmpty(target.display_name) or NonEmpty(target.callsign) or CP.L('common.unknown')
@@ -894,6 +900,11 @@ function Profile.handleReport(src, role, payload)
         return false, 'err.profile_other_dept'
     end
     if officer and officer.citizenid == rep.citizenid then return false, 'err.own_profile' end
+    -- a report on any character of his own license (off duty or on duty as another one), as ModerationTarget
+    if tonumber(src) ~= 0 and CP.AdminKit and CP.AdminKit.isSelf
+        and CP.AdminKit.isSelf(src, tostring(rep.citizenid)) then
+        return false, 'err.own_profile'
+    end
     local handler = tonumber(src) == 0 and 'console' or (ViewerCid(src) or ('player:%d'):format(src))
     local changed = MySQL.update.await(
         [[UPDATE cp_profile_reports SET status = ?, handled_by = ?, handled_at = FROM_UNIXTIME(?)

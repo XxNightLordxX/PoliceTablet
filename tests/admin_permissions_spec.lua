@@ -224,6 +224,17 @@ do
     H.ok(not P.can(2, 'fieldTraining', { department = 'sast' }), 'not another officer')
     H.ok(P.granted(5, 'builderTeleport'), 'a gang member from the gang grade')
     H.ok(not P.granted(6, 'builderTeleport'), 'not below it')
+
+    -- H13: the { grades = { ... } } list form: only the listed grades, never the others
+    H.ok(P.gradeGrant({ gradeLevel = 3 }, { grades = { 3, 5 } }), 'H13 grades list: a listed grade passes')
+    H.ok(not P.gradeGrant({ gradeLevel = 4 }, { grades = { 3, 5 } }),
+        'H13 grades list: an unlisted grade between does not')
+    H.ok(not P.gradeGrant({ gradeLevel = 2 }, { grades = { 3 } }), 'H13 grades list: an unlisted grade below does not')
+    local keepReview = Config.Permissions.grants.reviewFlagged
+    Config.Permissions.grants.reviewFlagged = { departments = { sast = { grades = { 2 } } } }
+    H.ok(P.granted(2, 'reviewFlagged'), 'H13 grades list end to end: sast grade 2 is listed')
+    H.ok(not P.granted(3, 'reviewFlagged'), 'H13 grades list end to end: sast grade 1 is not')
+    Config.Permissions.grants.reviewFlagged = keepReview
     H.eq(table.concat(P.actionsFor(2), ','), 'reviewFlagged', 'actionsFor lists the granted power')
     H.eq(table.concat(P.actionsFor(3), ','), 'fieldTraining', 'and the citizenid one')
 

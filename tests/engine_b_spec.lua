@@ -2730,6 +2730,69 @@ H.eq(DZ.endState, 'completed', 'Z2: the last officer out with downed_case: the r
 H.eq(dzEnded, 'completed', 'Z2: run:ended says completed')
 
 -- ============================================================================
+--                                     H13
+-- ============================================================================
+-- A RUN ROW THE DATABASE REFUSED IS SAVED AND PAID LATER.
+
+do
+    local realInsert = MySQL.insert.await
+    -- mode 'refuse': the row insert raises and writes nothing; 'committed': it writes the row, then raises
+    local function Outage(mode)
+        MySQL.insert.await = function(sql, params)
+            if type(sql) == 'string' and sql:find('INSERT INTO cp_mission_runs', 1, true) then
+                if mode == 'committed' then realInsert(sql, params) end
+                error('ECONNREFUSED (test outage)')
+            end
+            return realInsert(sql, params)
+        end
+    end
+    local function Finish(src, mtype)
+        local cur = Runs.getBySrc(src)
+        if cur then Runs.removeParticipant(cur, src, 'disconnected') end
+        H.reset()
+        local run = Runs.create({
+            mission = mission,
+            locationIndex = 1,
+            missionType = mtype,
+            members = { O[src] },
+            leaderSrc = src,
+        })
+        Runs.markArrived(run, src)
+        H.advance(6000)
+        Runs.objectiveComplete(run, 1)
+        Runs.objectiveComplete(run, 2)
+        return run
+    end
+    for src, mode in pairs({ [5] = 'refuse', [6] = 'committed' }) do
+        local pays = Count('cash.pay')
+        local counted = Count('scoring.counted')
+        Outage(mode)
+        local R = Finish(src, 'patrol')
+        MySQL.insert.await = realInsert
+        local card = LastEvent('crimson-police:client:runEnded', src)
+        H.eq(card and card.args[2], 'completed', 'H13 ' .. mode .. ': the run ends completed')
+        H.eq(card and card.args[4].notSaved, true, 'H13 ' .. mode .. ': the card says the row is not saved yet')
+        H.eq(card and card.args[4].cash.status, 'not_saved', 'H13 ' .. mode .. ': ...cash status not_saved')
+        H.eq(Count('cash.pay'), pays, 'H13 ' .. mode .. ': nothing paid while it is not saved')
+        H.eq(Runs._unsavedCount(), 1, 'H13 ' .. mode .. ': the row is kept to save again')
+        Outage('refuse')
+        local realScalar = MySQL.scalar.await
+        MySQL.scalar.await = function() error('ECONNREFUSED (test outage)') end
+        H.eq(Runs._retryUnsaved(), 1, 'H13 ' .. mode .. ': still down: still kept')
+        MySQL.insert.await, MySQL.scalar.await = realInsert, realScalar
+        H.eq(Runs._retryUnsaved(), 0, 'H13 ' .. mode .. ': the database is back: saved')
+        local rows = RowsOf(R.id)
+        H.eq(#rows, 1, 'H13 ' .. mode .. ': one row')
+        H.eq(rows[1] and rows[1].cash_status, 'paid', 'H13 ' .. mode .. ': ...paid')
+        H.eq(Count('cash.pay'), pays + 1, 'H13 ' .. mode .. ': paid once')
+        H.eq(Count('scoring.counted'), counted + 1, 'H13 ' .. mode .. ': counted once')
+        H.eq(Runs._retryUnsaved(), 0, 'H13 ' .. mode .. ': nothing left to save')
+        H.eq(#RowsOf(R.id), 1, 'H13 ' .. mode .. ': still one row')
+        H.eq(Count('cash.pay'), pays + 1, 'H13 ' .. mode .. ': still paid once')
+    end
+end
+
+-- ============================================================================
 --               RESOURCE STOP: entities deleted, nothing written
 -- ============================================================================
 

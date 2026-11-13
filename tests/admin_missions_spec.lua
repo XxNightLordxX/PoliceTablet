@@ -400,6 +400,18 @@ do
     local failed = X.cb('admin:getMissionCalls', 5, { outcome = 'failed', to = to })
     H.eq(failed and failed.total, 10, 'filtered by outcome')
 
+    -- a huge page number reads the last page; it never wraps the OFFSET into a failed query
+    for _, page in ipairs({ 2 ^ 62, math.maxinteger, 3 * 2 ^ 60 + 1, 1e300, -5, 1.5, 'x' }) do
+        local c, eC = X.cb('admin:getMissionCalls', 5, { page = page, to = to })
+        H.ok(c and math.type(c.page) == 'integer' and c.page >= 1 and c.page <= c.pages,
+            ('dispatch history page %s is a page that exists: %s'):format(tostring(page), tostring(eC)))
+        local o, eP = X.cb('admin:getOperations', 5, { page = page })
+        H.ok(o and math.type(o.page) == 'integer' and o.page >= 1 and o.page <= o.pages,
+            ('operation history page %s is a page that exists: %s'):format(tostring(page), tostring(eP)))
+    end
+    local last = X.cb('admin:getMissionCalls', 5, { page = 2 ^ 62, to = to })
+    H.ok(last and last.page == 2 and #last.rows == 5, 'past the last page reads the last page')
+
     -- stats over live + archive: 3 completed, 1 failed, 1 abandoned of one mission (1 voided, 1 flagged)
     local rows = {
         { 'completed', 300, 100, 500, 0, 0, 'cp_mission_runs' },

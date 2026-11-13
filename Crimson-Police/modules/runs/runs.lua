@@ -3020,6 +3020,10 @@ local INSERT_COLUMNS = {
     'live_catches',
 }
 
+-- Run rows the database refused, kept to save later (UNSAVED ROWS below Settle). list = { st, ... },
+-- keys[run_uuid|citizenid] = true; after(st, rowId) = the steps after a row is in the table.
+local Unsaved = { list = {}, keys = {}, retryMs = 30000, max = 500, busy = false, armed = false }
+
 -- NULL literals for nil values so the parameter list never has holes.
 local function InsertRow(row)
     CP.Db()
@@ -3276,7 +3280,33 @@ local function Settle(run, p, result, endReason, others)
     row.live_catches = CP.Int(p.stats and p.stats.live_catches, 0, 32767)
     local rowId = InsertRow(row)
     p.rowId = rowId
-    if not rowId then return nil, rr end
+    local st = {
+        run = run,
+        p = p,
+        result = result,
+        row = row,
+        rr = rr,
+        flag = flag,
+        amount = amount,
+        status = status,
+        cash = cash,
+    }
+    if not rowId then
+        -- the database refused the row (an outage): keep it and save it later, then pay it (Unsaved.queue)
+        Unsaved.queue(st)
+        rr.notSaved = true
+        cash.status = 'not_saved'
+        return nil, rr
+    end
+    Unsaved.after(st, rowId)
+    return rowId, rr
+end
+
+-- The steps after a run row is in the table: pay it, count it, record it, tell the listeners. st = the Settle state
+-- { run, p, result, row, rr, flag, amount, status, cash }. Also run by the unsaved-row retry (Unsaved.save).
+function Unsaved.after(st, rowId)
+    local run, p, result, row, rr, flag, amount, status, cash =
+        st.run, st.p, st.result, st.row, st.rr, st.flag, st.amount, st.status, st.cash
     row.id = rowId
     if result == 'completed' then
         hourCache[p.citizenid] = nil
@@ -3285,12 +3315,12 @@ local function Settle(run, p, result, endReason, others)
 
     if result == 'completed' and not flag and amount > 0 and Has('Cash', 'pay') then
         Call('Cash', 'pay', rowId)
-        local st, paid = ReadCashStatus(rowId)
-        if st then
-            cash.status = st
+        local now, paid = ReadCashStatus(rowId)
+        if now then
+            cash.status = now
             cash.paid = paid
-            row.cash_status, row.cash_paid = st, paid
-            if st ~= status then StoreCashStatus(rowId, st) end
+            row.cash_status, row.cash_paid = now, paid
+            if now ~= status then StoreCashStatus(rowId, now) end
         end
     end
     if (result == 'completed' or result == 'failed') and not flag then
@@ -3302,7 +3332,87 @@ local function Settle(run, p, result, endReason, others)
     end
     -- listeners may add to rr (CP.Scoring the progress, CP.Rewards the items); they may yield
     Fire('row:settled', run, p, rowId, row, rr)
-    return rowId, rr
+end
+
+-- ============================================================================
+--                        UNSAVED ROWS (DATABASE OUTAGE)
+-- ============================================================================
+-- A run row the database refused (InsertRow returned nil) is kept here and tried again every Unsaved.retryMs, then
+-- paid and counted as Settle would have done (Unsaved.after). An insert that errored may still have been committed
+-- (there is no unique key on run_uuid, citizenid), so each try first looks for the row. Kept in memory only: a
+-- restart during the outage still loses it (the card said so: cash.status 'not_saved').
+function Unsaved.queue(st)
+    local key = tostring(st.row.run_uuid) .. '|' .. tostring(st.row.citizenid)
+    if Unsaved.keys[key] then return false end
+    if #Unsaved.list >= Unsaved.max then
+        CP.err(TAG, 'unsaved run rows: the list is full, %s is lost', key)
+        return false
+    end
+    Unsaved.keys[key] = true
+    Unsaved.list[#Unsaved.list + 1] = st
+    Unsaved.arm()
+    CP.warn(TAG, 'run row %s kept to save again in %d s', key, Unsaved.retryMs // 1000)
+    return true
+end
+
+-- One try for one kept row -> true when it is saved (and settled) now.
+function Unsaved.save(st)
+    local row = st.row
+    local ok, found = pcall(MySQL.scalar.await,
+        'SELECT id FROM cp_mission_runs WHERE run_uuid = ? AND citizenid = ? ORDER BY id LIMIT 1',
+        { row.run_uuid, row.citizenid })
+    if not ok then return false end
+    local rowId = tonumber(found)
+    if not rowId then rowId = InsertRow(row) end
+    if not rowId then return false end
+    st.p.rowId = rowId
+    st.rr.notSaved = nil
+    st.cash.status = st.status
+    -- saved now: whatever happens next it is never tried again (a second Unsaved.after would count it twice)
+    local okA, err = pcall(Unsaved.after, st, rowId)
+    if not okA then CP.err(TAG, 'settling the saved run row %d failed: %s', rowId, tostring(err)) end
+    CP.log(TAG, 'run row %s|%s saved after an outage (row %d)', tostring(row.run_uuid), tostring(row.citizenid), rowId)
+    return true
+end
+
+function Runs._retryUnsaved()
+    if Unsaved.busy then return #Unsaved.list end
+    Unsaved.busy = true
+    local list = Unsaved.list
+    Unsaved.list = {}
+    local keep = {}
+    for i, st in ipairs(list) do
+        local ok, saved = pcall(Unsaved.save, st)
+        if not ok then CP.err(TAG, 'saving a kept run row failed: %s', tostring(saved)) end
+        if ok and saved then
+            Unsaved.keys[tostring(st.row.run_uuid) .. '|' .. tostring(st.row.citizenid)] = nil
+        else
+            -- the database is still down: this one and the rest wait for the next try
+            for j = i, #list do keep[#keep + 1] = list[j] end
+            break
+        end
+    end
+    for _, st in ipairs(Unsaved.list) do
+        keep[#keep + 1] = st
+    end -- queued while a try yielded
+    Unsaved.list = keep
+    Unsaved.busy = false
+    return #keep
+end
+
+function Runs._unsavedCount() return #Unsaved.list end
+
+-- The retry loop runs only while rows wait (an idle server never wakes for it).
+function Unsaved.arm()
+    if Unsaved.armed then return end
+    Unsaved.armed = true
+    CreateThread(function()
+        while #Unsaved.list > 0 do
+            Wait(Unsaved.retryMs)
+            Runs._retryUnsaved()
+        end
+        Unsaved.armed = false
+    end)
 end
 
 -- ============================================================================

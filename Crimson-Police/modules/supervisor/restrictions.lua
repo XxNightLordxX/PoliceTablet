@@ -103,6 +103,13 @@ local function FillFromAudit(rows)
     end
 end
 
+-- A kind whose rows name real-suspect players (def.staffNames): with Config.RealPlayers.staff.names = false they show
+-- citizen IDs only, as the real-suspect staff screens do. The admin who set it keeps his name.
+local function NamesHidden(row)
+    local def = Kinds().byKey[row.kind]
+    return def ~= nil and def.staffNames == true and CP.RealPlayers('staff').names == false
+end
+
 -- A name for every citizenid the rows name: online from Qbox, else cp_officers, in one query.
 local function FillNames(rows)
     local names, missing, seen = {}, {}, {}
@@ -118,8 +125,11 @@ local function FillNames(rows)
         end
     end
     for _, row in ipairs(rows) do
-        want(row.citizenid)
-        want(row.other)
+        row.hideNames = NamesHidden(row)
+        if not row.hideNames then
+            want(row.citizenid)
+            want(row.other)
+        end
         if row.byName == nil then want(row.by) end
     end
     if #missing > 0 then
@@ -134,8 +144,13 @@ local function FillNames(rows)
         end
     end
     for _, row in ipairs(rows) do
-        row.name = row.name or names[row.citizenid]
-        row.otherName = row.other and (row.otherName or names[row.other]) or nil
+        if row.hideNames then
+            row.name, row.otherName = nil, nil
+        else
+            row.name = row.name or names[row.citizenid]
+            row.otherName = row.other and (row.otherName or names[row.other]) or nil
+        end
+        row.hideNames = nil
         if row.byName == nil and row.by then row.byName = names[row.by] end
     end
 end

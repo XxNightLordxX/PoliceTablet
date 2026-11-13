@@ -5757,6 +5757,7 @@
   "result.cash_status.forfeited": "Forfeited",
   "result.cash_status.held": "Held for review",
   "result.cash_status.none": "Not paid",
+  "result.cash_status.not_saved": "Not saved yet: saved and paid when the database is back",
   "result.cash_status.paid": "Paid",
   "result.cash_status.paying": "Paying",
   "result.cash_status.pending": "Pending",
