@@ -1051,6 +1051,10 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Release Pay again: with Pay again on and `Config.Cash.source = 'society'`, a Pay again whose department refund
   failed half way shows "Pay again step" under Payments -> Resolve and offers Release Pay again; confirming without
   the box is refused; with the box ticked no money moves, the row stays Stuck, and Pay again then pays him once.
+- [ ] Mark withdrawn: the same kind of Pay again, but the department's history shows the money was taken and not
+  given back: Mark withdrawn (box ticked) moves no money and the step shows "withdrawn"; Pay again then pays him once
+  and the department's balance does not drop again. On another such row, Release Pay again at "withdrawn" puts the
+  money back on the department's account once.
 - [ ] Disputes and a maintenance lock: void a run, hold a maintenance lock (a restore) from hour 40 to hour 50,
   suspend the officer at hour 52 and lift it at hour 60: 47 h after the lift his Profile still shows the Dispute
   button and the run's cash is still held; at 49 h it is gone.

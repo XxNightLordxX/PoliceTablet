@@ -2812,7 +2812,12 @@ Admin transitions (full admin control, §5.20, §5.40; the money ones ship off b
 `withdrawing` → `withdrawn` → `adding` → `added`, or `review` when the raised deposit left no telling, `refunding`
 when a department refund left no telling). A Pay again left at its own `withdrawing` or `refunding` step is
 released by Resolve's `againRelease` (`CP.Cash.releaseAgain`, no money moves, compare and set on that step) once
-the admin ticked that the department was not charged or got it back; the row is `paying` at its own step again.
+the admin ticked that the department was not charged or got it back; the row is `paying` at its own step again. When
+the admin ticked that the department WAS charged and did not get it back, `againWithdrawn`
+(`CP.Cash.markAgainWithdrawn`, no money moves) sets its step to `withdrawn` (compare and set on the step). At
+`withdrawn` Pay again resumes with the deposit only (`again2`), and `againRelease` gives up: the step goes to
+`refunding`, the department gets its money back (`depositSociety`), then the claim is released; a refund with no
+telling stays at `refunding` (a second Release only releases), a refused one goes back to `withdrawn`.
 
 ---
 
@@ -3463,7 +3468,7 @@ every action.
 | callback `admin:previewRetryUnfunded` | `{ rowId }` or `{ department, since? }` → UnfundedPreview | payments | P |
 | callback `admin:previewCashSource` | `{}` → CashSourcePreview | payments | P |
 | callback `admin:getDepartmentFunds` | `{ department }` → DepartmentFundsView | deptFunds | P |
-| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, `CP.Cash.againOutcomes`; no money moves): W `allowPayAgain`, `checked` |
+| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| 'againWithdrawn' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, no money moves; at `withdrawn` the department gets its money back first) and againWithdrawn (at `withdrawing` or `refunding`: the step becomes `withdrawn`, no money moves), both offered by `CP.Cash.againOutcomes`: W `allowPayAgain`, `checked` |
 | `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
 | `server:admin:retryPending` | `{ requestId }` | payments | P I |
 | `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total; a department retry (and its preview, `excluded`) leaves out every row of the admin's own characters and runs, and rows whose officer's license is unknown |

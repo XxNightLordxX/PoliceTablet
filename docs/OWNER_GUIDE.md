@@ -2094,7 +2094,11 @@ What you can do from a row (the buttons show only where they make sense):
   through but the deposit failed can be pressed again: it only deposits. A Pay again whose own department
   withdrawal, or its refund, was cut half way shows its step under Resolve and offers **Release Pay again**: only
   when the department's history shows it was not charged for that Pay again, or got it back. Tick that box and
-  confirm: no money moves, and Pay again or Mark paid can be used again. These rows count in the Payments badge.
+  confirm: no money moves, and Pay again or Mark paid can be used again. When the department's history shows it
+  **was** charged for that Pay again and did not get it back, press **Mark withdrawn** instead (tick that box): no
+  money moves, and the Pay again is at "withdrawn". From there Pay again pays the officer with the deposit only (the
+  department is never charged twice), or **Release Pay again** gives up: the department gets its money back first,
+  then Pay again or Mark paid can be used again. These rows count in the Payments badge.
 - **Pay now** for a pending payment of an officer who is online, and **Retry all pending** for everyone online. These
   use the normal pay flow, so nothing is ever paid twice. Like **Forfeit now** and **Cancel payment**, they write their
   audit row first: if it can't be written, nothing happens.

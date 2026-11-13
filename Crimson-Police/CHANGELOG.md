@@ -24,6 +24,13 @@ The first version for sale.
   Cross-Department Missions, recognition, leaderboards and seasons, real suspects, cash and item rewards, and an
   Admin UI where every setting can be changed in game.
 
+### Fixes before 1.0.0
+
+- **Payments -> Resolve, Mark withdrawn:** a Pay again whose department withdrawal (or its refund) was cut half way,
+  where the department's history shows it **was** charged and not given it back, could only be closed with Mark
+  paid. **Mark withdrawn** (tick the box) now records that, with no money moved: Pay again then pays the officer with
+  the deposit only, and **Release Pay again** at that step gives the department its money back first.
+
 ### Optimization work before 1.0.0
 
 Measured in the test harness (`tests/`), before -> after. The intervals each loop runs at now are in

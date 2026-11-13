@@ -1839,29 +1839,118 @@ do
     ok, e = Resolve(idR, 'payAgain', '250')
     H.ok(ok and people[7].money.bank == 1250 and bank.balance.sast == sR - 250 and RowOf(idR).cash_status == 'paid',
         'Release Pay again: Pay again then pays once, the department charged once: ' .. tostring(e))
-    -- at 'withdrawing' too; never at 'withdrawn' (that one resumes with the deposit only) nor on a row no longer paying
-    for _, st in ipairs({ 'withdrawing', 'withdrawn' }) do
-        Reset()
-        local id = Row({
-            status = 'paying',
-            owed = 90,
-            cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = 90 },
-        })
-        H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.again', 'paying',
-            '$.cash.againClaim', 1, '$.cash.againStep', ?) WHERE id = ?]], { st, id })
-        ok, e = Resolve(id, 'againRelease')
-        if st == 'withdrawing' then
-            H.ok(ok and RowOf(id).bd.cash.again == nil, 'Release Pay again at withdrawing: ' .. tostring(e))
-        else
-            H.ok(not ok and e == 'err.payment_step_unknown' and RowOf(id).bd.cash.again == 'paying',
-                'Release Pay again: refused at withdrawn: ' .. tostring(e))
-        end
-    end
+    -- at 'withdrawing' too (no money moves), and never on a row no longer paying
+    Reset()
+    local idW = Row({
+        status = 'paying',
+        owed = 90,
+        cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = 90 },
+    })
+    H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.again', 'paying',
+        '$.cash.againClaim', 1, '$.cash.againStep', 'withdrawing') WHERE id = ?]], { idW })
+    local sW = bank.balance.sast
+    ok, e = Resolve(idW, 'againRelease')
+    H.ok(ok and RowOf(idW).bd.cash.again == nil and bank.balance.sast == sW,
+        'Release Pay again at withdrawing: ' .. tostring(e))
     local idP = Row({ status = 'paid', owed = 90, cash = { step = 'added', source = 'society', payAmount = 90 } })
     H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.again', 'paying',
         '$.cash.againStep', 'refunding') WHERE id = ?]], { idP })
     ok, e = Resolve(idP, 'againRelease')
     H.ok(not ok and RowOf(idP).bd.cash.again == 'paying', 'Release Pay again: never on a paid row: ' .. tostring(e))
+
+    -- Mark withdrawn: a Pay again left at 'withdrawing' or 'refunding' whose department WAS charged (and did not get
+    -- it back), the officer not paid. No money moves: its step becomes 'withdrawn', so Pay again deposits only (the
+    -- department is never charged twice) and Release Pay again gives the department its money back first.
+    local function AgainAt(st, owed)
+        local id = Row({
+            status = 'paying',
+            owed = owed,
+            cash = { step = 'claimed', source = 'society', societyAccount = 'sast', payAmount = owed },
+        })
+        H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.again', 'paying',
+            '$.cash.againClaim', 1, '$.cash.againStep', ?) WHERE id = ?]], { st, id })
+        return id
+    end
+    for _, st in ipairs({ 'withdrawing', 'refunding' }) do
+        Reset()
+        local id = AgainAt(st, 80)
+        local chk = Cb('admin:checkBankingTxn', 1, { rowId = id }) or {}
+        H.ok((chk.againOutcomes or {}).againWithdrawn == true and (chk.againOutcomes or {}).againRelease == true,
+            'Mark withdrawn: offered at ' .. st)
+    end
+    Reset()
+    people[7].money.bank = 1000
+    local idM = AgainAt('withdrawing', 120)
+    bank.balance.sast = bank.balance.sast - 120   -- the department was charged; the call raised with no telling
+    local sM = bank.balance.sast
+    ok, e = Resolve(idM, 'againWithdrawn', nil, false)
+    H.ok(not ok and e == 'err.check_first' and RowOf(idM).bd.cash.againStep == 'withdrawing',
+        'Mark withdrawn: refused without the checked box: ' .. tostring(e))
+    Config.Cash.allowPayAgain = false
+    ok, e = Resolve(idM, 'againWithdrawn')
+    Config.Cash.allowPayAgain = true
+    H.ok(not ok and e == 'err.money_tool_off' and RowOf(idM).bd.cash.againStep == 'withdrawing',
+        'Mark withdrawn: off while Pay again is off: ' .. tostring(e))
+    ok, e = Resolve(idM, 'againWithdrawn')
+    local cM = RowOf(idM).bd.cash
+    H.ok(ok and cM.again == 'paying' and cM.againStep == 'withdrawn' and RowOf(idM).cash_status == 'paying',
+        'Mark withdrawn: the Pay again is at withdrawn, the row still paying: ' .. tostring(e))
+    H.ok(
+        #calls.add == 0 and #Logged('withdraw') == 0 and #Logged('deposit') == 0 and bank.balance.sast == sM
+            and people[7].money.bank == 1000,
+        'Mark withdrawn: no money moves'
+    )
+    local auM = LastAudit('paymentResolve') or {}
+    H.ok(auM.old_value == 'again:withdrawing' and auM.new_value == 'againWithdrawn:120',
+        'Mark withdrawn: audited (' .. tostring(auM.old_value) .. ' -> ' .. tostring(auM.new_value) .. ')')
+    ok, e = Resolve(idM, 'againWithdrawn')
+    H.ok(not ok and e == 'err.payment_step_unknown', 'Mark withdrawn: only once: ' .. tostring(e))
+    ok, e = Resolve(idM, 'payAgain', '120')
+    H.ok(
+        ok and people[7].money.bank == 1120 and bank.balance.sast == sM and #Logged('withdraw') == 0
+            and RowOf(idM).cash_status == 'paid',
+        'Mark withdrawn: Pay again then deposits only, the department is not charged twice: ' .. tostring(e)
+    )
+    -- giving up at 'withdrawn': Release Pay again gives the department its money back first, once
+    Reset()
+    local idG = AgainAt('withdrawing', 70)
+    bank.balance.sast = bank.balance.sast - 70
+    Resolve(idG, 'againWithdrawn')
+    local chkG = Cb('admin:checkBankingTxn', 1, { rowId = idG }) or {}
+    H.ok(
+        chkG.againStep == 'withdrawn' and (chkG.againOutcomes or {}).againRelease == true
+            and (chkG.againOutcomes or {}).againWithdrawn == nil,
+        'Mark withdrawn: at withdrawn only Release is offered'
+    )
+    local sG = bank.balance.sast
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idG, 'againRelease')
+    Restore()
+    H.ok(
+        not ok and e == 'err.payment_refund_failed' and RowOf(idG).bd.cash.againStep == 'withdrawn'
+            and bank.balance.sast == sG,
+        'Release at withdrawn: a refused refund keeps it at withdrawn: ' .. tostring(e)
+    )
+    UnknownRefund()
+    ok, e = Resolve(idG, 'againRelease')
+    Restore()
+    H.ok(not ok and e == 'err.payment_raised' and RowOf(idG).bd.cash.againStep == 'refunding',
+        'Release at withdrawn: a refund with no telling stays at refunding: ' .. tostring(e))
+    ok, e = Resolve(idG, 'againRelease')
+    local cG = RowOf(idG).bd.cash
+    H.ok(ok and cG.again == nil and cG.againStep == nil and cG.step == 'claimed' and RowOf(idG).cash_status == 'paying',
+        'Release at withdrawn: the second Release only releases: ' .. tostring(e))
+    H.eq(bank.balance.sast - sG, 70, 'Release at withdrawn: the department got back $70 once')
+    Reset()
+    local idG2 = AgainAt('withdrawn', 60)
+    local sG2 = bank.balance.sast
+    ok, e = Resolve(idG2, 'againRelease')
+    local auG = LastAudit('paymentResolve') or {}
+    H.ok(
+        ok and RowOf(idG2).bd.cash.again == nil and bank.balance.sast - sG2 == 60 and auG.old_value == 'again:withdrawn'
+            and auG.new_value == 'againRelease:60',
+        'Release at withdrawn: the department gets it back, audited: ' .. tostring(e)
+    )
 
     CP.Qbx.getMoney = realGet
     Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = false, false, false

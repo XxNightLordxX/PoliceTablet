@@ -12,11 +12,11 @@ has none: its file's head comment in docs/dev/FILE_NOTES.md says what the file d
 | | functions |
 |---|---:|
 | named by a spec | 1127 |
-| via | 5735 |
+| via | 5738 |
 | world | 148 |
 | walk | 388 |
 | none | 275 |
-| all | 7673 |
+| all | 7676 |
 
 Client entry points: 110, 88 driven by a spec that loads their file, 22 known gaps (tools/coverage_gaps.txt).
 
@@ -3401,88 +3401,91 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 60 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
-| 75 | `ToId` | - | via admin_boards_spec |
-| 85 | `FmtMoney` | - | via admin_boards_spec |
-| 92 | `TierRow` | - | via admin_boards_spec |
-| 107 | `PresenceFailed` | - | via admin_boards_spec |
-| 114 | `WithLock` | - | via admin_boards_spec |
-| 129 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
-| 140 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
-| 156 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
-| 162 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
-| 169 | `Cash.compute` | - | anticheat_note_spec |
-| 204 | `ReadRow` | - | via admin_boards_spec |
-| 219 | `AmountOf` | - | via admin_boards_spec |
-| 226 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
-| 233 | `MissionLabel` | - | via admin_boards_spec |
-| 240 | `SetFinal` | - | via admin_boards_spec |
-| 257 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
-| 289 | `BackToPending` | - | via admin_boards_spec |
-| 306 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
-| 323 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
-| 342 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
-| 350 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
-| 358 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
-| 367 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
-| 378 | `WithdrawSociety` | - | via admin_boards_spec |
-| 382 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
-| 394 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
-| 401 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
-| 453 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
-| 628 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
-| 634 | `Cash.pay` | - | admin_economy_spec |
-| 660 | `Cash.payPending` | - | admin_economy_spec |
-| 689 | `Cash.release` | - | economy_spec |
-| 703 | `FireForfeited` | - | via admin_boards_spec |
-| 707 | `Cash.forfeit` | - | economy_spec |
-| 729 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
-| 779 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
-| 794 | `Clean` | - | via admin_boards_spec |
-| 804 | `CashOf` | - | via admin_boards_spec |
-| 806 | `TxnOf` | - | via admin_boards_spec |
-| 809 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
-| 813 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
-| 829 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
-| 850 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
-| 861 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
-| 874 | `Audited` | - | via admin_boards_spec |
-| 881 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
-| 890 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
-| 895 | `Cash.txnOf` | - | via admin_boards_spec |
-| 898 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
-| 903 | `Cash.paymentsHeld` | - | via admin_boards_spec |
-| 910 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
-| 935 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
-| 937 | `Step` | - | via admin_boards_spec |
-| 1014 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
-| 1071 | `Cash.payAgain` | - | admin_economy_spec |
-| 1118 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own 'withdrawing' or 'refunding' step (the department call or its refund raised... | via admin_boards_spec |
-| 1129 | `Cash.releaseAgain` | Release a Pay again left at 'withdrawing' or 'refunding': the admin checked the department's history and its Pay again withdrawal never w... | via admin_boards_spec |
-| 1153 | `CapRestLocked` | - | via admin_boards_spec |
-| 1195 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
-| 1226 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
-| 1236 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
-| 1255 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
-| 1288 | `ClawbackLocked` | - | via admin_boards_spec |
-| 1368 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
-| 1412 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
-| 1422 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
-| 1437 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
-| 1454 | `ResolveLocked` | - | via admin_boards_spec |
-| 1532 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
-| 1566 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
-| 1592 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
-| 1632 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
-| 1657 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
-| 1670 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
-| 1703 | `PoolFor` | - | via admin_boards_spec |
-| 1723 | `Cash.range` | - | admin_boards_spec |
-| 1760 | `Cash.stuckPayments` | - | admin_economy_spec |
-| 1799 | `Cash.earnedThisWeek` | - | economy_spec |
-| 1818 | `OnLoaded` | - | via admin_boards_spec |
-| 1862 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
-| 1866 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
+| 62 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
+| 77 | `ToId` | - | via admin_boards_spec |
+| 87 | `FmtMoney` | - | via admin_boards_spec |
+| 94 | `TierRow` | - | via admin_boards_spec |
+| 109 | `PresenceFailed` | - | via admin_boards_spec |
+| 116 | `WithLock` | - | via admin_boards_spec |
+| 131 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
+| 142 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
+| 158 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
+| 164 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
+| 171 | `Cash.compute` | - | anticheat_note_spec |
+| 206 | `ReadRow` | - | via admin_boards_spec |
+| 221 | `AmountOf` | - | via admin_boards_spec |
+| 228 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
+| 235 | `MissionLabel` | - | via admin_boards_spec |
+| 242 | `SetFinal` | - | via admin_boards_spec |
+| 259 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
+| 291 | `BackToPending` | - | via admin_boards_spec |
+| 308 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
+| 325 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
+| 344 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
+| 352 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
+| 360 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
+| 369 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
+| 380 | `WithdrawSociety` | - | via admin_boards_spec |
+| 384 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
+| 396 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
+| 403 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
+| 455 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
+| 630 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
+| 636 | `Cash.pay` | - | admin_economy_spec |
+| 662 | `Cash.payPending` | - | admin_economy_spec |
+| 691 | `Cash.release` | - | economy_spec |
+| 705 | `FireForfeited` | - | via admin_boards_spec |
+| 709 | `Cash.forfeit` | - | economy_spec |
+| 731 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
+| 781 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
+| 796 | `Clean` | - | via admin_boards_spec |
+| 806 | `CashOf` | - | via admin_boards_spec |
+| 808 | `TxnOf` | - | via admin_boards_spec |
+| 811 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
+| 815 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
+| 831 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
+| 852 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
+| 863 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
+| 876 | `Audited` | - | via admin_boards_spec |
+| 883 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
+| 892 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
+| 897 | `Cash.txnOf` | - | via admin_boards_spec |
+| 900 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
+| 905 | `Cash.paymentsHeld` | - | via admin_boards_spec |
+| 912 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
+| 937 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
+| 939 | `Step` | - | via admin_boards_spec |
+| 1016 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
+| 1074 | `Cash.payAgain` | - | admin_economy_spec |
+| 1124 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own step: { againRelease, againWithdrawn } or {}. | via admin_boards_spec |
+| 1134 | `AgainStepIf` | The Pay again's step moved from one value to another, compare and set on the row still 'paying' with its claim. | via admin_boards_spec |
+| 1143 | `GiveUpAgainLocked` | A Pay again at 'withdrawn' given up, under the officer's payment lock: the department gets its money back ('refunding' while the refund r... | via admin_boards_spec |
+| 1168 | `Cash.releaseAgain` | Release a Pay again left part way. | via admin_boards_spec |
+| 1197 | `Cash.markAgainWithdrawn` | Mark withdrawn: a Pay again left at 'withdrawing' or 'refunding' whose department the admin checked WAS charged and did not get it back (... | via admin_boards_spec |
+| 1218 | `CapRestLocked` | - | via admin_boards_spec |
+| 1260 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
+| 1291 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
+| 1301 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
+| 1320 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
+| 1353 | `ClawbackLocked` | - | via admin_boards_spec |
+| 1433 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
+| 1477 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
+| 1487 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
+| 1502 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
+| 1519 | `ResolveLocked` | - | via admin_boards_spec |
+| 1597 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
+| 1631 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
+| 1657 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
+| 1697 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
+| 1722 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
+| 1735 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
+| 1768 | `PoolFor` | - | via admin_boards_spec |
+| 1788 | `Cash.range` | - | admin_boards_spec |
+| 1825 | `Cash.stuckPayments` | - | admin_economy_spec |
+| 1864 | `Cash.earnedThisWeek` | - | economy_spec |
+| 1883 | `OnLoaded` | - | via admin_boards_spec |
+| 1927 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
+| 1931 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
 
 ### modules/money/engine.lua
 
@@ -3569,20 +3572,20 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 727 | `AuditFn` | The audit callback CP.Cash calls after its claim: the row id of the synchronous audit row, or false. | via admin_economy_spec |
 | 737 | `Touched` | A payment changed: the caches that hold it, the sidebar count and every admin's open Payments screen. | via admin_economy_spec |
 | 743 | `OffSwitch` | - | via admin_economy_spec |
-| 814 | `confirm` | - | via admin_economy_spec |
-| 915 | `confirm` | - | via admin_economy_spec |
-| 919 | `self` | - | via admin_economy_spec |
-| 944 | `confirm` | - | via admin_economy_spec |
-| 982 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
-| 983 | `Forfeitable` | - | via admin_economy_spec |
-| 1045 | `confirm` | - | via admin_economy_spec |
-| 1059 | `ManualUsed` | - | via admin_economy_spec |
-| 1110 | `confirm` | - | via admin_economy_spec |
-| 1116 | `self` | - | via admin_economy_spec |
-| 1181 | `confirm` | - | via admin_economy_spec |
-| 1201 | `run` | - | via admin_economy_spec |
-| 1208 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
-| 1226 | `Payments._resetNav` | - | admin_economy_spec |
+| 817 | `confirm` | - | via admin_economy_spec |
+| 918 | `confirm` | - | via admin_economy_spec |
+| 922 | `self` | - | via admin_economy_spec |
+| 947 | `confirm` | - | via admin_economy_spec |
+| 985 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
+| 986 | `Forfeitable` | - | via admin_economy_spec |
+| 1048 | `confirm` | - | via admin_economy_spec |
+| 1062 | `ManualUsed` | - | via admin_economy_spec |
+| 1113 | `confirm` | - | via admin_economy_spec |
+| 1119 | `self` | - | via admin_economy_spec |
+| 1184 | `confirm` | - | via admin_economy_spec |
+| 1204 | `run` | - | via admin_economy_spec |
+| 1211 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
+| 1229 | `Payments._resetNav` | - | admin_economy_spec |
 
 ### modules/money/payouts.lua
 
@@ -8295,7 +8298,7 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 537 | `AdminPayments` | - | none |
+| 573 | `AdminPayments` | - | none |
 
 ### web/src/admin/screens/Payouts.tsx
 

@@ -152,9 +152,10 @@ export interface BankingCheck {
     followUpAmount?: number | null;
     followUpStep?: string | null;
     outcomes?: Partial<Record<FollowUpOutcome, boolean>> | null;
-    // A Pay again left at its own 'withdrawing' or 'refunding' step: that step, and the Release it offers (Pay again on)
+    // A Pay again left at its own 'withdrawing', 'refunding' or 'withdrawn' step: that step, and the Release and Mark
+    // withdrawn it offers (Pay again on)
     againStep?: string | null;
-    againOutcomes?: { againRelease?: boolean } | null;
+    againOutcomes?: { againRelease?: boolean; againWithdrawn?: boolean } | null;
 }
 
 // admin:previewRetryUnfunded { rowId } | { department, since }
