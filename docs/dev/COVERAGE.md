@@ -11,12 +11,12 @@ has none: its file's head comment in docs/dev/FILE_NOTES.md says what the file d
 
 | | functions |
 |---|---:|
-| named by a spec | 1127 |
-| via | 5735 |
+| named by a spec | 1128 |
+| via | 5741 |
 | world | 148 |
 | walk | 388 |
 | none | 275 |
-| all | 7673 |
+| all | 7680 |
 
 Client entry points: 110, 88 driven by a spec that loads their file, 22 known gaps (tools/coverage_gaps.txt).
 
@@ -1549,9 +1549,10 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 676 | `FireLost` | - | via admin_backup_spec |
 | 687 | `Seed` | - | via admin_backup_spec |
 | 693 | `Evaluate` | Compare the player's current state with their last known active job. | via admin_backup_spec |
-| 716 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
-| 787 | `A.refreshOfficerRow` | - | admin_boards_spec |
-| 824 | `GetDepartment` | - | via admin_backup_spec |
+| 719 | `HeldWindowsOpenSql` | Whether the dispute windows the last suspension held are still open, in SQL on cp_officers: NOW() is at most its end (suspended_until) +... | via admin_backup_spec |
+| 738 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
+| 813 | `A.refreshOfficerRow` | - | admin_boards_spec |
+| 850 | `GetDepartment` | - | via admin_backup_spec |
 
 ### modules/access/client/access.lua
 
@@ -3401,88 +3402,91 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 60 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
-| 75 | `ToId` | - | via admin_boards_spec |
-| 85 | `FmtMoney` | - | via admin_boards_spec |
-| 92 | `TierRow` | - | via admin_boards_spec |
-| 107 | `PresenceFailed` | - | via admin_boards_spec |
-| 114 | `WithLock` | - | via admin_boards_spec |
-| 129 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
-| 140 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
-| 156 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
-| 162 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
-| 169 | `Cash.compute` | - | anticheat_note_spec |
-| 204 | `ReadRow` | - | via admin_boards_spec |
-| 219 | `AmountOf` | - | via admin_boards_spec |
-| 226 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
-| 233 | `MissionLabel` | - | via admin_boards_spec |
-| 240 | `SetFinal` | - | via admin_boards_spec |
-| 257 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
-| 289 | `BackToPending` | - | via admin_boards_spec |
-| 306 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
-| 323 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
-| 342 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
-| 350 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
-| 358 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
-| 367 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
-| 378 | `WithdrawSociety` | - | via admin_boards_spec |
-| 382 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
-| 394 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
-| 401 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
-| 453 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
-| 628 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
-| 634 | `Cash.pay` | - | admin_economy_spec |
-| 660 | `Cash.payPending` | - | admin_economy_spec |
-| 689 | `Cash.release` | - | economy_spec |
-| 703 | `FireForfeited` | - | via admin_boards_spec |
-| 707 | `Cash.forfeit` | - | economy_spec |
-| 729 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
-| 779 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
-| 794 | `Clean` | - | via admin_boards_spec |
-| 804 | `CashOf` | - | via admin_boards_spec |
-| 806 | `TxnOf` | - | via admin_boards_spec |
-| 809 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
-| 813 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
-| 829 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
-| 850 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
-| 861 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
-| 874 | `Audited` | - | via admin_boards_spec |
-| 881 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
-| 890 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
-| 895 | `Cash.txnOf` | - | via admin_boards_spec |
-| 898 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
-| 903 | `Cash.paymentsHeld` | - | via admin_boards_spec |
-| 910 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
-| 935 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
-| 937 | `Step` | - | via admin_boards_spec |
-| 1014 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
-| 1071 | `Cash.payAgain` | - | admin_economy_spec |
-| 1118 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own 'withdrawing' or 'refunding' step (the department call or its refund raised... | via admin_boards_spec |
-| 1129 | `Cash.releaseAgain` | Release a Pay again left at 'withdrawing' or 'refunding': the admin checked the department's history and its Pay again withdrawal never w... | via admin_boards_spec |
-| 1153 | `CapRestLocked` | - | via admin_boards_spec |
-| 1195 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
-| 1226 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
-| 1236 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
-| 1255 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
-| 1288 | `ClawbackLocked` | - | via admin_boards_spec |
-| 1368 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
-| 1412 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
-| 1422 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
-| 1437 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
-| 1454 | `ResolveLocked` | - | via admin_boards_spec |
-| 1532 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
-| 1566 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
-| 1592 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
-| 1632 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
-| 1657 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
-| 1670 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
-| 1703 | `PoolFor` | - | via admin_boards_spec |
-| 1723 | `Cash.range` | - | admin_boards_spec |
-| 1760 | `Cash.stuckPayments` | - | admin_economy_spec |
-| 1799 | `Cash.earnedThisWeek` | - | economy_spec |
-| 1818 | `OnLoaded` | - | via admin_boards_spec |
-| 1862 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
-| 1866 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
+| 62 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
+| 77 | `ToId` | - | via admin_boards_spec |
+| 87 | `FmtMoney` | - | via admin_boards_spec |
+| 94 | `TierRow` | - | via admin_boards_spec |
+| 109 | `PresenceFailed` | - | via admin_boards_spec |
+| 116 | `WithLock` | - | via admin_boards_spec |
+| 131 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
+| 142 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
+| 158 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
+| 164 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
+| 171 | `Cash.compute` | - | anticheat_note_spec |
+| 206 | `ReadRow` | - | via admin_boards_spec |
+| 221 | `AmountOf` | - | via admin_boards_spec |
+| 228 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
+| 235 | `MissionLabel` | - | via admin_boards_spec |
+| 242 | `SetFinal` | - | via admin_boards_spec |
+| 259 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
+| 291 | `BackToPending` | - | via admin_boards_spec |
+| 308 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
+| 325 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
+| 344 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
+| 352 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
+| 360 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
+| 369 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
+| 380 | `WithdrawSociety` | - | via admin_boards_spec |
+| 384 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
+| 396 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
+| 403 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
+| 455 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
+| 630 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
+| 636 | `Cash.pay` | - | admin_economy_spec |
+| 662 | `Cash.payPending` | - | admin_economy_spec |
+| 691 | `Cash.release` | - | economy_spec |
+| 705 | `FireForfeited` | - | via admin_boards_spec |
+| 709 | `Cash.forfeit` | - | economy_spec |
+| 731 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
+| 781 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
+| 796 | `Clean` | - | via admin_boards_spec |
+| 806 | `CashOf` | - | via admin_boards_spec |
+| 808 | `TxnOf` | - | via admin_boards_spec |
+| 811 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
+| 815 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
+| 831 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
+| 852 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
+| 863 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
+| 876 | `Audited` | - | via admin_boards_spec |
+| 883 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
+| 892 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
+| 897 | `Cash.txnOf` | - | via admin_boards_spec |
+| 900 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
+| 905 | `Cash.paymentsHeld` | - | via admin_boards_spec |
+| 912 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
+| 937 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
+| 939 | `Step` | - | via admin_boards_spec |
+| 1016 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
+| 1074 | `Cash.payAgain` | - | admin_economy_spec |
+| 1124 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own step: { againRelease, againWithdrawn } or {}. | via admin_boards_spec |
+| 1134 | `AgainStepIf` | The Pay again's step moved from one value to another, compare and set on the row still 'paying' with its claim. | via admin_boards_spec |
+| 1143 | `GiveUpAgainLocked` | A Pay again at 'withdrawn' given up, under the officer's payment lock: the department gets its money back ('refunding' while the refund r... | via admin_boards_spec |
+| 1168 | `Cash.releaseAgain` | Release a Pay again left part way. | via admin_boards_spec |
+| 1197 | `Cash.markAgainWithdrawn` | Mark withdrawn: a Pay again left at 'withdrawing' or 'refunding' whose department the admin checked WAS charged and did not get it back (... | via admin_boards_spec |
+| 1218 | `CapRestLocked` | - | via admin_boards_spec |
+| 1260 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
+| 1291 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
+| 1301 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
+| 1320 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
+| 1353 | `ClawbackLocked` | - | via admin_boards_spec |
+| 1433 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
+| 1477 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
+| 1487 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
+| 1502 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
+| 1519 | `ResolveLocked` | - | via admin_boards_spec |
+| 1597 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
+| 1631 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
+| 1657 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
+| 1697 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
+| 1722 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
+| 1735 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
+| 1768 | `PoolFor` | - | via admin_boards_spec |
+| 1788 | `Cash.range` | - | admin_boards_spec |
+| 1825 | `Cash.stuckPayments` | - | admin_economy_spec |
+| 1864 | `Cash.earnedThisWeek` | - | economy_spec |
+| 1883 | `OnLoaded` | - | via admin_boards_spec |
+| 1927 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
+| 1931 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
 
 ### modules/money/engine.lua
 
@@ -3569,20 +3573,20 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 727 | `AuditFn` | The audit callback CP.Cash calls after its claim: the row id of the synchronous audit row, or false. | via admin_economy_spec |
 | 737 | `Touched` | A payment changed: the caches that hold it, the sidebar count and every admin's open Payments screen. | via admin_economy_spec |
 | 743 | `OffSwitch` | - | via admin_economy_spec |
-| 814 | `confirm` | - | via admin_economy_spec |
-| 915 | `confirm` | - | via admin_economy_spec |
-| 919 | `self` | - | via admin_economy_spec |
-| 944 | `confirm` | - | via admin_economy_spec |
-| 982 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
-| 983 | `Forfeitable` | - | via admin_economy_spec |
-| 1045 | `confirm` | - | via admin_economy_spec |
-| 1059 | `ManualUsed` | - | via admin_economy_spec |
-| 1110 | `confirm` | - | via admin_economy_spec |
-| 1116 | `self` | - | via admin_economy_spec |
-| 1181 | `confirm` | - | via admin_economy_spec |
-| 1201 | `run` | - | via admin_economy_spec |
-| 1208 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
-| 1226 | `Payments._resetNav` | - | admin_economy_spec |
+| 817 | `confirm` | - | via admin_economy_spec |
+| 918 | `confirm` | - | via admin_economy_spec |
+| 922 | `self` | - | via admin_economy_spec |
+| 947 | `confirm` | - | via admin_economy_spec |
+| 985 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
+| 986 | `Forfeitable` | - | via admin_economy_spec |
+| 1048 | `confirm` | - | via admin_economy_spec |
+| 1062 | `ManualUsed` | - | via admin_economy_spec |
+| 1113 | `confirm` | - | via admin_economy_spec |
+| 1119 | `self` | - | via admin_economy_spec |
+| 1184 | `confirm` | - | via admin_economy_spec |
+| 1204 | `run` | - | via admin_economy_spec |
+| 1211 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
+| 1229 | `Payments._resetNav` | - | admin_economy_spec |
 
 ### modules/money/payouts.lua
 
@@ -6858,379 +6862,381 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 548 | `ParseDT` | A text as a date and time for comparisons and date functions: unix seconds, or nil when MariaDB would not read a date there (or reads one... | via admin_backup_spec |
 | 580 | `DateFormat` | - | via admin_backup_spec |
 | 704 | `RunTable` | - | via admin_backup_spec |
-| 716 | `CiFold` | - | via admin_backup_spec |
-| 726 | `CiKey` | - | via admin_backup_spec |
-| 744 | `SpaceRun` | - | via admin_backup_spec |
-| 750 | `PadOrder` | - | via admin_backup_spec |
-| 755 | `BinOrderKey` | utf8mb4_bin (JSON function results) is PAD SPACE too: its ordering key | via admin_backup_spec |
-| 759 | `CiOrderKey` | - | via admin_backup_spec |
-| 770 | `LowerText` | - | via admin_backup_spec |
-| 779 | `BadBytes` | "\xC3" style dump of the first invalid bytes (MariaDB's Incorrect string value message). | via admin_backup_spec |
-| 803 | `__tostring` | - | via admin_backup_spec |
-| 805 | `Jfail` | - | via admin_backup_spec |
-| 808 | `Jskip` | - | via admin_backup_spec |
-| 816 | `JstrEnd` | - | via admin_backup_spec |
-| 851 | `Jvalue` | - | via admin_backup_spec |
-| 922 | `Jparse` | Whole text -> node, or nil when it is not valid JSON. | via admin_backup_spec |
-| 938 | `JcheckValue` | - | via admin_backup_spec |
-| 995 | `Jvalid` | - | via admin_backup_spec |
-| 1003 | `JvalidStrict` | Is s JSON that any JSON reader takes (no 5. | via admin_backup_spec |
-| 1010 | `Jser` | - | via admin_backup_spec |
-| 1051 | `Jtext` | MariaDB's formatting (JSON_SET, JSON_REMOVE, JSON_EXTRACT output). | via admin_backup_spec |
-| 1058 | `Jcompact` | - | via admin_backup_spec |
-| 1067 | `JstrDecode` | - | via admin_backup_spec |
-| 1114 | `JstrEncode` | - | via admin_backup_spec |
-| 1121 | `Jkey` | - | via admin_backup_spec |
-| 1126 | `JfindKey` | - | via admin_backup_spec |
-| 1135 | `Jlua` | Node -> plain Lua value (for our own metadata files). | via admin_backup_spec |
-| 1159 | `Jpath` | - | via admin_backup_spec |
-| 1219 | `Jstep` | One path step; [0] of a value that is no array is the value itself (MariaDB, like MySQL, wraps it in an array). | via admin_backup_spec |
-| 1229 | `Jwalk` | - | via admin_backup_spec |
-| 1237 | `Jcollect` | - | via admin_backup_spec |
-| 1250 | `JscalarEq` | - | via admin_backup_spec |
-| 1257 | `Jcontains` | - | via admin_backup_spec |
-| 1287 | `Half` | - | via admin_backup_spec |
-| 1296 | `DropAll` | - | via admin_backup_spec |
-| 1299 | `JmemoPut` | - | via admin_backup_spec |
-| 1312 | `JmemoGet` | - | via admin_backup_spec |
-| 1329 | `JM.forget` | A text an UPDATE replaced: no row holds it any more, so its answers go (not on a DELETE: a row moved to the archive keeps the same text). | via admin_backup_spec |
-| 1333 | `JM.has` | - | memsql_spec |
-| 1338 | `JM.clear` | - | e2e_spec |
-| 1348 | `SyntaxError` | - | via admin_backup_spec |
-| 1357 | `Tokenize` | - | via admin_backup_spec |
-| 1464 | `Parse` | - | via admin_backup_spec |
-| 1469 | `tok` | - | via admin_backup_spec |
-| 1470 | `err` | - | via admin_backup_spec |
-| 1471 | `isKw` | - | via admin_backup_spec |
-| 1472 | `kw` | - | via admin_backup_spec |
-| 1477 | `needKw` | - | via admin_backup_spec |
-| 1478 | `op` | - | via admin_backup_spec |
-| 1483 | `needOp` | - | via admin_backup_spec |
-| 1484 | `ident` | - | via admin_backup_spec |
-| 1490 | `tableName` | - | via admin_backup_spec |
-| 1497 | `aliasOpt` | - | via admin_backup_spec |
-| 1506 | `parseCall` | - | via admin_backup_spec |
-| 1559 | `parseCase` | - | via admin_backup_spec |
-| 1573 | `parsePrimary` | - | via admin_backup_spec |
-| 1638 | `parseUnary` | - | via admin_backup_spec |
-| 1651 | `parseMul` | - | via admin_backup_spec |
-| 1666 | `parseAdd` | - | via admin_backup_spec |
-| 1686 | `parsePredicate` | - | via admin_backup_spec |
-| 1749 | `parseNot` | - | via admin_backup_spec |
-| 1754 | `parseAnd` | - | via admin_backup_spec |
-| 1762 | `parseExpr` | - | via admin_backup_spec |
-| 1771 | `parseSource` | - | via admin_backup_spec |
-| 1784 | `parseFrom` | - | via admin_backup_spec |
-| 1811 | `parseLimitValue` | - | via admin_backup_spec |
-| 1818 | `parseSelectCore` | - | via admin_backup_spec |
-| 1889 | `parseSelectStmt` | - | via admin_backup_spec |
-| 1904 | `parseColumnDef` | - | via admin_backup_spec |
-| 2019 | `parseKeyCols` | - | via admin_backup_spec |
-| 2031 | `ifNotExists` | - | via admin_backup_spec |
-| 2038 | `parseCreate` | - | via admin_backup_spec |
-| 2089 | `parseStatement` | - | via admin_backup_spec |
-| 2300 | `T_DEC` | - | via admin_backup_spec |
-| 2307 | `IsNumT` | - | via admin_backup_spec |
-| 2308 | `IsTimeT` | - | via admin_backup_spec |
-| 2311 | `MergeT` | Merge the types of CASE / IF / COALESCE branches and UNION columns. | via admin_backup_spec |
-| 2330 | `ToStr` | - | via admin_backup_spec |
-| 2342 | `JextNum` | The number MariaDB reads from a JSON_EXTRACT value: a string's or number's leading number, true 1, else 0. | via admin_backup_spec |
-| 2350 | `ToDouble` | - | via admin_backup_spec |
-| 2365 | `Converter` | Converter from one static type to another (nil when the value can be used as is). | via admin_backup_spec |
-| 2397 | `StrNumOf` | A text's number: the number it starts with (MariaDB's rule), or for an ENUM the member's number (1 = the first member, the empty value 0)... | via admin_backup_spec |
-| 2404 | `TruthFn` | - | via admin_backup_spec |
-| 2415 | `CmpClass` | Comparison class for two static types: 'int' plain Lua comparison (integers, DATETIME/DATE seconds), 'dec' scaled decimals, 'dbl' doubles... | via admin_backup_spec |
-| 2437 | `PadKey` | utf8mb4_bin (the collation of JSON function results) pads with spaces: 'a' = 'a ' | via admin_backup_spec |
-| 2442 | `JsonContent` | A JSON function result compared with text (MariaDB's compare_json_str): a JSON string by its content | via admin_backup_spec |
-| 2451 | `NormFor` | Normalisers: value -> comparable Lua value for the class (per side). | via admin_backup_spec |
-| 2484 | `CompileCompare` | - | via admin_backup_spec |
-| 2546 | `IDENT` | Equality key for hash lookups: the column's type and the probe's type must compare in class 'int', 'ci' or 'bin'; returns a function prob... | via admin_backup_spec |
-| 2547 | `KeyNormForLookup` | - | via admin_backup_spec |
-| 2560 | `IndexNorm` | The key a stored value has in a hash index of its column. | via admin_backup_spec |
-| 2566 | `OrderNorm` | The sort key of a value for ORDER BY: an ENUM sorts by member number, text by collation with PAD SPACE. | via admin_backup_spec |
-| 2577 | `LikeMatcher` | - | via admin_backup_spec |
-| 2620 | `ConstFn` | - | via admin_backup_spec |
-| 2621 | `fn` | - | via admin_backup_spec |
-| 2640 | `ResolveCol` | - | via admin_backup_spec |
-| 2676 | `ColReader` | - | via admin_backup_spec |
-| 2678 | `fn` | - | via admin_backup_spec |
-| 2697 | `MakeComparator` | Sort comparator over key slots base+1 .. | via admin_backup_spec |
-| 2747 | `SubPlan` | - | via admin_backup_spec |
-| 2753 | `SubRunner` | Run a subquery plan once per statement when it does not depend on the outer row. | via admin_backup_spec |
-| 2768 | `NumResultType` | - | via admin_backup_spec |
-| 2788 | `ExprText` | - | via admin_backup_spec |
-| 2839 | `OutOfRange` | Integer arithmetic stops where MariaDB's does (error 1690) instead of wrapping around; a SUM past 18 digits (MariaDB sums in DECIMAL(65))... | via admin_backup_spec |
-| 2840 | `M.sumTooBig` | - | via admin_backup_spec |
-| 2842 | `CompileArith` | - | via admin_backup_spec |
-| 2970 | `FastCompare` | - | via admin_backup_spec |
-| 2993 | `fn` | - | via admin_backup_spec |
-| 3008 | `fn` | - | via admin_backup_spec |
-| 3029 | `fn` | - | via admin_backup_spec |
-| 3040 | `fn` | - | via admin_backup_spec |
-| 3055 | `fn` | - | via admin_backup_spec |
-| 3064 | `fn` | - | via admin_backup_spec |
-| 3073 | `fn` | - | via admin_backup_spec |
-| 3087 | `AndOr` | - | via admin_backup_spec |
-| 3132 | `AndOrNumeric` | AND / OR of 1/0/NULL (or numeric) operands. | via admin_backup_spec |
-| 3197 | `Unify` | Merge branch types and build per-branch converters. | via admin_backup_spec |
-| 3205 | `CompileCase` | - | via admin_backup_spec |
-| 3259 | `ef` | - | via admin_backup_spec |
-| 3270 | `fn` | - | via admin_backup_spec |
-| 3277 | `fn` | - | via admin_backup_spec |
-| 3283 | `fn` | - | via admin_backup_spec |
-| 3320 | `CompileInList` | - | via admin_backup_spec |
-| 3356 | `fn` | - | via admin_backup_spec |
-| 3421 | `CompileInSub` | - | via admin_backup_spec |
-| 3485 | `CompileLike` | - | via admin_backup_spec |
-| 3508 | `ArgsOf` | - | via admin_backup_spec |
-| 3521 | `JsonNodeFrom` | - | via admin_backup_spec |
-| 3538 | `AsText` | - | via admin_backup_spec |
-| 3545 | `FUNCS.COALESCE` | - | via admin_backup_spec |
-| 3565 | `FUNCS.IFNULL` | - | via admin_backup_spec |
-| 3570 | `FUNCS.NULLIF` | - | via admin_backup_spec |
-| 3584 | `FUNCS.IF` | - | via admin_backup_spec |
-| 3610 | `MinmaxT` | The type GREATEST / LEAST compare in and answer with (MariaDB's aggregate_for_min_max): text with text is text, whole numbers with whole... | via admin_backup_spec |
-| 3639 | `MinmaxFn` | - | via admin_backup_spec |
-| 3671 | `FUNCS.ROUND` | - | via admin_backup_spec |
-| 3698 | `FUNCS.DATE` | - | via admin_backup_spec |
-| 3721 | `FUNCS.DATE_FORMAT` | - | via admin_backup_spec |
-| 3742 | `FUNCS.UNIX_TIMESTAMP` | - | via admin_backup_spec |
-| 3757 | `FUNCS.FROM_UNIXTIME` | - | via admin_backup_spec |
-| 3777 | `FUNCS.NOW` | - | via admin_backup_spec |
-| 3787 | `FUNCS.TIMESTAMPDIFF` | - | via admin_backup_spec |
-| 3809 | `FUNCS.SUBSTRING_INDEX` | - | via admin_backup_spec |
-| 3853 | `FUNCS.CHAR_LENGTH` | - | via admin_backup_spec |
-| 3867 | `FUNCS.LOWER` | - | via admin_backup_spec |
-| 3880 | `FUNCS.UUID` | - | via admin_backup_spec |
-| 3893 | `JsonArg` | - | via admin_backup_spec |
-| 3901 | `FUNCS.JSON_VALID` | - | via admin_backup_spec |
-| 3913 | `PathArg` | - | via admin_backup_spec |
-| 3923 | `Jreplace` | root with the value at steps[1..k] replaced by node (the path exists) | via admin_backup_spec |
-| 3937 | `FUNCS.JSON_SET` | - | via admin_backup_spec |
-| 3999 | `FUNCS.JSON_REMOVE` | - | via admin_backup_spec |
-| 4038 | `FUNCS.JSON_EXTRACT` | - | via admin_backup_spec |
-| 4071 | `FUNCS.JSON_UNQUOTE` | - | via admin_backup_spec |
-| 4087 | `FUNCS.JSON_VALUE` | - | via admin_backup_spec |
-| 4092 | `value` | - | via admin_backup_spec |
-| 4127 | `FUNCS.JSON_CONTAINS` | - | via admin_backup_spec |
-| 4149 | `FUNCS.JSON_TYPE` | - | via admin_backup_spec |
-| 4171 | `CompileAgg` | Aggregates are compiled into slot readers; the scan fills f.aggs. | via admin_backup_spec |
-| 4210 | `def.cmp` | - | via admin_backup_spec |
-| 4253 | `Cx` | - | via admin_backup_spec |
-| 4347 | `fn` | - | via admin_backup_spec |
-| 4349 | `fn` | - | via admin_backup_spec |
-| 4427 | `PredOf` | - | via admin_backup_spec |
-| 4432 | `pred` | - | via admin_backup_spec |
-| 4438 | `AllOf` | All filters of one scan level as one function (checked in order, stops at the first false). | via admin_backup_spec |
-| 4457 | `FlattenAnd` | - | via admin_backup_spec |
-| 4466 | `HasAgg` | - | via admin_backup_spec |
-| 4485 | `MakeCandidates` | Candidate rows for one FROM source (a hash lookup when a usable equality exists, else every row). | via admin_backup_spec |
-| 4491 | `materialize` | - | via admin_backup_spec |
-| 4596 | `ChooseLookup` | Pick a hash lookup for source si from its equality conjuncts (only columns of si against values that are known before si is scanned). | via admin_backup_spec |
-| 4670 | `BuildScan` | - | via admin_backup_spec |
-| 4756 | `PlanSources` | Sources, WHERE/ON placement and lookups shared by SELECT, UPDATE and DELETE. | via admin_backup_spec |
-| 4870 | `NewGen` | pre: lines before the function (memo tables); pro: the function's first lines, where every column read and every column-against-literal /... | via admin_backup_spec |
-| 4887 | `Gen:col` | The local holding column ci of source si for this row (nil for a NULL-extended row). | via admin_backup_spec |
-| 4903 | `Gen:leaf` | A comparison computed once in the prologue: key identifies it, code(var) returns its line. | via admin_backup_spec |
-| 4914 | `Gen:up` | An upvalue of the generated function holding v (functions, tables, texts, floats, big integers). | memsql_spec |
-| 4923 | `Gen:var` | - | via admin_backup_spec |
-| 4928 | `Gen:emit` | - | via admin_backup_spec |
-| 4930 | `Gen:lit` | - | via admin_backup_spec |
-| 4940 | `Gen:expr` | Code computing fn(f) into a new local; returns its name (or a literal). | via admin_backup_spec |
-| 5028 | `Gen:build` | - | via admin_backup_spec |
-| 5047 | `FusePreds` | The filters of one scan level as one function (each checked in order, the first false stops), or nil. | via admin_backup_spec |
-| 5073 | `FuseGroupKey` | The group of a row: (f, groups, newGroup) -> group, the GROUP BY values computed inline (NULL -> NULLK, a NaN -> NANK, text by its collat... | via admin_backup_spec |
-| 5107 | `FuseUpdaters` | One function (acc, f) running every aggregate's update for a row, or nil (then the updaters run one by one). | via admin_backup_spec |
-| 5153 | `GroupKeyFn` | - | via admin_backup_spec |
-| 5185 | `CompileSelect` | - | via admin_backup_spec |
-| 5274 | `fn` | - | via admin_backup_spec |
-| 5283 | `fn` | - | via admin_backup_spec |
-| 5292 | `fn` | - | via admin_backup_spec |
-| 5294 | `fn` | - | via admin_backup_spec |
-| 5307 | `limitValue` | - | via admin_backup_spec |
-| 5333 | `finishRows` | - | via admin_backup_spec |
-| 5347 | `distinctKey` | - | via admin_backup_spec |
-| 5367 | `project` | - | via admin_backup_spec |
-| 5383 | `plan.run` | - | admin_backup_spec |
-| 5556 | `plan.run` | - | admin_backup_spec |
-| 5563 | `newGroup` | - | via admin_backup_spec |
-| 5592 | `emit` | - | via admin_backup_spec |
-| 5690 | `CompileUnion` | - | via admin_backup_spec |
-| 5717 | `run` | - | via admin_backup_spec |
-| 5740 | `CompileQuery` | - | via admin_backup_spec |
-| 5758 | `ColTypeOf` | - | via admin_backup_spec |
-| 5777 | `SortableInt` | - | via admin_backup_spec |
-| 5779 | `PkKeyOf` | - | via admin_backup_spec |
-| 5796 | `SortKeyOf` | - | via admin_backup_spec |
-| 5816 | `UniqueKeyOf` | - | via admin_backup_spec |
-| 5834 | `LowerBound` | binary search for the first position whose key is >= k | via admin_backup_spec |
-| 5843 | `SortedInsert` | - | via admin_backup_spec |
-| 5851 | `SortedRemove` | - | via admin_backup_spec |
-| 5863 | `SortedReplace` | - | via admin_backup_spec |
-| 5872 | `IdxAdd` | - | via admin_backup_spec |
-| 5884 | `IdxRemove` | - | via admin_backup_spec |
-| 5899 | `MapsAdd` | keysOnly: the primary key and unique key maps only (a bulk DELETE and an UPDATE see to the index buckets) | via admin_backup_spec |
-| 5908 | `MapsRemove` | - | via admin_backup_spec |
-| 5920 | `RebuildMaps` | - | via admin_backup_spec |
-| 5932 | `DB:_log` | - | via admin_backup_spec |
-| 5940 | `DB:_rowInsert` | - | via admin_backup_spec |
-| 5952 | `IdxSwap` | A row replaced under the same primary key (UPDATE, ON DUPLICATE KEY UPDATE): new takes old's place in each index bucket whose key stayed... | via admin_backup_spec |
-| 5980 | `IdxMark` | A bulk DELETE: marks[ix][key] = true for every index bucket the row is in. | via admin_backup_spec |
-| 5993 | `BulkSweep` | The marked buckets drop their dead rows, the others keep their order (as one SortedRemove per row leaves them). | via admin_backup_spec |
-| 6012 | `DB:_rowDelete` | movedTo: the row that takes this one's place under another key (an UPDATE of the primary key) | memsql_spec |
-| 6025 | `DB:_deleteRows` | The delete loop of one DELETE (del) with counts[t] = the rows it deletes from table t. | via admin_backup_spec |
-| 6043 | `DB:_rowReplace` | Same primary key: swap the row object in place. | via admin_backup_spec |
-| 6053 | `DB:_compact` | - | via admin_backup_spec |
-| 6070 | `DB:_rollback` | - | via admin_backup_spec |
-| 6110 | `ColFromDef` | Build a table from a parsed CREATE TABLE (or a copy of another table's definition). | via admin_backup_spec |
-| 6158 | `ColTypeText` | - | via admin_backup_spec |
-| 6177 | `SqlQuote` | - | via admin_backup_spec |
-| 6180 | `RenderCreate` | CREATE TABLE text for _tables.json (parsed back with the same parser on load). | via admin_backup_spec |
-| 6217 | `ImplicitDefault` | The value a NOT NULL column without a default gets in the rows it is added to (ALTER TABLE ... | via admin_backup_spec |
-| 6229 | `STORE.jsonCis` | The table's JSON columns (cached until FinishTable runs again). | via admin_backup_spec |
-| 6239 | `FinishTable` | - | via admin_backup_spec |
-| 6252 | `colIdx` | - | via admin_backup_spec |
-| 6257 | `addIdx` | - | via admin_backup_spec |
-| 6319 | `NewTable` | - | via admin_backup_spec |
-| 6351 | `ColRef` | - | via admin_backup_spec |
-| 6354 | `ErrText` | a value in an error message: MariaDB (ErrConvString) shows 128 bytes, a longer one as 125 bytes of whole characters and '...' | via admin_backup_spec |
-| 6360 | `Note` | - | via admin_backup_spec |
-| 6361 | `WarnOr` | - | via admin_backup_spec |
-| 6367 | `ZeroDate` | A zero date is refused when the row is written (STORE.refuse), not when it is made: a row that a CHECK or a duplicate key leaves out neve... | via admin_backup_spec |
-| 6371 | `STORE.refuse` | - | admin_system_spec |
-| 6381 | `STORE.reset` | The value a NOT NULL column gets for NULL with IGNORE (MariaDB's Field::reset: 0, '', the ENUM's empty value). | admin_system_spec |
-| 6389 | `TimeNumber` | A DATETIME / DATE as the number MariaDB makes of it (YYYYMMDDhhmmss, YYYYMMDD). | via admin_backup_spec |
-| 6400 | `NumScan` | ---- NUMBERS IN TEXT, THE WAY A COLUMN STORES THEM --------------------- MariaDB reads the number at the start of a text (my_strntoull10r... | via admin_backup_spec |
-| 6426 | `IntOfDigits` | digits * 10^shift rounded half up to a whole number (nil when it does not fit a 64-bit integer). | via admin_backup_spec |
-| 6444 | `DecOfDigits` | digits * 10^shift as a decimal with s decimals (scaled, rounded half up): value (nil when it needs more than 18 digits) and whether non-z... | via admin_backup_spec |
-| 6462 | `Tail` | the rest of a text after its number: nothing, only spaces (a note) or more (Data truncated) | via admin_backup_spec |
-| 6468 | `Coercer` | - | via admin_backup_spec |
-| 6472 | `outOfRange` | - | via admin_backup_spec |
-| 6475 | `range` | - | via admin_backup_spec |
-| 6524 | `store` | x: the scaled value (nil: too large for any column), lost: digits rounded away | via admin_backup_spec |
-| 6532 | `ofDigits` | - | via admin_backup_spec |
-| 6617 | `bad` | - | via admin_backup_spec |
-| 6621 | `byIndex` | - | via admin_backup_spec |
-| 6726 | `STORE.checkRow` | The row's CHECK constraints: every JSON column holds valid JSON (MariaDB: CHECK (JSON_VALID(col))). | via admin_backup_spec |
-| 6745 | `RowCopy` | - | via admin_backup_spec |
-| 6751 | `RowsDiffer` | - | via admin_backup_spec |
-| 6758 | `DupEntryText` | - | via admin_backup_spec |
-| 6776 | `FindDuplicate` | The row already holding row's primary or unique key (and the key's name), if any. | via admin_backup_spec |
-| 6791 | `WriteResult` | - | via admin_backup_spec |
-| 6802 | `CompileInsert` | - | via admin_backup_spec |
-| 6831 | `__index` | - | via admin_backup_spec |
-| 6854 | `rowSource` | - | via admin_backup_spec |
-| 6870 | `rowSource` | - | via admin_backup_spec |
-| 7169 | `IsConst` | - | via admin_backup_spec |
-| 7184 | `SAll` | sets of values of one column: { null = bool, ivs = { { lo, loInc, hi, hiInc } } } (nil bound = unbounded) | via admin_backup_spec |
-| 7185 | `SEmpty` | - | via admin_backup_spec |
-| 7186 | `SNull` | - | via admin_backup_spec |
-| 7187 | `SNotNull` | - | via admin_backup_spec |
-| 7188 | `LessLo` | - | via admin_backup_spec |
-| 7194 | `IvIntersect` | - | via admin_backup_spec |
-| 7201 | `SIntersect` | - | via admin_backup_spec |
-| 7211 | `SUnion` | - | via admin_backup_spec |
-| 7217 | `SIsEmpty` | - | via admin_backup_spec |
-| 7218 | `SCmp` | - | via admin_backup_spec |
-| 7230 | `ImpossibleWhere` | - | via admin_backup_spec |
-| 7239 | `colOf` | - | via admin_backup_spec |
-| 7244 | `normFor` | value normaliser for a column and a constant's type, or nil when the range analysis is skipped | via admin_backup_spec |
-| 7272 | `range` | - | via admin_backup_spec |
-| 7393 | `CompileUpdate` | - | via admin_backup_spec |
-| 7493 | `CompileDelete` | - | via admin_backup_spec |
-| 7560 | `DB:_removeColumn` | - | via admin_backup_spec |
-| 7566 | `DB:_createTable` | - | via admin_backup_spec |
-| 7609 | `DB:_alter` | ALTER TABLE ... | via admin_backup_spec |
-| 7732 | `BindParams` | - | via admin_backup_spec |
-| 7770 | `SigTypes` | - | via admin_backup_spec |
-| 7786 | `M.new` | - | failed_start_spec |
-| 7793 | `DB:parse` | - | mission_reader_spec |
-| 7811 | `DB:route` | Which store serves a statement: 'engine' (Crimson-Police tables) or 'foreign' (another resource's). | e2e_spec |
-| 7832 | `DB:_plan` | - | via admin_backup_spec |
-| 7869 | `DB:_selectSliced` | - | via admin_backup_spec |
-| 7872 | `step` | - | via admin_backup_spec |
-| 7891 | `DB:_forgetReplaced` | After a statement that worked: the JSON texts its UPDATEs replaced leave the JSON memo (a DELETE keeps them: an archive move puts the sam... | via admin_backup_spec |
-| 7905 | `DB:exec` | - | memsql_spec |
-| 7982 | `DB:load` | Load tables and rows from the store (at start-up). | admin_backup_spec |
-| 7988 | `DB:fail` | Stop every statement with this message (a saves folder that could not be loaded). | via admin_backup_spec |
-| 7991 | `DB:_defineTable` | A table created without a statement (loading): definition from its CREATE TABLE text. | via admin_backup_spec |
-| 8000 | `DB:_loadRows` | Bulk-add loaded rows (already typed) to a table and rebuild its indexes. | via admin_backup_spec |
-| 8071 | `DB:bulk` | Run fn(db) with the write-through paused (each statement still atomic in memory), then save every table in one go: a bulk import writes e... | backup_restore_spec |
-| 8080 | `DB:tableNames` | - | storage_copy_spec |
-| 8088 | `BIGINT` | ---- 9. | via admin_backup_spec |
-| 8093 | `OutConv` | - | via admin_backup_spec |
-| 8117 | `M.luaRows` | Engine rows -> what oxmysql hands to Lua (NULL columns are missing keys). | storage_copy_spec |
-| 8138 | `M.writeTable` | - | via admin_backup_spec |
-| 8151 | `M.result` | What each MySQL.<kind> returns for an engine result (oxmysql parseResponse). | e2e_spec |
-| 8175 | `ParamsJson` | - | via admin_backup_spec |
-| 8196 | `M.errorText` | oxmysql's error text: "<resource> was unable to execute a query!\nQuery: ...\n[params]\n<message>" | via admin_backup_spec |
-| 8209 | `M.shim` | opts: realMySQL (oxmysql's MySQL table, for other resources' tables), resource (name for error text), isOwnTable(name) (default: name sta... | memsql_spec |
-| 8216 | `realReady` | - | via admin_backup_spec |
-| 8231 | `SaveTurn` | - | via admin_backup_spec |
-| 8250 | `run` | - | via admin_backup_spec |
-| 8306 | `method.await` | - | admin_backup_spec |
-| 8311 | `__call` | - | via admin_backup_spec |
-| 8313 | `go` | - | via admin_backup_spec |
-| 8334 | `await` | - | via admin_backup_spec |
-| 8336 | `__call` | - | via admin_backup_spec |
-| 8343 | `__index` | - | via admin_backup_spec |
-| 8359 | `FS.read` | - | admin_backup_spec |
-| 8367 | `FS.write` | - | admin_backup_spec |
-| 8379 | `FS.exists` | - | admin_control_e2e_spec |
-| 8388 | `FS.rename` | os.rename as it is. | backup_index_spec |
-| 8389 | `FS.remove` | - | backup_index_spec |
-| 8393 | `FS.list` | The names in a folder, or nil when this runtime cannot list one (FXServer: io.readdir, or its io.popen that only lists folders; plain Lua... | admin_backup_spec |
-| 8415 | `RenameFile` | A rename of a to b (a exists) as it really went: true, or nil and the error. | via admin_backup_spec |
-| 8432 | `InstallTmp` | Put <path>.tmp (already written) in the place of path without ever leaving path half-written. | via admin_backup_spec |
-| 8462 | `ReplaceFile` | Replace a file without ever leaving it half-written. | via admin_backup_spec |
-| 8471 | `M.replaceFile` | - | via admin_backup_spec |
-| 8474 | `RecoverFile` | Before reading a document: a leftover .tmp is dropped, a .bak without its document is restored. | via admin_backup_spec |
-| 8483 | `Fnv1a` | - | via admin_backup_spec |
-| 8491 | `Log2floor` | - | via admin_backup_spec |
-| 8498 | `BucketOf` | Linear hashing: bucket (0-based) of hash h among n buckets. | via admin_backup_spec |
-| 8506 | `IntLen` | Digits of an integer as %d writes it. | via admin_backup_spec |
-| 8542 | `DayOf` | - | via admin_backup_spec |
-| 8558 | `EncodeValue` | How a value is written in a document. | via admin_backup_spec |
-| 8575 | `EncodeRow` | - | via admin_backup_spec |
-| 8587 | `M.folderStore` | dir: the saves folder. | memsql_spec |
-| 8608 | `Store:path` | - | admin_missions_spec |
-| 8611 | `Store:shown` | A file of this folder as the messages name it (the label, not the full path). | mission_reader_spec |
-| 8613 | `Store:docName` | - | via admin_backup_spec |
-| 8618 | `Store:_state` | - | via admin_backup_spec |
-| 8639 | `Store:_header` | - | via admin_backup_spec |
-| 8646 | `Store:_hash` | - | via admin_backup_spec |
-| 8653 | `Store:_docOf` | - | memsql_spec |
-| 8664 | `Store:_add` | - | via admin_backup_spec |
-| 8675 | `Store:_remove` | - | via admin_backup_spec |
-| 8686 | `Store:_reassign` | Re-address every row of a table (a layout change): every document is written again. | via admin_backup_spec |
-| 8693 | `Store:_rebuildDocs` | Document membership from the rows in memory, nothing marked for saving (after a failed save is undone). | via admin_backup_spec |
-| 8705 | `Store._maxIdOf` | - | via admin_backup_spec |
-| 8713 | `Store:_maybeSplit` | After a statement: grow the layout when a document passed docRows rows (one split per statement). | via admin_backup_spec |
-| 8766 | `Store:_docRows` | Rows of one document in key order (plus extra rows: the old copies of rows moving to another document). | via admin_backup_spec |
-| 8796 | `Store:_docText` | - | via admin_backup_spec |
-| 8811 | `Store:_touchLn` | Row lines stay cached (row.ln) for the documents saved last; an older document's rows drop theirs. | via admin_backup_spec |
-| 8827 | `Store:_mayRemove` | An emptied document of a split table is removed, except the newest range document (it holds the ids that come next, so a missing one is n... | via admin_backup_spec |
-| 8834 | `Store:_tablesText` | savedLayouts: write the layouts that are already on disk (used when only a counter must be saved before the documents), not the ones this... | via admin_backup_spec |
-| 8868 | `Store:_tablesSaved` | What saving _tables.json means for the store's state. | via admin_backup_spec |
-| 8880 | `Store:_writeTables` | - | via admin_backup_spec |
-| 8895 | `Store:flush` | One save. | storage_spec |
-| 8946 | `writeTmp` | - | via admin_backup_spec |
-| 8967 | `stop` | - | via admin_backup_spec |
-| 8971 | `install` | - | via admin_backup_spec |
-| 9043 | `Store:_snapshot` | The store's state for the tables a statement touches, so a failed save can be undone (Store:restore). | via admin_backup_spec |
-| 9080 | `Store:commit` | Apply one statement's change log, then write through. | via admin_backup_spec |
-| 9163 | `Store:restore` | After a failed save (the statement is already undone in memory): the store's state as before the statement, and every file the save alrea... | admin_backup_spec |
-| 9224 | `Store:rewrite` | Every table re-addressed, split to its layout and written (after DB:bulk). | via admin_backup_spec |
-| 9246 | `IsNullJ` | - | via admin_backup_spec |
-| 9254 | `FromJsonValue` | - | via admin_backup_spec |
-| 9285 | `ParseLineSlow` | A row line parsed with the order-keeping parser (slow, exact): values and raw texts. | via admin_backup_spec |
-| 9340 | `Store._relayout` | A document in another layout (reformatted by an editor, all on one line): the same document in the engine's layout (header line, one row... | via admin_backup_spec |
-| 9347 | `sep` | - | via admin_backup_spec |
-| 9404 | `Store:_readDoc` | Read one document: rows appended to `into` (row.from = d). | via admin_backup_spec |
-| 9659 | `Store:_owner` | The table a document belongs to (from its first line, or the whole document), or nil. | via admin_backup_spec |
-| 9671 | `Store:_probeRename` | How this runtime's os.rename answers (see FS.rename): 'normal', 'inverted', or 'check' (decided by the files). | via admin_backup_spec |
-| 9683 | `Store:load` | - | admin_backup_spec |
-| 9864 | `Store:sizeOf` | Bytes and documents in the folder for one table (for reports and tests). | via admin_backup_spec |
+| 715 | `CiMap` | - | via admin_backup_spec |
+| 719 | `LowerMap` | - | via admin_backup_spec |
+| 724 | `CiFold` | - | via admin_backup_spec |
+| 734 | `CiKey` | - | via admin_backup_spec |
+| 752 | `SpaceRun` | - | via admin_backup_spec |
+| 758 | `PadOrder` | - | via admin_backup_spec |
+| 763 | `BinOrderKey` | utf8mb4_bin (JSON function results) is PAD SPACE too: its ordering key | via admin_backup_spec |
+| 767 | `CiOrderKey` | - | via admin_backup_spec |
+| 778 | `LowerText` | - | via admin_backup_spec |
+| 787 | `BadBytes` | "\xC3" style dump of the first invalid bytes (MariaDB's Incorrect string value message). | via admin_backup_spec |
+| 811 | `__tostring` | - | via admin_backup_spec |
+| 813 | `Jfail` | - | via admin_backup_spec |
+| 816 | `Jskip` | - | via admin_backup_spec |
+| 824 | `JstrEnd` | - | via admin_backup_spec |
+| 859 | `Jvalue` | - | via admin_backup_spec |
+| 930 | `Jparse` | Whole text -> node, or nil when it is not valid JSON. | via admin_backup_spec |
+| 946 | `JcheckValue` | - | via admin_backup_spec |
+| 1003 | `Jvalid` | - | via admin_backup_spec |
+| 1011 | `JvalidStrict` | Is s JSON that any JSON reader takes (no 5. | via admin_backup_spec |
+| 1018 | `Jser` | - | via admin_backup_spec |
+| 1059 | `Jtext` | MariaDB's formatting (JSON_SET, JSON_REMOVE, JSON_EXTRACT output). | via admin_backup_spec |
+| 1066 | `Jcompact` | - | via admin_backup_spec |
+| 1075 | `JstrDecode` | - | via admin_backup_spec |
+| 1122 | `JstrEncode` | - | via admin_backup_spec |
+| 1129 | `Jkey` | - | via admin_backup_spec |
+| 1134 | `JfindKey` | - | via admin_backup_spec |
+| 1143 | `Jlua` | Node -> plain Lua value (for our own metadata files). | via admin_backup_spec |
+| 1167 | `Jpath` | - | via admin_backup_spec |
+| 1227 | `Jstep` | One path step; [0] of a value that is no array is the value itself (MariaDB, like MySQL, wraps it in an array). | via admin_backup_spec |
+| 1237 | `Jwalk` | - | via admin_backup_spec |
+| 1245 | `Jcollect` | - | via admin_backup_spec |
+| 1258 | `JscalarEq` | - | via admin_backup_spec |
+| 1265 | `Jcontains` | - | via admin_backup_spec |
+| 1295 | `Half` | - | via admin_backup_spec |
+| 1304 | `DropAll` | - | via admin_backup_spec |
+| 1307 | `JmemoPut` | - | via admin_backup_spec |
+| 1320 | `JmemoGet` | - | via admin_backup_spec |
+| 1337 | `JM.forget` | A text an UPDATE replaced: no row holds it any more, so its answers go (not on a DELETE: a row moved to the archive keeps the same text). | via admin_backup_spec |
+| 1341 | `JM.has` | - | memsql_spec |
+| 1346 | `JM.clear` | - | e2e_spec |
+| 1356 | `SyntaxError` | - | via admin_backup_spec |
+| 1365 | `Tokenize` | - | via admin_backup_spec |
+| 1472 | `Parse` | - | via admin_backup_spec |
+| 1477 | `tok` | - | via admin_backup_spec |
+| 1478 | `err` | - | via admin_backup_spec |
+| 1479 | `isKw` | - | via admin_backup_spec |
+| 1480 | `kw` | - | via admin_backup_spec |
+| 1485 | `needKw` | - | via admin_backup_spec |
+| 1486 | `op` | - | via admin_backup_spec |
+| 1491 | `needOp` | - | via admin_backup_spec |
+| 1492 | `ident` | - | via admin_backup_spec |
+| 1498 | `tableName` | - | via admin_backup_spec |
+| 1505 | `aliasOpt` | - | via admin_backup_spec |
+| 1514 | `parseCall` | - | via admin_backup_spec |
+| 1567 | `parseCase` | - | via admin_backup_spec |
+| 1581 | `parsePrimary` | - | via admin_backup_spec |
+| 1646 | `parseUnary` | - | via admin_backup_spec |
+| 1659 | `parseMul` | - | via admin_backup_spec |
+| 1674 | `parseAdd` | - | via admin_backup_spec |
+| 1694 | `parsePredicate` | - | via admin_backup_spec |
+| 1757 | `parseNot` | - | via admin_backup_spec |
+| 1762 | `parseAnd` | - | via admin_backup_spec |
+| 1770 | `parseExpr` | - | via admin_backup_spec |
+| 1779 | `parseSource` | - | via admin_backup_spec |
+| 1792 | `parseFrom` | - | via admin_backup_spec |
+| 1819 | `parseLimitValue` | - | via admin_backup_spec |
+| 1826 | `parseSelectCore` | - | via admin_backup_spec |
+| 1897 | `parseSelectStmt` | - | via admin_backup_spec |
+| 1912 | `parseColumnDef` | - | via admin_backup_spec |
+| 2027 | `parseKeyCols` | - | via admin_backup_spec |
+| 2039 | `ifNotExists` | - | via admin_backup_spec |
+| 2046 | `parseCreate` | - | via admin_backup_spec |
+| 2097 | `parseStatement` | - | via admin_backup_spec |
+| 2308 | `T_DEC` | - | via admin_backup_spec |
+| 2315 | `IsNumT` | - | via admin_backup_spec |
+| 2316 | `IsTimeT` | - | via admin_backup_spec |
+| 2319 | `MergeT` | Merge the types of CASE / IF / COALESCE branches and UNION columns. | via admin_backup_spec |
+| 2338 | `ToStr` | - | via admin_backup_spec |
+| 2350 | `JextNum` | The number MariaDB reads from a JSON_EXTRACT value: a string's or number's leading number, true 1, else 0. | via admin_backup_spec |
+| 2358 | `ToDouble` | - | via admin_backup_spec |
+| 2373 | `Converter` | Converter from one static type to another (nil when the value can be used as is). | via admin_backup_spec |
+| 2405 | `StrNumOf` | A text's number: the number it starts with (MariaDB's rule), or for an ENUM the member's number (1 = the first member, the empty value 0)... | via admin_backup_spec |
+| 2412 | `TruthFn` | - | via admin_backup_spec |
+| 2423 | `CmpClass` | Comparison class for two static types: 'int' plain Lua comparison (integers, DATETIME/DATE seconds), 'dec' scaled decimals, 'dbl' doubles... | via admin_backup_spec |
+| 2445 | `PadKey` | utf8mb4_bin (the collation of JSON function results) pads with spaces: 'a' = 'a ' | via admin_backup_spec |
+| 2450 | `JsonContent` | A JSON function result compared with text (MariaDB's compare_json_str): a JSON string by its content | via admin_backup_spec |
+| 2459 | `NormFor` | Normalisers: value -> comparable Lua value for the class (per side). | via admin_backup_spec |
+| 2492 | `CompileCompare` | - | via admin_backup_spec |
+| 2554 | `IDENT` | Equality key for hash lookups: the column's type and the probe's type must compare in class 'int', 'ci' or 'bin'; returns a function prob... | via admin_backup_spec |
+| 2555 | `KeyNormForLookup` | - | via admin_backup_spec |
+| 2568 | `IndexNorm` | The key a stored value has in a hash index of its column. | via admin_backup_spec |
+| 2574 | `OrderNorm` | The sort key of a value for ORDER BY: an ENUM sorts by member number, text by collation with PAD SPACE. | via admin_backup_spec |
+| 2585 | `LikeMatcher` | - | via admin_backup_spec |
+| 2628 | `ConstFn` | - | via admin_backup_spec |
+| 2629 | `fn` | - | via admin_backup_spec |
+| 2648 | `ResolveCol` | - | via admin_backup_spec |
+| 2684 | `ColReader` | - | via admin_backup_spec |
+| 2686 | `fn` | - | via admin_backup_spec |
+| 2705 | `MakeComparator` | Sort comparator over key slots base+1 .. | via admin_backup_spec |
+| 2755 | `SubPlan` | - | via admin_backup_spec |
+| 2761 | `SubRunner` | Run a subquery plan once per statement when it does not depend on the outer row. | via admin_backup_spec |
+| 2776 | `NumResultType` | - | via admin_backup_spec |
+| 2796 | `ExprText` | - | via admin_backup_spec |
+| 2847 | `OutOfRange` | Integer arithmetic stops where MariaDB's does (error 1690) instead of wrapping around; a SUM past 18 digits (MariaDB sums in DECIMAL(65))... | via admin_backup_spec |
+| 2848 | `M.sumTooBig` | - | via admin_backup_spec |
+| 2850 | `CompileArith` | - | via admin_backup_spec |
+| 2978 | `FastCompare` | - | via admin_backup_spec |
+| 3001 | `fn` | - | via admin_backup_spec |
+| 3016 | `fn` | - | via admin_backup_spec |
+| 3037 | `fn` | - | via admin_backup_spec |
+| 3048 | `fn` | - | via admin_backup_spec |
+| 3063 | `fn` | - | via admin_backup_spec |
+| 3072 | `fn` | - | via admin_backup_spec |
+| 3081 | `fn` | - | via admin_backup_spec |
+| 3095 | `AndOr` | - | via admin_backup_spec |
+| 3140 | `AndOrNumeric` | AND / OR of 1/0/NULL (or numeric) operands. | via admin_backup_spec |
+| 3205 | `Unify` | Merge branch types and build per-branch converters. | via admin_backup_spec |
+| 3213 | `CompileCase` | - | via admin_backup_spec |
+| 3267 | `ef` | - | via admin_backup_spec |
+| 3278 | `fn` | - | via admin_backup_spec |
+| 3285 | `fn` | - | via admin_backup_spec |
+| 3291 | `fn` | - | via admin_backup_spec |
+| 3328 | `CompileInList` | - | via admin_backup_spec |
+| 3364 | `fn` | - | via admin_backup_spec |
+| 3429 | `CompileInSub` | - | via admin_backup_spec |
+| 3493 | `CompileLike` | - | via admin_backup_spec |
+| 3516 | `ArgsOf` | - | via admin_backup_spec |
+| 3529 | `JsonNodeFrom` | - | via admin_backup_spec |
+| 3546 | `AsText` | - | via admin_backup_spec |
+| 3553 | `FUNCS.COALESCE` | - | via admin_backup_spec |
+| 3573 | `FUNCS.IFNULL` | - | via admin_backup_spec |
+| 3578 | `FUNCS.NULLIF` | - | via admin_backup_spec |
+| 3592 | `FUNCS.IF` | - | via admin_backup_spec |
+| 3618 | `MinmaxT` | The type GREATEST / LEAST compare in and answer with (MariaDB's aggregate_for_min_max): text with text is text, whole numbers with whole... | via admin_backup_spec |
+| 3647 | `MinmaxFn` | - | via admin_backup_spec |
+| 3679 | `FUNCS.ROUND` | - | via admin_backup_spec |
+| 3706 | `FUNCS.DATE` | - | via admin_backup_spec |
+| 3729 | `FUNCS.DATE_FORMAT` | - | via admin_backup_spec |
+| 3750 | `FUNCS.UNIX_TIMESTAMP` | - | via admin_backup_spec |
+| 3765 | `FUNCS.FROM_UNIXTIME` | - | via admin_backup_spec |
+| 3785 | `FUNCS.NOW` | - | via admin_backup_spec |
+| 3795 | `FUNCS.TIMESTAMPDIFF` | - | via admin_backup_spec |
+| 3817 | `FUNCS.SUBSTRING_INDEX` | - | via admin_backup_spec |
+| 3861 | `FUNCS.CHAR_LENGTH` | - | via admin_backup_spec |
+| 3875 | `FUNCS.LOWER` | - | via admin_backup_spec |
+| 3888 | `FUNCS.UUID` | - | via admin_backup_spec |
+| 3901 | `JsonArg` | - | via admin_backup_spec |
+| 3909 | `FUNCS.JSON_VALID` | - | via admin_backup_spec |
+| 3921 | `PathArg` | - | via admin_backup_spec |
+| 3931 | `Jreplace` | root with the value at steps[1..k] replaced by node (the path exists) | via admin_backup_spec |
+| 3945 | `FUNCS.JSON_SET` | - | via admin_backup_spec |
+| 4007 | `FUNCS.JSON_REMOVE` | - | via admin_backup_spec |
+| 4046 | `FUNCS.JSON_EXTRACT` | - | via admin_backup_spec |
+| 4079 | `FUNCS.JSON_UNQUOTE` | - | via admin_backup_spec |
+| 4095 | `FUNCS.JSON_VALUE` | - | via admin_backup_spec |
+| 4100 | `value` | - | via admin_backup_spec |
+| 4135 | `FUNCS.JSON_CONTAINS` | - | via admin_backup_spec |
+| 4157 | `FUNCS.JSON_TYPE` | - | via admin_backup_spec |
+| 4179 | `CompileAgg` | Aggregates are compiled into slot readers; the scan fills f.aggs. | via admin_backup_spec |
+| 4218 | `def.cmp` | - | via admin_backup_spec |
+| 4261 | `Cx` | - | via admin_backup_spec |
+| 4355 | `fn` | - | via admin_backup_spec |
+| 4357 | `fn` | - | via admin_backup_spec |
+| 4435 | `PredOf` | - | via admin_backup_spec |
+| 4440 | `pred` | - | via admin_backup_spec |
+| 4446 | `AllOf` | All filters of one scan level as one function (checked in order, stops at the first false). | via admin_backup_spec |
+| 4465 | `FlattenAnd` | - | via admin_backup_spec |
+| 4474 | `HasAgg` | - | via admin_backup_spec |
+| 4493 | `MakeCandidates` | Candidate rows for one FROM source (a hash lookup when a usable equality exists, else every row). | via admin_backup_spec |
+| 4499 | `materialize` | - | via admin_backup_spec |
+| 4604 | `ChooseLookup` | Pick a hash lookup for source si from its equality conjuncts (only columns of si against values that are known before si is scanned). | via admin_backup_spec |
+| 4678 | `BuildScan` | - | via admin_backup_spec |
+| 4764 | `PlanSources` | Sources, WHERE/ON placement and lookups shared by SELECT, UPDATE and DELETE. | via admin_backup_spec |
+| 4878 | `NewGen` | pre: lines before the function (memo tables); pro: the function's first lines, where every column read and every column-against-literal /... | via admin_backup_spec |
+| 4895 | `Gen:col` | The local holding column ci of source si for this row (nil for a NULL-extended row). | via admin_backup_spec |
+| 4911 | `Gen:leaf` | A comparison computed once in the prologue: key identifies it, code(var) returns its line. | via admin_backup_spec |
+| 4922 | `Gen:up` | An upvalue of the generated function holding v (functions, tables, texts, floats, big integers). | memsql_spec |
+| 4931 | `Gen:var` | - | via admin_backup_spec |
+| 4936 | `Gen:emit` | - | via admin_backup_spec |
+| 4938 | `Gen:lit` | - | via admin_backup_spec |
+| 4948 | `Gen:expr` | Code computing fn(f) into a new local; returns its name (or a literal). | via admin_backup_spec |
+| 5036 | `Gen:build` | - | via admin_backup_spec |
+| 5055 | `FusePreds` | The filters of one scan level as one function (each checked in order, the first false stops), or nil. | via admin_backup_spec |
+| 5081 | `FuseGroupKey` | The group of a row: (f, groups, newGroup) -> group, the GROUP BY values computed inline (NULL -> NULLK, a NaN -> NANK, text by its collat... | via admin_backup_spec |
+| 5115 | `FuseUpdaters` | One function (acc, f) running every aggregate's update for a row, or nil (then the updaters run one by one). | via admin_backup_spec |
+| 5161 | `GroupKeyFn` | - | via admin_backup_spec |
+| 5193 | `CompileSelect` | - | via admin_backup_spec |
+| 5282 | `fn` | - | via admin_backup_spec |
+| 5291 | `fn` | - | via admin_backup_spec |
+| 5300 | `fn` | - | via admin_backup_spec |
+| 5302 | `fn` | - | via admin_backup_spec |
+| 5315 | `limitValue` | - | via admin_backup_spec |
+| 5341 | `finishRows` | - | via admin_backup_spec |
+| 5355 | `distinctKey` | - | via admin_backup_spec |
+| 5375 | `project` | - | via admin_backup_spec |
+| 5391 | `plan.run` | - | admin_backup_spec |
+| 5564 | `plan.run` | - | admin_backup_spec |
+| 5571 | `newGroup` | - | via admin_backup_spec |
+| 5600 | `emit` | - | via admin_backup_spec |
+| 5698 | `CompileUnion` | - | via admin_backup_spec |
+| 5725 | `run` | - | via admin_backup_spec |
+| 5748 | `CompileQuery` | - | via admin_backup_spec |
+| 5766 | `ColTypeOf` | - | via admin_backup_spec |
+| 5785 | `SortableInt` | - | via admin_backup_spec |
+| 5787 | `PkKeyOf` | - | via admin_backup_spec |
+| 5804 | `SortKeyOf` | - | via admin_backup_spec |
+| 5824 | `UniqueKeyOf` | - | via admin_backup_spec |
+| 5842 | `LowerBound` | binary search for the first position whose key is >= k | via admin_backup_spec |
+| 5851 | `SortedInsert` | - | via admin_backup_spec |
+| 5859 | `SortedRemove` | - | via admin_backup_spec |
+| 5871 | `SortedReplace` | - | via admin_backup_spec |
+| 5880 | `IdxAdd` | - | via admin_backup_spec |
+| 5892 | `IdxRemove` | - | via admin_backup_spec |
+| 5907 | `MapsAdd` | keysOnly: the primary key and unique key maps only (a bulk DELETE and an UPDATE see to the index buckets) | via admin_backup_spec |
+| 5916 | `MapsRemove` | - | via admin_backup_spec |
+| 5928 | `RebuildMaps` | - | via admin_backup_spec |
+| 5940 | `DB:_log` | - | via admin_backup_spec |
+| 5948 | `DB:_rowInsert` | - | via admin_backup_spec |
+| 5960 | `IdxSwap` | A row replaced under the same primary key (UPDATE, ON DUPLICATE KEY UPDATE): new takes old's place in each index bucket whose key stayed... | via admin_backup_spec |
+| 5988 | `IdxMark` | A bulk DELETE: marks[ix][key] = true for every index bucket the row is in. | via admin_backup_spec |
+| 6001 | `BulkSweep` | The marked buckets drop their dead rows, the others keep their order (as one SortedRemove per row leaves them). | via admin_backup_spec |
+| 6020 | `DB:_rowDelete` | movedTo: the row that takes this one's place under another key (an UPDATE of the primary key) | memsql_spec |
+| 6033 | `DB:_deleteRows` | The delete loop of one DELETE (del) with counts[t] = the rows it deletes from table t. | via admin_backup_spec |
+| 6051 | `DB:_rowReplace` | Same primary key: swap the row object in place. | via admin_backup_spec |
+| 6061 | `DB:_compact` | - | via admin_backup_spec |
+| 6078 | `DB:_rollback` | - | via admin_backup_spec |
+| 6118 | `ColFromDef` | Build a table from a parsed CREATE TABLE (or a copy of another table's definition). | via admin_backup_spec |
+| 6166 | `ColTypeText` | - | via admin_backup_spec |
+| 6185 | `SqlQuote` | - | via admin_backup_spec |
+| 6188 | `RenderCreate` | CREATE TABLE text for _tables.json (parsed back with the same parser on load). | via admin_backup_spec |
+| 6225 | `ImplicitDefault` | The value a NOT NULL column without a default gets in the rows it is added to (ALTER TABLE ... | via admin_backup_spec |
+| 6237 | `STORE.jsonCis` | The table's JSON columns (cached until FinishTable runs again). | via admin_backup_spec |
+| 6247 | `FinishTable` | - | via admin_backup_spec |
+| 6260 | `colIdx` | - | via admin_backup_spec |
+| 6265 | `addIdx` | - | via admin_backup_spec |
+| 6327 | `NewTable` | - | via admin_backup_spec |
+| 6359 | `ColRef` | - | via admin_backup_spec |
+| 6362 | `ErrText` | a value in an error message: MariaDB (ErrConvString) shows 128 bytes, a longer one as 125 bytes of whole characters and '...' | via admin_backup_spec |
+| 6368 | `Note` | - | via admin_backup_spec |
+| 6369 | `WarnOr` | - | via admin_backup_spec |
+| 6375 | `ZeroDate` | A zero date is refused when the row is written (STORE.refuse), not when it is made: a row that a CHECK or a duplicate key leaves out neve... | via admin_backup_spec |
+| 6379 | `STORE.refuse` | - | admin_system_spec |
+| 6389 | `STORE.reset` | The value a NOT NULL column gets for NULL with IGNORE (MariaDB's Field::reset: 0, '', the ENUM's empty value). | admin_system_spec |
+| 6397 | `TimeNumber` | A DATETIME / DATE as the number MariaDB makes of it (YYYYMMDDhhmmss, YYYYMMDD). | via admin_backup_spec |
+| 6408 | `NumScan` | ---- NUMBERS IN TEXT, THE WAY A COLUMN STORES THEM --------------------- MariaDB reads the number at the start of a text (my_strntoull10r... | via admin_backup_spec |
+| 6434 | `IntOfDigits` | digits * 10^shift rounded half up to a whole number (nil when it does not fit a 64-bit integer). | via admin_backup_spec |
+| 6452 | `DecOfDigits` | digits * 10^shift as a decimal with s decimals (scaled, rounded half up): value (nil when it needs more than 18 digits) and whether non-z... | via admin_backup_spec |
+| 6470 | `Tail` | the rest of a text after its number: nothing, only spaces (a note) or more (Data truncated) | via admin_backup_spec |
+| 6476 | `Coercer` | - | via admin_backup_spec |
+| 6480 | `outOfRange` | - | via admin_backup_spec |
+| 6483 | `range` | - | via admin_backup_spec |
+| 6532 | `store` | x: the scaled value (nil: too large for any column), lost: digits rounded away | via admin_backup_spec |
+| 6540 | `ofDigits` | - | via admin_backup_spec |
+| 6625 | `bad` | - | via admin_backup_spec |
+| 6629 | `byIndex` | - | via admin_backup_spec |
+| 6734 | `STORE.checkRow` | The row's CHECK constraints: every JSON column holds valid JSON (MariaDB: CHECK (JSON_VALID(col))). | via admin_backup_spec |
+| 6753 | `RowCopy` | - | via admin_backup_spec |
+| 6759 | `RowsDiffer` | - | via admin_backup_spec |
+| 6766 | `DupEntryText` | - | via admin_backup_spec |
+| 6784 | `FindDuplicate` | The row already holding row's primary or unique key (and the key's name), if any. | via admin_backup_spec |
+| 6799 | `WriteResult` | - | via admin_backup_spec |
+| 6810 | `CompileInsert` | - | via admin_backup_spec |
+| 6839 | `__index` | - | via admin_backup_spec |
+| 6862 | `rowSource` | - | via admin_backup_spec |
+| 6878 | `rowSource` | - | via admin_backup_spec |
+| 7177 | `IsConst` | - | via admin_backup_spec |
+| 7192 | `SAll` | sets of values of one column: { null = bool, ivs = { { lo, loInc, hi, hiInc } } } (nil bound = unbounded) | via admin_backup_spec |
+| 7193 | `SEmpty` | - | via admin_backup_spec |
+| 7194 | `SNull` | - | via admin_backup_spec |
+| 7195 | `SNotNull` | - | via admin_backup_spec |
+| 7196 | `LessLo` | - | via admin_backup_spec |
+| 7202 | `IvIntersect` | - | via admin_backup_spec |
+| 7209 | `SIntersect` | - | via admin_backup_spec |
+| 7219 | `SUnion` | - | via admin_backup_spec |
+| 7225 | `SIsEmpty` | - | via admin_backup_spec |
+| 7226 | `SCmp` | - | via admin_backup_spec |
+| 7238 | `ImpossibleWhere` | - | via admin_backup_spec |
+| 7247 | `colOf` | - | via admin_backup_spec |
+| 7252 | `normFor` | value normaliser for a column and a constant's type, or nil when the range analysis is skipped | via admin_backup_spec |
+| 7280 | `range` | - | via admin_backup_spec |
+| 7401 | `CompileUpdate` | - | via admin_backup_spec |
+| 7501 | `CompileDelete` | - | via admin_backup_spec |
+| 7568 | `DB:_removeColumn` | - | via admin_backup_spec |
+| 7574 | `DB:_createTable` | - | via admin_backup_spec |
+| 7617 | `DB:_alter` | ALTER TABLE ... | via admin_backup_spec |
+| 7740 | `BindParams` | - | via admin_backup_spec |
+| 7778 | `SigTypes` | - | via admin_backup_spec |
+| 7794 | `M.new` | - | failed_start_spec |
+| 7801 | `DB:parse` | - | mission_reader_spec |
+| 7819 | `DB:route` | Which store serves a statement: 'engine' (Crimson-Police tables) or 'foreign' (another resource's). | e2e_spec |
+| 7840 | `DB:_plan` | - | via admin_backup_spec |
+| 7877 | `DB:_selectSliced` | - | via admin_backup_spec |
+| 7880 | `step` | - | via admin_backup_spec |
+| 7899 | `DB:_forgetReplaced` | After a statement that worked: the JSON texts its UPDATEs replaced leave the JSON memo (a DELETE keeps them: an archive move puts the sam... | via admin_backup_spec |
+| 7913 | `DB:exec` | - | memsql_spec |
+| 7990 | `DB:load` | Load tables and rows from the store (at start-up). | admin_backup_spec |
+| 7996 | `DB:fail` | Stop every statement with this message (a saves folder that could not be loaded). | via admin_backup_spec |
+| 7999 | `DB:_defineTable` | A table created without a statement (loading): definition from its CREATE TABLE text. | via admin_backup_spec |
+| 8008 | `DB:_loadRows` | Bulk-add loaded rows (already typed) to a table and rebuild its indexes. | via admin_backup_spec |
+| 8079 | `DB:bulk` | Run fn(db) with the write-through paused (each statement still atomic in memory), then save every table in one go: a bulk import writes e... | backup_restore_spec |
+| 8088 | `DB:tableNames` | - | storage_copy_spec |
+| 8096 | `BIGINT` | ---- 9. | via admin_backup_spec |
+| 8101 | `OutConv` | - | via admin_backup_spec |
+| 8125 | `M.luaRows` | Engine rows -> what oxmysql hands to Lua (NULL columns are missing keys). | storage_copy_spec |
+| 8146 | `M.writeTable` | - | via admin_backup_spec |
+| 8159 | `M.result` | What each MySQL.<kind> returns for an engine result (oxmysql parseResponse). | e2e_spec |
+| 8183 | `ParamsJson` | - | via admin_backup_spec |
+| 8204 | `M.errorText` | oxmysql's error text: "<resource> was unable to execute a query!\nQuery: ...\n[params]\n<message>" | via admin_backup_spec |
+| 8217 | `M.shim` | opts: realMySQL (oxmysql's MySQL table, for other resources' tables), resource (name for error text), isOwnTable(name) (default: name sta... | memsql_spec |
+| 8224 | `realReady` | - | via admin_backup_spec |
+| 8239 | `SaveTurn` | - | via admin_backup_spec |
+| 8258 | `run` | - | via admin_backup_spec |
+| 8314 | `method.await` | - | admin_backup_spec |
+| 8319 | `__call` | - | via admin_backup_spec |
+| 8321 | `go` | - | via admin_backup_spec |
+| 8342 | `await` | - | via admin_backup_spec |
+| 8344 | `__call` | - | via admin_backup_spec |
+| 8351 | `__index` | - | via admin_backup_spec |
+| 8367 | `FS.read` | - | admin_backup_spec |
+| 8375 | `FS.write` | - | admin_backup_spec |
+| 8387 | `FS.exists` | - | admin_control_e2e_spec |
+| 8396 | `FS.rename` | os.rename as it is. | backup_index_spec |
+| 8397 | `FS.remove` | - | backup_index_spec |
+| 8401 | `FS.list` | The names in a folder, or nil when this runtime cannot list one (FXServer: io.readdir, or its io.popen that only lists folders; plain Lua... | admin_backup_spec |
+| 8423 | `RenameFile` | A rename of a to b (a exists) as it really went: true, or nil and the error. | via admin_backup_spec |
+| 8440 | `InstallTmp` | Put <path>.tmp (already written) in the place of path without ever leaving path half-written. | via admin_backup_spec |
+| 8470 | `ReplaceFile` | Replace a file without ever leaving it half-written. | via admin_backup_spec |
+| 8479 | `M.replaceFile` | - | via admin_backup_spec |
+| 8482 | `RecoverFile` | Before reading a document: a leftover .tmp is dropped, a .bak without its document is restored. | via admin_backup_spec |
+| 8491 | `Fnv1a` | - | via admin_backup_spec |
+| 8499 | `Log2floor` | - | via admin_backup_spec |
+| 8506 | `BucketOf` | Linear hashing: bucket (0-based) of hash h among n buckets. | via admin_backup_spec |
+| 8514 | `IntLen` | Digits of an integer as %d writes it. | via admin_backup_spec |
+| 8550 | `DayOf` | - | via admin_backup_spec |
+| 8566 | `EncodeValue` | How a value is written in a document. | via admin_backup_spec |
+| 8583 | `EncodeRow` | - | via admin_backup_spec |
+| 8595 | `M.folderStore` | dir: the saves folder. | memsql_spec |
+| 8616 | `Store:path` | - | admin_missions_spec |
+| 8619 | `Store:shown` | A file of this folder as the messages name it (the label, not the full path). | mission_reader_spec |
+| 8621 | `Store:docName` | - | via admin_backup_spec |
+| 8626 | `Store:_state` | - | via admin_backup_spec |
+| 8647 | `Store:_header` | - | via admin_backup_spec |
+| 8654 | `Store:_hash` | - | via admin_backup_spec |
+| 8661 | `Store:_docOf` | - | memsql_spec |
+| 8672 | `Store:_add` | - | via admin_backup_spec |
+| 8683 | `Store:_remove` | - | via admin_backup_spec |
+| 8694 | `Store:_reassign` | Re-address every row of a table (a layout change): every document is written again. | via admin_backup_spec |
+| 8701 | `Store:_rebuildDocs` | Document membership from the rows in memory, nothing marked for saving (after a failed save is undone). | via admin_backup_spec |
+| 8713 | `Store._maxIdOf` | - | via admin_backup_spec |
+| 8721 | `Store:_maybeSplit` | After a statement: grow the layout when a document passed docRows rows (one split per statement). | via admin_backup_spec |
+| 8774 | `Store:_docRows` | Rows of one document in key order (plus extra rows: the old copies of rows moving to another document). | via admin_backup_spec |
+| 8804 | `Store:_docText` | - | via admin_backup_spec |
+| 8819 | `Store:_touchLn` | Row lines stay cached (row.ln) for the documents saved last; an older document's rows drop theirs. | via admin_backup_spec |
+| 8835 | `Store:_mayRemove` | An emptied document of a split table is removed, except the newest range document (it holds the ids that come next, so a missing one is n... | via admin_backup_spec |
+| 8842 | `Store:_tablesText` | savedLayouts: write the layouts that are already on disk (used when only a counter must be saved before the documents), not the ones this... | via admin_backup_spec |
+| 8876 | `Store:_tablesSaved` | What saving _tables.json means for the store's state. | via admin_backup_spec |
+| 8888 | `Store:_writeTables` | - | via admin_backup_spec |
+| 8903 | `Store:flush` | One save. | storage_spec |
+| 8954 | `writeTmp` | - | via admin_backup_spec |
+| 8975 | `stop` | - | via admin_backup_spec |
+| 8979 | `install` | - | via admin_backup_spec |
+| 9051 | `Store:_snapshot` | The store's state for the tables a statement touches, so a failed save can be undone (Store:restore). | via admin_backup_spec |
+| 9088 | `Store:commit` | Apply one statement's change log, then write through. | via admin_backup_spec |
+| 9171 | `Store:restore` | After a failed save (the statement is already undone in memory): the store's state as before the statement, and every file the save alrea... | admin_backup_spec |
+| 9232 | `Store:rewrite` | Every table re-addressed, split to its layout and written (after DB:bulk). | via admin_backup_spec |
+| 9254 | `IsNullJ` | - | via admin_backup_spec |
+| 9262 | `FromJsonValue` | - | via admin_backup_spec |
+| 9293 | `ParseLineSlow` | A row line parsed with the order-keeping parser (slow, exact): values and raw texts. | via admin_backup_spec |
+| 9348 | `Store._relayout` | A document in another layout (reformatted by an editor, all on one line): the same document in the engine's layout (header line, one row... | via admin_backup_spec |
+| 9355 | `sep` | - | via admin_backup_spec |
+| 9412 | `Store:_readDoc` | Read one document: rows appended to `into` (row.from = d). | via admin_backup_spec |
+| 9667 | `Store:_owner` | The table a document belongs to (from its first line, or the whole document), or nil. | via admin_backup_spec |
+| 9679 | `Store:_probeRename` | How this runtime's os.rename answers (see FS.rename): 'normal', 'inverted', or 'check' (decided by the files). | via admin_backup_spec |
+| 9691 | `Store:load` | - | admin_backup_spec |
+| 9872 | `Store:sizeOf` | Bytes and documents in the folder for one table (for reports and tests). | via admin_backup_spec |
 
 ### modules/system/migrations.lua
 
@@ -7649,27 +7655,28 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | line | function | what it must do | spec |
 |---:|---|---|---|
 | 18 | `BaseOf` | The base key of a plural form key ('admin.audit.total_one' -> 'admin.audit.total'), or nil. | via admin_control_e2e_spec |
-| 24 | `LoadLocale` | - | via admin_control_e2e_spec |
-| 49 | `Interpolate` | - | via admin_control_e2e_spec |
-| 61 | `Label` | A name an admin gave in Settings → Names (Config.Labels, English text over the locale's), or nil. | via admin_control_e2e_spec |
-| 70 | `CP.L` | Translate a key; unknown keys are returned as-is so a missing string is visible, not blank. | blocks_a_spec |
-| 80 | `en` | - | via admin_control_e2e_spec |
-| 81 | `fr` | - | via admin_control_e2e_spec |
-| 84 | `CP.Ln` | - | i18n_scan_spec |
-| 99 | `CP.Locale.has` | - | blocks_c_spec |
-| 104 | `CP.Locale.inFile` | Whether locales/en.json itself has the key (Config.Labels left out). | via admin_control_e2e_spec |
-| 110 | `CP.Locale.all` | Every string (with Config.Labels over it): the client sends it to the NUI with the reply to 'ready' and after a Config.Labels change, so... | blocks_a_spec |
-| 142 | `CP.Lt` | - | via admin_control_e2e_spec |
-| 146 | `CP.Locale.isToken` | - | blocks_c_spec |
-| 153 | `EncodeVars` | vars with nested tokens become plain values: a nested token is written as its own token string. | via admin_control_e2e_spec |
-| 168 | `Encode` | - | via admin_control_e2e_spec |
-| 181 | `CP.Locale.encode` | The token string of a CP.Lt text (a plain value comes back as it is). | admin_control_e2e_spec |
-| 187 | `CP.Locale.tokenize` | A copy of a payload with every CP.Lt text in it turned into its token string (the engine's HUD path). | via admin_control_e2e_spec |
-| 198 | `ResolveVars` | - | via admin_control_e2e_spec |
-| 211 | `Resolve` | - | via admin_control_e2e_spec |
-| 237 | `CP.Locale.resolve` | Expand the tokens in a text (nested ones too). | failed_start_spec |
-| 242 | `CP.Locale.resolveAll` | A copy of a payload with every token in it resolved (the client, right before SendNUIMessage). | via admin_control_e2e_spec |
-| 252 | `CP.Locale.label` | The locale text of key when the locale has it, else the fallback text (both with vars filled in). | admin_control_e2e_spec |
+| 28 | `LoadLocale` | - | via admin_control_e2e_spec |
+| 41 | `Strings` | - | via admin_control_e2e_spec |
+| 60 | `Interpolate` | - | via admin_control_e2e_spec |
+| 72 | `Label` | A name an admin gave in Settings → Names (Config.Labels, English text over the locale's), or nil. | via admin_control_e2e_spec |
+| 81 | `CP.L` | Translate a key; unknown keys are returned as-is so a missing string is visible, not blank. | blocks_a_spec |
+| 91 | `en` | - | via admin_control_e2e_spec |
+| 92 | `fr` | - | via admin_control_e2e_spec |
+| 95 | `CP.Ln` | - | i18n_scan_spec |
+| 110 | `CP.Locale.has` | - | blocks_c_spec |
+| 115 | `CP.Locale.inFile` | Whether locales/en.json itself has the key (Config.Labels left out). | startup_load_spec |
+| 121 | `CP.Locale.all` | Every string (with Config.Labels over it): the client sends it to the NUI with the reply to 'ready' and after a Config.Labels change, so... | blocks_a_spec |
+| 153 | `CP.Lt` | - | via admin_control_e2e_spec |
+| 157 | `CP.Locale.isToken` | - | blocks_c_spec |
+| 164 | `EncodeVars` | vars with nested tokens become plain values: a nested token is written as its own token string. | via admin_control_e2e_spec |
+| 179 | `Encode` | - | via admin_control_e2e_spec |
+| 192 | `CP.Locale.encode` | The token string of a CP.Lt text (a plain value comes back as it is). | admin_control_e2e_spec |
+| 198 | `CP.Locale.tokenize` | A copy of a payload with every CP.Lt text in it turned into its token string (the engine's HUD path). | via admin_control_e2e_spec |
+| 209 | `ResolveVars` | - | via admin_control_e2e_spec |
+| 222 | `Resolve` | - | via admin_control_e2e_spec |
+| 248 | `CP.Locale.resolve` | Expand the tokens in a text (nested ones too). | failed_start_spec |
+| 253 | `CP.Locale.resolveAll` | A copy of a payload with every token in it resolved (the client, right before SendNUIMessage). | via admin_control_e2e_spec |
+| 263 | `CP.Locale.label` | The locale text of key when the locale has it, else the fallback text (both with vars filled in). | admin_control_e2e_spec |
 
 ### shared/net.lua
 
@@ -8295,7 +8302,7 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 537 | `AdminPayments` | - | none |
+| 573 | `AdminPayments` | - | none |
 
 ### web/src/admin/screens/Payouts.tsx
 

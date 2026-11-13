@@ -225,7 +225,7 @@ Full admin control also has `modules/review/corrections` (§5.38), `modules/supe
 | `CP.e(name)` | shared/init.lua | `'crimson-police:' .. name` |
 | `CP.configProblem(cfg) -> nil \| 'error'\|'warn', text` | shared/init.lua | The config load check: `'error'` when `Config` is not a table (config.lua did not load), `'warn'` naming the table sections of config.lua and blocks.lua that are missing (config.lua stopped at an error, or is from an older version). The server prints it once as the file loads (tag `config`), before any module can fail on it |
 | `CP.Blocks.register(id, impl)`, `.get(id)`, `.all()` | shared/init.lua | one registry per side |
-| `CP.L(key, vars)`, `CP.Locale.all()`, `CP.Locale.has(key)`, `CP.Locale.inFile(key)` | shared/locale.lua | `{var}` placeholders. `Config.Labels` (Settings → Names: English names of offences, commendation kinds, badges, bonuses, penalties) is read first by `CP.L`, `has` and `label`, and merged over the file by `all()`; `inFile` = the key is in `locales/en.json` itself |
+| `CP.L(key, vars)`, `CP.Locale.all()`, `CP.Locale.has(key)`, `CP.Locale.inFile(key)` | shared/locale.lua | `{var}` placeholders. `Config.Labels` (Settings → Names: English names of offences, commendation kinds, badges, bonuses, penalties) is read first by `CP.L`, `has` and `label`, and merged over the file by `all()`; `inFile` = the key is in `locales/en.json` itself. The file of `Config.Locale` (as config.lua names it when the file loads) is read and decoded on first use, not while the scripts load (`tests/startup_load_spec.lua`) |
 | `CP.Lt(key, vars) -> token`, `CP.Locale.isToken(v)`, `encode`, `tokenize(payload)`, `resolve(text, code)`, `resolveAll(payload, code)` | shared/locale.lua | A `{ key, vars }` token for text meant for a player's screen: `CP.Runs.hud`, `ctx.hud` and `ctx.send` accept it and the client resolves it right before `SendNUIMessage` (`CP.Locale.resolveAll`). CP.L is never replaced. English only: every token resolves in the server language |
 | `CP.Locale.label(key, fallback, vars)` | shared/locale.lua | The locale text when the key exists, else the fallback (config or mission text): the optional label overrides of §10 |
 | `CP.Hooks.on(name, fn) -> id`, `CP.Hooks.off(id) -> bool`, `CP.Hooks.fire(name, ...) -> n` | shared/init.lua | Both sides. Listeners run in the caller's thread, in the order added, each in pcall (a failure is logged, the next still runs). The hooks and who fires them: §5.10 |
@@ -1544,7 +1544,8 @@ Files for §5.24–§5.26: `modules/{admin,disputes,anticheat}/server.lua`, `loc
   inside the window holds it (`cp_officers.suspended_from`, migration 019, `row.suspended_from_ts`), the window's
   end moved on by the last maintenance lock as `CP.Maintenance.windowEnd` does it (in `CP.Money.disputeStartSql`
   too, with the lock's start and end written in as numbers): a later one never reopens a closed window. `CP.Access.suspend` writes it on a new suspension; one given while he is suspended or
-  less than a window after the last one ended keeps that start; a lift keeps it. Migration 019 fills it for the
+  less than a window after the last one ended (that window's end moved on by the last maintenance lock, as
+  `CP.Maintenance.windowEnd` does it) keeps that start; a lift keeps it. Migration 019 fills it for the
   suspensions given before it: the last `suspend` row of `cp_audit` up to their end, else `NOW()` for one still
   running.
 - `forSupervisor(src)`, `forAdmin()` (both read by the one Review queue, §5.26a), `forOfficer(citizenid, goesTo?,
@@ -2812,7 +2813,12 @@ Admin transitions (full admin control, §5.20, §5.40; the money ones ship off b
 `withdrawing` → `withdrawn` → `adding` → `added`, or `review` when the raised deposit left no telling, `refunding`
 when a department refund left no telling). A Pay again left at its own `withdrawing` or `refunding` step is
 released by Resolve's `againRelease` (`CP.Cash.releaseAgain`, no money moves, compare and set on that step) once
-the admin ticked that the department was not charged or got it back; the row is `paying` at its own step again.
+the admin ticked that the department was not charged or got it back; the row is `paying` at its own step again. When
+the admin ticked that the department WAS charged and did not get it back, `againWithdrawn`
+(`CP.Cash.markAgainWithdrawn`, no money moves) sets its step to `withdrawn` (compare and set on the step). At
+`withdrawn` Pay again resumes with the deposit only (`again2`), and `againRelease` gives up: the step goes to
+`refunding`, the department gets its money back (`depositSociety`), then the claim is released; a refund with no
+telling stays at `refunding` (a second Release only releases), a refused one goes back to `withdrawn`.
 
 ---
 
@@ -3463,7 +3469,7 @@ every action.
 | callback `admin:previewRetryUnfunded` | `{ rowId }` or `{ department, since? }` → UnfundedPreview | payments | P |
 | callback `admin:previewCashSource` | `{}` → CashSourcePreview | payments | P |
 | callback `admin:getDepartmentFunds` | `{ department }` → DepartmentFundsView | deptFunds | P |
-| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, `CP.Cash.againOutcomes`; no money moves): W `allowPayAgain`, `checked` |
+| `server:admin:resolvePayment` | `{ rowId, outcome = 'paid' \| 'payAgain' \| 'againRelease' \| 'againWithdrawn' \| <follow-up outcome>, checked?, reason, confirm?, requestId }` | payments | P I R S; payAgain: W `allowPayAgain`, `checked`, T the amount; againRelease (a Pay again left at its own `withdrawing` or `refunding` step, no money moves; at `withdrawn` the department gets its money back first) and againWithdrawn (at `withdrawing` or `refunding`: the step becomes `withdrawn`, no money moves), both offered by `CP.Cash.againOutcomes`: W `allowPayAgain`, `checked` |
 | `server:admin:payNow` | `{ rowId, requestId }` | payments | P I |
 | `server:admin:retryPending` | `{ requestId }` | payments | P I |
 | `server:admin:retryUnfunded` | `{ rowId \| department + since?, reason, confirm, previewToken, requestId }` | payments | P I R T(total) V S W `allowUnfundedRetry`; balance ≥ total; a department retry (and its preview, `excluded`) leaves out every row of the admin's own characters and runs, and rows whose officer's license is unknown |

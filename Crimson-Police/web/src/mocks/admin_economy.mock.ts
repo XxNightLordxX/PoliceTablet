@@ -179,6 +179,9 @@ registerMock('request', 'admin:exportPayments', (args: unknown) => {
     return { csv: `${csv}\n`, rows: list.length, truncated: false };
 });
 
+// The Pay again step of a row once Mark withdrawn moved it (the server keeps it in breakdown.cash.againStep)
+const againSteps: Record<number, string> = {};
+
 registerMock('request', 'admin:checkBankingTxn', (args: unknown): BankingCheck => {
     const id = Number((args as { rowId?: number } | null)?.rowId);
     const r = rows.find(x => x.id === id) ?? rows[0];
@@ -205,8 +208,13 @@ registerMock('request', 'admin:checkBankingTxn', (args: unknown): BankingCheck =
                 : r.followUp === 'giveBack'
                   ? { giveBack: true, giveBackDone: true }
                   : null,
-        againStep: r.again === 'paying' ? 'refunding' : null,
-        againOutcomes: r.again === 'paying' && MONEY ? { againRelease: true } : null,
+        againStep: r.again === 'paying' ? (againSteps[r.id] ?? 'refunding') : null,
+        againOutcomes:
+            r.again === 'paying' && MONEY
+                ? againSteps[r.id] === 'withdrawn'
+                    ? { againRelease: true }
+                    : { againRelease: true, againWithdrawn: true }
+                : null,
     };
 });
 
@@ -224,7 +232,15 @@ registerMock('action', 'server:admin:resolvePayment', (p: { outcome?: string; ch
         if (!p.checked) throw new Error('err.check_first');
         if (r.again !== 'paying') throw new Error('err.payment_step_unknown');
         r.again = null;
+        delete againSteps[r.id];
         return { id: r.id, outcome: 'againRelease', amount: r.owed };
+    }
+    if (p.outcome === 'againWithdrawn') {
+        needSwitch();
+        if (!p.checked) throw new Error('err.check_first');
+        if (r.again !== 'paying' || againSteps[r.id] === 'withdrawn') throw new Error('err.payment_step_unknown');
+        againSteps[r.id] = 'withdrawn';
+        return { id: r.id, outcome: 'againWithdrawn', amount: r.owed };
     }
     if (p.outcome === 'payAgain') {
         needSwitch();

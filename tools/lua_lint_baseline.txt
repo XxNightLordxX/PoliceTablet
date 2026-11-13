@@ -39,7 +39,6 @@ W581 Crimson-Police/modules/system/memsql.lua if prev ~= nil and not (prev < k) 
 W431 Crimson-Police/modules/system/migrations.lua local version = row and row.v -- an inner local or argument reuses an upvalue name on purpose; the function reads only its own
 W311 Crimson-Police/modules/system/migrations.lua local okC, errC = true, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
 W311 Crimson-Police/modules/teams/operations.lua local runState, tier, tierExpected, remaining = nil, nil, true, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
-W311 Crimson-Police/shared/locale.lua local strings = {} -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
 W311 Crimson-Police/shared/utils.lua local line, key, value = r.tl, nil, nil -- dead store: a starting value (nil, false, {}) that every path overwrites before reading; harmless
 W113 tests/foundation_spec.lua H.eq(pcall(function() return NoSuchNative end), false, 'H.strictGlobals: an undefined global is an error') -- H.strictGlobals is tested with a name that is undefined on purpose
 W113 tests/foundation_spec.lua H.eq(NoSuchNative, nil, 'and nil again once off') -- H.strictGlobals is tested with a name that is undefined on purpose

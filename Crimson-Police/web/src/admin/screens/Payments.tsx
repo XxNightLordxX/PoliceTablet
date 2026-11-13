@@ -157,8 +157,10 @@ const FOLLOW_UP_ORDER: FollowUpOutcome[] = [
 ];
 
 // 'againRelease': a Pay again left at its own 'withdrawing' or 'refunding' step is released (no money moves) once the
-// admin ticked that the department's history shows it was not charged or got it back
-type ResolveMode = 'paid' | 'payAgain' | 'againRelease' | FollowUpOutcome;
+// admin ticked that the department's history shows it was not charged or got it back; at 'withdrawn' the department
+// gets its money back first. 'againWithdrawn': at 'withdrawing' or 'refunding' the department WAS charged and did not
+// get it back, so the step becomes 'withdrawn' (no money moves; Pay again then deposits only)
+type ResolveMode = 'paid' | 'payAgain' | 'againRelease' | 'againWithdrawn' | FollowUpOutcome;
 
 function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClose: () => void; onDone: () => void }) {
     const { data, loading, error } = useRequest<BankingCheck>(
@@ -173,6 +175,7 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
     const followUp = data?.followUp ?? null;
     const amount = followUp ? (data?.followUpAmount ?? 0) : (data?.amount ?? row.owed);
     const moves = mode === 'payAgain' || mode === 'giveBack';
+    const refundsAgain = mode === 'againRelease' && data?.againStep === 'withdrawn';
 
     const submit = async (reason: string, typed: string) => {
         const res = await run(
@@ -186,7 +189,9 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                           ? 'payments.resolve.paid_again'
                           : mode === 'againRelease'
                             ? 'payments.resolve.again_released'
-                            : 'payments.followup.done',
+                            : mode === 'againWithdrawn'
+                              ? 'payments.resolve.again_marked_withdrawn'
+                              : 'payments.followup.done',
             },
         );
         if (res.ok) {
@@ -202,15 +207,21 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
               ? t('payments.resolve.pay_again')
               : m === 'againRelease'
                 ? t('payments.resolve.again_release')
-                : t(`payments.followup.${m}`);
+                : m === 'againWithdrawn'
+                  ? t('payments.resolve.again_withdrawn')
+                  : t(`payments.followup.${m}`);
     const message = (m: ResolveMode) =>
         m === 'paid'
             ? t('payments.resolve.mark_paid_msg')
             : m === 'payAgain'
               ? t('payments.resolve.pay_again_msg')
               : m === 'againRelease'
-                ? t('payments.resolve.again_release_msg')
-                : t(`payments.followup.${m}_msg`);
+                ? data?.againStep === 'withdrawn'
+                    ? t('payments.resolve.again_refund_msg')
+                    : t('payments.resolve.again_release_msg')
+                : m === 'againWithdrawn'
+                  ? t('payments.resolve.again_withdrawn_msg')
+                  : t(`payments.followup.${m}_msg`);
 
     return (
         <>
@@ -268,6 +279,19 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                                         }}
                                     >
                                         {t('payments.resolve.again_release')}
+                                    </Button>
+                                ) : null}
+                                {data?.againOutcomes?.againWithdrawn !== undefined ? (
+                                    <Button
+                                        variant="secondary"
+                                        icon="check"
+                                        disabled={data.busy || !data.againOutcomes.againWithdrawn}
+                                        onClick={() => {
+                                            setChecked(false);
+                                            setMode('againWithdrawn');
+                                        }}
+                                    >
+                                        {t('payments.resolve.again_withdrawn')}
                                     </Button>
                                 ) : null}
                             </>
@@ -335,8 +359,20 @@ function ResolveDialog({ row, onClose, onDone }: { row: PaymentRow | null; onClo
                                 />
                             ) : null}
                         </>
+                    ) : refundsAgain ? (
+                        <Checkbox
+                            checked={checked}
+                            onChange={setChecked}
+                            label={t('payments.resolve.again_refund_checked')}
+                        />
                     ) : mode === 'againRelease' ? (
                         <Checkbox checked={checked} onChange={setChecked} label={t('payments.resolve.again_checked')} />
+                    ) : mode === 'againWithdrawn' ? (
+                        <Checkbox
+                            checked={checked}
+                            onChange={setChecked}
+                            label={t('payments.resolve.again_withdrawn_checked')}
+                        />
                     ) : null
                 }
                 typedWord={moves ? String(amount) : undefined}

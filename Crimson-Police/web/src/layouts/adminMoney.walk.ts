@@ -128,6 +128,27 @@ async function steps(): Promise<void> {
         ),
         'Release of a Pay again has its English texts',
     );
+    // Mark withdrawn: the department was charged for that Pay again and did not get it back. Offered by the server
+    // (Pay again on), confirmed with its own checked box; at 'withdrawn' Release says the department gets it back
+    ok(
+        /data\?\.againOutcomes\?\.againWithdrawn !== undefined/.test(paymentsSrc) &&
+            /disabled=\{data\.busy \|\| !data\.againOutcomes\.againWithdrawn\}/.test(paymentsSrc) &&
+            /mode === 'againWithdrawn'[\s\S]*?label=\{t\('payments\.resolve\.again_withdrawn_checked'\)\}/.test(
+                paymentsSrc,
+            ),
+        'Mark withdrawn of a Pay again: offered by the server, confirmed with its checked box',
+    );
+    ok(
+        [
+            'again_withdrawn',
+            'again_withdrawn_msg',
+            'again_withdrawn_checked',
+            'again_marked_withdrawn',
+            'again_refund_msg',
+            'again_refund_checked',
+        ].every(k => t(`payments.resolve.${k}`) !== `payments.resolve.${k}`),
+        'Mark withdrawn and the Release at withdrawn have their English texts',
+    );
 }
 
 export async function walk(): Promise<{ passed: number; failures: string[] }> {

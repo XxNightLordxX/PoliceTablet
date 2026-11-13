@@ -665,8 +665,8 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
                 and (v.followUp == 'rest' and c.restPaidStep or v.followUp == 'back' and c.backStep or c.giveBack)
             or nil,
         outcomes = v.followUp and CP.Cash.followUpOutcomes(bd) or nil,
-        -- A Pay again left at its own 'withdrawing' or 'refunding' step: that step and the Release it offers (with
-        -- Pay again on)
+        -- A Pay again left at its own 'withdrawing', 'refunding' or 'withdrawn' step: that step and the Release and
+        -- Mark withdrawn it offers (with Pay again on)
         againStep = not v.followUp and c.again == 'paying' and type(c.againStep) == 'string' and c.againStep or nil,
         againOutcomes = not v.followUp and Switch('allowPayAgain') and CP.Cash.againOutcomes and CP.Cash.againOutcomes(
             row, bd) or nil,
@@ -785,16 +785,19 @@ Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
         if not ok then return false, data end
         Touched(ctx, cid)
         return true, data
-    elseif p.outcome == 'againRelease' then
-        -- A Pay again left at 'withdrawing' or 'refunding': released once the admin ticked that the department's
-        -- history shows it was not charged (or got it back). No money moves. Audited first ('paymentResolve', old
-        -- 'again:<step>', new 'againRelease:<amount>').
+    elseif p.outcome == 'againRelease' or p.outcome == 'againWithdrawn' then
+        -- A Pay again left at 'withdrawing' or 'refunding', once the admin ticked what the department's history
+        -- shows: not charged (or got it back) -> againRelease, no money moves; charged and not given back ->
+        -- againWithdrawn, its step becomes 'withdrawn', no money moves. At 'withdrawn' againRelease gives up: the
+        -- department gets its money back first. Audited first ('paymentResolve', old 'again:<step>', new
+        -- '<outcome>:<amount>').
         local off = OffSwitch('allowPayAgain')
         if off then return false, off end
         if p.checked ~= true then return false, 'err.check_first' end
-        local ok, data = CP.Cash.releaseAgain(id, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
+        local fn = p.outcome == 'againRelease' and CP.Cash.releaseAgain or CP.Cash.markAgainWithdrawn
+        local ok, data = fn(id, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
             return ('again:%s'):format(tostring(i.step or '?'))
-        end, function(i) return ('againRelease:%d'):format(i.amount or 0) end))
+        end, function(i) return ('%s:%d'):format(i.outcome or '?', i.amount or 0) end))
         if not ok then return false, data end
         Touched(ctx, cid)
         return true, data

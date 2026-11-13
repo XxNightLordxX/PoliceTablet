@@ -7,7 +7,7 @@
 CP = CP or {}
 CP.Locale = CP.Locale or {}
 
-local strings = {}
+local strings = nil                -- the locale's texts: read on first use (Strings), not while the scripts load
 
 -- The plural form suffixes CP.Ln and the NUI's tn() read (key_<form>).
 local PLURAL_FORMS = { 'zero', 'one', 'two', 'few', 'many', 'other' }
@@ -21,8 +21,12 @@ local function BaseOf(k)
     return nil
 end
 
+-- The file reader as it is when this file loads (the same native in game; a test that hands its own locale file to
+-- this load keeps it for the read on first use).
+local readFile = LoadResourceFile
+
 local function LoadLocale(code)
-    local raw = LoadResourceFile(GetCurrentResourceName(), ('locales/%s.json'):format(code))
+    local raw = readFile(GetCurrentResourceName(), ('locales/%s.json'):format(code))
     if not raw or raw == '' then return nil end
     local ok, data = pcall(json.decode, raw)
     if ok and type(data) == 'table' then return data end
@@ -30,20 +34,27 @@ local function LoadLocale(code)
     return nil
 end
 
-do
-    local code = (Config and Config.Locale) or 'en'
-    strings = LoadLocale(code) or {}
+-- The language is the one config.lua names when this file loads (as before); its file is read and decoded the
+-- first time a text is needed, so the decode is not part of the resource's start-up hitch.
+local localeCode = (Config and Config.Locale) or 'en'
+
+local function Strings()
+    if strings then return strings end
+    local code = localeCode
+    local t = LoadLocale(code) or {}
     if code ~= 'en' then
         -- Missing keys fall back to English. An English plural form (key_one, key_other) is left out when the
         -- translation has the base key itself (one written before the forms): its own text stays.
         local own = {}
-        for k in pairs(strings) do own[k] = true end
+        for k in pairs(t) do own[k] = true end
         local en = LoadLocale('en') or {}
         for k, v in pairs(en) do
             local base = BaseOf(k)
-            if strings[k] == nil and not (base and own[base]) then strings[k] = v end
+            if t[k] == nil and not (base and own[base]) then t[k] = v end
         end
     end
+    strings = t
+    return t
 end
 
 local function Interpolate(s, vars)
@@ -68,7 +79,7 @@ end
 
 -- Translate a key; unknown keys are returned as-is so a missing string is visible, not blank.
 function CP.L(key, vars)
-    local s = Label(key) or strings[key]
+    local s = Label(key) or Strings()[key]
     if s == nil then return Interpolate(tostring(key), vars) end
     return Interpolate(s, vars)
 end
@@ -85,33 +96,33 @@ function CP.Ln(key, n, vars)
     n = tonumber(n) or 0
     local all = { n = n }
     for k, v in pairs(vars or {}) do all[k] = v end
-    local lang = Label('locale.lang') or strings['locale.lang'] or 'en'
+    local lang = Label('locale.lang') or Strings()['locale.lang'] or 'en'
     local rule = PLURAL[lang] or PLURAL.en
     local form = key .. '_' .. rule(n)
     if Label(form) then return CP.L(form, all) end
     -- a Settings -> Names rename of the key itself (from before the forms) wins over the file's forms
     if Label(key) and not Label(key .. '_other') then return CP.L(key, all) end
-    if strings[form] then return CP.L(form, all) end
-    if Label(key .. '_other') or strings[key .. '_other'] then return CP.L(key .. '_other', all) end
+    if Strings()[form] then return CP.L(form, all) end
+    if Label(key .. '_other') or Strings()[key .. '_other'] then return CP.L(key .. '_other', all) end
     return CP.L(key, all)
 end
 
 function CP.Locale.has(key)
-    return Label(key) ~= nil or strings[key] ~= nil
+    return Label(key) ~= nil or Strings()[key] ~= nil
 end
 
 -- Whether locales/en.json itself has the key (Config.Labels left out).
 function CP.Locale.inFile(key)
-    return strings[key] ~= nil
+    return Strings()[key] ~= nil
 end
 
 -- Every string (with Config.Labels over it): the client sends it to the NUI with the reply to 'ready' and after a
 -- Config.Labels change, so the UI shares one text source. Sessions do not carry it.
 function CP.Locale.all()
     local labels = Config and Config.Labels
-    if type(labels) ~= 'table' or next(labels) == nil then return strings end
+    if type(labels) ~= 'table' or next(labels) == nil then return Strings() end
     local out = {}
-    for k, v in pairs(strings) do out[k] = v end
+    for k, v in pairs(Strings()) do out[k] = v end
     for k, v in pairs(labels) do
         if type(k) == 'string' and type(v) == 'string' and v ~= '' then out[k] = v end
     end
@@ -250,7 +261,7 @@ end
 
 -- The locale text of key when the locale has it, else the fallback text (both with vars filled in).
 function CP.Locale.label(key, fallback, vars)
-    if type(key) == 'string' and (strings[key] ~= nil or Label(key)) then return CP.L(key, vars) end
+    if type(key) == 'string' and (Strings()[key] ~= nil or Label(key)) then return CP.L(key, vars) end
     if fallback == nil then return CP.L(key, vars) end
     return Interpolate(tostring(fallback), vars)
 end

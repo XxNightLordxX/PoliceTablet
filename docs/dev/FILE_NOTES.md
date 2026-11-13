@@ -699,6 +699,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/spawn_placer_spec.lua`: The placer (modules/runs/client/spawn.lua): a participant's game puts a new mission entity on the ground when the server asks through its cp bag, or leaves a bad point frozen, and tells the server, against the typed natives of H.placerNatives over the ground map of H.groundNatives.
 - `tests/spawn_walkin_spec.lua`: CP.Spawn.walkIn and the ox_lib callback crimson-police:client:spawn:walkIn (modules/runs/client/spawn.lua):
 - `tests/stage_ahead_spec.lua`: Stage ahead (Config.Spawning.stageAhead) on the real engine (tests/fixtures/custody/world.lua: runs, npc, scaling, scoring): while an objective runs, the block of the NEXT objective may place that objective's people in its own stage(ctx, dt) hook; its start then sees ctx.staged.
+- `tests/startup_load_spec.lua`: The script files do no work at load that can wait: the locale and the collation maps are built on first use.
 - `tests/storage_copy_spec.lua`: /CrimsonPoliceAdmin storage and storage copy (modules/admin) with MariaDB and a temporary saves folder together.
 - `tests/storage_spec.lua`: Database off (Config.Database.enabled = false) from end to end: the saves folder holds every feature's data, survives a restart, and stays fast and small at 50,000 runs.
 - `tests/sup_actions_spec.lua`: Supervisor officer actions: Clear cooldown (one officer's mission or type cooldown, from Department Report) and "+ minutes" on a live run (Live Missions), both Mission controls of kind 'action'.
