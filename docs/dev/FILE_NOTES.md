@@ -604,6 +604,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/live_scoring_spec.lua`: Live scoring: a live case scores only its weighted live_* lines (Config.RealPlayers.liveCrime.linesOnly), its tier
 - `tests/live_surrender_spec.lua`: Surrender and Talk them down in a live case (modules/realplayers/surrender): the suspect's own command, an
 - `tests/live_tablet_spec.lua`: The officers' tablet for a live case: the LIVE line of the ready check (CP.LiveCrime.readyLine), the
+- `tests/livecrime_client_spec.lua`: The client halves of live cases and tours, driven with edge payloads: the pop-ups, the radial and the tours.
 - `tests/livecrime_intake_spec.lua`: Live crimes: the Crimson-Contracts adapter and the intake (CP.LiveCrime).
 - `tests/load_spec.lua`: Every workflow under load: 48 officers, 16 runs at once, 4 operations, 200 queued payments, backup and copy.
 - `tests/location_labels_spec.lua`: Built-in location labels name the right place: renamed locations keep their old label in `aliases`, so a Config.DisabledLocations or MissionTweaks entry written by the old label still matches; Traffic Enforcement's two city corridors are posted at 60 km/h.
@@ -675,6 +676,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tests/search_area_volunteer_spec.lua`: search_area's volunteer slot (docs/dev/ARCHITECTURE.md §7.3): Manhunt's fugitive played by a volunteer who hides inside the search circle.
 - `tests/season_boot_spec.lua`: A planned season end that fell due while the server was down: the season start-up catches it up, the way the weekly bounty weeks are caught up, so a server that restarts across the daily reset still ends the season.
 - `tests/server_cost_spec.lua`: Server cost (docs/dev/LOOPS.md "Server cost and NUI"): the REAL server side of Crimson-Police with its officers
+- `tests/settings_matrix_spec.lua`: Every switch of the Settings screen on the whole server: the world of tests/workflows_full_spec.lua (every server file of fxmanifest loaded as in game, the owner's scripts running, database off: the saves folder, as shipped), booted on the shipped config with no section of that spec run (CP_WF_WORLD).
 - `tests/settings_spec.lua`: Admin UI → Settings (modules/admin/settings): the schema read from config.lua and blocks.lua, every check of a value, saving, resetting and a restart in every storage mode, Config and the clients, the mission and location switches.
 - `tests/setup_coords_spec.lua`: Setup coordinates from the Qbox scripts: each shipped mission desk and drop-off names its source or is kept.
 - `tests/setup_spec.lua`: Admin UI -> Home's First-start setup (modules/admin/setup): shipped off (Home as before); with
@@ -731,6 +733,7 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tools/capability_inventory.lua`: The capability inventory: every command, event, callback, NUI callback, export, admin action, setting, feature and Config key Crimson-Police has, one sorted line each (dev tooling, not shipped).
 - `tools/check_all.sh`: Every check of the repository in one command, in order, with a PASS/FAIL summary.
 - `tools/check_contracts.py`: Static cross-checks for Crimson-Police: CP calls, net events, NUI names and locale keys (dev tooling, not shipped).
+- `tools/check_coverage.py`: The coverage list of Crimson-Police (dev tooling, not shipped). Run by tools/check_all.sh as lint-coverage.
 - `tools/check_i18n.py`: Translation scanner for Crimson-Police (dev tooling, not shipped). Run by tools/check_all.sh as lint-i18n.
 - `tools/clickthrough.mjs`: The click-through of every tablet in a real browser (Playwright, the built web UI in its mock mode).
 - `tools/db_check.lua`: The checks of tools/db_check.sh: the real migrations runner on four kinds of database, PREPARE of every query, unique keys, column names and round-trip writes (dev tooling, not shipped).

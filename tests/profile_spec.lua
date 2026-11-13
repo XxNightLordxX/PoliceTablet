@@ -570,4 +570,40 @@ do
     rc.announce, CP.Admin.webhook = oldAnnounce, oldHook
 end
 
+-- ============================================================================
+--                        AN ADMIN'S OWN OTHER CHARACTER
+-- ============================================================================
+-- handleReport and commend.
+
+do
+    -- admin src 1 plays ADMIN1 now; ADMIN2 is another character of his license (CP.AdminKit.isSelf, adminkit_spec)
+    H.sql([[INSERT INTO cp_officers (citizenid, display_name, callsign, department, xp, hide_name)
+        VALUES ('ADMIN2', 'Alt Character', 'A-2', 'sast', 0, 0)]])
+    local oldKit = CP.AdminKit
+    CP.AdminKit = {
+        isSelf = function(src, cid)
+            return tonumber(src) == 1 and (cid == 'ADMIN1' or cid == 'ADMIN2')
+        end,
+    }
+    local function Report()
+        H.sql([[INSERT INTO cp_profile_reports (citizenid, reporter, reason, note, department, status)
+            VALUES ('ADMIN2', 'P2', 'bio', 'mine', 'sast', 'open')]])
+        return H.sql('SELECT MAX(id) AS id FROM cp_profile_reports')[1].id
+    end
+    local id = Report()
+    H.eq(select(2, Act('server:admin:handleReport', 1, { id = id, decision = 'dismiss', reason = 'fine' })),
+        'err.own_profile', 'an admin cannot dismiss a report on his own other character')
+    H.eq(select(2, Act('server:admin:handleReport', 1, { id = id, decision = 'clear', reason = 'fine' })),
+        'err.own_profile', '...nor clear it')
+    H.eq(H.sql('SELECT status FROM cp_profile_reports WHERE id = ?', { id })[1].status, 'open', 'the report stays open')
+    local good = 'Pulled two people out of a burning car.'
+    H.eq(select(2, Act('server:admin:commend', 1, { citizenid = 'ADMIN2', kind = 'leadership', citation = good })),
+        'err.commend_self', 'an admin cannot commend his own other character')
+    H.eq(tonumber(H.sql('SELECT COUNT(*) AS n FROM cp_commendations WHERE citizenid = \'ADMIN2\'')[1].n), 0,
+        'no commendation written')
+    -- someone else's character still works, and the console is never self
+    H.eq(P.handleReport(0, 'admin', { id = id, decision = 'dismiss', reason = 'fine' }), true, 'the console handles it')
+    CP.AdminKit = oldKit
+end
+
 return H

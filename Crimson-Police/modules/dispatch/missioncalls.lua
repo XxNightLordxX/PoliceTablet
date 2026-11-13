@@ -2531,6 +2531,9 @@ function MC.history(args)
     local okC, total = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_mission_calls c WHERE ' .. w, params)
     if not okC then return nil, 'err.internal' end
     total = math.floor(Num(total, 0))
+    -- past the last page reads the last page (a huge page number would wrap the OFFSET)
+    local pages = math.max(1, math.ceil(total / HISTORY_PAGE))
+    if page > pages then page = pages end
     local okR, rows = pcall(
         MySQL.query.await,
         ([[SELECT c.id, c.code, c.mission_type, c.area, c.priority, c.status,
@@ -2578,7 +2581,7 @@ function MC.history(args)
             claimSeconds = claimed and math.max(0, math.floor(claimed - created)) or nil,
         }
     end
-    return { rows = out, page = page, pages = math.max(1, math.ceil(total / HISTORY_PAGE)), total = total }
+    return { rows = out, page = page, pages = pages, total = total }
 end
 
 do

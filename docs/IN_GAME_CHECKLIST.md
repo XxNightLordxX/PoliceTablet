@@ -1103,3 +1103,17 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   mission calls past the limit are removed (no need to wait for the daily reset).
 - [ ] Desks: change a desk in Admin UI -> Departments twice quickly while a desk prop model is still loading (or
   join a Crimson-Arena match and leave it at once): afterwards each desk has one ox_target option, not two.
+
+## Coverage round fixes
+
+- [ ] Two live cases at once (`Config.RealPlayers.liveCrime.maxLiveRuns = 2`): stand on duty near both scenes; the
+  join pop-up for the first case shows, and once you answer it (or it runs out) the pop-up for the second case
+  shows, if its time has not run out. Only one pop-up is ever on screen; a surrender question that is open also
+  holds a join offer back until it closes.
+- [ ] End case: as the unit leader on a live case, open the radial, press End case, and while the confirm is open
+  pass the lead to another officer; Confirm then does nothing (only the new leader can end the case).
+- [ ] Admin UI -> Missions -> Operations and Dispatch history, and Leaderboards -> Item rewards: paging past the
+  last page shows the last page; no error appears in the server console.
+- [ ] Profile reports and commendations: an admin with two characters on one license cannot dismiss or clear a
+  report on his other character, or commend it, even while off duty or on duty as another character ("You can't
+  moderate your own profile" / "You can't commend yourself").

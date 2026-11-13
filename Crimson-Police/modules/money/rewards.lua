@@ -972,7 +972,7 @@ end
 -- args: a page number (old callers) or { page, citizenid, status, source, from, to }.
 function Rewards.adminView(args)
     if type(args) ~= 'table' then args = { page = args } end
-    local page = math.max(1, math.floor(Num(args.page, 1)))
+    local page = CP.Int(args.page, 1, 100000) -- a whole page number; a huge one would break the OFFSET
     local where, params = AdminWhere(args)
     if not where then return nil, params end
     EnsureChecked()

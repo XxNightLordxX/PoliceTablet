@@ -94,7 +94,7 @@ Add funds, Settings changes, presets, restarts, drops and reconnects, duty toggl
 resets, the maintenance lock, the guided tours (done, `/crimsonhelp`, the admin's reset, the Setup checklist on Home)
 and opening each tablet. It also mixes in hard crashes (no onResourceStop, the old boot's entities gone, as
 on a real server crash) and database outages (every MySQL call raises for 1-4 actions and up to 90 s; the error
-lines of that window are expected and dropped); `CP_SOAK_CHAOS=0` leaves both out. Even seeds turn every switch on first; odd seeds keep the shipped config. After every action
+lines of that window are expected and dropped); `CP_SOAK_CHAOS=0` leaves both out. Even seeds first turn on the supervisor mission controls (Permissions.supervisor.missionControls and every MissionControls control) and the money tools (Cash.allowManualCash, Cash.allowAddFunds); odd seeds keep the shipped config. Every other switch is turned on by `tests/settings_matrix_spec.lua` ("Every switch" below). After every action
 it checks: no player on two runs; every run ends once per player (one runEnded, one ledger row), and at the end
 every run has ended (a restart ends the runs it stops, as documented in runs.lua); the cash each character got
 equals the cash_paid of his paid and capped rows; no negative XP, pay or funding; the supervisors' per-day caps, the
@@ -121,7 +121,7 @@ on MariaDB in the database suite). Every one passed with the same results as on 
 world's storage copy goes the other way (the database into the saves folder, Replace). The only differences were in the
 specs themselves (they expected the saves folder, and read TINYINT 0 where oxmysql gives false), fixed there; no defect
 of the resource was found. `tests/load_spec.lua` (in all three suites) then loads the same world: 48 officers in three
-departments, 12 runs at once on the shipped config (the 13th refused) and 16 with every switch on (the 17th refused),
+departments, 12 runs at once on the shipped config (the 13th refused) and 16 with the load limits changed (the server cap 16, no launch cooldown, the route not required, manual cash on; the 17th refused),
 4 cross-department operations (one started by its join window's end), a drop and reconnect mid-run, two start
 deadlines, a backup during the 16 runs, 200 queued payments (Qbox refusing some officers' pay, the admin's manual cash
 to officers who are offline) with a storage copy and a backup while they wait, then the logins and a restart paying
@@ -720,6 +720,19 @@ Steps: A Setting's save reply carries the changed setting and the screen
 applies it (no second fetch); Reset all's reply carries the whole Settings view (before: 2 requests; after: 1); the typed ENABLE stays on the money tools (risky). The common Settings errors now say what to do next (for example "That is
 not valid JSON. Check the brackets, quotes and commas.", "This is not a Crimson-Police settings export. Paste a file
 made by Export in Settings.").
+
+### Every switch
+
+How it works: each boolean of Admin UI -> Settings that needs no restart can be turned on or off live; the server
+reads the new value at its next use (no module keeps a copy of a Config table).
+
+Spec: tests/settings_matrix_spec.lua, on the world of tests/workflows_full_spec.lua. Covers: (1) each boolean
+alone, flipped through CP.Settings.set (confirm ENABLE for the money switches), 3 s of the server's loops, then reset:
+no error line, no new Config health line that is not ok, the value back after the reset, and only the refusals by
+design (Database.enabled and QboxAdmins are locked, the Bonuses each/engineOnly flips are code facts,
+Tablet.access.requireItem needs an item); (2) every shipped-off boolean on together (Testing.* left out): the admin
+screens (Settings, Home, Payments, Restrictions, Mission controls), six Officer UIs and two Supervisor UIs open, EVOC
+ends completed and paid ($350) and a 2-officer unit accepts tactical, with no error line. Result: **Pass**.
 
 ### Corrections
 

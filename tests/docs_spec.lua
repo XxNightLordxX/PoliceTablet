@@ -118,6 +118,7 @@ local DOCS = {
     'IN_GAME_TEST_PLAN.md',
     'OWNER_GUIDE.md',
     'dev/ARCHITECTURE.md',
+    'dev/COVERAGE.md',
     'dev/FILE_NOTES.md',
     'dev/INTEGRATIONS.md',
     'dev/LOOPS.md',
@@ -224,7 +225,8 @@ H.eq(table.concat(StepIds('(WF5A) WF5F-1 (MG3) (FM5, FIN4) SALE3: (UI6) H3 added
 H.eq(table.concat(StepIds('F7 (F8) the F10 panel FX01-FX12 C9 Tactical P1 utf8mb4 MB4 fx10_loops.lua'), ' '), '',
     'the step id scan leaves keys, lint rules, Arena rules and priorities alone')
 for _, rel in ipairs(files) do
-    if rel:match('%.md$') and not rel:match('CHANGELOG%.md$') then
+    -- (COVERAGE.md is generated from the code comments, which have their own rule below)
+    if rel:match('%.md$') and not rel:match('CHANGELOG%.md$') and not rel:match('COVERAGE%.md$') then
         local hits = StepIds(ReadRepo(rel:gsub('^%./', '')) or '')
         H.eq(table.concat(hits, ', '), '', rel:gsub('^%./', '') .. ': no step or plan ids in it')
     end

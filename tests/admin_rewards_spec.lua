@@ -372,6 +372,12 @@ do
     local _, e = Cb('admin:getRewards', 1, { status = 'lost' })
     H.eq(e, 'err.invalid_filter', 'an unknown status is refused')
     H.eq(v.allowTakeBack, false, 'Take back ships off')
+    -- a huge or broken page number is a whole page number the query can use
+    for _, page in ipairs({ 2 ^ 62, math.maxinteger, 3 * 2 ^ 60 + 1, 1e300, -5, 1.5, 'x' }) do
+        local pv, pe = Cb('admin:getRewards', 1, { page = page })
+        H.ok(pv and math.type(pv.page) == 'integer' and pv.page >= 1 and pv.page <= 100000,
+            ('rewards page %s is a whole page number: %s'):format(tostring(page), tostring(pe)))
+    end
 end
 
 -- ============================================================================

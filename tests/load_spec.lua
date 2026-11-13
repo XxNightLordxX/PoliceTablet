@@ -9,7 +9,8 @@
 --      storage copy while runs go on, manual cash (the money tool ships off), a launch by an officer, a supervisor's
 --      points for another department's officer, and a new run while an operation holds the boards. Operation 1 (four
 --      officers of three departments) runs to the end during the 12 runs; a second launch waits for the cooldown.
---   2. every switch on (the admin's Settings): the cap 16, so 16 runs at once (the 17th refused), operations 2 to 4
+--   2. the load limits changed (the admin's Settings: the server cap 16, no launch cooldown, the route not required,
+--      manual cash on; every other switch: tests/settings_matrix_spec.lua): 16 runs at once (the 17th refused), operations 2 to 4
 --      back to back (the last starts by itself when its join window closes), a backup while the 16 runs go on, a
 --      player drop and reconnect mid-run, two runs nobody reaches (their start deadline), the rest done to the end
 --      while Qbox refuses the pay of a few officers (their payments wait).
@@ -371,7 +372,7 @@ H.eq(Running(), 0, 'shipped: no run left')
 H.eq(DoubleRows(), nil, 'shipped: no double ledger row')
 
 -- ============================================================================
---                     2. EVERY SWITCH ON: 16 RUNS AT ONCE
+--                 2. THE LOAD LIMITS CHANGED: 16 RUNS AT ONCE
 -- ============================================================================
 
 Phase('switches')

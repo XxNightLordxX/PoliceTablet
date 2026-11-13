@@ -49,6 +49,7 @@
 | `docs/dev/LOOPS.md` | Every loop and timer: when it runs, its interval and why, and the loop census |
 | `docs/dev/WORKFLOWS.md` | Every workflow by group (Officer, Supervisor, Field training, Criminal, Admin, System) and the end-to-end spec that drives it |
 | `docs/dev/STYLE.md` | The code style. `python3 tools/restyle.py` formats the tree, `--check` lists what isn't |
+| `docs/dev/COVERAGE.md` | The coverage list: every function and client entry point, what it must do and the spec that runs it (written by `python3 tools/check_coverage.py --write`) |
 | `docs/dev/FILE_NOTES.md` | One line per source file saying what it is for (written by `tools/restyle.py` from the file headers) |
 | `tests/` | Lua unit, SQL and end-to-end tests (`lua5.4 tests/run.lua`; needs a local MariaDB) |
 | `tools/check_all.sh` | Every check in one command |

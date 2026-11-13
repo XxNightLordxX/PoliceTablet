@@ -1711,6 +1711,9 @@ function Ops.history(args)
     local okC, total = pcall(MySQL.scalar.await, 'SELECT COUNT(*) AS n FROM cp_operations WHERE ' .. where, params)
     if not okC then return nil, 'err.internal' end
     total = math.floor(CP.U.num(total))
+    -- past the last page reads the last page (a huge page number would wrap the OFFSET)
+    local pages = math.max(1, math.ceil(total / HISTORY_PAGE))
+    if page > pages then page = pages end
     local owhere = 'o.created_at >= FROM_UNIXTIME(?) AND o.created_at < FROM_UNIXTIME(?)'
     if args.status ~= nil and args.status ~= '' then owhere = owhere .. ' AND o.status = ?' end
     local okR, rows = pcall(
@@ -1780,7 +1783,7 @@ function Ops.history(args)
             end
         end
     end
-    return { rows = list, page = page, pages = math.max(1, math.ceil(total / HISTORY_PAGE)), total = total }
+    return { rows = list, page = page, pages = pages, total = total }
 end
 
 do

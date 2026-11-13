@@ -15,6 +15,7 @@ What to update with each change is at the end, in "Working on the code".
 | `contracts` | `python3 tools/check_contracts.py` (module calls, events, NUI names, locale keys, build stamp) | 1.5 s |
 | `lint-fivem` | `python3 tools/lint_fivem.py`: FiveM pitfall rules FX01-FX12 (FX10, loops that can go round with no Wait, parses the Lua with `tools/lua_flow.py`; FX11, a `debug` function FXServer does not have; FX12, a server yes/no answer compared with `true`), known hits in `tools/lint_baseline.txt` | 7 s |
 | `lint-lua` | `python3 tools/lint_lua.py`: luacheck at warning level over `Crimson-Police/` and `tests/` (undefined globals, unused and shadowed locals, dead stores, unreachable code), the rules in `.luacheckrc`, known hits in `tools/lua_lint_baseline.txt` ("lint-lua" below) | 20 s |
+| `lint-coverage` | `python3 tools/check_coverage.py`: `docs/dev/COVERAGE.md` is the coverage list of today's code (every Lua function, exported web function and client entry point with what it must do and the spec that runs it), and every client entry point is driven by a spec that loads its file, known gaps in `tools/coverage_gaps.txt` ("Coverage list" below) | 3 s |
 | `lint-i18n` | `python3 tools/check_i18n.py`: the translation scanner, English joined to a translated text (J), a plural built in place (P), a count string with no `_one` / `_other` forms (S), known hits in `tools/i18n_baseline.txt` ("Translation scanner" below) | 1 s |
 | `style` | `python3 tools/restyle.py --check`: restyles a scratch copy of the tree and fails on any file that differs (docs/dev/STYLE.md) | 75 s |
 | `suite-db` | `lua5.4 tests/run.lua`: every `tests/*_spec.lua` on MariaDB | 112 s |
@@ -429,6 +430,30 @@ feature switch and shipped Config key, each `<kind> <side> <name>`) and compares
 
 The server list comes from tests/workflows_full_spec.lua's world on the shipped config, so a command or event that
 registers only while its feature is on is listed only while it ships on.
+
+### Coverage list
+
+`docs/dev/COVERAGE.md` lists every function (Lua: `function X.y`, `local function Name`, `X.y = function`, a table
+field `name = function`; web: every exported function of `web/src`, not the walks and mocks) and every client entry
+point (client net event, NUI callback, client callback, command, export, client action), each with its file:line,
+what it must do (the first sentence of the comment above it) and what runs it: a spec that loads the file and names
+it, `via <spec>` (the spec loads the file and runs it through its callers), `world` (only the whole-server or
+whole-client worlds load it), `walk <file>`, or `none`. `python3 tools/check_coverage.py` (the gate's `lint-coverage`)
+fails on:
+
+```
+stale: docs/dev/COVERAGE.md is not the list of today's code: run python3 tools/check_coverage.py --write
+  - no spec drives the client entry point event client:foo modules/foo/client/foo.lua (a spec that loads its file and names it)
+  - stale gap event client:bar ...: a spec drives it now (python3 tools/check_coverage.py --write drops it)
+```
+
+- After any change to the code or the specs, run `python3 tools/check_coverage.py --write` and commit the list.
+- A client entry point counts as driven only by a spec that loads its own client file and names it; a server spec
+  that only sees the server send the event does not count. Write that spec (`tests/livecrime_client_spec.lua` is an
+  example: ox_lib's alertDialog stubbed as one dialog at a time, the handlers fired with edge payloads).
+  `tools/coverage_gaps.txt` holds the entry points with no such spec on 2026-11-13; it only shrinks. `--write-gaps`
+  adds today's undriven ones to it: only on purpose, and say why in the commit.
+- The web components the walks do not import show `none`: `tools/clickthrough.mjs` (opt-in) renders every screen.
 
 ### Crash matrix
 
