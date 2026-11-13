@@ -26,6 +26,20 @@ The first version for sale.
 
 ### Fixes before 1.0.0
 
+- **Disputes and maintenance locks:** a second maintenance lock dropped the time the first one added to a dispute
+  window, so a voided run could be forfeited (and a dispute refused) early. Every lock a window reached now counts,
+  and the end of a lock is saved in one step, so a failed save or a new lock right after it never loses or stretches
+  one.
+- **Payments -> Resolve, Pay the rest:** **Mark withdrawn** for a rest whose department call was cut half way but
+  charged the department, so a later Pay the rest never charges it twice. A Release that gives the department its
+  money back asks for the amount typed, a refused one gets its own audit row, and one whose refund went through but
+  could not finish only offers Release (it never refunds twice).
+- **Guided tours:** the arrow keys no longer move a tour while it steps aside for a dialog.
+- **Database outages:** the mission ban and suspension checks no longer read the database on every lookup while it
+  is down (a mission ban still holds everyone, a known suspension still holds).
+- **Mission controls:** raising `Config.MissionControls.changeWait` in game now also counts the changes made before
+  the last start.
+
 - **Payments -> Resolve, Mark withdrawn:** a Pay again whose department withdrawal (or its refund) was cut half way,
   where the department's history shows it **was** charged and not given it back, could only be closed with Mark
   paid. **Mark withdrawn** (tick the box) now records that, with no money moved: Pay again then pays the officer with

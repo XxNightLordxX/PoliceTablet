@@ -1055,9 +1055,18 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
   given back: Mark withdrawn (box ticked) moves no money and the step shows "withdrawn"; Pay again then pays him once
   and the department's balance does not drop again. On another such row, Release Pay again at "withdrawn" puts the
   money back on the department's account once.
+  Release at "withdrawn" asks for the amount typed: a wrong or empty amount is refused.
+- [ ] Pay the rest, Mark withdrawn: with Pay the rest on and `Config.Cash.source = 'society'`, a rest whose
+  department withdrawal was cut half way (Resolve shows "The department withdrawal was cut or failed half way") but
+  whose department history shows it was charged: Mark withdrawn moves no money; Release then asks for the rest typed
+  and puts it back on the department once; Pay the rest then pays the officer and charges the department once.
 - [ ] Disputes and a maintenance lock: void a run, hold a maintenance lock (a restore) from hour 40 to hour 50,
   suspend the officer at hour 52 and lift it at hour 60: 47 h after the lift his Profile still shows the Dispute
   button and the run's cash is still held; at 49 h it is gone.
+- [ ] Two maintenance locks: void a run, hold a lock from hour 10 to hour 20 and another from hour 50 to hour 55: at
+  hour 62 the Dispute button still shows and the cash is still held; at hour 64 it is gone.
+- [ ] Guided tour and a dialog: start a tour, open a dialog over it (the card steps aside), press the arrow keys: the
+  tour stays on its step; close the dialog and the arrows move it again.
 - [ ] Translations: with a translated locales/<code>.json written before the counted (plural) forms (it has
   'admin.audit.total' but not 'admin.audit.total_one'), Admin UI -> Audit shows the translated total, not the
   English one.

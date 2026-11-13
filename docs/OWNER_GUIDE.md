@@ -622,7 +622,7 @@ Everything else works as shipped. These are the ones owners change most:
 | Setting | What it does |
 |---|---|
 | `Config.Rewards` | Item rewards, off by default (see [3.3](#33-item-rewards)) |
-| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted; only a suspension that started while the window was still open counts, so a later one never reopens an old run) and while a maintenance lock (a storage copy or a restore) holds, also across restarts; held cash and items of a voided run are forfeited only after it |
+| `Config.Disputes.windowHours` | How long officers have to dispute a run (48 hours). The time stands still while the officer is suspended (he gets the whole window once the suspension ends or is lifted; only a suspension that started while the window was still open counts, so a later one never reopens an old run) and while a maintenance lock (a storage copy or a restore) holds, also across restarts (every lock the window reached adds its time, not only the last one); held cash and items of a voided run are forfeited only after it |
 
 **System**
 
@@ -2088,7 +2088,9 @@ What you can do from a row (the buttons show only where they make sense):
   and it deposits only (the department, which already paid, is not charged again). When Qbox or Renewed-Banking fails but the balance shows the money
   arrived (or did not move at all), the payment finishes (or goes back to pending) by itself.
 - **Resolve** on a paid or capped row marked **Check**: a money tool left half way. Pay the rest: **Mark the rest
-  paid** or **Release** (the department gets back what it paid). A clawback: **It was taken** or **It was not
+  paid** or **Release** (the department gets back what it paid: type the amount). When the department's call was cut
+  half way and its history shows it **was** charged for the rest and did not get it back, press **Mark withdrawn**
+  first (no money moves); **Release** then gives the department its money back. A clawback: **It was taken** or **It was not
   taken**. Giving a clawback back to the department failed: it is tried again at every start and every 10 minutes,
   or press **Retry give-back** (type the amount) or **It arrived**. A Pay again whose department withdrawal went
   through but the deposit failed can be pressed again: it only deposits. A Pay again whose own department
@@ -2097,8 +2099,9 @@ What you can do from a row (the buttons show only where they make sense):
   confirm: no money moves, and Pay again or Mark paid can be used again. When the department's history shows it
   **was** charged for that Pay again and did not get it back, press **Mark withdrawn** instead (tick that box): no
   money moves, and the Pay again is at "withdrawn". From there Pay again pays the officer with the deposit only (the
-  department is never charged twice), or **Release Pay again** gives up: the department gets its money back first,
-  then Pay again or Mark paid can be used again. These rows count in the Payments badge.
+  department is never charged twice), or **Release Pay again** gives up: the department gets its money back first
+  (type the amount), then Pay again or Mark paid can be used again. When a Release's refund is refused, the audit log
+  shows a second row "refused". These rows count in the Payments badge.
 - **Pay now** for a pending payment of an officer who is online, and **Retry all pending** for everyone online. These
   use the normal pay flow, so nothing is ever paid twice. Like **Forfeit now** and **Cancel payment**, they write their
   audit row first: if it can't be written, nothing happens.
