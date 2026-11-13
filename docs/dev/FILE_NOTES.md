@@ -741,5 +741,6 @@ ARCHITECTURE.md §1 and the SPEC "Data model") and Crimson-Police/web/dist (the 
 - `tools/lint_fivem.py`: FiveM pitfall lint for Crimson-Police (dev tooling, not shipped).
 - `tools/lint_lua.py`: General Lua lint for Crimson-Police and its tests: luacheck at warning level (dev tooling, not shipped).
 - `tools/lua_flow.py`: Control flow of Lua loops, for tools/lint_fivem.py rule FX10 (dev tooling, not shipped).
+- `tools/mutate.py`: Mutation testing for the Lua side: small breaks in one file, run against the specs that should catch them.
 - `tools/restyle.py`: Restyles Crimson-Police to the owner's style (docs/dev/STYLE.md) and writes docs/dev/FILE_NOTES.md (dev tooling, not shipped).
 - `tools/setup_test_env.sh`: Checks what tools/check_all.sh needs on Debian/Ubuntu, and installs it on request.
