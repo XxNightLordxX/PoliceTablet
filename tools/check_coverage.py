@@ -19,8 +19,13 @@ spec that runs it:
                 specs on its world; loops_spec, resmon_spec and escrow_boot_spec load every client script)
   walk <file>   a web walk (src/**/*.walk.ts) names it or imports its module
   none          nothing runs it
-A client entry point counts as driven only when a spec that loads its own client file names it: the server specs
-that only see the server send it do not count. The entry points with no such spec are listed in
+A client entry point counts as driven only when a spec that loads its own client file fires or calls it (comments
+and the lines that only look at what the server sent, such as H.findEvents, never count): an event by its full
+name ('client:x' or 'crimson-police:client:x', or the bare 'x' on a call line of a spec that builds the name with
+'crimson-police:client:' ..); an NUI callback, client action, callback, command or export by a call (.x( :x( ['x'](),
+as the first argument of a call (Client('x'), Act('x')), or as name = 'x' (the NUI 'client' endpoint). Events
+registered under the literal 'crimson-police:client:x' count as client:x. The server specs that only see the server
+send it do not count. The entry points with no such spec are listed in
 tools/coverage_gaps.txt (`<kind> <name> <file>`); a new one fails here, and a listed one that a spec now drives is
 stale (--write drops it). docs/dev/TESTING.md "Coverage list".
 """
@@ -155,6 +160,56 @@ def names_it(text, short):
     return short in got
 
 
+def _code_lines(text):
+    """The lines of a spec with their Lua comments cut, minus the lines that only read what the server sent."""
+    out = []
+    for l in text.split('\n'):
+        i = l.find('--')
+        while i >= 0:
+            if l[:i].count("'") % 2 == 0 and l[:i].count('"') % 2 == 0:
+                l = l[:i]
+                break
+            i = l.find('--', i + 2)
+        if not OUTGOING_RX.search(l):
+            out.append(l)
+    return out
+
+
+OUTGOING_RX = re.compile(r'findEvents|EventsTo|Events\(|Sent\(|SentTo|lastEvent|Has\(|readFile|:find\(')
+CALLISH_RX = re.compile(r'(?i)(fire|call|act|run|nui|trigger|emit|send|invoke|press|click|drive|step)\w*\s*\(')
+CONCAT_RX = re.compile(r"""['"](?:crimson-police:)?client:['"]\s*\.\.""")
+_lines = {}
+
+
+def drives(text, kind, name):
+    """The spec fires or calls the client entry point (not only names it)."""
+    lines = _lines.get(id(text))
+    if lines is None:
+        lines = _code_lines(text)
+        _lines[id(text)] = lines
+    key = name.split(':', 1)[1] if name.startswith('client:') else name
+
+    def quoted(x):
+        return ("'%s'" % x, '"%s"' % x)
+
+    if kind == 'event':
+        full = quoted(name) + quoted('crimson-police:' + name)
+        if any(any(p in l for p in full) for l in lines):
+            return True
+        if CONCAT_RX.search(text):
+            return any(any(p in l for p in quoted(key)) and CALLISH_RX.search(l) for l in lines)
+        return False
+    calls = ('.%s(' % key, ':%s(' % key, "['%s'](" % key, '["%s"](' % key)
+    first = re.compile(r"""[A-Za-z_]\w*\(\s*['"]%s['"]""" % re.escape(key))
+    named = re.compile(r"""\bname\s*=\s*['"]%s['"]""" % re.escape(key))
+    for l in lines:
+        if any(c in l for c in calls) or first.search(l) or named.search(l):
+            return True
+        if any(p in l for p in quoted(key)) and CALLISH_RX.search(l):
+            return True
+    return False
+
+
 def is_client(r):
     return '/client/' in r or r.endswith('/client.lua') or r.startswith('client/')
 
@@ -198,11 +253,12 @@ def build():
                     if kind in ('command', 'export') and not client:
                         continue
                     if kind == 'event' and name.startswith('crimson-police:'):
-                        continue
-                    key = name.split(':', 1)[1] if name.startswith('client:') else name
+                        if not name.startswith('crimson-police:client:'):
+                            continue
+                        name = name[len('crimson-police:'):]
                     cover = None
                     for n in load:
-                        if key in sp[n]:
+                        if drives(sp[n], kind, name):
                             cover = n
                             break
                     entries.append((kind, name, r, i + 1, cover))

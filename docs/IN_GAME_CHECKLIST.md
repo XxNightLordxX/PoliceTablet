@@ -1117,3 +1117,14 @@ marker. Run the mission on that location (turn its other locations off, docs/OWN
 - [ ] Profile reports and commendations: an admin with two characters on one license cannot dismiss or clear a
   report on his other character, or commend it, even while off duty or on duty as another character ("You can't
   moderate your own profile" / "You can't commend yourself").
+
+## Runtime and oracle round fixes
+
+- [ ] Season rewards after a correction (`Config.Rewards.enabled = true` and `Config.Rewards.season` set): end a
+  season while an officer of the champion department is offline, so his champion reward waits in his locker. Admin
+  UI -> Seasons: Recount champion to another department and back again (or Reopen the season and end it again with
+  the same result). The officer's champion (and top 10) reward is back in his Rewards locker, once, not twice. A
+  season reward you cancelled yourself in Leaderboards -> Item rewards stays cancelled.
+- [ ] Commendations: an admin with two characters on one license cannot restore (unrevoke) or edit the citation
+  of a commendation on either of his own characters ("You can't do this to one of your own characters. Ask another
+  admin."); on another officer both still work.

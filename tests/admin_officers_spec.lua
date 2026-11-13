@@ -524,6 +524,9 @@ do
     res = Cb('admin:previewRecordMove', 1, { from = 'OLD00009', to = 'NEW00009' })
     H.ok(res and res.error == 'err.record_move_paying', 'refused while a payment is paying')
     H.sql('DELETE FROM cp_mission_runs WHERE id = ?', { payId })
+    -- H15: an item reward still waiting in the old character's locker moves with the record
+    H.sql([[INSERT INTO cp_item_rewards (source, source_key, citizenid, item, count, value, status, created_at)
+        VALUES ('level', '5', 'OLD00009', 'water', 1, 20, 'pending', NOW())]])
 
     pv = Data('admin:previewRecordMove', 1, { from = 'OLD00009', to = 'NEW00009' })
     local ok, e = Act('server:admin:moveRecord', 1, {
@@ -544,11 +547,15 @@ do
     H.eq(One([[SELECT department FROM cp_mission_runs WHERE citizenid = 'NEW00009']]).department, 'sast',
         'rows keep their department')
     H.eq(W.xp('NEW00009'), 150, 'XP recomputed from the rows')
+    H.eq(Count([[SELECT COUNT(*) AS n FROM cp_item_rewards WHERE citizenid = 'NEW00009' AND status = 'pending']]), 1,
+        'H15: the waiting item reward moved too')
 
     ok, e = Act('server:admin:undoRecordMove', 1, { jobId = jobId, reason = 'Mistake' })
     H.ok(ok == true, 'undo: ' .. tostring(e))
     H.eq(Count([[SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = 'OLD00009']]), 1, 'moved back')
     H.eq(Count([[SELECT COUNT(*) AS n FROM cp_officers WHERE citizenid = 'OLD00009']]), 1, 'the record is back')
+    H.eq(Count([[SELECT COUNT(*) AS n FROM cp_item_rewards WHERE citizenid = 'OLD00009']]), 1,
+        'H15: and the item reward moved back')
 
     -- the target has rows of its own: refused
     W.row({ citizenid = 'NEW00009', points = 5 })
@@ -677,6 +684,153 @@ do
     end
     H.ok(not shown, 'gone at its expiry')
     H.ok(nid ~= nil, 'notice id')
+end
+
+-- ============================================================================
+--                                   8b. H15
+-- ============================================================================
+-- UNREVOKE AND EDIT CITATION NEVER ON THE ADMIN'S OWN RECORDS.
+
+do
+    local function Revoked(cid)
+        H.sql([[INSERT INTO cp_commendations (citizenid, kind, citation, department, issued_by, issuer_role, revoked,
+            revoked_by, revoke_reason) VALUES (?, 'valor', 'Brave work on the bank job', 'sast', 'SUP00002',
+            'supervisor', 1, 'ADM00009', 'mistake')]], { cid })
+        return H.sql('SELECT MAX(id) AS id FROM cp_commendations')[1].id
+    end
+    local function RevokedNow(id)
+        return H.sql('SELECT revoked FROM cp_commendations WHERE id = ?', { id })[1].revoked
+    end
+    for _, cid in ipairs({ 'ADM00001', 'ALT00001' }) do
+        local id = Revoked(cid)
+        local ok, e = Act('server:admin:unrevokeCommendation', 1, { id = id, reason = 'restore it' })
+        H.ok(not ok and e == 'err.self_target',
+            'H15: unrevoke on the admin\'s own character ' .. cid .. ' is refused: ' .. tostring(e))
+        H.ok(tostring(RevokedNow(id)) == '1' or RevokedNow(id) == true, 'H15: and it stays revoked (' .. cid .. ')')
+        ok, e = Act('server:admin:editCitation', 1, { id = id, reason = 'x', citation = 'Edited by the admin himself' })
+        H.ok(not ok and e == 'err.self_target', 'H15: editCitation on ' .. cid .. ' is refused: ' .. tostring(e))
+    end
+    local id = Revoked('OFF00003')
+    local ok, e = Act('server:admin:editCitation', 1, { id = id, reason = 'x', citation = 'Edited by another admin' })
+    H.ok(ok == true, 'H15: editCitation on another officer still works: ' .. tostring(e))
+    ok, e = Act('server:admin:unrevokeCommendation', 1, { id = id, reason = 'restore it' })
+    H.ok(ok == true and (tostring(RevokedNow(id)) == '0' or RevokedNow(id) == false),
+        'H15: unrevoke on another officer still works: ' .. tostring(e))
+end
+
+-- ============================================================================
+--                                   8c. H15
+-- ============================================================================
+-- RESET PROGRESSION, BADGE RE-CHECKS, CLEAR OVERRIDE, RUN READS.
+
+do
+    local cid = 'OFF00004'
+    H.sql('DELETE FROM cp_mission_runs WHERE citizenid = ?', { cid })
+    H.sql('DELETE FROM cp_mission_runs_archive WHERE citizenid = ?', { cid })
+    local shared = W.uuid()
+    local r1 = W.row({ citizenid = cid, department = 'fib', points = 40, at = H.time - 3 * DAY, type = 'patrol' })
+    local r2 = W.row({
+        citizenid = cid,
+        department = 'fib',
+        points = 60,
+        at = H.time - DAY,
+        type = 'tactical',
+        mission = 'bank_job',
+        state = 'failed',
+    })
+    W.row({ citizenid = cid, department = 'fib', points = 70, at = H.time - 5000, uuid = shared })
+    W.row({ citizenid = 'ALT00001', department = 'sast', points = 70, at = H.time - 5000, uuid = shared })
+    W.async(function() return CP.Scoring.syncXp(cid) end)
+
+    -- the run list and its filters, one run, the badge catalog
+    local runs = Data('admin:getOfficerRuns', 1, { citizenid = cid })
+    H.eq(runs and runs.total, 3, 'H15: getOfficerRuns: every run of the officer')
+    runs = Data('admin:getOfficerRuns', 1, { citizenid = cid, type = 'tactical' })
+    H.ok(runs and runs.total == 1 and runs.runs[1].id == r2, 'H15: the type filter')
+    runs = Data('admin:getOfficerRuns', 1, { citizenid = cid, state = 'failed' })
+    H.ok(runs and runs.total == 1 and runs.runs[1].id == r2, 'H15: the state filter')
+    runs = Data('admin:getOfficerRuns', 1, { citizenid = cid, from = H.time - 4 * DAY, to = H.time - 2 * DAY })
+    H.ok(runs and runs.total == 1 and runs.runs[1].id == r1, 'H15: the from/to window')
+    runs = Data('admin:getOfficerRuns', 1, { citizenid = cid, size = 1, page = 99 })
+    H.ok(runs and runs.size == 1 and runs.pages == 3 and runs.page == 3 and #runs.runs == 1,
+        'H15: a page past the end reads the last page')
+    local res = Cb('admin:getOfficerRuns', 1, { citizenid = 'bad id!' })
+    H.ok(res and res.ok == false and res.error == 'err.invalid_citizenid', 'H15: a bad citizenid')
+    res = Cb('admin:getOfficerRuns', 3, { citizenid = cid })
+    H.ok(res and res.ok == false, 'H15: an officer may not read them')
+    local run = Data('admin:getRun', 1, { rowId = r1 })
+    H.ok(run and run.citizenid == cid and run.id == r1, 'H15: getRun: the row with its officer')
+    res = Cb('admin:getRun', 1, { rowId = 'x' })
+    H.ok(res and res.ok == false and res.error == 'err.invalid_row', 'H15: getRun: a bad id')
+    res = Cb('admin:getRun', 1, { rowId = 99999999 })
+    H.ok(res and res.ok == false and res.error == 'err.row_not_found', 'H15: getRun: no such row')
+    local cat = Data('admin:getBadgeCatalog', 1, {})
+    H.ok(cat and type(cat.achievements) == 'table' and #cat.achievements > 0, 'H15: the badge catalog')
+
+    -- badge override, then back to automatic
+    local badge = cat and cat.achievements[1] and (cat.achievements[1].id or cat.achievements[1]) or 'iron_wheels'
+    local ok, e = Act('server:admin:grantBadge', 1, { citizenid = cid, badgeId = badge, reason = 'test' })
+    H.ok(ok == true, 'H15: a badge granted by hand: ' .. tostring(e))
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE citizenid = ? AND badge_id = ?', { cid, badge }), 1,
+        'H15: as an override')
+    ok, e = Act('server:admin:clearBadgeOverride', 1, { citizenid = 'ALT00001', badgeId = badge, reason = 'x' })
+    H.ok(not ok and e == 'err.self_target', 'H15: never on the admin\'s own character: ' .. tostring(e))
+    ok, e = Act('server:admin:clearBadgeOverride', 1, { citizenid = cid, badgeId = 5, reason = 'x' })
+    H.ok(not ok and e == 'err.invalid_payload', 'H15: a bad badge id')
+    ok, e = Act('server:admin:clearBadgeOverride', 1, { citizenid = cid, badgeId = badge, reason = 'automatic' })
+    H.ok(ok == true, 'H15: back to automatic: ' .. tostring(e))
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_badge_overrides WHERE citizenid = ? AND badge_id = ?', { cid, badge }), 0,
+        'H15: the override is gone')
+    H.eq(W.auditCount('badgeOverrideClear', cid), 1, 'H15: audited')
+    ok, e = Act('server:admin:clearBadgeOverride', 1, { citizenid = cid, badgeId = badge, reason = 'again' })
+    H.ok(not ok, 'H15: nothing left to clear: ' .. tostring(e))
+
+    -- re-check one officer, then everyone (a job)
+    H.clockMs = H.clockMs + 5000
+    ok, e = Act('server:admin:recheckBadges', 1, { citizenid = cid })
+    H.ok(ok == true and type(e.added) == 'table' and type(e.removed) == 'table',
+        'H15: re-check badges: ' .. tostring(e))
+    ok, e = Act('server:admin:recheckBadges', 1, { citizenid = 'NOBODY77' })
+    H.ok(not ok and e == 'err.unknown_officer', 'H15: an unknown officer')
+    H.clockMs = H.clockMs + 5000
+    local before = W.auditCount('badgesRecheck', 'everyone')
+    ok, e = Act('server:admin:recheckAllBadges', 1, { requestId = Rid() })
+    H.ok(ok == true and e.jobId ~= nil and e.officers >= 3, 'H15: re-check everyone starts a job: ' .. tostring(e))
+    H.ok(W.drain(), 'H15: the job drains')
+    H.eq(One('SELECT state FROM cp_admin_jobs WHERE id = ?', { e.jobId }).state, 'done', 'H15: and is done')
+    H.eq(W.auditCount('badgesRecheck', 'everyone'), before + 1, 'H15: audited')
+
+    -- reset progression: preview first, the typed citizenid, never the run the admin's alt shared, Undo restores
+    local pv = Data('admin:previewBulkVoid', 1, { filter = { citizenid = cid, allTime = true, includeAwards = true } })
+    H.ok(pv and pv.total == 2 and pv.excluded == 1, 'H15: the preview leaves the shared run out')
+    ok, e = Act('server:admin:resetProgression', 1,
+        { citizenid = cid, reason = 'x', confirm = 'WRONG', previewToken = pv.previewToken, requestId = Rid() })
+    H.ok(not ok and e == 'err.confirm_mismatch', 'H15: the typed citizenid is needed')
+    ok, e = Act('server:admin:resetProgression', 1, {
+        citizenid = 'ALT00001',
+        reason = 'x',
+        confirm = 'ALT00001',
+        previewToken = pv.previewToken,
+        requestId = Rid(),
+    })
+    H.ok(not ok and e == 'err.self_target', 'H15: never the admin\'s own character: ' .. tostring(e))
+    ok, e = Act('server:admin:resetProgression', 1,
+        { citizenid = cid, reason = 'start over', confirm = cid, previewToken = pv.previewToken, requestId = Rid() })
+    H.ok(ok == true and e.rows == 2, 'H15: reset progression: ' .. tostring(e and e.rows or e))
+    H.ok(W.drain(), 'H15: the job drains')
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND voided = 0', { cid }), 1,
+        'H15: only the shared run is left')
+    H.eq(One('SELECT void_kind FROM cp_mission_runs WHERE id = ?', { r1 }).void_kind, 'correction',
+        'H15: a correction, never a strike')
+    H.eq(W.xp(cid), 70, 'H15: XP from the run left')
+    H.ok(W.auditCount('resetProgression') >= 1, 'H15: audited')
+    local jobId = e.jobId
+    ok, e = Act('server:admin:restoreBatch', 1, { batchId = jobId, reason = 'Undo', requestId = Rid() })
+    H.ok(ok == true, 'H15: Undo the reset: ' .. tostring(e))
+    W.drain()
+    H.eq(Count('SELECT COUNT(*) AS n FROM cp_mission_runs WHERE citizenid = ? AND voided = 0', { cid }), 3,
+        'H15: every run is back')
+    H.eq(W.xp(cid), 170, 'H15: and the XP')
 end
 
 -- ============================================================================

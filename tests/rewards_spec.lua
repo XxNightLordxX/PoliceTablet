@@ -604,6 +604,35 @@ do
     H.eq(#Rows('CID5'), 0, 'another department: nothing')
     H.eq(#Rows('CID6'), 1, 'top 10 only')
     H.eq(Rows('CID6')[1].status, 'pending', 'offline: pending in the locker')
+    -- H15: a season correction (Reopen season, Recount champion) cancels the unfinished season rewards; when the
+    -- season ends again with the same result they come back (they never reached the officer). A row an admin
+    -- cancelled himself (rewardCancel audit row) stays forfeited.
+    local function Cancel(cid, key)
+        H.sql([[UPDATE cp_item_rewards SET status = 'forfeited' WHERE citizenid = ? AND source = 'season'
+            AND source_key = ? AND status IN ('held', 'pending')]], { cid, key })
+    end
+    local function Status(cid, key)
+        for _, r in ipairs(Rows(cid)) do if r.source_key == key then return r.status end end
+    end
+    Cancel('CID4', 'champion:7')
+    Cancel('CID6', 'top10:7')
+    H.eq(Status('CID4', 'champion:7'), 'forfeited', 'H15: the recount cancelled the old champion reward')
+    CP.Hooks.fire('season:ended', 7, { champion = 'fib', top10 = { 'CID4', 'CID6' }, recount = true })
+    H.eq(Status('CID4', 'champion:7'), 'forfeited', 'H15: recount sast -> fib: the SAST officer keeps nothing')
+    H.eq(Status('CID5', 'champion:7'), 'pending', 'H15: recount sast -> fib: the FIB officer gets it')
+    H.eq(Status('CID6', 'top10:7'), 'pending', 'H15: a cancelled top 10 reward comes back when the season ends again')
+    Cancel('CID5', 'champion:7')
+    CP.Hooks.fire('season:ended', 7, { champion = 'sast', top10 = { 'CID4', 'CID6' }, recount = true })
+    H.eq(Status('CID4', 'champion:7'), 'pending', 'H15: recount back to sast: the SAST officer gets it again')
+    H.eq(Status('CID5', 'champion:7'), 'forfeited', 'H15: and the FIB one is cancelled')
+    H.eq(#Rows('CID4'), 2, 'H15: no new row, the old one came back')
+    -- an admin's own Cancel stays final
+    local fid = H.sql([[SELECT id FROM cp_item_rewards WHERE citizenid = 'CID5' AND source_key = 'champion:7']])[1].id
+    H.sql([[INSERT INTO cp_audit (action, target, actor) VALUES ('rewardCancel', ?, 'ADMIN')]],
+        { ('reward #%d'):format(fid) })
+    Cancel('CID4', 'champion:7')
+    CP.Hooks.fire('season:ended', 7, { champion = 'fib', top10 = { 'CID4', 'CID6' }, recount = true })
+    H.eq(Status('CID5', 'champion:7'), 'forfeited', 'H15: a season reward an admin cancelled himself stays forfeited')
     H.time = NOW
 end
 

@@ -1306,6 +1306,15 @@ if CP.AdminKit and CP.AdminKit.action then
         return true, { added = added, removed = removed, total = total }
     end, { reason = true })
 
+    -- Never on a commendation of the admin's own license (any of his characters), as commend and handleReport
+    local function CommendationOwner(p)
+        local id = math.tointeger(tonumber(p.id))
+        if not id then return nil end
+        CP.Db()
+        local r = MySQL.single.await('SELECT citizenid FROM cp_commendations WHERE id = ?', { id })
+        return r and { citizenid = tostring(r.citizenid) } or nil
+    end
+
     Kit.action('server:admin:unrevokeCommendation', 'officerRecords', function(ctx)
         local id = math.tointeger(tonumber(ctx.payload.id))
         if not id or id < 1 then return false, 'err.invalid_payload' end
@@ -1321,7 +1330,7 @@ if CP.AdminKit and CP.AdminKit.action then
         RefreshNews(cid)
         PushProfile(cid)
         return true, { id = id }
-    end, { reason = true })
+    end, { reason = true, self = CommendationOwner })
 
     Kit.action('server:admin:editCitation', 'officerRecords', function(ctx)
         local id = math.tointeger(tonumber(ctx.payload.id))
@@ -1342,7 +1351,7 @@ if CP.AdminKit and CP.AdminKit.action then
         RefreshNews(cid)
         PushProfile(cid)
         return true, { id = id }
-    end, { reason = true })
+    end, { reason = true, self = CommendationOwner })
 end
 
 -- Officers → Review: the admin sidebar count, registered once every module has loaded.

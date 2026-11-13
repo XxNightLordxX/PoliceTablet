@@ -2049,5 +2049,146 @@ do
     H.time = T0
 end
 
+-- ============================================================================
+--                                   20. H15
+-- ============================================================================
+-- THE CASH SOURCE PREVIEW, THE LOW-BALANCE TOASTS, RESOLVE "GIVE-BACK DONE", RETRY ONE UNFUNDED ROW, AND THE
+-- ROLLBACK OF RETRY UNFUNDED / PAY FORFEITED AFTER ALL WHEN THEIR AUDIT ROW FAILS.
+
+do
+    Reset()
+    H.sql('DELETE FROM cp_mission_runs')
+    local Kit = CP.AdminKit
+    local realBalance = { sast = bank.balance.sast, fib = bank.balance.fib }
+
+    -- (a) Payments.sourcePreview (admin:previewCashSource): balance, held/pending rows and what they owe
+    Config.Cash.source = 'society'
+    bank.balance.sast, bank.balance.fib = 300, 9000
+    Row({ status = 'pending', owed = 400 })
+    Row({ status = 'held', owed = 250, dept = 'fib' })
+    Row({ status = 'paid', owed = 999, paid = 999 })
+    local pv = Cb('admin:previewCashSource', 1, {})
+    local by = {}
+    for _, d in ipairs(pv and pv.departments or {}) do by[d.department] = d end
+    H.ok(pv and pv.source == 'society', 'H15: the preview names the source in use')
+    H.ok(by.sast and by.sast.rows == 1 and by.sast.owed == 400 and by.sast.balance == 300 and by.sast.short == true,
+        'H15: SAST owes $400 on one row and its $300 is short')
+    H.ok(by.fib and by.fib.rows == 1 and by.fib.owed == 250 and by.fib.balance == 9000 and not by.fib.short,
+        'H15: FIB owes $250 and has enough')
+    H.eq(select(2, Cb('admin:previewCashSource', 7, {})), 'err.no_permission', 'H15: an officer may not preview')
+
+    -- (b) the daily low-balance toast: only the low department's online supervisors
+    local sent = {}
+    local realMany = CP.Tablet.notifyMany
+    CP.Tablet.notifyMany = function(srcs, kind, key, vars)
+        sent[#sent + 1] = { srcs = srcs, key = key, vars = vars }
+        return realMany(srcs, kind, key, vars)
+    end
+    Config.Cash.lowBalanceWarn = 6000
+    H.eq(Pay.lowBalanceToasts(), 1, 'H15: one low department, one toast')
+    local to = {}
+    for _, s in ipairs(sent[1] and sent[1].srcs or {}) do to[s] = true end
+    H.ok(sent[1] and sent[1].key == 'payments.low_balance_toast' and to[2] and not to[7] and not to[8] and not to[3],
+        'H15: to SAST\'s supervisors only (not officers, not FIB)')
+    sent = {}
+    Config.Cash.lowBalanceWarn = 0
+    H.eq(Pay.lowBalanceToasts(), 0, 'H15: lowBalanceWarn 0: no toast')
+    Config.Cash.lowBalanceWarn = 6000
+    Config.Cash.source = 'server'
+    H.eq(Pay.lowBalanceToasts(), 0, 'H15: Cash.source server: no toast')
+    H.eq(#sent, 0, 'H15: nothing sent')
+    CP.Tablet.notifyMany = realMany
+    Config.Cash.lowBalanceWarn = 0
+    bank.balance.sast, bank.balance.fib = realBalance.sast, realBalance.fib
+
+    -- (c) Resolve "give-back done": staff gave the cut back by hand; no money moves
+    H.sql('DELETE FROM cp_mission_runs')
+    Config.Cash.allowClawback = true
+    Config.Cash.source = 'society'
+    people[7].money.bank = 1000
+    local realDeposit = CP.Banking.depositSociety
+    local idC = Row({
+        status = 'paid',
+        owed = 300,
+        paid = 300,
+        cash = { source = 'society', societyAccount = 'sast', account = 'bank' },
+    })
+    CP.Banking.depositSociety = function() return false end
+    local ok, e = Act('server:admin:clawback', 1,
+        { rowId = idC, amount = 40, reason = 'x', confirm = '40', requestId = Rid() })
+    CP.Banking.depositSociety = realDeposit
+    local c = RowOf(idC).bd.cash
+    H.ok(ok and c.giveBack == 'owed' and c.backOwed == 40, 'H15: a give-back is owed: ' .. tostring(e))
+    local given0, sast0, bank0 = math.floor(tonumber(c.backGiven) or 0), bank.balance.sast, people[7].money.bank
+    ok, e = Act('server:admin:resolvePayment', 1,
+        { rowId = idC, outcome = 'giveBackDone', checked = true, reason = 'gave it by hand', requestId = Rid() })
+    c = RowOf(idC).bd.cash
+    H.ok(
+        ok and c.giveBack == 'back' and c.backOwed == 0 and c.backGiven == given0 + 40
+            and c.giveBackResolved == 'marked',
+        'H15: give-back done: owed 0, given +$40: ' .. tostring(e)
+    )
+    H.ok(bank.balance.sast == sast0 and people[7].money.bank == bank0, 'H15: and no money moves')
+    H.ok(((LastAudit('paymentResolve') or {}).new_value or ''):find('giveBackDone', 1, true) ~= nil, 'H15: audited')
+    local stuck = false
+    for _, s in ipairs(Cash.stuckPayments()) do if s.id == idC then stuck = true end end
+    H.ok(not stuck, 'H15: no longer listed as stuck')
+    ok, e = Act('server:admin:resolvePayment', 1,
+        { rowId = idC, outcome = 'giveBackDone', checked = true, reason = 'again', requestId = Rid() })
+    H.ok(not ok, 'H15: a second give-back done is refused: ' .. tostring(e))
+    Config.Cash.allowClawback = false
+
+    -- (d) Retry unfunded for one row (the Retry button on a row)
+    H.sql('DELETE FROM cp_mission_runs')
+    Config.Cash.allowUnfundedRetry = true
+    Config.Cash.source = 'server'
+    Reset()
+    local a = Row({ status = 'unfunded', owed = 300 })
+    local mine = Row({ status = 'unfunded', owed = 700, cid = 'ALT00001' })
+    local pr = Cb('admin:previewRetryUnfunded', 1, { rowId = a })
+    H.ok(pr and pr.previewToken ~= nil, 'H15: a preview for one row')
+    ok, e = Act('server:admin:retryUnfunded', 1,
+        { rowId = a, reason = 'x', confirm = '300', previewToken = pr.previewToken, requestId = Rid() })
+    H.ok(ok and RowOf(a).cash_status == 'paid' and #calls.add == 1 and calls.add[1].amount == 300,
+        'H15: the one row is paid: ' .. tostring(e))
+    local pm = Cb('admin:previewRetryUnfunded', 1, { rowId = mine })
+    ok, e = Act('server:admin:retryUnfunded', 1,
+        { rowId = mine, reason = 'x', confirm = '700', previewToken = pm and pm.previewToken, requestId = Rid() })
+    H.ok(not ok and RowOf(mine).cash_status == 'unfunded', 'H15: never the admin\'s own row: ' .. tostring(e))
+    H.eq(select(2, Cb('admin:previewRetryUnfunded', 1, { rowId = 'abc' })), 'err.invalid_row', 'H15: a bad row id')
+    H.eq(select(2, Cb('admin:previewRetryUnfunded', 1, { department = 'sast', since = 'x' })), 'err.invalid_filter',
+        'H15: a bad since')
+
+    -- (e) the audit row fails: Retry unfunded and Pay forfeited after all put the rows back
+    local b1 = Row({ status = 'unfunded', owed = 120 })
+    local b2 = Row({ status = 'unfunded', owed = 80 })
+    pr = Cb('admin:previewRetryUnfunded', 1, { department = 'sast' })
+    local realAudit = Kit.auditSync
+    Kit.auditSync = function() return nil end
+    Reset()
+    ok, e = Act('server:admin:retryUnfunded', 1, {
+        department = 'sast',
+        reason = 'x',
+        confirm = tostring(pr.effect.total),
+        previewToken = pr.previewToken,
+        requestId = Rid(),
+    })
+    H.ok(not ok and e == 'err.audit_failed' and pr.effect.total == 200,
+        'H15: Retry unfunded with no audit row: refused (' .. tostring(e) .. ')')
+    H.ok(RowOf(b1).cash_status == 'unfunded' and RowOf(b2).cash_status == 'unfunded' and #calls.add == 0,
+        'H15: the claimed rows go back to unfunded and nothing is paid')
+    H.eq(RowOf(b1).bd.cash.status, 'unfunded', 'H15: the breakdown status too')
+    Config.Cash.restoreForfeited = true
+    local f = Row({ status = 'forfeited', owed = 90 })
+    ok, e = Act('server:admin:repayForfeited', 1, { rowId = f, reason = 'x', confirm = '90', requestId = Rid() })
+    H.ok(not ok and e == 'err.audit_failed' and RowOf(f).cash_status == 'forfeited' and #calls.add == 0,
+        'H15: Pay forfeited after all with no audit row: the row stays forfeited (' .. tostring(e) .. ')')
+    Kit.auditSync = realAudit
+    ok, e = Act('server:admin:repayForfeited', 1, { rowId = f, reason = 'x', confirm = '90', requestId = Rid() })
+    H.ok(ok and RowOf(f).cash_status == 'paid', 'H15: with the audit row it pays: ' .. tostring(e))
+    Config.Cash.restoreForfeited, Config.Cash.allowUnfundedRetry = false, false
+    Reset()
+end
+
 _G.print = realPrint
 return H
