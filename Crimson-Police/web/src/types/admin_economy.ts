@@ -131,7 +131,8 @@ export interface BankingEntry {
 // What an admin money tool left part way on a paid or capped row: the rest of a capped payment, a clawback, or the
 // give-back of a clawback to the department.
 export type FollowUpKind = 'rest' | 'back' | 'giveBack';
-export type FollowUpOutcome = 'restPaid' | 'restRelease' | 'backTaken' | 'backUndone' | 'giveBack' | 'giveBackDone';
+export type FollowUpOutcome =
+    'restPaid' | 'restRelease' | 'restWithdrawn' | 'backTaken' | 'backUndone' | 'giveBack' | 'giveBackDone';
 
 export interface BankingCheck {
     id: number;
@@ -156,6 +157,9 @@ export interface BankingCheck {
     // withdrawn it offers (Pay again on)
     againStep?: string | null;
     againOutcomes?: { againRelease?: boolean; againWithdrawn?: boolean } | null;
+    // What a Release gives the department back now (Pay again at 'withdrawn', the rest after its department
+    // withdrawal): the confirm then asks for that amount typed
+    releaseRefund?: number | null;
 }
 
 // admin:previewRetryUnfunded { rowId } | { department, since }

@@ -1572,7 +1572,12 @@ do
     H.ok(not ok and e == 'err.payment_refund_failed' and c.restPaidStep == 'withdrawn' and c.restPaidAccount == 'sast',
         'H3 (e): the rest at step withdrawn')
     sast0 = bank.balance.sast
+    H.eq((Cb('admin:checkBankingTxn', 1, { rowId = idE2 }) or {}).releaseRefund, 200,
+        'R4: the dialog is told that Release gives back $200')
     ok, e = Resolve(idE2, 'restRelease')
+    H.ok(not ok and e == 'err.confirm_mismatch' and bank.balance.sast == sast0,
+        'R4: Release that gives the department its money back asks for the typed amount: ' .. tostring(e))
+    ok, e = Resolve(idE2, 'restRelease', '200')
     H.ok(ok and bank.balance.sast == sast0 + 200 and RowOf(idE2).bd.cash.restPaid == nil,
         'H3 (e): Release gives the department its $200 back and frees the rest: ' .. tostring(e))
     ok = Act('server:admin:payCapRest', 1, { rowId = idE2, reason = 'x', confirm = '200', requestId = Rid() })
@@ -1688,7 +1693,7 @@ do
     H.eq(RowOf(idA).bd.cash.restPaidStep, 'withdrawn', 'H8 (A): the rest at step withdrawn')
     local sast0 = bank.balance.sast
     UnknownRefund()
-    local ok, e = Resolve(idA, 'restRelease')
+    local ok, e = Resolve(idA, 'restRelease', '200')
     Restore()
     H.ok(not ok and e == 'err.payment_raised' and RowOf(idA).bd.cash.restPaidStep == 'refunding',
         'H8 (A): a refund with no telling stays at refunding: ' .. tostring(e))
@@ -1923,8 +1928,11 @@ do
         'Mark withdrawn: at withdrawn only Release is offered'
     )
     local sG = bank.balance.sast
-    CP.Banking.depositSociety = function() return false end
     ok, e = Resolve(idG, 'againRelease')
+    H.ok(not ok and e == 'err.confirm_mismatch' and bank.balance.sast == sG,
+        'R4: Release at withdrawn asks for the typed amount: ' .. tostring(e))
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idG, 'againRelease', '70')
     Restore()
     H.ok(
         not ok and e == 'err.payment_refund_failed' and RowOf(idG).bd.cash.againStep == 'withdrawn'
@@ -1932,7 +1940,7 @@ do
         'Release at withdrawn: a refused refund keeps it at withdrawn: ' .. tostring(e)
     )
     UnknownRefund()
-    ok, e = Resolve(idG, 'againRelease')
+    ok, e = Resolve(idG, 'againRelease', '70')
     Restore()
     H.ok(not ok and e == 'err.payment_raised' and RowOf(idG).bd.cash.againStep == 'refunding',
         'Release at withdrawn: a refund with no telling stays at refunding: ' .. tostring(e))
@@ -1944,13 +1952,116 @@ do
     Reset()
     local idG2 = AgainAt('withdrawn', 60)
     local sG2 = bank.balance.sast
-    ok, e = Resolve(idG2, 'againRelease')
+    ok, e = Resolve(idG2, 'againRelease', '60')
     local auG = LastAudit('paymentResolve') or {}
     H.ok(
         ok and RowOf(idG2).bd.cash.again == nil and bank.balance.sast - sG2 == 60 and auG.old_value == 'again:withdrawn'
             and auG.new_value == 'againRelease:60',
         'Release at withdrawn: the department gets it back, audited: ' .. tostring(e)
     )
+
+    -- R6: a Release refused after its audit row (the refund refused) gets a row of its own, as Forfeit now does
+    Reset()
+    local idF = AgainAt('withdrawn', 40)
+    CP.Banking.depositSociety = function() return false end
+    ok, e = Resolve(idF, 'againRelease', '40')
+    Restore()
+    local auF = H.sql(
+        'SELECT old_value, new_value FROM cp_audit WHERE action = \'paymentResolve\' ORDER BY id DESC LIMIT 2')
+    H.ok(
+        not ok and auF[1] and auF[1].old_value == 'againRelease:40'
+            and auF[1].new_value == 'refused:err.payment_refund_failed' and auF[2]
+            and auF[2].new_value == 'againRelease:40',
+        'R6: the refused refund is audited as its own row (' .. tostring(auF[1] and auF[1].new_value) .. ')'
+    )
+
+    -- R5: the refund went through and the release that follows fails: 'refunded', where Release only releases (no
+    -- Mark withdrawn, no typed amount, no second refund)
+    local realUpd = MySQL.update.await
+    local function FailRelease(key)
+        local once = true
+        MySQL.update.await = function(sql, ...)
+            if once and tostring(sql):find('JSON_REMOVE(breakdown, \'$.cash.' .. key .. '\'', 1, true) then
+                once = false
+                error('db down')
+            end
+            return realUpd(sql, ...)
+        end
+    end
+    Reset()
+    local idK = AgainAt('withdrawn', 30)
+    local sK = bank.balance.sast
+    FailRelease('again')
+    ok, e = Resolve(idK, 'againRelease', '30')
+    MySQL.update.await = realUpd
+    local chkK = Cb('admin:checkBankingTxn', 1, { rowId = idK }) or {}
+    H.ok(
+        not ok and RowOf(idK).bd.cash.againStep == 'refunded' and bank.balance.sast - sK == 30
+            and (chkK.againOutcomes or {}).againRelease == true and (chkK.againOutcomes or {}).againWithdrawn == nil
+            and chkK.releaseRefund == nil,
+        'R5: Pay again: a refund done and a failed release: refunded, only Release offered (' .. tostring(e) .. ')'
+    )
+    ok, e = Resolve(idK, 'againRelease')
+    H.ok(ok and RowOf(idK).bd.cash.again == nil and bank.balance.sast - sK == 30,
+        'R5: Pay again: the second Release only releases: ' .. tostring(e))
+    ok, e = Resolve(idK, 'againWithdrawn')
+    H.ok(not ok, 'R5: Pay again: no Mark withdrawn after the refund')
+
+    -- R2: Pay the rest left at 'withdrawing' or 'refunding' whose department WAS charged: Mark withdrawn records it,
+    -- Release then gives the department its money back, so a later Pay the rest never charges it twice
+    local function RestAt(st)
+        local id = Row(
+            { status = 'capped', owed = 500, paid = 300, cash = { source = 'society', societyAccount = 'sast' } })
+        H.sql([[UPDATE cp_mission_runs SET breakdown = JSON_SET(breakdown, '$.cash.restPaid', 'paying',
+            '$.cash.restPaidClaim', 1, '$.cash.restPaidStep', ?, '$.cash.restPaidAccount', 'sast') WHERE id = ?]],
+            { st, id })
+        return id
+    end
+    for _, st in ipairs({ 'withdrawing', 'refunding' }) do
+        Reset()
+        local chk = Cb('admin:checkBankingTxn', 1, { rowId = RestAt(st) }) or {}
+        H.ok(
+            (chk.outcomes or {}).restWithdrawn == true and (chk.outcomes or {}).restRelease == true
+                and chk.releaseRefund == nil,
+            'R2: Mark withdrawn offered for the rest at ' .. st
+        )
+    end
+    Reset()
+    people[7].money.bank = 1000
+    local idT = RestAt('withdrawing')
+    bank.balance.sast = bank.balance.sast - 200   -- the department was charged; the call raised with no telling
+    local sT = bank.balance.sast
+    ok, e = Resolve(idT, 'restWithdrawn')
+    local auT = LastAudit('paymentResolve') or {}
+    H.ok(
+        ok and RowOf(idT).bd.cash.restPaidStep == 'withdrawn' and bank.balance.sast == sT
+            and auT.old_value == 'rest:withdrawing' and auT.new_value == 'restWithdrawn:200',
+        'R2: Mark withdrawn: step withdrawn, no money moves, audited: ' .. tostring(e)
+    )
+    local chkT = Cb('admin:checkBankingTxn', 1, { rowId = idT }) or {}
+    H.ok(
+        (chkT.outcomes or {}).restWithdrawn == nil and (chkT.outcomes or {}).restRelease == true
+            and chkT.releaseRefund == 200,
+        'R2: at withdrawn Release gives the $200 back'
+    )
+    ok, e = Resolve(idT, 'restWithdrawn')
+    H.ok(not ok and e == 'err.payment_step_unknown', 'R2: Mark withdrawn only once: ' .. tostring(e))
+    -- R5 for the rest: the refund done, the release fails: 'refunded', Release then only releases
+    FailRelease('restPaid')
+    ok, e = Resolve(idT, 'restRelease', '200')
+    MySQL.update.await = realUpd
+    local chkT2 = Cb('admin:checkBankingTxn', 1, { rowId = idT }) or {}
+    H.ok(
+        not ok and RowOf(idT).bd.cash.restPaidStep == 'refunded' and bank.balance.sast == sT + 200
+            and (chkT2.outcomes or {}).restWithdrawn == nil and chkT2.releaseRefund == nil,
+        'R5: the rest: refunded, only Release offered (' .. tostring(e) .. ')'
+    )
+    ok, e = Resolve(idT, 'restRelease')
+    H.ok(ok and RowOf(idT).bd.cash.restPaid == nil and bank.balance.sast == sT + 200,
+        'R5: the rest: the second Release only releases: ' .. tostring(e))
+    ok, e = Act('server:admin:payCapRest', 1, { rowId = idT, reason = 'x', confirm = '200', requestId = Rid() })
+    H.ok(ok and RowOf(idT).cash_paid == 500 and bank.balance.sast == sT and people[7].money.bank == 1200,
+        'R2: Pay the rest then charges the department once: ' .. tostring(e))
 
     CP.Qbx.getMoney = realGet
     Config.Cash.allowPayAgain, Config.Cash.allowClawback, Config.Cash.allowCapTopUp = false, false, false

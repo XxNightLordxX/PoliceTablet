@@ -670,6 +670,8 @@ Kit.callback('admin:checkBankingTxn', 'payments', function(ctx)
         againStep = not v.followUp and c.again == 'paying' and type(c.againStep) == 'string' and c.againStep or nil,
         againOutcomes = not v.followUp and Switch('allowPayAgain') and CP.Cash.againOutcomes and CP.Cash.againOutcomes(
             row, bd) or nil,
+        -- what a Release gives the department back now (the dialog then asks for the typed amount), else nil
+        releaseRefund = CP.Cash.releaseRefund and CP.Cash.releaseRefund(row, bd) or nil,
     }
 end, { rate = 2 })
 
@@ -746,15 +748,38 @@ local function OffSwitch(name) if not Switch(name) then return 'err.money_tool_o
 --                      RESOLVE A PAYMENT LEFT IN 'PAYING'
 -- ============================================================================
 
--- The outcomes of a follow-up's Resolve (CP.Cash.resolveFollowUp); the ones that move money ask for the amount
+-- The outcomes of a follow-up's Resolve (CP.Cash.resolveFollowUp); the ones that move money ask for the amount (a
+-- Release that gives the department its money back too: CP.Cash.releaseRefund)
 local FOLLOW_UP_OUTCOMES = {
     restPaid = 'none',
     restRelease = 'none',
+    restWithdrawn = 'none',
     backTaken = 'none',
     backUndone = 'none',
     giveBack = 'amount',
     giveBackDone = 'none',
 }
+
+-- A Resolve whose audit row comes before a money call (Release at 'withdrawn' gives the department its money back):
+-- audit as AuditFn does, and refused(err) writes the refusal as its own row once that audit row was written
+-- (old '<outcome>:<amount>', new 'refused:<err>'), as Forfeit now and Cancel payment do.
+local function RefusalAudited(ctx, rowId, cid, oldFn)
+    local written = nil
+    local audit = AuditFn(ctx, 'paymentResolve', rowId, cid, oldFn, function(i)
+        return ('%s:%d'):format(i.outcome or '?', i.amount or 0)
+    end)
+    local function wrapped(info)
+        local res = audit(info)
+        if res then written = info or {} end
+        return res
+    end
+    local function refused(err)
+        if not written then return end
+        ctx.audit('paymentResolve', Target(rowId, cid),
+            ('%s:%d'):format(tostring(written.outcome or '?'), written.amount or 0), 'refused:' .. tostring(err))
+    end
+    return wrapped, refused
+end
 
 Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
     local p = ctx.payload
@@ -789,24 +814,32 @@ Kit.action('server:admin:resolvePayment', 'payments', function(ctx)
         -- A Pay again left at 'withdrawing' or 'refunding', once the admin ticked what the department's history
         -- shows: not charged (or got it back) -> againRelease, no money moves; charged and not given back ->
         -- againWithdrawn, its step becomes 'withdrawn', no money moves. At 'withdrawn' againRelease gives up: the
-        -- department gets its money back first. Audited first ('paymentResolve', old 'again:<step>', new
-        -- '<outcome>:<amount>').
+        -- department gets its money back first (the typed amount). Audited first ('paymentResolve', old
+        -- 'again:<step>', new '<outcome>:<amount>'); a refusal after that row gets its own ('refused:<err>').
         local off = OffSwitch('allowPayAgain')
         if off then return false, off end
         if p.checked ~= true then return false, 'err.check_first' end
         local fn = p.outcome == 'againRelease' and CP.Cash.releaseAgain or CP.Cash.markAgainWithdrawn
-        local ok, data = fn(id, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
+        local audit, refused = RefusalAudited(ctx, id, cid, function(i)
             return ('again:%s'):format(tostring(i.step or '?'))
-        end, function(i) return ('%s:%d'):format(i.outcome or '?', i.amount or 0) end))
-        if not ok then return false, data end
+        end)
+        local ok, data = fn(id, audit)
+        if not ok then
+            refused(data)
+            return false, data
+        end
         Touched(ctx, cid)
         return true, data
     elseif FOLLOW_UP_OUTCOMES[p.outcome] then
         -- A follow-up: audited first ('paymentResolve', old '<kind>:<step>', new '<outcome>:<amount>')
-        local ok, data = CP.Cash.resolveFollowUp(id, p.outcome, AuditFn(ctx, 'paymentResolve', id, cid, function(i)
+        local audit, refused = RefusalAudited(ctx, id, cid, function(i)
             return ('%s:%s'):format(i.kind or '?', tostring(i.step or 'claimed'))
-        end, function(i) return ('%s:%d'):format(i.outcome or '?', i.amount or 0) end))
-        if not ok then return false, data end
+        end)
+        local ok, data = CP.Cash.resolveFollowUp(id, p.outcome, audit)
+        if not ok then
+            refused(data)
+            return false, data
+        end
         Touched(ctx, cid)
         return true, data
     end
@@ -815,12 +848,18 @@ end, {
     requestId = true,
     reason = true,
     confirm = function(p)
-        local money = p.outcome == 'payAgain' or FOLLOW_UP_OUTCOMES[p.outcome] == 'amount'
+        local release = p.outcome == 'againRelease' or p.outcome == 'restRelease'
+        local money = p.outcome == 'payAgain' or FOLLOW_UP_OUTCOMES[p.outcome] == 'amount' or release
         if not money then return nil end
         local row = RowById(p.rowId)
         if not row then return nil end
         local bd = U.jsonField(row.breakdown) or {}
         local c = type(bd.cash) == 'table' and bd.cash or {}
+        if release then
+            -- a Release asks for the amount only when it gives the department its money back
+            local back = CP.Cash.releaseRefund and CP.Cash.releaseRefund(row, bd) or nil
+            return back and tostring(back) or nil
+        end
         if p.outcome ~= 'payAgain' then
             local kind = CP.Cash.followUpOf(bd)
             return kind and tostring(CP.Cash.followUpAmount(row, bd, kind)) or nil

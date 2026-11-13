@@ -215,41 +215,59 @@ registerMock('request', 'admin:checkBankingTxn', (args: unknown): BankingCheck =
                     ? { againRelease: true }
                     : { againRelease: true, againWithdrawn: true }
                 : null,
+        // what a Release gives the department back now: the rest at 'withdrawn', a Pay again at 'withdrawn'
+        releaseRefund:
+            r.followUp === 'rest'
+                ? r.owed - r.paid
+                : r.again === 'paying' && MONEY && againSteps[r.id] === 'withdrawn'
+                  ? r.owed
+                  : null,
     };
 });
 
-registerMock('action', 'server:admin:resolvePayment', (p: { outcome?: string; checked?: boolean }) => {
-    const r = byId(p);
-    needReason(p);
-    if (r.followUp && p.outcome !== 'paid' && p.outcome !== 'payAgain') {
-        r.followUp = null;
-        r.restPaid = null;
-        return { id: r.id, outcome: p.outcome };
-    }
-    if (r.status !== 'paying') throw new Error('err.state_changed');
-    if (p.outcome === 'againRelease') {
-        needSwitch();
-        if (!p.checked) throw new Error('err.check_first');
-        if (r.again !== 'paying') throw new Error('err.payment_step_unknown');
-        r.again = null;
-        delete againSteps[r.id];
-        return { id: r.id, outcome: 'againRelease', amount: r.owed };
-    }
-    if (p.outcome === 'againWithdrawn') {
-        needSwitch();
-        if (!p.checked) throw new Error('err.check_first');
-        if (r.again !== 'paying' || againSteps[r.id] === 'withdrawn') throw new Error('err.payment_step_unknown');
-        againSteps[r.id] = 'withdrawn';
-        return { id: r.id, outcome: 'againWithdrawn', amount: r.owed };
-    }
-    if (p.outcome === 'payAgain') {
-        needSwitch();
-        if (!p.checked) throw new Error('err.check_first');
-    }
-    r.status = 'paid';
-    r.paid = r.owed;
-    return { id: r.id, status: 'paid', amount: r.owed };
-});
+registerMock(
+    'action',
+    'server:admin:resolvePayment',
+    (p: { outcome?: string; checked?: boolean; confirm?: string }) => {
+        const r = byId(p);
+        needReason(p);
+        // a Release that gives the department its money back asks for that amount typed (CP.Cash.releaseRefund)
+        if (p.outcome === 'restRelease' && r.followUp === 'rest' && p.confirm !== String(r.owed - r.paid)) {
+            throw new Error('err.confirm_mismatch');
+        }
+        if (p.outcome === 'againRelease' && againSteps[r.id] === 'withdrawn' && p.confirm !== String(r.owed)) {
+            throw new Error('err.confirm_mismatch');
+        }
+        if (r.followUp && p.outcome !== 'paid' && p.outcome !== 'payAgain') {
+            r.followUp = null;
+            r.restPaid = null;
+            return { id: r.id, outcome: p.outcome };
+        }
+        if (r.status !== 'paying') throw new Error('err.state_changed');
+        if (p.outcome === 'againRelease') {
+            needSwitch();
+            if (!p.checked) throw new Error('err.check_first');
+            if (r.again !== 'paying') throw new Error('err.payment_step_unknown');
+            r.again = null;
+            delete againSteps[r.id];
+            return { id: r.id, outcome: 'againRelease', amount: r.owed };
+        }
+        if (p.outcome === 'againWithdrawn') {
+            needSwitch();
+            if (!p.checked) throw new Error('err.check_first');
+            if (r.again !== 'paying' || againSteps[r.id] === 'withdrawn') throw new Error('err.payment_step_unknown');
+            againSteps[r.id] = 'withdrawn';
+            return { id: r.id, outcome: 'againWithdrawn', amount: r.owed };
+        }
+        if (p.outcome === 'payAgain') {
+            needSwitch();
+            if (!p.checked) throw new Error('err.check_first');
+        }
+        r.status = 'paid';
+        r.paid = r.owed;
+        return { id: r.id, status: 'paid', amount: r.owed };
+    },
+);
 
 registerMock('action', 'server:admin:payNow', (p: unknown) => {
     const r = byId(p);
