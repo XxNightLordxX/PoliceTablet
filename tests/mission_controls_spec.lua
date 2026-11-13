@@ -535,6 +535,37 @@ do
     DC.unregister('t_lock')
 end
 
+-- R10: changeWait raised after a start: the changes before that start inside the longer wait still hold it (the
+-- audit is read again for the longer wait)
+do
+    local keepMaster = Config.Permissions.supervisor.missionControls
+    Config.Permissions.supervisor.missionControls = true
+    Config.MissionControls.grants = {}
+    local keepControls, keepDept = Config.MissionControls.controls, Config.Departments.sast.missionControls
+    Config.MissionControls.controls = { t_wait = { on = true, min = 300, max = 900 } }
+    Config.Departments.sast.missionControls = nil
+    Wait(4000)
+    local ok = Act('server:admin:setMissionControl', 1,
+        { department = 'sast', key = 't_wait', value = 700, reason = 'r10' })
+    H.eq(ok, true, 'R10: an admin sets the control')
+    ok = Act('server:admin:resetMissionControl', 1, { department = 'sast', key = 't_wait', reason = 'r10' })
+    H.eq(ok, true, 'R10: and resets it (no row is left)')
+    Wait(400)
+    DC._reset()   -- a restart 400 s after the reset
+    Config.MissionControls.changeWait = 300
+    DC.view(2)    -- a lookup with the 300 s wait reads the audit
+    Config.MissionControls.changeWait = 3600
+    local err
+    ok, err = SupSet(2, 't_wait', 400)
+    H.ok(ok == false and err == 'err.control_wait',
+        'R10: changeWait raised to an hour: the reset 400 s ago still holds the wait: ' .. tostring(err))
+    Config.MissionControls.changeWait = 300
+    ok, err = SupSet(2, 't_wait', 400)
+    H.ok(ok == true, 'R10: back at 300 s it may change: ' .. tostring(err))
+    Config.Permissions.supervisor.missionControls = keepMaster
+    Config.MissionControls.controls, Config.Departments.sast.missionControls = keepControls, keepDept
+end
+
 Config.Permissions.supervisor = keepSup
 Config.MissionControls = keepMC
 Config.Departments.sast.missionControls = nil

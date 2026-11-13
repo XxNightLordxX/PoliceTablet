@@ -15,7 +15,7 @@ import { DEPT_TABS } from '../../layouts/supDepartment';
 import { action, request } from '../nui';
 import { SCREEN_HEADS } from '../screenHeads';
 import { placeCard } from './place';
-import { tourCovered } from './TourHost';
+import { tourArrow, tourCovered } from './TourHost';
 import {
     askTour,
     autoTourFor,
@@ -323,4 +323,14 @@ function dialogChecks(): void {
     ok(tourCovered(dialog, outside) === true, 'a dialog open, the step points elsewhere: the tour steps aside');
     ok(tourCovered(dialog, null) === true, 'a dialog open, a step with no element: the tour steps aside');
     ok(tourCovered(dialog, inside) === false, 'the step points into the open dialog: the tour shows');
+    // R7: while the tour steps aside the arrows are the dialog's: the hidden tour never moves
+    ok(
+        typeof tourArrow === 'function' && /tourArrow\(e\.key, covered\)/.test(SOURCES['./TourHost.tsx'] ?? ''),
+        'the arrow keys go through tourArrow with covered',
+    );
+    if (typeof tourArrow === 'function') {
+        ok(tourArrow('ArrowRight', false) === 1 && tourArrow('ArrowLeft', false) === -1, 'the arrows move the tour');
+        ok(tourArrow('ArrowRight', true) === 0 && tourArrow('ArrowLeft', true) === 0, 'covered: the arrows do nothing');
+        ok(tourArrow('Enter', false) === 0, 'another key does nothing');
+    }
 }

@@ -395,8 +395,11 @@ function A.isSuspended(citizenid)
     local c = suspensionCache[citizenid]
     if not c or now - c.at >= SUSPENSION_TTL then
         if not ReadOfficerState(citizenid, now) then
-            -- an unreadable row keeps a suspension the cache already knew (it never lifts one by failing)
-            if c and c.untilTs and c.untilTs > now then return true, c.untilTs end
+            -- an unreadable row keeps a suspension the cache already knew (it never lifts one by failing); the failed
+            -- read is kept as the cache for SUSPENSION_TTL, so an outage costs one SELECT per officer per TTL
+            local known = c and c.untilTs and c.untilTs > now and c.untilTs or nil
+            suspensionCache[citizenid] = { untilTs = known, at = now }
+            if known then return true, known end
             return false, nil
         end
         c = suspensionCache[citizenid]

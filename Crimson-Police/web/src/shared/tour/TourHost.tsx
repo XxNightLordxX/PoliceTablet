@@ -41,6 +41,15 @@ export function tourCovered(dialog: { contains(node: unknown): boolean } | null,
     if (!dialog) return false;
     return !(target && dialog.contains(target));
 }
+
+// The step an arrow key moves the tour by: 1 (ArrowRight), -1 (ArrowLeft), 0 for any other key and while the tour
+// steps aside for a dialog (the arrows are the dialog's then; the hidden tour never moves). Pure, for the walk.
+export function tourArrow(key: string, covered: boolean): number {
+    if (covered) return 0;
+    if (key === 'ArrowRight') return 1;
+    if (key === 'ArrowLeft') return -1;
+    return 0;
+}
 const PAD = 4; // px of ring around the element
 
 function sameBox(a: Box | null, b: Box | null): boolean {
@@ -215,24 +224,21 @@ export function TourHost({
     }, [stepKey]);
 
     // Escape ends the tour first (before any dialog under it or the tablet); arrows move between steps. While the tour
-    // steps aside for a dialog opened over it, Escape is the dialog's.
+    // steps aside for a dialog opened over it, Escape and the arrows are the dialog's.
     useEscapeLayer(!!run && !covered, () => endRun(false));
     useEffect(() => {
         if (!run) return;
         const onKey = (e: KeyboardEvent) => {
             if (typing(e)) return;
-            if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                if (last) endRun(true);
-                else moveRun(1);
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                moveRun(-1);
-            }
+            const by = tourArrow(e.key, covered);
+            if (by === 0) return;
+            e.preventDefault();
+            if (by > 0 && last) endRun(true);
+            else moveRun(by);
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [run, last]);
+    }, [run, last, covered]);
 
     // the card: measured, then placed next to the element
     const card = useRef<HTMLDivElement>(null);

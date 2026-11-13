@@ -45,21 +45,27 @@ function MB.perDay() return math.max(0, math.floor(Num(McCfg().missionBanPerDay,
 --                                  THE STORE
 -- ============================================================================
 
--- While the store cannot be read every officer reads as banned for a minute (a ban in force never lifts by a
--- failed read): MB.get answers { until = now + 60, unreadable = true }, read again on the next lookup.
-local UNREADABLE = {
+-- While the store cannot be read every officer reads as banned (a ban in force never lifts by a failed read): MB.get
+-- answers { until = now + 60, unreadable = true }. The failed read is kept for UNREADABLE_RETRY seconds, so an
+-- outage costs one SELECT a minute, not one a lookup.
+local UNREADABLE_RETRY = 60    -- seconds before the store is read again after a failed read
+local UNREADABLE = setmetatable({}, {
     __index = function() return { ['until'] = os.time() + 60, unreadable = true } end,
-}
+    __newindex = function() end,   -- a ban saved meanwhile is read with the others at the next read
+})
+local unreadableUntil = 0      -- os.time() before which a failed read is not tried again
 
 -- Every saved ban, read once (after the migrations) and then kept in memory.
 local function Load()
     if Bans then return Bans end
+    if os.time() < unreadableUntil then return UNREADABLE end
     if CP.Migrations and CP.Migrations.ready then CP.Migrations.ready() end
     local ok, rows = pcall(MySQL.query.await,
         'SELECT citizenid, mission_ban FROM cp_officers WHERE mission_ban IS NOT NULL')
     if not ok then
         CP.err(TAG, 'reading the mission bans failed: %s', tostring(rows))
-        return setmetatable({}, UNREADABLE)
+        unreadableUntil = os.time() + UNREADABLE_RETRY
+        return UNREADABLE
     end
     local out = {}
     for _, r in ipairs(type(rows) == 'table' and rows or {}) do
@@ -80,6 +86,7 @@ local function Save(citizenid, ban)
         return false, 'err.internal'
     end
     if (tonumber(n) or 0) < 1 then return false, 'err.unknown_officer' end
+    unreadableUntil = 0   -- the store answers again: the next lookup reads it
     Load()[citizenid] = ban
     return true
 end
@@ -109,7 +116,7 @@ function MB.view(citizenid, now)
 end
 
 -- Forget what is in memory (a storage switch or restore, tests): read again at the next lookup.
-function MB.clearCache() Bans = nil end
+function MB.clearCache() Bans, unreadableUntil = nil, 0 end
 
 -- Tell the officer's tablet (and his unit's) that the board changed.
 local function PushBoard(citizenid)
