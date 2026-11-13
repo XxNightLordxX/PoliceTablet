@@ -11,12 +11,12 @@ has none: its file's head comment in docs/dev/FILE_NOTES.md says what the file d
 
 | | functions |
 |---|---:|
-| named by a spec | 1128 |
-| via | 5741 |
+| named by a spec | 1130 |
+| via | 5746 |
 | world | 148 |
-| walk | 388 |
+| walk | 389 |
 | none | 275 |
-| all | 7680 |
+| all | 7688 |
 
 Client entry points: 110, 88 driven by a spec that loads their file, 22 known gaps (tools/coverage_gaps.txt).
 
@@ -1527,32 +1527,32 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 359 | `A.isAdmin` | - | adminkit_spec |
 | 376 | `ReadOfficerState` | One read of the officer's row fills both caches (suspension and retirement): the tablet's officer check asks for both, so a refresh is on... | via admin_backup_spec |
 | 392 | `A.isSuspended` | - | admin_officers_spec |
-| 408 | `DispatchSuspended` | - | via admin_backup_spec |
-| 421 | `A.dispatchSuspension` | An SC-Dispatch suspension as Crimson-Police sees it (view only: sc-dispatch is never changed). | adminkit_spec |
-| 429 | `A.isRetired` | A retired officer (Admin UI → Officers → Retire) can't open the tablet until an admin unretires them. | opponents_proof_spec |
-| 451 | `IdentifierOf` | One identifier of an online player. | via admin_backup_spec |
-| 460 | `A.licenseOfSrc` | The license of an online player (nil for the console or an unknown player): the loaded character's (Qbox PlayerData.license), else the pl... | adminkit_spec |
-| 470 | `A.licensesOfSrc` | Every license src's characters can be stored under: the loaded character's, the license: and the license2: identifier, without repeats. | identity_spec |
-| 474 | `add` | - | via admin_backup_spec |
-| 488 | `A.sameUser` | true when two licenses belong to one player: the same text, or one row of Qbox's users table (its license and license2) has both. | identity_spec |
-| 499 | `A.licenseOf` | The license of a character: cp_officers.license (written at every tablet open), else Qbox's own record. | admin_backup_spec |
-| 517 | `A.selfCitizenids` | Every citizenid of src's licenses (their characters), their current one first. | adminkit_spec |
-| 521 | `add` | - | via admin_backup_spec |
-| 548 | `A.getOfficer` | - | admin_officers_spec |
-| 586 | `A.maybeOfficer` | A cheap pre-filter for loops over every online player: false only when the primary job Qbox last reported for src (CP.Qbx.knownJob, kept... | core_spec |
-| 596 | `A.explain` | Admin UI → Officers → Support → Check access: why this online player can or can't open the Officer UI. | via admin_backup_spec |
-| 599 | `step` | - | via admin_backup_spec |
-| 636 | `A.isSupervisor` | officer: getOfficer(src) when the caller already has it (CP.Permissions.can), so it is looked up once. | adminkit_spec |
-| 641 | `A.role` | - | adminkit_spec |
-| 649 | `A.recheck` | - | admin_boards_spec |
-| 668 | `A.onLost` | - | core_spec |
-| 676 | `FireLost` | - | via admin_backup_spec |
-| 687 | `Seed` | - | via admin_backup_spec |
-| 693 | `Evaluate` | Compare the player's current state with their last known active job. | via admin_backup_spec |
-| 719 | `HeldWindowsOpenSql` | Whether the dispute windows the last suspension held are still open, in SQL on cp_officers: NOW() is at most its end (suspended_until) +... | via admin_backup_spec |
-| 738 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
-| 813 | `A.refreshOfficerRow` | - | admin_boards_spec |
-| 850 | `GetDepartment` | - | via admin_backup_spec |
+| 411 | `DispatchSuspended` | - | via admin_backup_spec |
+| 424 | `A.dispatchSuspension` | An SC-Dispatch suspension as Crimson-Police sees it (view only: sc-dispatch is never changed). | adminkit_spec |
+| 432 | `A.isRetired` | A retired officer (Admin UI → Officers → Retire) can't open the tablet until an admin unretires them. | opponents_proof_spec |
+| 454 | `IdentifierOf` | One identifier of an online player. | via admin_backup_spec |
+| 463 | `A.licenseOfSrc` | The license of an online player (nil for the console or an unknown player): the loaded character's (Qbox PlayerData.license), else the pl... | adminkit_spec |
+| 473 | `A.licensesOfSrc` | Every license src's characters can be stored under: the loaded character's, the license: and the license2: identifier, without repeats. | identity_spec |
+| 477 | `add` | - | via admin_backup_spec |
+| 491 | `A.sameUser` | true when two licenses belong to one player: the same text, or one row of Qbox's users table (its license and license2) has both. | identity_spec |
+| 502 | `A.licenseOf` | The license of a character: cp_officers.license (written at every tablet open), else Qbox's own record. | admin_backup_spec |
+| 520 | `A.selfCitizenids` | Every citizenid of src's licenses (their characters), their current one first. | adminkit_spec |
+| 524 | `add` | - | via admin_backup_spec |
+| 551 | `A.getOfficer` | - | admin_officers_spec |
+| 589 | `A.maybeOfficer` | A cheap pre-filter for loops over every online player: false only when the primary job Qbox last reported for src (CP.Qbx.knownJob, kept... | core_spec |
+| 599 | `A.explain` | Admin UI → Officers → Support → Check access: why this online player can or can't open the Officer UI. | via admin_backup_spec |
+| 602 | `step` | - | via admin_backup_spec |
+| 639 | `A.isSupervisor` | officer: getOfficer(src) when the caller already has it (CP.Permissions.can), so it is looked up once. | adminkit_spec |
+| 644 | `A.role` | - | adminkit_spec |
+| 652 | `A.recheck` | - | admin_boards_spec |
+| 671 | `A.onLost` | - | core_spec |
+| 679 | `FireLost` | - | via admin_backup_spec |
+| 690 | `Seed` | - | via admin_backup_spec |
+| 696 | `Evaluate` | Compare the player's current state with their last known active job. | via admin_backup_spec |
+| 720 | `HeldWindowsOpenSql` | Whether the dispute windows the last suspension held are still open, in SQL on cp_officers: NOW() is at most its end (suspended_until) +... | via admin_backup_spec |
+| 732 | `A.suspend` | opts: { untilTs = unix time } suspends until that exact moment (days is then ignored; it must be in the future and at most MAX_SUSPEND_DA... | admin_economy_spec |
+| 807 | `A.refreshOfficerRow` | - | admin_boards_spec |
+| 844 | `GetDepartment` | - | via admin_backup_spec |
 
 ### modules/access/client/access.lua
 
@@ -2037,22 +2037,24 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 936 | `Kit._actions` | - | admin_officers_spec |
 | 945 | `MaintView` | - | via admin_backup_spec |
 | 961 | `MaintPush` | - | via admin_backup_spec |
-| 974 | `MetaGet` | - | via admin_backup_spec |
 | 980 | `MetaSet` | - | via admin_backup_spec |
-| 991 | `ReadHold` | - | via admin_backup_spec |
-| 1002 | `HoldOpen` | - | via admin_backup_spec |
-| 1011 | `HoldClose` | - | via admin_backup_spec |
-| 1023 | `Maint.settleHold` | At start, after the start-up locks: a hold left open by the last run that no lock took again ended at this start. | admin_economy_spec |
-| 1032 | `Maint.hold` | The last hold: { from, to } (to = now while a lock is held) / nil. | admin_live_spec |
-| 1040 | `Maint.windowEnd` | The end of a window of windowS seconds from startTs, moved on by the time the last hold stood it still (the part of the hold from the win... | via admin_backup_spec |
-| 1048 | `Maint.begin` | ok / false, errKey. | admin_economy_spec |
-| 1059 | `Maint.finish` | - | admin_backup_spec |
-| 1070 | `Maint.active` | kind, info / nil | admin_backup_spec |
-| 1075 | `Maint.view` | - | admin_backup_spec |
-| 1079 | `Maint.mark` | More about the lock that is held (for example a restore that failed part way): fields are merged into its info and every client gets the... | admin_boards_spec |
-| 1088 | `Maint.askRestart` | The work is done and only a restart by the owner ends the lock: the Admin UI and one console line say so. | adminkit_spec |
-| 1108 | `Kit._reset` | Test hooks (not part of the contract). | admin_boards_spec |
-| 1111 | `Kit._jobKinds` | - | via admin_backup_spec |
+| 988 | `ParseHold` | - | via admin_backup_spec |
+| 996 | `ReadHolds` | The holds as saved: { past, open } / nil when they cannot be read. | via admin_backup_spec |
+| 1021 | `EncodeHolds` | The row's value: the ended holds that can still move a window that is open (one that ended more than the longest window plus every hold's... | via admin_backup_spec |
+| 1039 | `HoldSync` | The holds brought in line with the lock: one opens when a lock is held and none is open, the open one ends when no lock is held. | via admin_backup_spec |
+| 1070 | `Maint.settleHold` | At start, after the start-up locks: a hold left open by the last run that no lock took again ended at this start. | admin_economy_spec |
+| 1073 | `Maint.holds` | Every hold kept, oldest first: { { from, to }, ... | via admin_backup_spec |
+| 1083 | `Maint.hold` | The last hold: { from, to } (to = now while a lock is held) / nil. | admin_economy_spec |
+| 1093 | `Maint.windowEnd` | THE RULE, in Lua and in SQL. | admin_economy_spec |
+| 1106 | `Maint.windowEndSql` | The same end in SQL: a DATETIME expression for the window of windowS seconds from the DATETIME startExpr (a column or an expression of th... | admin_economy_spec |
+| 1123 | `Maint.begin` | ok / false, errKey. | admin_economy_spec |
+| 1134 | `Maint.finish` | - | admin_backup_spec |
+| 1145 | `Maint.active` | kind, info / nil | admin_backup_spec |
+| 1150 | `Maint.view` | - | admin_backup_spec |
+| 1154 | `Maint.mark` | More about the lock that is held (for example a restore that failed part way): fields are merged into its info and every client gets the... | admin_boards_spec |
+| 1163 | `Maint.askRestart` | The work is done and only a restart by the owner ends the lock: the Admin UI and one console line say so. | adminkit_spec |
+| 1183 | `Kit._reset` | Test hooks (not part of the contract). | admin_boards_spec |
+| 1187 | `Kit._jobKinds` | - | via admin_backup_spec |
 
 ### modules/admin/client/diag.lua
 
@@ -3402,106 +3404,107 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 62 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
-| 77 | `ToId` | - | via admin_boards_spec |
-| 87 | `FmtMoney` | - | via admin_boards_spec |
-| 94 | `TierRow` | - | via admin_boards_spec |
-| 109 | `PresenceFailed` | - | via admin_boards_spec |
-| 116 | `WithLock` | - | via admin_boards_spec |
-| 131 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
-| 142 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
-| 158 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
-| 164 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
-| 171 | `Cash.compute` | - | anticheat_note_spec |
-| 206 | `ReadRow` | - | via admin_boards_spec |
-| 221 | `AmountOf` | - | via admin_boards_spec |
-| 228 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
-| 235 | `MissionLabel` | - | via admin_boards_spec |
-| 242 | `SetFinal` | - | via admin_boards_spec |
-| 259 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
-| 291 | `BackToPending` | - | via admin_boards_spec |
-| 308 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
-| 325 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
-| 344 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
-| 352 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
-| 360 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
-| 369 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
-| 380 | `WithdrawSociety` | - | via admin_boards_spec |
-| 384 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
-| 396 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
-| 403 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
-| 455 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
-| 630 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
-| 636 | `Cash.pay` | - | admin_economy_spec |
-| 662 | `Cash.payPending` | - | admin_economy_spec |
-| 691 | `Cash.release` | - | economy_spec |
-| 705 | `FireForfeited` | - | via admin_boards_spec |
-| 709 | `Cash.forfeit` | - | economy_spec |
-| 731 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
-| 781 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
-| 796 | `Clean` | - | via admin_boards_spec |
-| 806 | `CashOf` | - | via admin_boards_spec |
-| 808 | `TxnOf` | - | via admin_boards_spec |
-| 811 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
-| 815 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
-| 831 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
-| 852 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
-| 863 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
-| 876 | `Audited` | - | via admin_boards_spec |
-| 883 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
-| 892 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
-| 897 | `Cash.txnOf` | - | via admin_boards_spec |
-| 900 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
-| 905 | `Cash.paymentsHeld` | - | via admin_boards_spec |
-| 912 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
-| 937 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
-| 939 | `Step` | - | via admin_boards_spec |
-| 1016 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
-| 1074 | `Cash.payAgain` | - | admin_economy_spec |
-| 1124 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own step: { againRelease, againWithdrawn } or {}. | via admin_boards_spec |
-| 1134 | `AgainStepIf` | The Pay again's step moved from one value to another, compare and set on the row still 'paying' with its claim. | via admin_boards_spec |
-| 1143 | `GiveUpAgainLocked` | A Pay again at 'withdrawn' given up, under the officer's payment lock: the department gets its money back ('refunding' while the refund r... | via admin_boards_spec |
-| 1168 | `Cash.releaseAgain` | Release a Pay again left part way. | via admin_boards_spec |
-| 1197 | `Cash.markAgainWithdrawn` | Mark withdrawn: a Pay again left at 'withdrawing' or 'refunding' whose department the admin checked WAS charged and did not get it back (... | via admin_boards_spec |
-| 1218 | `CapRestLocked` | - | via admin_boards_spec |
-| 1260 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
-| 1291 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
-| 1301 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
-| 1320 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
-| 1353 | `ClawbackLocked` | - | via admin_boards_spec |
-| 1433 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
-| 1477 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
-| 1487 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
-| 1502 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
-| 1519 | `ResolveLocked` | - | via admin_boards_spec |
-| 1597 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
-| 1631 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
-| 1657 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
-| 1697 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
-| 1722 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
-| 1735 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
-| 1768 | `PoolFor` | - | via admin_boards_spec |
-| 1788 | `Cash.range` | - | admin_boards_spec |
-| 1825 | `Cash.stuckPayments` | - | admin_economy_spec |
-| 1864 | `Cash.earnedThisWeek` | - | economy_spec |
-| 1883 | `OnLoaded` | - | via admin_boards_spec |
-| 1927 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
-| 1931 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
+| 64 | `SocietyOn` | Config.Cash.source = 'society' and a banking script serves the department accounts (CP.Banking.societyOn); with the banking stand-in of a... | via admin_boards_spec |
+| 79 | `ToId` | - | via admin_boards_spec |
+| 89 | `FmtMoney` | - | via admin_boards_spec |
+| 96 | `TierRow` | - | via admin_boards_spec |
+| 111 | `PresenceFailed` | - | via admin_boards_spec |
+| 118 | `WithLock` | - | via admin_boards_spec |
+| 133 | `PaymentsHeld` | A maintenance lock (a storage copy or switch, a backup restore) holds every payment back: the rows wait and are paid after the restart. | via admin_boards_spec |
+| 144 | `UnderBusyLock` | Long admin jobs (bulk voids, restores, copies) and the forfeiture job never meet half done: the job waits for the shared busy lock and ho... | via admin_boards_spec |
+| 160 | `RoundMoney` | ============================================================================ COMPUTE ====================================================... | via admin_boards_spec |
+| 166 | `Cash.bonusOf` | The happy hour cash bonus a run carries (run.controls.cashBonus, fixed at the accept): x the cash, 1.0 = none. | via admin_boards_spec |
+| 173 | `Cash.compute` | - | anticheat_note_spec |
+| 208 | `ReadRow` | - | via admin_boards_spec |
+| 223 | `AmountOf` | - | via admin_boards_spec |
+| 230 | `PayAmountOf` | The amount the last payment attempt was for (after the daily cap), from its step marker. | via admin_boards_spec |
+| 237 | `MissionLabel` | - | via admin_boards_spec |
+| 244 | `SetFinal` | - | via admin_boards_spec |
+| 261 | `Mark` | Writes fields under breakdown.cash of a row in one of the expected statuses: the step markers of a payment and the account and source it... | via admin_boards_spec |
+| 293 | `BackToPending` | - | via admin_boards_spec |
+| 310 | `PaidOnDay` | Paid (or capped) cash on the reset-day of ts, excluding the row being paid. | via admin_boards_spec |
+| 327 | `SupervisorsOf` | Online supervisors of a department (for the unfunded warning). | via admin_boards_spec |
+| 346 | `SocietyBalance` | The department account's balance, or nil. | via admin_boards_spec |
+| 354 | `BalanceOf` | The officer's Qbox balance of a money account, or nil (a money item has none to read). | via admin_boards_spec |
+| 362 | `Outcome` | 'done' / 'refused' / 'unknown' from the balance before and after a call that raised, for a change of delta. | via admin_boards_spec |
+| 371 | `SocietyCall` | A society call (withdrawSociety or depositSociety) decided: 'done' / 'refused' / 'unknown'. | via admin_boards_spec |
+| 382 | `WithdrawSociety` | - | via admin_boards_spec |
+| 386 | `DepositChecked` | The officer's deposit decided: 'done' / 'refused' / 'unknown', and the balances read (for the review marker). | via admin_boards_spec |
+| 398 | `RefundSociety` | Gives a department back what it paid: 'done' / 'refused' / 'unknown' (a raised call is decided from the balance). | via admin_boards_spec |
+| 405 | `PayRow` | Pays one claimed-or-claimable row. | via admin_boards_spec |
+| 457 | `PayClaimed` | The claimed part of payRow (row is 'paying'). | via admin_boards_spec |
+| 632 | `Cash.paidToday` | Cash counted against the daily cap today (manual cash payments left out). | admin_economy_spec |
+| 638 | `Cash.pay` | - | admin_economy_spec |
+| 664 | `Cash.payPending` | - | admin_economy_spec |
+| 693 | `Cash.release` | - | economy_spec |
+| 707 | `FireForfeited` | - | via admin_boards_spec |
+| 711 | `Cash.forfeit` | - | economy_spec |
+| 733 | `ForfeitRows` | Voided rows whose dispute window closed with no open dispute: held/pending -> forfeited. | via admin_boards_spec |
+| 783 | `ForfeitureJob` | Waits while a maintenance lock holds payments, and for an admin's bulk job (a void in flight is never forfeited half done); holds the bus... | via admin_boards_spec |
+| 798 | `Clean` | - | via admin_boards_spec |
+| 808 | `CashOf` | - | via admin_boards_spec |
+| 810 | `TxnOf` | - | via admin_boards_spec |
+| 813 | `Update` | The rows a statement changed; 0 when it raised (CP.update logged it). | via admin_boards_spec |
+| 817 | `Release` | Undoes a JSON claim marker (breakdown.cash.<key>) that is still 'paying', with its step marker (<key>Step) and its claim tag (<key>Claim). | via admin_boards_spec |
+| 833 | `MarkIf` | Sets fields under breakdown.cash only while breakdown.cash.<key> is still val (compare and set): the step markers of an admin money tool,... | via admin_boards_spec |
+| 854 | `ClaimMarker` | Claims a JSON marker (breakdown.cash.<key> = 'paying') on a row in status: only one caller wins. | via admin_boards_spec |
+| 865 | `RunLocked` | fn() under the officer's payment lock. | via admin_boards_spec |
+| 878 | `Audited` | - | via admin_boards_spec |
+| 885 | `OnlineOf` | The online officer of a row, re-read: src, info / nil. | via admin_boards_spec |
+| 894 | `Cash.amountOf` | What an admin sees about a payment: owed, paid, taken back, the step markers. | via admin_boards_spec |
+| 899 | `Cash.txnOf` | - | via admin_boards_spec |
+| 902 | `Cash.rowBusy` | true while pay() works on the row or the officer's payment lock is held (an admin waits for it). | via admin_boards_spec |
+| 907 | `Cash.paymentsHeld` | - | via admin_boards_spec |
+| 914 | `Cash.markPaid` | Mark paid: the admin checked the bank history and the money arrived. | via admin_boards_spec |
+| 940 | `MoveLocked` | The money calls of Pay again and Pay the rest, each behind its own step marker breakdown.cash.<key>Step (withdrawing -> withdrawn -> addi... | via admin_boards_spec |
+| 942 | `Step` | - | via admin_boards_spec |
+| 1021 | `PayAgainLocked` | Pay again under the officer's payment lock. | via admin_boards_spec |
+| 1079 | `Cash.payAgain` | - | admin_economy_spec |
+| 1130 | `Cash.againOutcomes` | What Resolve may do with a Pay again left part way at its own step: { againRelease, againWithdrawn } or {}. | via admin_boards_spec |
+| 1140 | `AgainStepIf` | The Pay again's step moved from one value to another, compare and set on the row still 'paying' with its claim. | via admin_boards_spec |
+| 1150 | `GiveUpAgainLocked` | A Pay again at 'withdrawn' given up, under the officer's payment lock: the department gets its money back ('refunding' while the refund r... | via admin_boards_spec |
+| 1177 | `Cash.releaseAgain` | Release a Pay again left part way. | via admin_boards_spec |
+| 1206 | `Cash.markAgainWithdrawn` | Mark withdrawn: a Pay again left at 'withdrawing' or 'refunding' whose department the admin checked WAS charged and did not get it back (... | via admin_boards_spec |
+| 1227 | `CapRestLocked` | - | via admin_boards_spec |
+| 1269 | `Cash.payCapRest` | Pay the rest: the part of a capped payment the daily cap cut (owed - paid, computed here), once per row, with its own transaction id CP-<... | admin_economy_spec |
+| 1300 | `UndoBack` | The claim undone: cash_reclaimed - amount and the markers cleared, only while backStep is still fromStep. | via admin_boards_spec |
+| 1310 | `BackDone` | The money was taken: backs = n, the pending markers cleared (while backStep is still fromStep) and, with an account, the give-back owed (... | via admin_boards_spec |
+| 1329 | `GiveBackRow` | Gives the department what it is owed on a row (giveBack 'owed' -> 'paying' -> 'back'). | via admin_boards_spec |
+| 1362 | `ClawbackLocked` | - | via admin_boards_spec |
+| 1442 | `Cash.clawback` | Clawback: takes up to what was paid (minus what was taken back before) from an online officer. | via admin_boards_spec |
+| 1486 | `Cash.followUpOf` | 'rest' / 'back' / 'giveBack' / nil | via admin_boards_spec |
+| 1496 | `FollowUpAmount` | The amount a follow-up is about: the rest owed, the clawback held, the give-back owed. | via admin_boards_spec |
+| 1508 | `Cash.releaseRefund` | The amount a Release would give the department back now, else nil: a Pay again at 'withdrawn' (againRelease), a Pay the rest after its de... | via admin_boards_spec |
+| 1533 | `Cash.followUpOutcomes` | What a follow-up's Resolve may do now: { outcome = true }. | via admin_boards_spec |
+| 1551 | `ResolveLocked` | - | via admin_boards_spec |
+| 1641 | `Cash.resolveFollowUp` | Resolves a follow-up (Admin UI -> Payments -> Resolve): audit(info) first (false = nothing changes), then the change under the officer's... | via admin_boards_spec |
+| 1675 | `Cash.retryGiveBacks` | The give-backs a department is still owed, tried again (the start-up sweep and the 10-minute job). | admin_economy_spec |
+| 1701 | `ReleaseUnstarted` | At the start: the claims of an admin tool cut before its first money call (no step marker yet) are released, so the tool can be used agai... | via admin_boards_spec |
+| 1741 | `Cash.toPending` | unfunded -> pending (Retry unfunded) or forfeited -> pending (a restored run pays its forfeited cash after all): the claim of the payment... | via admin_boards_spec |
+| 1766 | `Cash.backFromPending` | The claim of toPending undone (its audit row could not be written): pending -> from. | via admin_boards_spec |
+| 1779 | `Cash.adminForfeit` | held/pending -> forfeited by an admin. | feature_rewards_spec |
+| 1812 | `PoolFor` | - | via admin_boards_spec |
+| 1832 | `Cash.range` | - | admin_boards_spec |
+| 1869 | `Cash.stuckPayments` | - | admin_economy_spec |
+| 1908 | `Cash.earnedThisWeek` | - | economy_spec |
+| 1927 | `OnLoaded` | - | via admin_boards_spec |
+| 1971 | `Cash.nextForfeitureAt` | - | via admin_boards_spec |
+| 1975 | `StartupSweep` | After a resource (re)start, officers who are already online never fire PlayerLoaded again: pay their pending rows once, after Renewed-Ban... | via admin_boards_spec |
 
 ### modules/money/engine.lua
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 48 | `Money.disputeStartSql` | Where the dispute window of a voided run row r starts (the cash and item reward forfeiture): its creation, or the end of the officer's su... | via admin_boards_spec |
-| 71 | `Money.disputeEnd` | The end of a dispute window that starts at startTs: Config.Disputes.windowHours on, moved on by the time a maintenance lock stood it stil... | via admin_boards_spec |
-| 82 | `Money.seasonId` | The id of the current Department Challenge season, or nil (none running, or no challenge module). | admin_boards_spec |
-| 92 | `Money.department` | A department for a payment, a turned-off one included (its unfinished pay still pays from its account): { key, label, societyAccount } /... | admin_boards_spec |
-| 108 | `Money.accountOf` | The account of a ledger row's cash breakdown: its own 'bank' or 'cash', its own 'item' when it names the money item, else Config.Cash.acc... | money_spec |
-| 119 | `GiveItem` | Gives amount of a money item. | via admin_boards_spec |
-| 133 | `Money.deposit` | The deposit of every payment: a money item when account is 'item' (never a Qbox account named 'item'), else the Qbox account. | admin_economy_spec |
-| 146 | `Money.rowOf` | cid nil: any player's row of that id. | money_spec |
-| 165 | `Money.writeRow` | One manual award ledger row (out of the run counts, goals, streaks and the draw by the existing filters), written as 'none', which no log... | money_spec |
-| 218 | `Money.settle` | Hands a written, audited row to CP.Cash. | money_spec |
+| 47 | `Money.disputeStartSql` | Where the dispute window of a voided run row r starts (the cash and item reward forfeiture): its creation, or the end of the officer's su... | via admin_boards_spec |
+| 61 | `Money.disputeEnd` | The end of a dispute window that starts at startTs: Config.Disputes.windowHours on, moved on by the time a maintenance lock stood it stil... | via admin_boards_spec |
+| 72 | `Money.seasonId` | The id of the current Department Challenge season, or nil (none running, or no challenge module). | admin_boards_spec |
+| 82 | `Money.department` | A department for a payment, a turned-off one included (its unfinished pay still pays from its account): { key, label, societyAccount } /... | admin_boards_spec |
+| 98 | `Money.accountOf` | The account of a ledger row's cash breakdown: its own 'bank' or 'cash', its own 'item' when it names the money item, else Config.Cash.acc... | money_spec |
+| 109 | `GiveItem` | Gives amount of a money item. | via admin_boards_spec |
+| 123 | `Money.deposit` | The deposit of every payment: a money item when account is 'item' (never a Qbox account named 'item'), else the Qbox account. | admin_economy_spec |
+| 136 | `Money.rowOf` | cid nil: any player's row of that id. | money_spec |
+| 155 | `Money.writeRow` | One manual award ledger row (out of the run counts, goals, streaks and the draw by the existing filters), written as 'none', which no log... | money_spec |
+| 208 | `Money.settle` | Hands a written, audited row to CP.Cash. | money_spec |
 
 ### modules/money/featurerewards.lua
 
@@ -3568,25 +3571,28 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 527 | `Payments.lowBalanceToasts` | Once a day: a toast to each department's online supervisors when its account is below Cash.lowBalanceWarn. | admin_economy_spec |
 | 558 | `OwnRow` | true when a row belongs to src (any character of their license, or a run they took part in) or the license is unknown: the S guard for a... | via admin_economy_spec |
 | 569 | `UnfundedSet` | The unfunded rows of one row id, or of a department since a time: ids, total, per-department totals. | via admin_economy_spec |
-| 714 | `SelfOfRow` | - | via admin_economy_spec |
-| 720 | `OwedWord` | - | via admin_economy_spec |
-| 727 | `AuditFn` | The audit callback CP.Cash calls after its claim: the row id of the synchronous audit row, or false. | via admin_economy_spec |
-| 737 | `Touched` | A payment changed: the caches that hold it, the sidebar count and every admin's open Payments screen. | via admin_economy_spec |
-| 743 | `OffSwitch` | - | via admin_economy_spec |
-| 817 | `confirm` | - | via admin_economy_spec |
-| 918 | `confirm` | - | via admin_economy_spec |
-| 922 | `self` | - | via admin_economy_spec |
-| 947 | `confirm` | - | via admin_economy_spec |
-| 985 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
-| 986 | `Forfeitable` | - | via admin_economy_spec |
-| 1048 | `confirm` | - | via admin_economy_spec |
-| 1062 | `ManualUsed` | - | via admin_economy_spec |
-| 1113 | `confirm` | - | via admin_economy_spec |
-| 1119 | `self` | - | via admin_economy_spec |
-| 1184 | `confirm` | - | via admin_economy_spec |
-| 1204 | `run` | - | via admin_economy_spec |
-| 1211 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
-| 1229 | `Payments._resetNav` | - | admin_economy_spec |
+| 716 | `SelfOfRow` | - | via admin_economy_spec |
+| 722 | `OwedWord` | - | via admin_economy_spec |
+| 729 | `AuditFn` | The audit callback CP.Cash calls after its claim: the row id of the synchronous audit row, or false. | via admin_economy_spec |
+| 739 | `Touched` | A payment changed: the caches that hold it, the sidebar count and every admin's open Payments screen. | via admin_economy_spec |
+| 745 | `OffSwitch` | - | via admin_economy_spec |
+| 766 | `RefusalAudited` | A Resolve whose audit row comes before a money call (Release at 'withdrawn' gives the department its money back): audit as AuditFn does,... | via admin_economy_spec |
+| 771 | `wrapped` | - | via admin_economy_spec |
+| 776 | `refused` | - | via admin_economy_spec |
+| 850 | `confirm` | - | via admin_economy_spec |
+| 957 | `confirm` | - | via admin_economy_spec |
+| 961 | `self` | - | via admin_economy_spec |
+| 986 | `confirm` | - | via admin_economy_spec |
+| 1024 | `OneRow` | One Forfeit now / Cancel payment per row at a time, and a row no longer held or pending is refused before its audit row (the intent row c... | via admin_economy_spec |
+| 1025 | `Forfeitable` | - | via admin_economy_spec |
+| 1087 | `confirm` | - | via admin_economy_spec |
+| 1101 | `ManualUsed` | - | via admin_economy_spec |
+| 1152 | `confirm` | - | via admin_economy_spec |
+| 1158 | `self` | - | via admin_economy_spec |
+| 1223 | `confirm` | - | via admin_economy_spec |
+| 1243 | `run` | - | via admin_economy_spec |
+| 1250 | `FailUnstartedFunding` | A funding row still 'pending' a minute after it was written never reached its deposit (a restart cut it before it): failed at the start,... | via admin_economy_spec |
+| 1268 | `Payments._resetNav` | - | admin_economy_spec |
 
 ### modules/money/payouts.lua
 
@@ -6277,29 +6283,29 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 544 | `DC.canChange` | Who may change a control of a department: admins any (bounds still apply); a supervisor only his own department (any for a server-wide co... | admin_permissions_spec |
 | 590 | `DC.available` | DC.available(src): true when that player may change at least one control now (the Supervisor UI shows its Mission controls screen then; w... | admin_runctl_spec |
 | 597 | `ActorOf` | - | via admin_live_spec |
-| 605 | `SeedChanges` | After a start, lastChange is filled once from the audit (missionControlSet / missionControlReset of the last changeWait), so a reset (whi... | via admin_live_spec |
-| 631 | `WaitLeft` | Seconds until the control may change again in that department (0 = now; the whole wait while the last changes cannot be read). | via admin_live_spec |
-| 640 | `Audit` | - | via admin_live_spec |
-| 646 | `Push` | The open Supervisor UIs of that department (every department for '*') and the Admin UIs get the new state. | via admin_live_spec |
-| 664 | `Changed` | - | via admin_live_spec |
-| 672 | `DC.expired` | A timed change ran out (nobody changed it): the readers that keep their own caches and the open screens hear it. | notices_spec |
-| 688 | `SetChecked` | - | via admin_live_spec |
-| 745 | `DC.set` | - | admin_live_spec |
-| 762 | `DC.reset` | DC.reset(src, dept, key, reason): back to the config value (the row is deleted). | admin_permissions_spec |
-| 794 | `OwnBounds` | The department's own bounds of a control (Config.Departments.<key>.missionControls), nil for a server-wide one. | via admin_live_spec |
-| 802 | `FlagList` | The flag names a control registered, sorted (nil when none). | via admin_live_spec |
-| 810 | `ChoiceList` | Every name a choice control's list may hold (its choices function). | via admin_live_spec |
-| 819 | `ControlFields` | - | via admin_live_spec |
-| 866 | `ControlView` | - | via admin_live_spec |
-| 879 | `DeptView` | - | via admin_live_spec |
-| 899 | `DC.view` | DC.view(src): what the Mission controls screens show. | difficulty_unit_spec |
-| 943 | `DayUse` | A control's per-day count for a supervisor (its viewExtra's perDay; 0 or none = no count) and his uses today. | via admin_live_spec |
-| 961 | `DC.mine` | DC.mine(src) (Department -> Controls, inline; MG3: always on): the controls that player may use now (DC.canChange), each with its current... | admin_live_spec |
-| 997 | `ChoicesOk` | A choice control's list in the config: names its choices function knows, each once, at most CHOICE_MAX. | via admin_live_spec |
-| 1014 | `DC.checkConfig` | Config.MissionControls.controls or a department's missionControls: { <control> = { on, min, max } }. | cooldown_controls_spec |
-| 1056 | `Payload` | - | via admin_live_spec |
-| 1062 | `SupPermission` | A supervisor's own department (a server-wide control: any); the action itself runs DC.canChange. | via admin_live_spec |
-| 1102 | `DC._reset` | Test hooks (not part of the contract). | difficulty_unit_spec |
+| 606 | `SeedChanges` | After a start, lastChange is filled from the audit (missionControlSet / missionControlReset of the last changeWait), so a reset (which le... | via admin_live_spec |
+| 632 | `WaitLeft` | Seconds until the control may change again in that department (0 = now; the whole wait while the last changes cannot be read). | via admin_live_spec |
+| 641 | `Audit` | - | via admin_live_spec |
+| 647 | `Push` | The open Supervisor UIs of that department (every department for '*') and the Admin UIs get the new state. | via admin_live_spec |
+| 665 | `Changed` | - | via admin_live_spec |
+| 673 | `DC.expired` | A timed change ran out (nobody changed it): the readers that keep their own caches and the open screens hear it. | notices_spec |
+| 689 | `SetChecked` | - | via admin_live_spec |
+| 746 | `DC.set` | - | admin_live_spec |
+| 763 | `DC.reset` | DC.reset(src, dept, key, reason): back to the config value (the row is deleted). | admin_permissions_spec |
+| 795 | `OwnBounds` | The department's own bounds of a control (Config.Departments.<key>.missionControls), nil for a server-wide one. | via admin_live_spec |
+| 803 | `FlagList` | The flag names a control registered, sorted (nil when none). | via admin_live_spec |
+| 811 | `ChoiceList` | Every name a choice control's list may hold (its choices function). | via admin_live_spec |
+| 820 | `ControlFields` | - | via admin_live_spec |
+| 867 | `ControlView` | - | via admin_live_spec |
+| 880 | `DeptView` | - | via admin_live_spec |
+| 900 | `DC.view` | DC.view(src): what the Mission controls screens show. | difficulty_unit_spec |
+| 944 | `DayUse` | A control's per-day count for a supervisor (its viewExtra's perDay; 0 or none = no count) and his uses today. | via admin_live_spec |
+| 962 | `DC.mine` | DC.mine(src) (Department -> Controls, inline; MG3: always on): the controls that player may use now (DC.canChange), each with its current... | admin_live_spec |
+| 998 | `ChoicesOk` | A choice control's list in the config: names its choices function knows, each once, at most CHOICE_MAX. | via admin_live_spec |
+| 1015 | `DC.checkConfig` | Config.MissionControls.controls or a department's missionControls: { <control> = { on, min, max } }. | cooldown_controls_spec |
+| 1057 | `Payload` | - | via admin_live_spec |
+| 1063 | `SupPermission` | A supervisor's own department (a server-wide control: any); the action itself runs DC.canChange. | via admin_live_spec |
+| 1103 | `DC._reset` | Test hooks (not part of the contract). | difficulty_unit_spec |
 
 ### modules/supervisor/fieldtraining.lua
 
@@ -6449,35 +6455,36 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | 32 | `Decode` | - | via admin_control_e2e_spec |
 | 39 | `McCfg` | - | via admin_control_e2e_spec |
 | 42 | `MB.perDay` | Bans one supervisor may set a day (Config.MissionControls.missionBanPerDay). | via admin_control_e2e_spec |
-| 51 | `__index` | - | via admin_control_e2e_spec |
-| 55 | `Load` | Every saved ban, read once (after the migrations) and then kept in memory. | via admin_control_e2e_spec |
-| 74 | `Save` | ok / false, errKey | via admin_control_e2e_spec |
-| 88 | `MB.get` | The ban in force for this officer (until is still ahead), else nil. | admin_control_e2e_spec |
-| 96 | `MB.first` | The first of these officers ({ citizenid, src }) with a ban in force: officer, ban / nil. | admin_control_e2e_spec |
-| 105 | `MB.view` | What the officer's screens show: { until, by (the name), reason, mine } or nil. | admin_missions_spec |
-| 112 | `MB.clearCache` | Forget what is in memory (a storage switch or restore, tests): read again at the next lookup. | mission_ban_spec |
-| 115 | `PushBoard` | Tell the officer's tablet (and his unit's) that the board changed. | via admin_control_e2e_spec |
-| 129 | `DC` | - | via admin_control_e2e_spec |
-| 131 | `CanUse` | - | via admin_control_e2e_spec |
-| 137 | `Register` | - | via admin_control_e2e_spec |
-| 144 | `viewExtra` | - | via admin_control_e2e_spec |
-| 145 | `usedToday` | - | via admin_control_e2e_spec |
-| 152 | `IsAdmin` | - | via admin_control_e2e_spec |
-| 157 | `CanUseFor` | CanUse for one officer: an admin works in the officer's department (its switch and hours), not his own. | via admin_control_e2e_spec |
-| 163 | `MB.usedToday` | Mission bans that player set today (the 'Your controls today' card). | mission_ban_spec |
-| 170 | `HoursRange` | The hours a supervisor may pick in his department: lo, hi / nil. | via admin_control_e2e_spec |
-| 179 | `Target` | The target as the rules need it: online, his department and grade (Qbox, on duty or not). | via admin_control_e2e_spec |
-| 191 | `MB.supView` | What the Department Report's officer dialog needs for Mission ban: nil when that player may not ban this officer (the control is off, not... | mission_ban_spec |
-| 218 | `OfficerTarget` | - | via admin_control_e2e_spec |
-| 221 | `WithActivity` | From the department report's activity dialog the reply carries his fresh activity (CP.Challenge). | via admin_control_e2e_spec |
-| 283 | `permission` | - | via admin_control_e2e_spec |
-| 288 | `Lift` | Lifts a ban in force early: the supervisor who set it, or an admin (server:restriction, modules/supervisor/ restrictions.lua: the officer... | via admin_control_e2e_spec |
-| 310 | `Extend` | An admin extends a ban in force by some hours (never past HOURS_MAX from now): audited and told like a new ban. | via admin_control_e2e_spec |
-| 328 | `Rows` | Every ban in force as rows of the restrictions list (who set it and why are kept with the ban). | via admin_control_e2e_spec |
-| 352 | `lift` | - | via admin_control_e2e_spec |
-| 356 | `permission` | - | via admin_control_e2e_spec |
-| 357 | `canLift` | - | via admin_control_e2e_spec |
-| 358 | `lift` | - | via admin_control_e2e_spec |
+| 53 | `__index` | - | via admin_control_e2e_spec |
+| 54 | `__newindex` | - | via admin_control_e2e_spec |
+| 59 | `Load` | Every saved ban, read once (after the migrations) and then kept in memory. | via admin_control_e2e_spec |
+| 80 | `Save` | ok / false, errKey | via admin_control_e2e_spec |
+| 95 | `MB.get` | The ban in force for this officer (until is still ahead), else nil. | admin_control_e2e_spec |
+| 103 | `MB.first` | The first of these officers ({ citizenid, src }) with a ban in force: officer, ban / nil. | admin_control_e2e_spec |
+| 112 | `MB.view` | What the officer's screens show: { until, by (the name), reason, mine } or nil. | admin_missions_spec |
+| 119 | `MB.clearCache` | Forget what is in memory (a storage switch or restore, tests): read again at the next lookup. | mission_ban_spec |
+| 122 | `PushBoard` | Tell the officer's tablet (and his unit's) that the board changed. | via admin_control_e2e_spec |
+| 136 | `DC` | - | via admin_control_e2e_spec |
+| 138 | `CanUse` | - | via admin_control_e2e_spec |
+| 144 | `Register` | - | via admin_control_e2e_spec |
+| 151 | `viewExtra` | - | via admin_control_e2e_spec |
+| 152 | `usedToday` | - | via admin_control_e2e_spec |
+| 159 | `IsAdmin` | - | via admin_control_e2e_spec |
+| 164 | `CanUseFor` | CanUse for one officer: an admin works in the officer's department (its switch and hours), not his own. | via admin_control_e2e_spec |
+| 170 | `MB.usedToday` | Mission bans that player set today (the 'Your controls today' card). | mission_ban_spec |
+| 177 | `HoursRange` | The hours a supervisor may pick in his department: lo, hi / nil. | via admin_control_e2e_spec |
+| 186 | `Target` | The target as the rules need it: online, his department and grade (Qbox, on duty or not). | via admin_control_e2e_spec |
+| 198 | `MB.supView` | What the Department Report's officer dialog needs for Mission ban: nil when that player may not ban this officer (the control is off, not... | mission_ban_spec |
+| 225 | `OfficerTarget` | - | via admin_control_e2e_spec |
+| 228 | `WithActivity` | From the department report's activity dialog the reply carries his fresh activity (CP.Challenge). | via admin_control_e2e_spec |
+| 290 | `permission` | - | via admin_control_e2e_spec |
+| 295 | `Lift` | Lifts a ban in force early: the supervisor who set it, or an admin (server:restriction, modules/supervisor/ restrictions.lua: the officer... | via admin_control_e2e_spec |
+| 317 | `Extend` | An admin extends a ban in force by some hours (never past HOURS_MAX from now): audited and told like a new ban. | via admin_control_e2e_spec |
+| 335 | `Rows` | Every ban in force as rows of the restrictions list (who set it and why are kept with the ban). | via admin_control_e2e_spec |
+| 359 | `lift` | - | via admin_control_e2e_spec |
+| 363 | `permission` | - | via admin_control_e2e_spec |
+| 364 | `canLift` | - | via admin_control_e2e_spec |
+| 365 | `lift` | - | via admin_control_e2e_spec |
 
 ### modules/supervisor/notices.lua
 
@@ -8302,7 +8309,7 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 
 | line | function | what it must do | spec |
 |---:|---|---|---|
-| 573 | `AdminPayments` | - | none |
+| 589 | `AdminPayments` | - | none |
 
 ### web/src/admin/screens/Payouts.tsx
 
@@ -9415,7 +9422,8 @@ Client entry points: 110, 88 driven by a spec that loads their file, 22 known ga
 | line | function | what it must do | spec |
 |---:|---|---|---|
 | 40 | `tourCovered` | A dialog opened while the tour runs (Deliver now, Rename, ...) sits under the tour (z-index 60 < 85): the card and the dim would cover it... | walk shared/tour/tours.walk.ts |
-| 63 | `TourHost` | - | walk shared/tour/tours.walk.ts |
+| 47 | `tourArrow` | The step an arrow key moves the tour by: 1 (ArrowRight), -1 (ArrowLeft), 0 for any other key and while the tour steps aside for a dialog... | walk shared/tour/tours.walk.ts |
+| 72 | `TourHost` | - | walk shared/tour/tours.walk.ts |
 
 ### web/src/shared/tour/place.ts
 
