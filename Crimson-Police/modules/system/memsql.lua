@@ -710,13 +710,21 @@ c0,17,1,e0,1 d8,7,1,f8,1 100,18,2,101,2 130,1,1,69,0 132,3,2,133,2 139,8,2,13a,2
         end
         return map
     end
-    local CI_MB = RunTable(GENERAL_CI_RUNS)
-    local LOWER_MB = RunTable(LOWER_RUNS)
+    -- built the first time a non-ASCII text needs one (about 3 500 entries: not part of the resource's start)
+    local CI_MB, LOWER_MB
+    local function CiMap()
+        CI_MB = CI_MB or RunTable(GENERAL_CI_RUNS)
+        return CI_MB
+    end
+    local function LowerMap()
+        LOWER_MB = LOWER_MB or RunTable(LOWER_RUNS)
+        return LOWER_MB
+    end
 
     CiFold = function(s)
         if sfind(s, '[\128-\255]') then
             s = sgsub(s, '[\240-\244][\128-\191][\128-\191][\128-\191]', '\239\191\189')
-            s = sgsub(s, '[\194-\239][\128-\191]+', CI_MB)
+            s = sgsub(s, '[\194-\239][\128-\191]+', CiMap())
         end
         if sfind(s, '[a-z]') then s = sgsub(s, '[a-z]', UPPER_ASCII) end
         return s
@@ -769,7 +777,7 @@ c0,17,1,e0,1 d8,7,1,f8,1 100,18,2,101,2 130,1,1,69,0 132,3,2,133,2 139,8,2,13a,2
 
     LowerText = function(s)
         s = sgsub(s, '[A-Z]', LOWER_ASCII)
-        if sfind(s, '[\194-\239]') then s = sgsub(s, '[\194-\239][\128-\191]+', LOWER_MB) end
+        if sfind(s, '[\194-\239]') then s = sgsub(s, '[\194-\239][\128-\191]+', LowerMap()) end
         return s
     end
     M.lowerText = LowerText

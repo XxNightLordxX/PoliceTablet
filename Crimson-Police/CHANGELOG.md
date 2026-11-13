@@ -64,6 +64,7 @@ Measured in the test harness (`tests/`), before -> after. The intervals each loo
 | an admin who leaves in the middle of a logo upload | memory | his chunks kept 60 s (and the next player with his id refused with "busy") -> forgotten on `playerDropped` |
 | `Config.Performance.pushGapMs = 300`, three pushes of one topic to one player at once | client events | 3 -> 2 (the first at once, the others merged and sent when the gap is over); shipped `0` = 3, as before |
 | `Config.Performance.latentAboveBytes = 2000`, a 200-row list answer to the tablet | reliable events | 1 big reliable reply -> a small reply plus a latent event at `Config.Limits.exportBps`; shipped `0` = as before |
+| the resource's start: the work the server scripts' main chunks do while the files load (lua5.4, `tests/harness.lua`, files mode, median of 7; compiling the files is about 128 ms of it and stays) | ms | 26.1 -> 13.4 (`shared/locale.lua` 8.4 -> 0.0: `locales/en.json` is decoded on first use; `modules/system/memsql.lua` 3.9 -> 0.4: the two utf8mb4_general_ci maps are built for the first non-ASCII text; `tests/startup_load_spec.lua`) |
 
 **Work repeated inside one request, one ox_target pass or one draw**
 
